@@ -1,0 +1,162 @@
+"use client";
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useTheme } from "./theme-provider";
+import { 
+  LayoutDashboard, 
+  ClipboardList, 
+  Calendar, 
+  CalendarDays, 
+  Truck, 
+  Database,
+  Menu,
+  CircleDot,
+  Moon,
+  Sun,
+  FileText,
+  BadgeDollarSign
+} from 'lucide-react';
+import { cn } from "@/lib/utils";
+
+const navigation = [
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { name: 'Controle de OS', path: '/os', icon: ClipboardList },
+  { name: 'Programação Preventiva', path: '/preventivas', icon: Calendar },
+  { name: 'Boletim de Pneus', path: '/pneus', icon: CircleDot },
+  { name: 'Programação Semanal', path: '/semanal', icon: CalendarDays },
+  { name: 'Backlog', path: '/backlog', icon: FileText },
+  { name: 'Custos', path: '/custos', icon: BadgeDollarSign },
+  { name: 'Base de Frotas', path: '/base-frotas', icon: Truck },
+  { name: 'Base de Dados', path: '/base-dados', icon: Database },
+];
+
+export function MainLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const isLoginPage = pathname?.startsWith("/login");
+
+  if (isLoginPage) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-between overflow-x-hidden">
+        {children}
+      </main>
+    );
+  }
+
+  const isDark = theme === 'dark';
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
+      <style>{`
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(-10px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed top-0 left-0 z-50 h-[100dvh] w-64 border-r overflow-y-auto",
+        "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700",
+        "transition-transform duration-300 ease-in-out",
+        // Desktop: sempre visível | Mobile: controlado por sidebarOpen
+        "lg:translate-x-0",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
+        <div className="flex items-center gap-3 p-6 border-b border-slate-100 dark:border-slate-700">
+          <img
+            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
+            alt="Eunaman Logo"
+            className="w-10 h-10 object-contain"
+          />
+          <div>
+            <h1 className="font-bold text-lg text-slate-900 dark:text-white">Eunaman</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Controle de Manutenção</p>
+          </div>
+        </div>
+
+        <nav className="p-4 space-y-1">
+          <div className="flex items-center justify-between px-3 mb-3">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              Navegação
+            </p>
+            <button
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="p-1.5 rounded-lg transition-colors bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600"
+              title={isDark ? "Modo Claro" : "Modo Escuro"}
+            >
+              {isDark
+                ? <Sun className="w-4 h-4 text-yellow-400" />
+                : <Moon className="w-4 h-4 text-slate-600" />
+              }
+            </button>
+          </div>
+
+          {navigation.map((item, index) => {
+            const isActive = pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                  "hover:scale-[1.02] active:scale-95",
+                  isActive
+                    ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
+                )}
+                style={{ animationDelay: `${index * 50}ms`, animation: 'slideIn 0.3s ease-out' }}
+              >
+                <item.icon className={cn(
+                  "w-5 h-5",
+                  isActive ? "text-blue-500 dark:text-blue-400" : "text-slate-400"
+                )} />
+                <span className="truncate">{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {/* Main content wrapper */}
+      <div className="lg:pl-64 flex flex-col min-h-screen">
+        {/* Mobile header */}
+        <header className="lg:hidden sticky top-0 z-30 border-b px-4 py-3 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+            >
+              <Menu className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            </button>
+            <div className="flex items-center gap-2">
+              <img
+                src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
+                alt="Eunaman Logo"
+                className="w-8 h-8 object-contain"
+              />
+              <span className="font-bold text-slate-900 dark:text-white">Eunaman</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 w-full">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

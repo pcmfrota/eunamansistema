@@ -1,0 +1,687 @@
+"use client";
+
+import { useState, useEffect, useTransition } from "react";
+import { Download, Plus, Search, Pencil, Trash2, X, Check } from "lucide-react";
+import {
+  criarOrdemServico,
+  atualizarStatusOS,
+  atualizarOrdemServico,
+  excluirOrdemServico,
+  excluirOrdensMassivo,
+  importarOrdensServico
+} from "./actions";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+type OS = {
+  id: string;
+  numero_os: string;
+  placa: string | null;
+  modulo: string | null;
+  status: string | null;
+  data_abertura: string;
+  data_fechamento: string | null;
+  horas_manutencao: number | null;
+  descricao: string | null;
+  horimetro: number | null;
+  operacao_tipo: string | null;
+  local: string | null;
+  classe: string | null;
+  foi_enviado_reserva: boolean | null;
+  motivo: string | null;
+  sistema: string | null;
+  sub_sistema: string | null;
+  observacoes: string | null;
+  equipamento_id: string;
+};
+
+type Equipamento = {
+  id: string;
+  placa: string;
+  modulo?: string;
+  ultimoHist?: number;
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function fmt(dateStr: string | null) {
+  if (!dateStr) return "-";
+  // Usa o valor literal salvo no banco (removendo influências de fuso horário da máquina)
+  const cleanStr = dateStr.slice(0, 16); // ex: "2026-03-29T08:00"
+  if (!cleanStr.includes('T')) return dateStr;
+  const [datePart, timePart] = cleanStr.split('T');
+  if (!datePart || !timePart) return dateStr;
+  const [y, m, d] = datePart.split('-');
+  return `${d}/${m}/${y} ${timePart}`;
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  const s = status || "Aberta";
+  if (s === "Fechada" || s === "Concluída")
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">Fechada</span>;
+  if (s === "Em Andamento")
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">Em Andamento</span>;
+  return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">Aberta</span>;
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function ControleOSClient({
+  ordens: initialOrdens,
+  equipamentos,
+  operacoesTipo = [],
+  motivos = [],
+  sistemas = [],
+  subSistemas = [],
+}: {
+  ordens: OS[];
+  equipamentos: Equipamento[];
+  operacoesTipo?: string[];
+  motivos?: string[];
+  sistemas?: string[];
+  subSistemas?: string[];
+}) {
+  const [ordens, setOrdens] = useState(initialOrdens);
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("Todos Status");
+  const [filtroModulo, setFiltroModulo] = useState("Todos Módulos");
+  const [filtroOrdem, setFiltroOrdem] = useState("Mais Recente");
+  const [showModal, setShowModal] = useState(false);
+  const [editingOS, setEditingOS] = useState<OS | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isPending, startTransition] = useTransition();
+
+  // Update when server data changes
+  useEffect(() => { setOrdens(initialOrdens); }, [initialOrdens]);
+
+  // Derived lists for filter dropdowns
+  const modulos = ["Todos Módulos", ...Array.from(new Set(ordens.map(o => o.modulo).filter(Boolean)))];
+
+  // Filter + sort
+  const filtradas = ordens
+    .filter(o => {
+      const q = busca.toLowerCase();
+      const matchBusca = !q || o.numero_os.toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
+      const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
+      const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
+      return matchBusca && matchStatus && matchModulo;
+    })
+    .sort((a, b) => {
+      if (filtroOrdem === "Mais Recente") return new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime();
+      if (filtroOrdem === "Mais Antiga") return new Date(a.data_abertura).getTime() - new Date(b.data_abertura).getTime();
+      return 0;
+    });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtradas.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtradas.map(o => o.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  const handleExcluirSelecionados = () => {
+    if (selectedIds.size === 0) return;
+    if (confirm(`Tem certeza que deseja apagar ${selectedIds.size} chamados?`)) {
+      startTransition(async () => {
+        const res = await excluirOrdensMassivo(Array.from(selectedIds));
+        if (res?.error) alert(res.error);
+        else setSelectedIds(new Set());
+      });
+    }
+  };
+
+  useEffect(() => {
+    // Add XLSX script globally for excel handling if not present
+    if (typeof window !== "undefined" && !(window as any).XLSX) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js";
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Check if XLSX is loaded
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("Carregando motor Excel, tente novamente em alguns segundos...");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const bstr = evt.target?.result;
+      const wb = XLSX.read(bstr, { type: "binary" });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws);
+      startTransition(async () => {
+        const res = await importarOrdensServico(data);
+        if (res?.error) alert("Erro ao importar: " + res.error);
+        else alert("Importação concluída com sucesso!");
+      });
+      e.target.value = "";
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  function exportarExcel() {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("Motor Excel carregando...");
+      return;
+    }
+
+    const rows = filtradas.map(o => ({
+      "Nº OS": o.numero_os,
+      "Placa": o.placa || "",
+      "Módulo": o.modulo || "",
+      "Status": o.status || "",
+      "Abertura": fmt(o.data_abertura),
+      "Fechamento": fmt(o.data_fechamento),
+      "Horas": o.horas_manutencao ?? "",
+      "Descrição": o.descricao || "",
+      "Motivo": o.motivo || "",
+      "Sistema": o.sistema || "",
+      "Sub-Sistema": o.sub_sistema || "",
+      "Operação (Tipo)": o.operacao_tipo || "",
+      "Local": o.local || "",
+      "Classe": o.classe || "",
+      "Reserva": o.foi_enviado_reserva ? "SIM" : "NÃO",
+      "Horímetro": o.horimetro ?? "",
+      "Observações": o.observacoes || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "OrdensServico");
+    XLSX.writeFile(workbook, "ordens_servico.xlsx");
+  }
+
+  return (
+    <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[96rem] mx-auto w-full">
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Controle de OS</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Gerenciar ordens de serviço de manutenção</p>
+        </div>
+        <div className="flex gap-3">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleExcluirSelecionados}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm focus:ring-2 focus:ring-red-500/50"
+            >
+              <Trash2 size={16} /> Apagar Selecionados ({selectedIds.size})
+            </button>
+          )}
+
+          <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm cursor-pointer">
+            <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleImportExcel} />
+            <Download size={15} className="rotate-180" /> Importar
+          </label>
+          <button
+            onClick={exportarExcel}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+          >
+            <Download size={15} /> Exportar Excel
+          </button>
+          <button
+            onClick={() => { setEditingOS(null); setShowModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <Plus size={15} /> Nova OS
+          </button>
+        </div>
+      </div>
+
+      {/* Table Card */}
+      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        {/* Table header with filters */}
+        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800">
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Ordens de Serviço</h2>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={15} />
+              <input
+                type="text"
+                placeholder="Buscar por OS ou placa..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+              />
+            </div>
+            {/* Filters */}
+            <select
+              value={filtroStatus}
+              onChange={e => setFiltroStatus(e.target.value)}
+              className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option>Todos Status</option>
+              <option>Aberta</option>
+              <option>Em Andamento</option>
+              <option>Fechada</option>
+            </select>
+            <select
+              value={filtroModulo}
+              onChange={e => setFiltroModulo(e.target.value)}
+              className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              {modulos.map(m => <option key={m}>{m}</option>)}
+            </select>
+            <select
+              value={filtroOrdem}
+              onChange={e => setFiltroOrdem(e.target.value)}
+              className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option>Mais Recente</option>
+              <option>Mais Antiga</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                <th className="w-10 px-4 py-3 text-left">
+                  <input type="checkbox" checked={filtradas.length > 0 && selectedIds.size === filtradas.length} onChange={toggleSelectAll} className="rounded border-zinc-300" />
+                </th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Nº OS</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Placa</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Módulo</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Abertura</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Fechamento</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Horas</th>
+                <th className="text-right px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
+              {filtradas.map(os => (
+                <tr
+                  key={os.id}
+                  className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors group"
+                >
+                  <td className="px-4 py-3">
+                    <input type="checkbox" checked={selectedIds.has(os.id)} onChange={() => toggleSelect(os.id)} className="rounded border-zinc-300" />
+                  </td>
+                  <td className="px-4 py-3 font-mono text-[12px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                    {os.numero_os}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                    {os.placa || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+                    {os.modulo || "-"}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <StatusBadge status={os.status} />
+                  </td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 whitespace-nowrap text-[12px]">
+                    {fmt(os.data_abertura)}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 whitespace-nowrap text-[12px]">
+                    {fmt(os.data_fechamento)}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 font-medium whitespace-nowrap">
+                    {os.horas_manutencao != null ? `${os.horas_manutencao}h` : "-"}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                      {/* Quick status change */}
+                      {os.status === "Aberta" && (
+                        <button
+                          title="Iniciar OS"
+                          onClick={() => startTransition(() => atualizarStatusOS(os.id, "Em Andamento"))}
+                          className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                        >
+                          <Check size={14} />
+                        </button>
+                      )}
+                      {os.status === "Em Andamento" && (
+                        <button
+                          title="Fechar OS"
+                          onClick={() => startTransition(() => atualizarStatusOS(os.id, "Fechada"))}
+                          className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                        >
+                          <Check size={14} />
+                        </button>
+                      )}
+                      <button
+                        title="Editar"
+                        onClick={() => { setEditingOS(os); setShowModal(true); }}
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        title="Excluir"
+                        onClick={() => setDeletingId(os.id)}
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {filtradas.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-16 text-center text-zinc-400 text-sm">
+                    Nenhuma OS encontrada
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer count */}
+        <div className="px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400">
+          {filtradas.length} ordem(s) de serviço
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-2">Excluir OS?</h3>
+            <p className="text-sm text-zinc-500 mb-5">Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingId(null)}
+                className="px-4 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  startTransition(async () => {
+                    if (deletingId) {
+                      const res = await excluirOrdemServico(deletingId);
+                      if (res?.error) alert(res.error);
+                    }
+                    setDeletingId(null);
+                  });
+                }}
+                className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New/Edit OS Modal */}
+      {showModal && (
+        <NovaOSModal
+          equipamentos={equipamentos}
+          initialData={editingOS}
+          onClose={() => { setShowModal(false); setEditingOS(null); }}
+          operacoesTipo={operacoesTipo}
+          motivos={motivos}
+          sistemas={sistemas}
+          subSistemas={subSistemas}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── New OS Modal (inline) ────────────────────────────────────────────────────
+function NovaOSModal({
+  equipamentos,
+  initialData,
+  onClose,
+  operacoesTipo = [],
+  motivos = [],
+  sistemas = [],
+  subSistemas = [],
+}: {
+  equipamentos: Equipamento[];
+  initialData: OS | null;
+  onClose: () => void;
+  operacoesTipo?: string[];
+  motivos?: string[];
+  sistemas?: string[];
+  subSistemas?: string[];
+}) {
+  const [loading, setLoading] = useState(false);
+  const [selectedEq, setSelectedEq] = useState<Equipamento | null>(
+    initialData ? equipamentos.find(e => e.id === initialData.equipamento_id) || null : null
+  );
+  // Para data de abertura: se editando, usa o valor salvo (já em horário local); se criando, usa a hora local atual
+  const getLocalNow = () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  };
+  // Os dados do banco já estão em formato local (ex: "2026-03-30T11:40"), não converter via toISOString
+  const defaultAbertura = initialData ? initialData.data_abertura.slice(0, 16) : getLocalNow();
+  const defaultFechamento = initialData?.data_fechamento ? initialData.data_fechamento.slice(0, 16) : "";
+  
+  const [dataAbertura, setDataAbertura] = useState(defaultAbertura);
+  const [dataFechamento, setDataFechamento] = useState(defaultFechamento);
+
+  // Calcula em MINUTOS EXATOS (equivalente ao dayjs.diff('minute'))
+  const calcMinutosIniciais = () => {
+    if (defaultAbertura && defaultFechamento) {
+      const diff = Math.floor(
+        (new Date(defaultFechamento).getTime() - new Date(defaultAbertura).getTime()) / (1000 * 60)
+      );
+      return diff > 0 ? diff : 0;
+    }
+    return 0;
+  };
+  const [diffMinutos, setDiffMinutos] = useState(calcMinutosIniciais);
+
+  // Formata minutos no padrão HH:mm
+  const formatarTempo = (totalMinutos: number): string => {
+    if (totalMinutos <= 0) return "00:00";
+    const h = Math.floor(totalMinutos / 60);
+    const m = totalMinutos % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+
+  useEffect(() => {
+    if (dataAbertura && dataFechamento) {
+      const diff = Math.floor(
+        (new Date(dataFechamento).getTime() - new Date(dataAbertura).getTime()) / (1000 * 60)
+      );
+      setDiffMinutos(diff > 0 ? diff : 0);
+    } else {
+      setDiffMinutos(0);
+    }
+  }, [dataAbertura, dataFechamento]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    const fd = new FormData(e.currentTarget);
+    // Salva no banco como decimal de horas (ex: 90min → 1.5)
+    fd.append("horas_manutencao", Number((diffMinutos / 60).toFixed(2)).toString());
+    fd.append("placa", selectedEq?.placa || "");
+
+    let result;
+    if (initialData) {
+      result = await atualizarOrdemServico(initialData.id, fd);
+    } else {
+      result = await criarOrdemServico(fd);
+    }
+
+    if (result?.error) alert("Erro: " + result.error);
+    else onClose();
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh]">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{initialData ? "Editar OS" : "Nova OS"}</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Data/Hora Abertura *">
+              <input name="data_abertura" type="datetime-local" required value={dataAbertura} onChange={e => setDataAbertura(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Data/Hora Fechamento">
+              <input name="data_fechamento" type="datetime-local" value={dataFechamento} onChange={e => setDataFechamento(e.target.value)} className={inputCls} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Status *">
+              <select name="status" required defaultValue={initialData?.status || "Aberta"} className={inputCls}>
+                <option value="Aberta">Aberta</option>
+                <option value="Em Andamento">Em Andamento</option>
+                <option value="Fechada">Fechada</option>
+              </select>
+            </Field>
+            <Field label="Placa *">
+              <select name="equipamento_id" required defaultValue={initialData?.equipamento_id || ""} onChange={e => setSelectedEq(equipamentos.find(eq => eq.id === e.target.value) || null)} className={inputCls}>
+                <option value="">Selecione a placa...</option>
+                {equipamentos.map(eq => <option key={eq.id} value={eq.id}>{eq.placa}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Módulo">
+            <input name="modulo" type="text" readOnly value={selectedEq?.modulo || ""} className={`${inputCls} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed`} />
+          </Field>
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="Horímetro">
+              <input name="horimetro" type="number" step="0.1" defaultValue={initialData?.horimetro || selectedEq?.ultimoHist || ""} className={inputCls} />
+            </Field>
+            <Field label="Operação (Tipo)">
+              {/* datalist = autocomplete livre: digita ou escolhe da lista */}
+              <input
+                name="operacao_tipo"
+                type="text"
+                list="lista-operacao-tipo"
+                defaultValue={initialData?.operacao_tipo || ""}
+                placeholder="Digite ou selecione..."
+                className={inputCls}
+              />
+              <datalist id="lista-operacao-tipo">
+                {operacoesTipo.map(op => (
+                  <option key={op} value={op} />
+                ))}
+              </datalist>
+            </Field>
+            <Field label="Local">
+              <input name="local" type="text" defaultValue={initialData?.local || ""} className={inputCls} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4 items-end">
+            <Field label="Classe">
+              <select name="classe" defaultValue={initialData?.classe || "CORRETIVA"} className={inputCls}>
+                <option value="CORRETIVA">CORRETIVA</option>
+                <option value="PREVENTIVA">PREVENTIVA</option>
+                <option value="PREDITIVA">PREDITIVA</option>
+              </select>
+            </Field>
+            <div className="flex items-center gap-3 pb-1">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" name="foi_enviado_reserva" defaultChecked={initialData?.foi_enviado_reserva || false} className="sr-only peer" />
+                <div className="w-10 h-5 bg-zinc-200 rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                <span className="ms-2 text-sm text-zinc-600 dark:text-zinc-300">Foi enviado reserva?</span>
+              </label>
+            </div>
+          </div>
+          <Field label="Descrição da Atividade *">
+            <textarea name="descricao" required rows={3} defaultValue={initialData?.descricao || ""} placeholder="Descreva a atividade..." className={`${inputCls} resize-none`} />
+          </Field>
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="Motivo">
+              <select name="motivo" defaultValue={initialData?.motivo || ""} className={inputCls}>
+                <option value="">Selecione</option>
+                {motivos.length > 0
+                  ? motivos.map(m => <option key={m} value={m}>{m}</option>)
+                  : (
+                    <>
+                      <option value="Desgaste Natural">Desgaste Natural</option>
+                      <option value="Quebra Operacional">Quebra Operacional</option>
+                      <option value="Falha Elétrica">Falha Elétrica</option>
+                    </>
+                  )
+                }
+              </select>
+            </Field>
+            <Field label="Sistema">
+              <select name="sistema" defaultValue={initialData?.sistema || ""} className={inputCls}>
+                <option value="">Selecione</option>
+                {sistemas.length > 0
+                  ? sistemas.map(s => <option key={s} value={s}>{s}</option>)
+                  : (
+                    <>
+                      <option value="Motor">Motor</option>
+                      <option value="Hidráulica">Hidráulica</option>
+                      <option value="Freios">Freios</option>
+                      <option value="Elétrico">Elétrico</option>
+                    </>
+                  )
+                }
+              </select>
+            </Field>
+            <Field label="Sub-Sistema">
+              <select name="sub_sistema" defaultValue={initialData?.sub_sistema || ""} className={inputCls}>
+                <option value="">Selecione</option>
+                {subSistemas.length > 0
+                  ? subSistemas.map(s => <option key={s} value={s}>{s}</option>)
+                  : (
+                    <>
+                      <option value="Bomba Injetora">Bomba Injetora</option>
+                      <option value="Cilindro Mestre">Cilindro Mestre</option>
+                      <option value="Alternador">Alternador</option>
+                    </>
+                  )
+                }
+              </select>
+            </Field>
+          </div>
+          <Field label="Observações">
+            <textarea name="observacoes" rows={2} defaultValue={initialData?.observacoes || ""} placeholder="Observações..." className={`${inputCls} resize-none`} />
+          </Field>
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-lg text-sm text-blue-900 dark:text-blue-300 font-medium">
+            Tempo Total: <span className="font-bold">{formatarTempo(diffMinutos)}</span>
+          </div>
+          <div className="flex justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
+            <button type="submit" disabled={loading} className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
+              {loading ? "Salvando..." : initialData ? "Salvar Alterações" : "Criar OS"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const inputCls = "w-full px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 text-zinc-900 dark:text-zinc-100";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</label>
+      {children}
+    </div>
+  );
+}

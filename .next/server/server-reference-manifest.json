@@ -1,0 +1,70 @@
+{
+  "node": {
+    "925f9eec75cecc4dc1af17999e5a29b621e19132": {
+      "workers": {
+        "app/page": "(rsc)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cactions%5C%5Cdashboard.ts%22%2C%5B%22getDashboardData%22%5D%5D%5D&__client_imported__=!"
+      },
+      "layer": {
+        "app/page": "rsc"
+      }
+    },
+    "a3f45d06f59aa36ff13dbbd7eec2cfdaab3d555c": {
+      "workers": {
+        "app/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cactions%5C%5Cos-placa.ts%22%2C%5B%22buscarOSporPlaca%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/page": "action-browser"
+      }
+    },
+    "116b71a4d55004a1a3103588fab0e8bd33ea0f66": {
+      "workers": {
+        "app/pneus/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cpneus%5C%5Cactions.ts%22%2C%5B%22excluirInspecao%22%2C%22registrarInspecaoCompleta%22%2C%22excluirInspecoesMassivo%22%2C%22registrarInspecaoPneu%22%2C%22importarInspecoesPneus%22%2C%22atualizarInspecao%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/pneus/page": "action-browser"
+      }
+    },
+    "1b2e72f04227d2bc68bb819b481a5e42c8fbea45": {
+      "workers": {
+        "app/pneus/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cpneus%5C%5Cactions.ts%22%2C%5B%22excluirInspecao%22%2C%22registrarInspecaoCompleta%22%2C%22excluirInspecoesMassivo%22%2C%22registrarInspecaoPneu%22%2C%22importarInspecoesPneus%22%2C%22atualizarInspecao%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/pneus/page": "action-browser"
+      }
+    },
+    "2850c47a00b5b7c350697a7af5681ab8c861984c": {
+      "workers": {
+        "app/pneus/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cpneus%5C%5Cactions.ts%22%2C%5B%22excluirInspecao%22%2C%22registrarInspecaoCompleta%22%2C%22excluirInspecoesMassivo%22%2C%22registrarInspecaoPneu%22%2C%22importarInspecoesPneus%22%2C%22atualizarInspecao%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/pneus/page": "action-browser"
+      }
+    },
+    "9487f3a0a73ae33f97665c2e567fbc8c559ea068": {
+      "workers": {
+        "app/pneus/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cpneus%5C%5Cactions.ts%22%2C%5B%22excluirInspecao%22%2C%22registrarInspecaoCompleta%22%2C%22excluirInspecoesMassivo%22%2C%22registrarInspecaoPneu%22%2C%22importarInspecoesPneus%22%2C%22atualizarInspecao%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/pneus/page": "action-browser"
+      }
+    },
+    "b1d3263e4262b4c849d808efb6c12dd309682025": {
+      "workers": {
+        "app/pneus/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cpneus%5C%5Cactions.ts%22%2C%5B%22excluirInspecao%22%2C%22registrarInspecaoCompleta%22%2C%22excluirInspecoesMassivo%22%2C%22registrarInspecaoPneu%22%2C%22importarInspecoesPneus%22%2C%22atualizarInspecao%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/pneus/page": "action-browser"
+      }
+    },
+    "f6c0b81947692564acff3df2265325a8c171a2df": {
+      "workers": {
+        "app/pneus/page": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Capp%5C%5Cpneus%5C%5Cactions.ts%22%2C%5B%22excluirInspecao%22%2C%22registrarInspecaoCompleta%22%2C%22excluirInspecoesMassivo%22%2C%22registrarInspecaoPneu%22%2C%22importarInspecoesPneus%22%2C%22atualizarInspecao%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/pneus/page": "action-browser"
+      }
+    }
+  },
+  "edge": {},
+  "encryptionKey": "6rN5K2JiyRjDSPL7QD0jFGTQuZAvcwBGs2Wl7fwe1Mc="
+}
