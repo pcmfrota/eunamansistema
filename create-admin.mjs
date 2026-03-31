@@ -35,30 +35,41 @@ async function setupAdmin() {
 
   if (!user) {
     const { data: newData, error: createError } = await supabase.auth.admin.createUser({
-      email, password, email_confirm: true, user_metadata: { full_name: fullName }
+      email, 
+      password, 
+      email_confirm: true, 
+      user_metadata: { full_name: fullName },
+      app_metadata: { role: 'admin' }
     })
-    if (createError) return console.error('Erro:', createError.message);
+    if (createError) return console.error('Erro ao criar usuário:', createError.message);
     user = newData.user;
-    console.log('✅ Usuário criado no Auth.');
+    console.log('✅ Usuário criado no Auth com metadados.');
   } else {
     const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
-      password, email_confirm: true
+      password, 
+      email_confirm: true,
+      app_metadata: { role: 'admin' }
     })
-    if (updateError) return console.error('Erro:', updateError.message);
-    console.log('✅ Usuário atualizado no Auth.');
+    if (updateError) return console.error('Erro ao atualizar usuário no Auth:', updateError.message);
+    console.log('✅ Usuário atualizado no Auth (senha e cargo).');
   }
 
+  // 2. Garantir que o Perfil exista e tenha o cargo de admin
   const { error: profileError } = await supabase.from('profiles').upsert({
-    id: user.id, full_name: fullName, role: 'admin', updated_at: new Date().toISOString()
+    id: user.id, 
+    full_name: fullName, 
+    role: 'admin', 
+    updated_at: new Date().toISOString()
   });
 
-  if (profileError) return console.error('Erro no Perfil:', profileError.message);
+  if (profileError) return console.error('Erro ao atualizar tabela Profiles:', profileError.message);
+  console.log('✅ Tabela Profiles sincronizada com cargo Admin.');
 
   console.log('\n-----------------------------------')
-  console.log('USUÁRIO CONFIGURADO COM SUCESSO!')
+  console.log('CONFIGURAÇÃO CONCLUÍDA COM SUCESSO!')
   console.log(`E-mail: ${email}`)
   console.log(`Senha: ${password}`)
-  console.log('Pode logar agora no localhost:3000')
+  console.log('Cargo: Administrador')
   console.log('-----------------------------------\n')
 }
 

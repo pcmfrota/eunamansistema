@@ -35,13 +35,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session) {
+          console.log('[Auth] Usuário detectado:', session.user.email, 'ID:', session.user.id)
           setUser(session.user)
-          const { data: profileData } = await supabase
+          
+          // Buscar perfil do DB
+          const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single()
-          setProfile(profileData)
+          
+          if (profileError) {
+            console.warn('[Auth] Erro ao buscar perfil na tabela:', profileError.message)
+          }
+
+          // Estratégia de Role: Banco de Dados > Metadados do Token > Default
+          const finalRole = profileData?.role || session.user.app_metadata?.role || 'visitante'
+          
+          const profileWithRole = profileData ? { ...profileData, role: finalRole } : {
+            id: session.user.id,
+            email: session.user.email,
+            full_name: session.user.user_metadata?.full_name || 'Usuário',
+            role: finalRole,
+            avatar_url: session.user.user_metadata?.avatar_url || null
+          }
+
+          console.log('[Auth] Role Final definida como:', finalRole)
+          setProfile(profileWithRole)
         }
       } catch (err) {
         console.error('Erro na sessão inicial:', err)
@@ -52,22 +72,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initSession()
 
-    // 2. Ouvir mudanças (login/logout) - Inscrever apenas UMA vez
+    // 2. Ouvir mudanças (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
+      console.log('[Auth] Mudança de estado:', _event)
       if (session) {
         setUser(session.user)
+        
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single()
-        setProfile(profileData)
+        
+        const finalRole = profileData?.role || session.user.app_metadata?.role || 'visitante'
+        
+        setProfile(profileData ? { ...profileData, role: finalRole } : {
+          id: session.user.id,
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || 'Usuário',
+          role: finalRole,
+          avatar_url: session.user.user_metadata?.avatar_url || null
+        })
       } else {
         setUser(null)
         setProfile(null)
-        // Somente redirecionar se não estiver no login
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          router.push('/login')
+          window.location.assign('/login')
         }
       }
       setLoading(false)
@@ -79,8 +109,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, router])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
+    try {
+      await supabase.auth.signOut()
+      // Forçar recarregamento total para limpar o estado do cliente e redirecionar
+      window.location.assign('/login')
+    } catch (error) {
+      console.error('Erro ao sair:', error)
+      window.location.assign('/login')
+    }
   }
 
   return (
