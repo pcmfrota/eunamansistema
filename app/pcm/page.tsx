@@ -1,8 +1,12 @@
 "use client";
 
-import { Settings, Calendar } from "lucide-react";
+import { Settings, Calendar, ShieldAlert } from "lucide-react";
+import { useAuth } from "@/components/auth-context";
 
 export default function PCMPage() {
+  const { user, profile } = useAuth();
+  const isVisitante = profile?.role === "visitante";
+
   return (
     <div className="p-4 md:p-8 flex flex-col gap-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -17,6 +21,13 @@ export default function PCMPage() {
             </p>
           </div>
         </div>
+
+        {isVisitante && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
+            <ShieldAlert size={16} />
+            <span>Somente Leitura</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

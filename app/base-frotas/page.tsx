@@ -10,9 +10,11 @@ import {
   Pencil,
   Trash2,
   X,
-  Truck
+  Truck,
+  ShieldAlert
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth-context";
 
 const initialVehicles = [
   { placa: "TCC4D15", tipo: "COMBOIO", tipoColor: "blue", categoria: "PESADA", modulo: "ALUGADO", horimetro: "799h", ultimaAtualizacao: "2026-03-26" },
@@ -31,6 +33,9 @@ const colorMap: Record<string, string> = {
 };
 
 export default function BaseFrotasPage() {
+  const { user, profile } = useAuth();
+  const isVisitante = profile?.role === "visitante";
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>(initialVehicles);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -231,27 +236,36 @@ export default function BaseFrotasPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 self-end md:self-auto">
-          <input 
-            type="file" 
-            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
-            ref={fileInputRef} 
-            onChange={handleImportExcel} 
-            className="hidden" 
-          />
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm">
-            <Upload size={16} /> Importar Excel/CSV
-          </button>
+          {!isVisitante ? (
+            <>
+              <input 
+                type="file" 
+                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                ref={fileInputRef} 
+                onChange={handleImportExcel} 
+                className="hidden" 
+              />
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm">
+                <Upload size={16} /> Importar Excel/CSV
+              </button>
+              <button 
+                onClick={() => { setEditingVehicle(null); setIsModalOpen(true); }}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <Plus size={16} /> Novo Veículo
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
+              <ShieldAlert size={16} />
+              <span>Somente Leitura</span>
+            </div>
+          )}
           <button onClick={exportToJSON} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors shadow-sm">
             <Download size={16} /> JSON
           </button>
           <button onClick={exportToExcel} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">
             <Download size={16} /> Excel (.xlsx)
-          </button>
-          <button 
-            onClick={() => { setEditingVehicle(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <Plus size={16} /> Novo Veículo
           </button>
         </div>
       </div>
@@ -263,7 +277,7 @@ export default function BaseFrotasPage() {
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Veículos Cadastrados ({vehicles.length})</h2>
             
-            {selectedVehicles.length > 0 && (
+            {selectedVehicles.length > 0 && !isVisitante && (
               <button 
                 onClick={handleBatchDelete}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
@@ -303,7 +317,7 @@ export default function BaseFrotasPage() {
                 <th className="py-4 px-6 font-semibold">Módulo</th>
                 <th className="py-4 px-6 font-semibold">Horímetro Atual</th>
                 <th className="py-4 px-6 font-semibold">Última Atualização</th>
-                <th className="py-4 px-6 font-semibold text-right">Ações</th>
+                {!isVisitante && <th className="py-4 px-6 font-semibold text-right">Ações</th>}
               </tr>
             </thead>
             <tbody>
@@ -334,24 +348,26 @@ export default function BaseFrotasPage() {
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300">{vehicle.modulo}</td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300">{vehicle.horimetro}</td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300">{vehicle.ultimaAtualizacao}</td>
-                  <td className="py-3.5 px-6">
-                    <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => handleEdit(vehicle)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded transition-colors" 
-                        title="Editar"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(vehicle.placa)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded transition-colors" 
-                        title="Excluir"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
+                  {!isVisitante && (
+                    <td className="py-3.5 px-6">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => handleEdit(vehicle)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded transition-colors" 
+                          title="Editar"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(vehicle.placa)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded transition-colors" 
+                          title="Excluir"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

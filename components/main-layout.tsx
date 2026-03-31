@@ -21,7 +21,8 @@ import {
   User,
   LogOut,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -35,6 +36,10 @@ const navigation = [
   { name: 'Custos', path: '/custos', icon: BadgeDollarSign },
   { name: 'Base de Frotas', path: '/base-frotas', icon: Truck },
   { name: 'Base de Dados', path: '/base-dados', icon: Database },
+];
+
+const adminNavigation = [
+  { name: 'Gestão de Usuários', path: '/admin/usuarios', icon: Users },
 ];
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
@@ -184,6 +189,38 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {profile?.role === 'admin' && (
+            <>
+              <div className="pt-4 pb-2 px-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Administração</p>
+              </div>
+              {adminNavigation.map((item, index) => {
+                const isActive = pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                      "hover:scale-[1.02] active:scale-95",
+                      isActive
+                        ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                    style={{ animationDelay: `${(navigation.length + index) * 50}ms`, animation: 'slideIn 0.3s ease-out' }}
+                  >
+                    <item.icon className={cn(
+                      "w-5 h-5",
+                      isActive ? "text-indigo-500 dark:text-indigo-400" : "text-slate-400"
+                    )} />
+                    <span className="truncate">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
       </aside>
 

@@ -1,10 +1,20 @@
 import { createClient } from '@/utils/supabase/server'
-import { Calendar, Search, Edit2, Trash2 } from 'lucide-react'
+import { Calendar, Search, Edit2, Trash2, ShieldAlert } from 'lucide-react'
 import NovaPreventivaModal from './NovoModal'
 import { revalidatePath } from 'next/cache'
 
 export default async function ProgramacaoPreventivaPage() {
   const supabase = createClient()
+
+  // Buscar usuário logado e seu cargo para RBAC
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user?.id)
+    .single()
+
+  const isVisitante = profile?.role === 'visitante'
 
   // Buscar todos equipamentos e pre-calcular ultimo horimetro para o dropdown Modal
   const { data: equipamentos } = await supabase
@@ -49,9 +59,16 @@ export default async function ProgramacaoPreventivaPage() {
           </div>
         </div>
 
-        <div>
-          <NovaPreventivaModal equipamentos={eqTransformados} />
-        </div>
+        {!isVisitante ? (
+          <div>
+            <NovaPreventivaModal equipamentos={eqTransformados} />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-sm border border-zinc-200 dark:border-zinc-700">
+            <ShieldAlert size={16} />
+            <span>Somente Leitura</span>
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col mt-4">
@@ -102,7 +119,7 @@ export default async function ProgramacaoPreventivaPage() {
                 <th className="px-6 py-4 font-semibold text-zinc-900 dark:text-zinc-100">Falta ↑</th>
                 <th className="px-6 py-4">Última Atualização</th>
                 <th className="px-6 py-4">Status ↑</th>
-                <th className="px-6 py-4 text-center">Ações</th>
+                {!isVisitante && <th className="px-6 py-4 text-center">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -148,24 +165,26 @@ export default async function ProgramacaoPreventivaPage() {
                         {statusBadge}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-3 text-zinc-400">
-                        <button className="hover:text-blue-500 transition-colors" title="Editar">
-                          <Edit2 size={16} />
-                        </button>
-                        <button className="hover:text-red-500 transition-colors" title="Excluir">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+                    {!isVisitante && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-3 text-zinc-400">
+                          <button className="hover:text-blue-500 transition-colors" title="Editar">
+                            <Edit2 size={16} />
+                          </button>
+                          <button className="hover:text-red-500 transition-colors" title="Excluir">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
 
               {(!preventivas || preventivas.length === 0) && (
                 <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-zinc-500">
-                    Nenhuma manutenção preventiva listada. Registre uma através da opção "Nova Preventiva".
+                  <td colSpan={isVisitante ? 10 : 11} className="px-6 py-12 text-center text-zinc-500">
+                    Nenhuma manutenção preventiva listada. {!isVisitante && 'Registre uma através da opção "Nova Preventiva".'}
                   </td>
                 </tr>
               )}

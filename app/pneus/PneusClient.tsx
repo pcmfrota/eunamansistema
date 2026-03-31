@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, Upload, Plus, X, AlertTriangle, CheckCircle, Circle, Edit2, Trash2, CheckSquare } from "lucide-react";
+import { Download, Upload, Plus, X, AlertTriangle, CheckCircle, Circle, Edit2, Trash2, CheckSquare, ShieldAlert } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { registrarInspecaoCompleta, importarInspecoesPneus, excluirInspecao, excluirInspecoesMassivo, atualizarInspecao } from "./actions";
+import { useAuth } from "@/components/auth-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null };
@@ -69,6 +70,9 @@ export default function PneusClient({
   equipamentos: Equipamento[];
   inspecoes: Inspecao[];
 }) {
+  const { user, profile } = useAuth();
+  const isVisitante = profile?.role === "visitante";
+
   const [tab, setTab] = useState<Tab>("dashboard");
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -178,12 +182,21 @@ export default function PneusClient({
           <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm">
             <Download size={15} /> Exportar Excel
           </button>
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm">
-            <Upload size={15} /> Importar Arquivos
-          </button>
-          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors shadow-sm">
-            <Plus size={15} /> Nova Inspeção
-          </button>
+          {!isVisitante ? (
+            <>
+              <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm">
+                <Upload size={15} /> Importar Arquivos
+              </button>
+              <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors shadow-sm">
+                <Plus size={15} /> Nova Inspeção
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
+              <ShieldAlert size={15} />
+              <span>Somente Leitura</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -365,7 +378,7 @@ export default function PneusClient({
           {/* Top Actions */}
           <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {selectedIds.size > 0 && (
+              {selectedIds.size > 0 && !isVisitante && (
                 <button onClick={handleBatchDelete} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 transition-colors">
                   <Trash2 size={14} /> Excluir {selectedIds.size} Selecionados
                 </button>
@@ -388,7 +401,7 @@ export default function PneusClient({
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase">Km</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase">Condição</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase">Obs</th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase">Ações</th>
+                  {!isVisitante && <th className="px-4 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase">Ações</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
@@ -409,16 +422,18 @@ export default function PneusClient({
                         <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
                       </td>
                       <td className="px-4 py-3 text-zinc-500 max-w-xs truncate">{(ins as any).observacoes || "-"}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setEditingItem(ins)} className="p-1.5 text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded truncate transition-colors" title="Editar Inspeção">
-                            <Edit2 size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(ins.id)} className="p-1.5 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded truncate transition-colors" title="Apagar Permanentemente">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
+                      {!isVisitante && (
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => setEditingItem(ins)} className="p-1.5 text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded truncate transition-colors" title="Editar Inspeção">
+                              <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(ins.id)} className="p-1.5 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded truncate transition-colors" title="Apagar Permanentemente">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

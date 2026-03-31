@@ -7,9 +7,11 @@ import {
   Upload,
   Plus, 
   Trash2,
-  Database
+  Database,
+  ShieldAlert
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth-context";
 
 type TabType = 'motivos' | 'sistemas' | 'subSistemas';
 
@@ -26,6 +28,9 @@ const initialData: StoreData = {
 };
 
 export default function BaseDadosPage() {
+  const { user, profile } = useAuth();
+  const isVisitante = profile?.role === "visitante";
+
   const [activeTab, setActiveTab] = useState<TabType>('motivos');
   const [data, setData] = useState<StoreData>(initialData);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -242,16 +247,25 @@ export default function BaseDadosPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 self-end md:self-auto">
-          <input 
-            type="file" 
-            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
-            ref={fileInputRef} 
-            onChange={handleImportExcel} 
-            className="hidden" 
-          />
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm">
-            <Upload size={16} /> Importar Excel/CSV
-          </button>
+          {!isVisitante ? (
+            <>
+              <input 
+                type="file" 
+                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+                ref={fileInputRef} 
+                onChange={handleImportExcel} 
+                className="hidden" 
+              />
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm">
+                <Upload size={16} /> Importar Excel/CSV
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
+              <ShieldAlert size={16} />
+              <span>Somente Leitura</span>
+            </div>
+          )}
           <button onClick={exportToJSON} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors shadow-sm">
             <Download size={16} /> JSON
           </button>
@@ -287,25 +301,27 @@ export default function BaseDadosPage() {
                {activeTab === 'motivos' ? 'Motivos de Manutenção' : activeTab === 'sistemas' ? 'Sistemas' : 'Sub-Sistemas'}
              </h2>
              
-             {selectedItems.length > 0 && (
+             {selectedItems.length > 0 && !isVisitante && (
                <button onClick={handleBatchDelete} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 rounded-lg transition-colors">
                  <Trash2 size={14} /> Excluir Selecionados ({selectedItems.length})
                </button>
              )}
           </div>
 
-          <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row gap-3 mb-8">
-            <input 
-              type="text" 
-              value={newItemText}
-              onChange={(e) => setNewItemText(e.target.value)}
-              placeholder={`Novo ${activeTab === 'motivos' ? 'motivo' : activeTab === 'sistemas' ? 'sistema' : 'sub-sistema'}...`}
-              className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3.5"
-            />
-            <button type="submit" className="flex items-center justify-center gap-2 px-8 py-3.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors shadow-sm">
-              <Plus size={16} /> Adicionar
-            </button>
-          </form>
+          {!isVisitante && (
+            <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row gap-3 mb-8">
+              <input 
+                type="text" 
+                value={newItemText}
+                onChange={(e) => setNewItemText(e.target.value)}
+                placeholder={`Novo ${activeTab === 'motivos' ? 'motivo' : activeTab === 'sistemas' ? 'sistema' : 'sub-sistema'}...`}
+                className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3.5"
+              />
+              <button type="submit" className="flex items-center justify-center gap-2 px-8 py-3.5 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors shadow-sm">
+                <Plus size={16} /> Adicionar
+              </button>
+            </form>
+          )}
 
           <div className="flex flex-col">
              {/* Check All header row */}
@@ -322,7 +338,7 @@ export default function BaseDadosPage() {
                <label htmlFor="selectAll" className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 flex-1 cursor-pointer">
                   NOME / DESCRIÇÃO
                </label>
-               <span className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 w-12 text-center">AÇÕES</span>
+               {!isVisitante && <span className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 w-12 text-center">AÇÕES</span>}
              </div>
 
              {/* List of items */}
@@ -338,15 +354,17 @@ export default function BaseDadosPage() {
                       />
                     </div>
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 uppercase">{item}</span>
-                    <div className="w-12 flex justify-center">
-                      <button 
-                        onClick={() => handleDeleteItem(item)}
-                        className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        title="Excluir permanentemente"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                    {!isVisitante && (
+                      <div className="w-12 flex justify-center">
+                        <button 
+                          onClick={() => handleDeleteItem(item)}
+                          className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          title="Excluir permanentemente"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )}
                  </div>
                ))}
              </div>

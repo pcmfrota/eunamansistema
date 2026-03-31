@@ -31,7 +31,7 @@ function __build_action__(action, args) {
   return (0,next_dist_client_app_call_server__WEBPACK_IMPORTED_MODULE_0__.callServer)(action.$$id, args)
 }
 
-/* __next_internal_action_entry_do_not_use__ {"a3f45d06f59aa36ff13dbbd7eec2cfdaab3d555c":"buscarOSporPlaca"} */ var buscarOSporPlaca = (0,private_next_rsc_action_client_wrapper__WEBPACK_IMPORTED_MODULE_1__.createServerReference)("a3f45d06f59aa36ff13dbbd7eec2cfdaab3d555c");
+/* __next_internal_action_entry_do_not_use__ {"e6e09809e5e98e1369cba7843327fed13ac6216f":"buscarOSporPlaca"} */ var buscarOSporPlaca = (0,private_next_rsc_action_client_wrapper__WEBPACK_IMPORTED_MODULE_1__.createServerReference)("e6e09809e5e98e1369cba7843327fed13ac6216f");
 
 
 

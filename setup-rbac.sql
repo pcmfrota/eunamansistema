@@ -42,3 +42,24 @@ CREATE TRIGGER on_auth_user_created
 -- CREATE POLICY "Avatar upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'avatars' AND auth.role() = 'authenticated');
 -- CREATE POLICY "Avatar update" ON storage.objects FOR UPDATE WITH CHECK (bucket_id = 'avatars' AND auth.role() = 'authenticated');
 -- CREATE POLICY "Avatar view" ON storage.objects FOR SELECT USING (bucket_id = 'avatars');
+
+-- 7. Admin Specific Policies (New)
+-- Allow admins to update any profile (to change roles)
+CREATE POLICY "Admins can update any profile" ON public.profiles
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Allow admins to delete any profile
+CREATE POLICY "Admins can delete any profile" ON public.profiles
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
