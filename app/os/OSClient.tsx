@@ -10,6 +10,8 @@ import {
   excluirOrdensMassivo,
   importarOrdensServico
 } from "./actions";
+import { useAuth } from "@/components/auth-context";
+import { Lock } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type OS = {
@@ -88,6 +90,9 @@ export default function ControleOSClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const { profile } = useAuth();
+
+  const isVisitante = profile?.role === "visitante";
 
   // Update when server data changes
   useEffect(() => { setOrdens(initialOrdens); }, [initialOrdens]);
@@ -216,7 +221,7 @@ export default function ControleOSClient({
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Gerenciar ordens de serviço de manutenção</p>
         </div>
         <div className="flex gap-3">
-          {selectedIds.size > 0 && (
+          {selectedIds.size > 0 && !isVisitante && (
             <button
               onClick={handleExcluirSelecionados}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm focus:ring-2 focus:ring-red-500/50"
@@ -225,22 +230,32 @@ export default function ControleOSClient({
             </button>
           )}
 
-          <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm cursor-pointer">
-            <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleImportExcel} />
-            <Download size={15} className="rotate-180" /> Importar
-          </label>
+          {!isVisitante && (
+            <>
+              <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm cursor-pointer">
+                <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleImportExcel} />
+                <Download size={15} className="rotate-180" /> Importar
+              </label>
+            </>
+          )}
           <button
             onClick={exportarExcel}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
           >
             <Download size={15} /> Exportar Excel
           </button>
-          <button
-            onClick={() => { setEditingOS(null); setShowModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <Plus size={15} /> Nova OS
-          </button>
+          {!isVisitante ? (
+            <button
+              onClick={() => { setEditingOS(null); setShowModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <Plus size={15} /> Nova OS
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed border border-zinc-200 dark:border-zinc-700">
+              <Lock size={14} /> Somente Leitura
+            </div>
+          )}
         </div>
       </div>
 
@@ -340,39 +355,46 @@ export default function ControleOSClient({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                      {/* Quick status change */}
-                      {os.status === "Aberta" && (
-                        <button
-                          title="Iniciar OS"
-                          onClick={() => startTransition(() => atualizarStatusOS(os.id, "Em Andamento"))}
-                          className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
-                        >
-                          <Check size={14} />
-                        </button>
+                      {!isVisitante && (
+                        <>
+                          {/* Quick status change */}
+                          {os.status === "Aberta" && (
+                            <button
+                              title="Iniciar OS"
+                              onClick={() => startTransition(() => atualizarStatusOS(os.id, "Em Andamento"))}
+                              className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                            >
+                              <Check size={14} />
+                            </button>
+                          )}
+                          {os.status === "Em Andamento" && (
+                            <button
+                              title="Fechar OS"
+                              onClick={() => startTransition(() => atualizarStatusOS(os.id, "Fechada"))}
+                              className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                            >
+                              <Check size={14} />
+                            </button>
+                          )}
+                          <button
+                            title="Editar"
+                            onClick={() => { setEditingOS(os); setShowModal(true); }}
+                            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            title="Excluir"
+                            onClick={() => setDeletingId(os.id)}
+                            className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
                       )}
-                      {os.status === "Em Andamento" && (
-                        <button
-                          title="Fechar OS"
-                          onClick={() => startTransition(() => atualizarStatusOS(os.id, "Fechada"))}
-                          className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
-                        >
-                          <Check size={14} />
-                        </button>
+                      {isVisitante && (
+                        <span className="text-[10px] text-zinc-400 italic">Visualização</span>
                       )}
-                      <button
-                        title="Editar"
-                        onClick={() => { setEditingOS(os); setShowModal(true); }}
-                        className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        title="Excluir"
-                        onClick={() => setDeletingId(os.id)}
-                        className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
                   </td>
                 </tr>

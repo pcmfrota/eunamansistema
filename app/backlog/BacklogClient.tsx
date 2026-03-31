@@ -5,11 +5,14 @@ import {
   FileText, Upload, Download, Plus, Search, ChevronDown,
   BarChart2, ClipboardList, X,
   CheckCircle2, ChevronRight, MapPin, Wrench, ShoppingCart,
-  Calendar, Tag, Clock, Layers, AlertTriangle
+  Calendar, Tag, Clock, Layers, AlertTriangle, Lock
 } from 'lucide-react';
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 import * as XLSX from 'xlsx';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '../../utils/supabase/client';
+import { useAuth } from '../../components/auth-context';
+
+const supabase = createClient();
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -742,6 +745,7 @@ const detalhadoColumns = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function BacklogClient({ placas }: { placas: Placa[] }) {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState('Backlog');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [backlogItems, setBacklogItems] = useState<any[]>([]);
@@ -750,6 +754,8 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const [hasMore, setHasMore] = useState(true);
   const [pageSize, setPageSize] = useState(100);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isVisitante = profile?.role === 'visitante';
 
   // ─── Carregar do Banco de Dados ─────────────────────────────────────────────
   useEffect(() => {
@@ -945,22 +951,33 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
             className="hidden"
             accept=".xlsx, .xls, .csv"
           />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border border-purple-200 text-purple-600 hover:bg-purple-50 dark:border-purple-800/60 dark:text-purple-400 dark:hover:bg-purple-900/20 transition-colors bg-white dark:bg-slate-900/50">
-            <Upload size={16} /> Importar
-          </button>
+          
+          {!isVisitante && (
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border border-purple-200 text-purple-600 hover:bg-purple-50 dark:border-purple-800/60 dark:text-purple-400 dark:hover:bg-purple-900/20 transition-colors bg-white dark:bg-slate-900/50">
+              <Upload size={16} /> Importar
+            </button>
+          )}
+
           <button 
             onClick={handleExportExcel}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800/60 dark:text-green-400 dark:hover:bg-green-900/20 transition-colors bg-white dark:bg-slate-900/50">
             <Download size={16} /> Excel
           </button>
-          <button onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#8B5CF6] hover:bg-[#7C3AED] text-white transition-all shadow-sm hover:shadow-purple-500/25 hover:shadow-lg active:scale-95">
-            <Plus size={16} /> Novo Item
-          </button>
+
+          {!isVisitante ? (
+            <button onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#8B5CF6] hover:bg-[#7C3AED] text-white transition-all shadow-sm hover:shadow-purple-500/25 hover:shadow-lg active:scale-95">
+              <Plus size={16} /> Novo Item
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700 cursor-not-allowed">
+              <Lock size={16} /> Somente Leitura
+            </div>
+          )}
           
-          {selectedIds.size > 0 && (
+          {selectedIds.size > 0 && !isVisitante && (
             <button 
               onClick={handleDeleteSelected}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 animate-in fade-in zoom-in duration-200">

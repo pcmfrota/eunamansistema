@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from "./theme-provider";
+import { useAuth } from "./auth-context";
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -16,7 +17,11 @@ import {
   Moon,
   Sun,
   FileText,
-  BadgeDollarSign
+  BadgeDollarSign,
+  User,
+  LogOut,
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -35,6 +40,7 @@ const navigation = [
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { profile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isLoginPage = pathname?.startsWith("/login");
@@ -68,13 +74,13 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed top-0 left-0 z-50 h-[100dvh] w-64 border-r overflow-y-auto",
+        "fixed top-0 left-0 z-50 h-[100dvh] w-64 border-r overflow-y-auto flex flex-col",
         "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700",
         "transition-transform duration-300 ease-in-out",
-        // Desktop: sempre visível | Mobile: controlado por sidebarOpen
         "lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
+        {/* Header/Logo */}
         <div className="flex items-center gap-3 p-6 border-b border-slate-100 dark:border-slate-700">
           <img
             src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
@@ -87,7 +93,57 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="p-4 space-y-1">
+        {/* User Profile Summary */}
+        <div className="px-4 py-6 border-b border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="relative">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt={profile.full_name || 'Usuário'} 
+                  className="w-10 h-10 rounded-full object-cover border-2 border-blue-500/20"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <User size={20} />
+                </div>
+              )}
+              {profile?.role === 'admin' && (
+                <div className="absolute -bottom-1 -right-1 bg-green-500 border-2 border-white dark:border-slate-800 rounded-full p-0.5" title="Administrador">
+                  <ShieldCheck size={10} className="text-white" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                {profile?.full_name || 'Usuário'}
+              </p>
+              <p className="text-[10px] font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                {profile?.role || 'Visitante'}
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Link 
+              href="/perfil"
+              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              <Settings size={12} />
+              Perfil
+            </Link>
+            <button 
+              onClick={() => signOut()}
+              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/20 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
+            >
+              <LogOut size={12} />
+              Sair
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1">
           <div className="flex items-center justify-between px-3 mb-3">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
               Navegação
@@ -135,21 +191,34 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-64 flex flex-col min-h-screen">
         {/* Mobile header */}
         <header className="lg:hidden sticky top-0 z-30 border-b px-4 py-3 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
-            >
-              <Menu className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            </button>
-            <div className="flex items-center gap-2">
-              <img
-                src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
-                alt="Eunaman Logo"
-                className="w-8 h-8 object-contain"
-              />
-              <span className="font-bold text-slate-900 dark:text-white">Eunaman</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <Menu className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+              </button>
+              <div className="flex items-center gap-2">
+                <img
+                  src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
+                  alt="Eunaman Logo"
+                  className="w-8 h-8 object-contain"
+                />
+                <span className="font-bold text-slate-900 dark:text-white">Eunaman</span>
+              </div>
             </div>
+            
+            {/* Mobile Profile Link */}
+            <Link href="/perfil" className="lg:hidden">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} className="w-8 h-8 rounded-full border border-slate-200" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold uppercase text-[10px]">
+                  {profile?.full_name?.charAt(0) || <User size={14} />}
+                </div>
+              )}
+            </Link>
           </div>
         </header>
 
