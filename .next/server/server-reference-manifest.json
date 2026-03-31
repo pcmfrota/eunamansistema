@@ -1,21 +1,5 @@
 {
   "node": {
-    "6d16d65d5dd6cbc4e8fc507a10569ff8b7569c66": {
-      "workers": {
-        "app/login/page": "(rsc)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Ceunamansistema%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22logout%22%2C%22login%22%5D%5D%5D&__client_imported__=!"
-      },
-      "layer": {
-        "app/login/page": "rsc"
-      }
-    },
-    "dd9a6675d4aa0555162c0612181c9b2401f3024f": {
-      "workers": {
-        "app/login/page": "(rsc)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Ceunamansistema%5C%5Capp%5C%5Clogin%5C%5Cactions.ts%22%2C%5B%22logout%22%2C%22login%22%5D%5D%5D&__client_imported__=!"
-      },
-      "layer": {
-        "app/login/page": "rsc"
-      }
-    },
     "25ed75e026a76eacc8bc5de13d8b3485b2279b0f": {
       "workers": {
         "app/page": "(rsc)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22C%3A%5C%5CUsers%5C%5Cjessi%5C%5COneDrive%5C%5C%C3%81rea%20de%20Trabalho%5C%5CEUNAMAN%20SISTEMA%5C%5Ceunamansistema%5C%5Capp%5C%5Cactions%5C%5Cdashboard.ts%22%2C%5B%22getDashboardData%22%5D%5D%5D&__client_imported__=!"
@@ -66,5 +50,5 @@
     }
   },
   "edge": {},
-  "encryptionKey": "mA8OkeFz7m/UG8qLlGljV57AKfBdE5u/2lsdlT34MjQ="
+  "encryptionKey": "yD6p+Y8V3skLx+svMKSt+ivQJW8fv9Mnwm3fltrx2PI="
 }

@@ -22,7 +22,8 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
-  Users
+  Users,
+  Loader2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,17 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const { profile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await signOut();
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+      setIsLoggingOut(false);
+    }
+  };
 
   const isLoginPage = pathname?.startsWith("/login");
 
@@ -138,10 +150,15 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               Perfil
             </Link>
             <button 
-              onClick={() => signOut()}
-              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/20 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/20 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
             >
-              <LogOut size={12} />
+              {isLoggingOut ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <LogOut size={12} />
+              )}
               Sair
             </button>
           </div>

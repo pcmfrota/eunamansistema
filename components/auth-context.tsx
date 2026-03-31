@@ -30,35 +30,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
-    const getUserData = async () => {
+    // 1. Iniciar com os dados da sessão atual (se houver)
+    const initSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        
         if (session) {
           setUser(session.user)
-          
-          // Buscar perfil
           const { data: profileData } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single()
-          
           setProfile(profileData)
-        } else {
-          setUser(null)
-          setProfile(null)
         }
-      } catch (error) {
-        console.error('Erro ao buscar dados do usuário:', error)
+      } catch (err) {
+        console.error('Erro na sessão inicial:', err)
       } finally {
         setLoading(false)
       }
     }
 
-    getUserData()
+    initSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // 2. Ouvir mudanças (login/logout) - Inscrever apenas UMA vez
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
       if (session) {
         setUser(session.user)
         const { data: profileData } = await supabase
@@ -70,7 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null)
         setProfile(null)
-        if (pathname !== '/login') {
+        // Somente redirecionar se não estiver no login
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
           router.push('/login')
         }
       }
@@ -80,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabase, router, pathname])
+  }, [supabase, router])
 
   const signOut = async () => {
     await supabase.auth.signOut()
