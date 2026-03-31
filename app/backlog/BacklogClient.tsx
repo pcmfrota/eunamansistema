@@ -520,7 +520,7 @@ function StepProgramacao({ form, setForm }: any) {
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
-function NovoItemModal({ onClose, placas, setBacklogItems }: { onClose: () => void; placas: Placa[]; setBacklogItems: React.Dispatch<React.SetStateAction<any[]>> }) {
+function NovoItemModal({ onClose, placas, setBacklogItems, pageSize }: { onClose: () => void; placas: Placa[]; setBacklogItems: React.Dispatch<React.SetStateAction<any[]>>; pageSize: number }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<any>({
     status: 'Aberta', // Default status
@@ -703,11 +703,12 @@ function NovoItemModal({ onClose, placas, setBacklogItems }: { onClose: () => vo
                       return;
                     }
 
-                    // Recarregar a lista do banco para atualizar a UI com os novos dados
+                    // Recarregar apenas o topo para manter a performance
                     const { data: refreshed } = await supabase
                       .from('backlog')
                       .select('*')
-                      .order('created_at', { ascending: false });
+                      .order('created_at', { ascending: false })
+                      .limit(pageSize);
                     
                     if (refreshed) setBacklogItems(refreshed);
                     
@@ -746,6 +747,8 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const [backlogItems, setBacklogItems] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(true);
+  const [pageSize, setPageSize] = useState(100);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Carregar do Banco de Dados ─────────────────────────────────────────────
@@ -755,17 +758,23 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       const { data, error } = await supabase
         .from('backlog')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(pageSize);
 
       if (error) {
         console.error('Erro ao buscar backlog:', error);
       } else {
         setBacklogItems(data || []);
+        setHasMore((data || []).length === pageSize);
       }
       setIsLoading(false);
     }
     loadBacklog();
-  }, []);
+  }, [pageSize]);
+
+  const handleLoadMore = () => {
+    setPageSize(prev => prev + 100);
+  };
 
   // ─── Geração de ID Único ────────────────────────────────────────────────────
   const generateId = () => crypto.randomUUID();
@@ -890,12 +899,12 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
           return;
         }
 
-        // Mapeia de volta para camelCase para o estado da UI se necessário, ou usa direto
-        // Para simplificar e evitar bugs, vamos recarregar a lista do banco
+        // Recarregar respeitando o limite para manter o sistema rápido
         const { data: refreshed } = await supabase
           .from('backlog')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(pageSize);
         
         if (refreshed) setBacklogItems(refreshed);
         alert(`${normalized.length} itens importados e salvos com sucesso!`);
@@ -1185,6 +1194,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
           onClose={() => setIsModalOpen(false)} 
           placas={placas} 
           setBacklogItems={setBacklogItems}
+          pageSize={pageSize}
         />
       )}
     </div>
