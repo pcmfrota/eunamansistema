@@ -1,8 +1,8 @@
-// File: C:\Users\jessi\OneDrive\Área de Trabalho\EUNAMAN SISTEMA\eunamansistema\app\perfil\page.tsx
-import * as entry from '../../../../app/perfil/page.js'
+// File: C:\Users\jessi\OneDrive\Área de Trabalho\EUNAMAN SISTEMA\eunamansistema\app\admin\usuarios\page.tsx
+import * as entry from '../../../../../app/admin/usuarios/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
-type TEntry = typeof import('../../../../app/perfil/page.js')
+type TEntry = typeof import('../../../../../app/admin/usuarios/page.js')
 
 // Check that the entry is a valid entry
 checkFields<Diff<{
