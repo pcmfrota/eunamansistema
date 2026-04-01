@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { useFormDraft } from '@/hooks/useFormDraft'
+import { useFormDraft } from '@/hooks/use-form-draft'
 import { criarEquipamento, atualizarEquipamento } from './actions'
 
 interface EquipamentoModalProps {
