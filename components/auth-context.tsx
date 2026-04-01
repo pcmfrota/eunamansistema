@@ -33,10 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 1. Iniciar com os dados da sessão atual (se houver)
     const initSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          console.log('[Auth] Usuário detectado:', session.user.email, 'ID:', session.user.id)
-          setUser(session.user)
+        // getUser() é mais seguro pois valida no servidor
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (user) {
+          console.log('[Auth] Usuário detectado via getUser:', user.email)
+          setUser(user)
           
           // Buscar perfil do DB
           const { data: profileData, error: profileError } = await supabase
@@ -50,14 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           // Estratégia de Role: Banco de Dados > Metadados do Token > Default
-          const finalRole = profileData?.role || session.user.app_metadata?.role || 'visitante'
+          const finalRole = profileData?.role || user.app_metadata?.role || 'visitante'
           
           const profileWithRole = profileData ? { ...profileData, role: finalRole } : {
-            id: session.user.id,
-            email: session.user.email,
-            full_name: session.user.user_metadata?.full_name || 'Usuário',
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || 'Usuário',
             role: finalRole,
-            avatar_url: session.user.user_metadata?.avatar_url || null
+            avatar_url: user.user_metadata?.avatar_url || null
           }
 
           console.log('[Auth] Role Final definida como:', finalRole)
