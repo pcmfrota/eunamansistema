@@ -29,18 +29,30 @@ export default async function ControleOSPage() {
     .select('*')
     .order('data_abertura', { ascending: false })
 
-  // Busca valores únicos para os selects dinâmicos (a partir das OS já lançadas)
-  const extrairUnicos = (campo: string): string[] => {
-    const vals = (ordens || [])
+  // Busca configurações auxiliares (Ex: Motivos, Sistemas, Sub-Sistemas)
+  const { data: auxConfigs } = await supabase
+    .from('aux_config')
+    .select('*')
+
+  // Busca valores únicos para os selects dinâmicos (a partir das OS já lançadas e da aux_config)
+  const extrairUnicos = (campo: string, tipoAux?: string): string[] => {
+    // Valores das OS
+    const valsOS = (ordens || [])
       .map((o: any) => o[campo])
       .filter((v: any) => v && String(v).trim() !== '')
-    return Array.from(new Set(vals)).sort() as string[]
+
+    // Valores da aux_config
+    const valsAux = (auxConfigs || [])
+      .filter((a: any) => !tipoAux || a.tipo === tipoAux)
+      .map((a: any) => a.valor)
+
+    return Array.from(new Set([...valsOS, ...valsAux])).sort() as string[]
   }
 
   const operacoesTipo  = extrairUnicos('operacao_tipo')
-  const motivos        = extrairUnicos('motivo')
-  const sistemas       = extrairUnicos('sistema')
-  const subSistemas    = extrairUnicos('sub_sistema')
+  const motivos        = extrairUnicos('motivo', 'Motivo')
+  const sistemas       = extrairUnicos('sistema', 'Sistema')
+  const subSistemas    = extrairUnicos('sub_sistema', 'Sub-Sistema')
 
   return (
     <ControleOSClient

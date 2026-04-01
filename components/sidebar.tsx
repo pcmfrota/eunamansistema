@@ -14,12 +14,15 @@ import {
   LogOut,
   FileText,
   Calendar,
+  User,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useTheme } from "./theme-provider";
 import { logout } from "@/app/login/actions";
+import AlterarSenhaModal from "./AlterarSenhaModal";
 
 const routes = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -29,11 +32,13 @@ const routes = [
   { name: "Programação Preventiva", path: "/preventivas", icon: Calendar },
   { name: "Backlog", path: "/backlog", icon: Wrench },
   { name: "PCM", path: "/pcm", icon: Settings },
+  { name: "Meu Perfil", path: "/perfil", icon: User },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   return (
@@ -89,6 +94,15 @@ export function Sidebar() {
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             Alternar Tema
           </button>
+          
+          <button
+            onClick={() => setIsPasswordModalOpen(true)}
+            className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 w-full text-left font-black uppercase tracking-tighter"
+          >
+            <Shield size={18} className="text-blue-500" />
+            Alterar Senha
+          </button>
+
           <button 
             onClick={() => logout()}
             className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 w-full text-left"
@@ -98,6 +112,11 @@ export function Sidebar() {
           </button>
         </div>
       </div>
+
+      <AlterarSenhaModal 
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+      />
 
       {/* Mobile Overlay */}
       {isMobileOpen && (

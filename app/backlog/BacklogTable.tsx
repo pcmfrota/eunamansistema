@@ -1,0 +1,224 @@
+'use client'
+
+import React from 'react'
+import { 
+  ChevronRight, 
+  Clock, 
+  AlertTriangle, 
+  CheckCircle2, 
+  MoreVertical, 
+  Trash2, 
+  Edit3,
+  Calendar,
+  Layers,
+  MapPin,
+  Tag
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+interface BacklogTableProps {
+  items: any[]
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
+  onToggleSelectAll: () => void
+  onEdit: (item: any) => void
+  onDelete: (id: string) => void
+  view: 'Geral' | 'Detalhamento'
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    'Aberta': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+    'Em Andamento': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    'Encerrada': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+  }
+  return (
+    <span className={cn("px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm", styles[status] || styles['Aberta'])}>
+      {status}
+    </span>
+  )
+}
+
+function CritBadge({ crit }: { crit: string }) {
+  const styles: Record<string, string> = {
+    'A': 'bg-red-500 text-white shadow-red-500/20',
+    'B': 'bg-orange-500 text-white shadow-orange-500/20',
+  }
+  return (
+    <span className={cn("w-6 h-6 flex items-center justify-center rounded-lg text-[10px] font-black shadow-lg border-b-2 border-black/10", styles[crit] || 'bg-zinc-500 text-white')}>
+      {crit}
+    </span>
+  )
+}
+
+export default function BacklogTable({ 
+  items, 
+  selectedIds, 
+  onToggleSelect, 
+  onToggleSelectAll, 
+  onEdit, 
+  onDelete,
+  view
+}: BacklogTableProps) {
+  
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 bg-white dark:bg-zinc-950 rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800">
+         <Layers size={48} className="text-zinc-200 dark:text-zinc-800 mb-4" />
+         <p className="text-zinc-500 font-bold">Nenhum item encontrado no backlog</p>
+         <p className="text-[10px] text-zinc-400 uppercase tracking-widest mt-1">Sua lista de pendências está vazia</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
+      <div className="overflow-x-auto custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[1000px]">
+          <thead>
+            <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-900">
+              <th className="px-6 py-4 w-10">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  onChange={onToggleSelectAll} 
+                  checked={items.length > 0 && selectedIds.size === items.length} 
+                />
+              </th>
+              {view === 'Geral' ? (
+                <>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Frota</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Criticidade</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Status</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Evidência</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Descrição</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">TAG</th>
+                </>
+              ) : (
+                <>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Detalhes</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Local / Módulo</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">RC / Ordem</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Prog. Prevista</th>
+                </>
+              )}
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
+            {items.map((item) => (
+              <tr key={item.id} className={cn(
+                "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-all group",
+                selectedIds.has(item.id) && "bg-indigo-50/50 dark:bg-indigo-900/10"
+              )}>
+                <td className="px-6 py-4">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    checked={selectedIds.has(item.id)} 
+                    onChange={() => onToggleSelect(item.id)} 
+                  />
+                </td>
+                
+                {view === 'Geral' ? (
+                  <>
+                    <td className="px-4 py-4">
+                       <span className="block text-sm font-black text-zinc-900 dark:text-zinc-50 tracking-tight">{item.frota}</span>
+                       <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">{item.modulo || 'N/A'}</span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                       <CritBadge crit={item.criticidade} />
+                    </td>
+                    <td className="px-4 py-4">
+                       <StatusBadge status={item.status} />
+                    </td>
+                    <td className="px-4 py-4">
+                       <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-400">
+                         <Calendar size={14} className="opacity-40" />
+                         {item.data_evidencia ? new Date(item.data_evidencia).toLocaleDateString('pt-BR') : '-'}
+                       </div>
+                    </td>
+                    <td className="px-4 py-4 max-w-xs">
+                       <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 line-clamp-1">{item.descricao}</p>
+                       <span className="text-[10px] text-zinc-400 opacity-60 font-medium">{item.tipo}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                       <span className="text-[10px] px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded font-black text-zinc-500 dark:text-zinc-400">{item.tag || '---'}</span>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-4 py-4">
+                       <div className="flex items-start gap-4">
+                          <CritBadge crit={item.criticidade} />
+                          <div>
+                            <p className="text-sm font-black text-zinc-900 dark:text-zinc-50">{item.frota}</p>
+                            <p className="text-[10px] font-bold text-zinc-400 line-clamp-1 max-w-[200px]">{item.descricao}</p>
+                          </div>
+                       </div>
+                    </td>
+                    <td className="px-4 py-4">
+                       <div className="flex flex-col gap-1">
+                          <span className="flex items-center gap-1.5 text-xs font-black text-zinc-600 dark:text-zinc-400">
+                            <MapPin size={12} className="text-indigo-500" /> {item.campo_base || 'Local Indef.'}
+                          </span>
+                          <span className="text-[10px] font-bold text-zinc-400 ml-5">{item.modulo}</span>
+                       </div>
+                    </td>
+                    <td className="px-4 py-4">
+                       <div className="flex flex-col gap-1 font-black uppercase tracking-tighter">
+                          <span className={cn("text-[10px]", item.nr_rc ? "text-indigo-500" : "text-zinc-300 dark:text-zinc-800")}>
+                            RC: {item.nr_rc || 'PENDENTE'}
+                          </span>
+                          <span className={cn("text-[10px]", item.nr_ordem ? "text-emerald-500" : "text-zinc-300 dark:text-zinc-800")}>
+                            OC: {item.nr_ordem || 'AGUARDANDO'}
+                          </span>
+                       </div>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                       {item.data_programacao ? (
+                         <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400">{new Date(item.data_programacao).toLocaleDateString('pt-BR')}</span>
+                            <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">{item.status_programacao}</span>
+                         </div>
+                       ) : (
+                         <span className="text-[9px] font-black text-zinc-300 dark:text-zinc-800 uppercase tracking-widest italic">Não Programado</span>
+                       )}
+                    </td>
+                  </>
+                )}
+
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => onEdit(item)}
+                      className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-zinc-400 hover:text-indigo-600 rounded-xl transition-all"
+                      title="Editar"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => onDelete(item.id)}
+                      className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 rounded-xl transition-all"
+                      title="Excluir"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {items.length >= 100 && (
+         <div className="p-4 bg-zinc-50/50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-900 text-center">
+            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center gap-2">
+              <Clock size={12} /> Exibindo 100 registros mais recentes
+            </span>
+         </div>
+      )}
+    </div>
+  )
+}

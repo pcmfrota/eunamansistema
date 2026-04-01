@@ -1,4 +1,4 @@
--- 1. Sincronizar AUTH.USERS com APP_METADATA 'admin'
+--- 1. Sincronizar AUTH.USERS com APP_METADATA 'admin'
 -- Substitua pelo ID real se o email não for encontrado ou se houver múltiplos
 DO $$
 DECLARE

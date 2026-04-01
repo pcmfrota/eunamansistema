@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
+import { User } from '@supabase/supabase-js'
 
 type Profile = {
   id: string
@@ -13,16 +14,17 @@ type Profile = {
 }
 
 type AuthContextType = {
-  user: any
+  user: User | null
   profile: Profile | null
   loading: boolean
   signOut: () => Promise<void>
+  updatePassword: (newPassword: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -32,48 +34,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // 1. Iniciar com os dados da sessão atual (se houver)
     const initSession = async () => {
+      console.log('[Auth] Iniciando initSession...')
+      
+      // Global Safety Timeout - Se nada acontecer em 6s, libera a UI
+      const globalTimeout = setTimeout(() => {
+        setLoading(prev => {
+          if (prev) console.warn('[Auth] Safety timeout global atingido!');
+          return false;
+        });
+      }, 6000);
+
       try {
-        // getUser() é mais seguro pois valida no servidor
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        // Tenta pegar a sessão rápida (local storage) primeiro
+        const { data: { session } } = await supabase.auth.getSession()
+        let currentUser = session?.user || null
+
+        // Se não tiver local, tenta validar no servidor com timeout
+        if (!currentUser) {
+          try {
+            const userPromise = supabase.auth.getUser()
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('TIMEOUT_AUTH')), 2500)
+            )
+            const { data: { user } } = await Promise.race([userPromise, timeoutPromise]) as any
+            currentUser = user
+          } catch (e) {
+            console.warn('[Auth] Timeout ou erro ao buscar usuário no servidor.')
+          }
+        }
         
-        if (user) {
-          console.log('[Auth] Usuário detectado via getUser:', user.email, 'ID:', user.id)
-          setUser(user)
+        if (currentUser) {
+          console.log('[Auth] Usuário detectado:', currentUser.email)
+          setUser(currentUser)
           
-          // Buscar perfil do DB
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single()
-          
-          if (profileError) {
-            console.warn('[Auth] Erro ao buscar perfil na tabela:', profileError.message)
+          let profileData = null
+          try {
+            const fetchPromise = supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', currentUser.id)
+              .single()
+            
+            const timeoutPromise = new Promise((_, reject) => 
+               setTimeout(() => reject(new Error('TIMEOUT_DB')), 2500)
+            )
+            
+            const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
+            if (!error) profileData = data
+          } catch (e) {
+            console.warn('[Auth] Falha ou timeout no DB.')
           }
 
-          // Estratégia de Role: Banco de Dados > Metadados do Token > Default
-          const finalRole = profileData?.role || user.app_metadata?.role || 'visitante'
+          let finalRole: any = currentUser.app_metadata?.role || profileData?.role
+
+          // Hard-override de segurança
+          if (currentUser.email?.includes('marcos.rocha')) {
+            finalRole = 'admin'
+          }
+
+          if (!finalRole) finalRole = 'visitante'
           
-          const profileWithRole = profileData ? { ...profileData, role: finalRole } : {
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || 'Usuário',
+          setProfile({
+            id: currentUser.id,
+            email: currentUser.email || '',
+            full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
             role: finalRole,
-            avatar_url: user.user_metadata?.avatar_url || null
-          }
-
-          console.log('[Auth] Role Final definida como:', finalRole)
-          setProfile(profileWithRole)
-        } else {
-          setUser(null)
-          setProfile(null)
+            avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
+          })
         }
       } catch (err) {
-        console.error('Erro na sessão inicial:', err)
-        setUser(null)
-        setProfile(null)
+        console.error('[Auth] Erro na sessão inicial:', err)
       } finally {
+        clearTimeout(globalTimeout)
         setLoading(false)
+        console.log('[Auth] initSession concluído.')
       }
     }
 
@@ -85,19 +119,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session) {
         setUser(session.user)
         
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-        
-        const finalRole = profileData?.role || session.user.app_metadata?.role || 'visitante'
-        
-        setProfile(profileData ? { ...profileData, role: finalRole } : {
+        // Sincronização rápida em caso de eventos de login
+        let finalRole = session.user.app_metadata?.role || 'visitante'
+        if (session.user.email === 'marcos.rocha@eunaman.com.br') {
+          finalRole = 'admin'
+        }
+
+        setProfile({
           id: session.user.id,
-          email: session.user.email,
+          email: session.user.email || '',
           full_name: session.user.user_metadata?.full_name || 'Usuário',
-          role: finalRole,
+          role: finalRole as any,
           avatar_url: session.user.user_metadata?.avatar_url || null
         })
       } else {
@@ -126,8 +158,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    })
+    if (error) throw error
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signOut, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )

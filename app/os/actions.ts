@@ -152,86 +152,114 @@ export async function excluirOrdensMassivo(ids: string[]) {
 export async function importarOrdensServico(rows: any[]) {
   const supabase = createClient()
 
-  const { data: equipamentos } = await supabase.from('equipamentos').select('id, placa, modulo')
-  const eqMap: Record<string, { id: string; modulo: string }> = {}
-  equipamentos?.forEach(e => { eqMap[e.placa.toUpperCase()] = { id: e.id, modulo: e.modulo || '' } })
+  const { data: equipamentos } = await supabase.from('equipamentos').select('id, placa, ultimoHist, modulo')
+  const eqMap: Record<string, { id: string; modulo: string; ultimoHist: number | null }> = {}
+  equipamentos?.forEach(e => { eqMap[e.placa.toUpperCase()] = { id: e.id, modulo: e.modulo || '', ultimoHist: e.ultimoHist } })
 
   const inserts = []
+  const eqUpdates: Record<string, number> = {} // id -> new horimetro
 
   function parsePossibleDate(d?: any) {
     if (!d) return null;
     
     // Check if it's an Excel numeric date format (e.g. 45000)
     if (typeof d === 'number' && d > 20000 && d < 100000) {
-      // Excel dates are days since 1899-12-30 (accounting for the 1900 leap year bug)
       const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
       return jsDate.toISOString();
     }
 
     const str = String(d).trim();
-    if (/^\d{2}\/\d{2}\/\d{4}/.test(str)) {
+    // Format: DD/MM/YYYY or DD/MM/YYYY HH:mm
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(str)) {
       const parts = str.split(' ');
       const dateParts = parts[0].split('/');
+      const day = dateParts[0].padStart(2, '0');
+      const month = dateParts[1].padStart(2, '0');
+      let year = dateParts[2];
+      if (year.length === 2) year = '20' + year;
+
       let timePart = parts[1] || '00:00:00';
-      if (timePart.split(':').length === 2) timePart += ':00'; // Append seconds
-      return `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}T${timePart}`;
+      if (timePart.split(':').length === 2) timePart += ':00';
+      return `${year}-${month}-${day}T${timePart}`;
     }
+    
     const dt = new Date(str);
     if (!isNaN(dt.getTime())) return dt.toISOString();
     return null;
   }
 
-  for (const row of rows) {
-    let placaUpper = (row.placa || row.Placa || '').toUpperCase().trim()
-    const eq = eqMap[placaUpper]
+  function getVal(row: any, aliases: string[]) {
+    for (const alias of aliases) {
+      if (row[alias] !== undefined && row[alias] !== null && row[alias] !== '') return row[alias];
+      // Case-insensitive
+      const key = Object.keys(row).find(k => k.toLowerCase() === alias.toLowerCase());
+      if (key && row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key];
+    }
+    return null;
+  }
 
-    let status = row.status || row.Status || 'Aberta'
-    let data_abertura = parsePossibleDate(row.data_abertura || row.Abertura) || new Date(Date.now() - 3 * 3600 * 1000).toISOString();
-    let data_fechamento = parsePossibleDate(row.data_fechamento || row.Fechamento)
-    let descricao = row.descricao || row.Descrição || 'Importação via Planilha'
-
-    const parseFloatSafe = (val: any) => {
-      if (val === null || val === undefined || val === '') return null;
-      if (typeof val === 'number') return val;
-      const strVal = String(val).trim();
-      // Se tiver vírgula, tratamos como formato BR (ex: 1.234,56)
-      if (strVal.includes(',')) {
-        const parsed = parseFloat(strVal.replace(/\./g, '').replace(',', '.'));
-        return isNaN(parsed) ? null : parsed;
-      }
-      // Se não tiver vírgula, pode ser formato americano ou sem milhares
-      const parsed = parseFloat(strVal);
+  const parseFloatSafe = (val: any) => {
+    if (val === null || val === undefined || val === '') return null;
+    if (typeof val === 'number') return val;
+    const strVal = String(val).trim();
+    if (strVal.includes(',')) {
+      const parsed = parseFloat(strVal.replace(/\./g, '').replace(',', '.'));
       return isNaN(parsed) ? null : parsed;
     }
+    const parsed = parseFloat(strVal);
+    return isNaN(parsed) ? null : parsed;
+  }
 
-    let horimetro = parseFloatSafe(row.horimetro || row.Horímetro)
-    let horas_manutencao = parseFloatSafe(row.horas_manutencao || row.Horas)
+  for (const row of rows) {
+    const placaRaw = getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa']) || ''
+    let placaUpper = String(placaRaw).toUpperCase().trim()
+    const eq = eqMap[placaUpper]
+
+    const status = getVal(row, ['status', 'Situação', 'Estado']) || 'Aberta'
+    const data_abertura = parsePossibleDate(getVal(row, ['data_abertura', 'Abertura', 'Data Início', 'Início'])) || new Date().toISOString();
+    const data_fechamento = parsePossibleDate(getVal(row, ['data_fechamento', 'Fechamento', 'Data Fim', 'Conclusão']))
+    const descricao = getVal(row, ['descricao', 'Descrição', 'Serviço', 'Atividade']) || 'Importação via Planilha'
+    
+    const horimetro = parseFloatSafe(getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori']))
+    const horas_manutencao = parseFloatSafe(getVal(row, ['horas_manutencao', 'Horas', 'Tempo']))
+
+    // Sincronizar Horímetro do Equipamento
+    if (eq && horimetro && (!eq.ultimoHist || horimetro > eq.ultimoHist)) {
+      if (!eqUpdates[eq.id] || horimetro > eqUpdates[eq.id]) {
+        eqUpdates[eq.id] = horimetro
+      }
+    }
 
     inserts.push({
       numero_os: `OS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       equipamento_id: eq ? eq.id : null,
       placa: eq ? placaUpper : 'EQUIPAMENTO_NAO_ENCONTRADO',
-      modulo: eq ? eq.modulo : null,
+      modulo: eq ? eq.modulo : (getVal(row, ['modulo', 'Módulo']) || null),
       status,
       data_abertura,
       data_fechamento,
       horimetro,
-      operacao_tipo: row.operacao_tipo || row['Operação (Tipo)'] || null,
-      local: row.local || row.Local || null,
-      classe: row.classe || row.Classe || 'CORRETIVA',
-      foi_enviado_reserva: row.foi_enviado_reserva === true || row.foi_enviado_reserva === 'SIM',
+      operacao_tipo: getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo']),
+      local: getVal(row, ['local', 'Local', 'Frente']),
+      classe: getVal(row, ['classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS']) || 'CORRETIVA',
+      foi_enviado_reserva: row.foi_enviado_reserva === true || String(row.foi_enviado_reserva).toUpperCase() === 'SIM',
       descricao,
-      motivo: row.motivo || row.Motivo || null,
-      sistema: row.sistema || row.Sistema || null,
-      sub_sistema: row.sub_sistema || row['Sub-Sistema'] || null,
+      motivo: getVal(row, ['motivo', 'Motivo', 'Causa']),
+      sistema: getVal(row, ['sistema', 'Sistema']),
+      sub_sistema: getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema']),
       horas_manutencao,
-      observacoes: row.observacoes || row.Observações || null
+      observacoes: getVal(row, ['observacoes', 'Observações', 'Notas'])
     })
   }
 
-  // Se nao encontrou equipamento, ainda vai falhar a constraint de equipamento_id
-  const { error } = await supabase.from('ordens_servico').insert(inserts)
-  if (error) return { error: error.message }
+  // Executar inserções
+  const { error: insError } = await supabase.from('ordens_servico').insert(inserts)
+  if (insError) return { error: insError.message }
+
+  // Executar atualizações de horímetro
+  for (const [id, value] of Object.entries(eqUpdates)) {
+    await supabase.from('equipamentos').update({ ultimoHist: value }).eq('id', id)
+  }
 
   revalidatePath('/os')
   revalidatePath('/')

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Download, Plus, Search, Pencil, Trash2, X, Check } from "lucide-react";
+import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock } from "lucide-react";
 import {
   criarOrdemServico,
   atualizarStatusOS,
@@ -11,7 +11,7 @@ import {
   importarOrdensServico
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
-import { Lock } from "lucide-react";
+import OSFormModal from "./NovoModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type OS = {
@@ -265,17 +265,29 @@ export default function ControleOSClient({
         <div className="p-4 border-b border-zinc-100 dark:border-zinc-800">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Ordens de Serviço</h2>
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={15} />
+            <div className="relative flex-1 group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-blue-500 transition-colors" size={15} />
               <input
                 type="text"
                 placeholder="Buscar por OS ou placa..."
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all font-bold"
               />
             </div>
+            {/* Clear Filters */}
+            {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos") && (
+              <button
+                onClick={() => {
+                  setBusca("");
+                  setFiltroStatus("Todos Status");
+                  setFiltroModulo("Todos Módulos");
+                }}
+                className="px-3 py-2 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"
+              >
+                Limpar Filtros
+              </button>
+            )}
             {/* Filters */}
             <select
               value={filtroStatus}
@@ -451,7 +463,7 @@ export default function ControleOSClient({
 
       {/* New/Edit OS Modal */}
       {showModal && (
-        <NovaOSModal
+        <OSFormModal
           equipamentos={equipamentos}
           initialData={editingOS}
           onClose={() => { setShowModal(false); setEditingOS(null); }}
@@ -461,238 +473,6 @@ export default function ControleOSClient({
           subSistemas={subSistemas}
         />
       )}
-    </div>
-  );
-}
-
-// ─── New OS Modal (inline) ────────────────────────────────────────────────────
-function NovaOSModal({
-  equipamentos,
-  initialData,
-  onClose,
-  operacoesTipo = [],
-  motivos = [],
-  sistemas = [],
-  subSistemas = [],
-}: {
-  equipamentos: Equipamento[];
-  initialData: OS | null;
-  onClose: () => void;
-  operacoesTipo?: string[];
-  motivos?: string[];
-  sistemas?: string[];
-  subSistemas?: string[];
-}) {
-  const [loading, setLoading] = useState(false);
-  const [selectedEq, setSelectedEq] = useState<Equipamento | null>(
-    initialData ? equipamentos.find(e => e.id === initialData.equipamento_id) || null : null
-  );
-  // Para data de abertura: se editando, usa o valor salvo (já em horário local); se criando, usa a hora local atual
-  const getLocalNow = () => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  };
-  // Os dados do banco já estão em formato local (ex: "2026-03-30T11:40"), não converter via toISOString
-  const defaultAbertura = initialData ? initialData.data_abertura.slice(0, 16) : getLocalNow();
-  const defaultFechamento = initialData?.data_fechamento ? initialData.data_fechamento.slice(0, 16) : "";
-  
-  const [dataAbertura, setDataAbertura] = useState(defaultAbertura);
-  const [dataFechamento, setDataFechamento] = useState(defaultFechamento);
-
-  // Calcula em MINUTOS EXATOS (equivalente ao dayjs.diff('minute'))
-  const calcMinutosIniciais = () => {
-    if (defaultAbertura && defaultFechamento) {
-      const diff = Math.floor(
-        (new Date(defaultFechamento).getTime() - new Date(defaultAbertura).getTime()) / (1000 * 60)
-      );
-      return diff > 0 ? diff : 0;
-    }
-    return 0;
-  };
-  const [diffMinutos, setDiffMinutos] = useState(calcMinutosIniciais);
-
-  // Formata minutos no padrão HH:mm
-  const formatarTempo = (totalMinutos: number): string => {
-    if (totalMinutos <= 0) return "00:00";
-    const h = Math.floor(totalMinutos / 60);
-    const m = totalMinutos % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-  };
-
-  useEffect(() => {
-    if (dataAbertura && dataFechamento) {
-      const diff = Math.floor(
-        (new Date(dataFechamento).getTime() - new Date(dataAbertura).getTime()) / (1000 * 60)
-      );
-      setDiffMinutos(diff > 0 ? diff : 0);
-    } else {
-      setDiffMinutos(0);
-    }
-  }, [dataAbertura, dataFechamento]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    const fd = new FormData(e.currentTarget);
-    // Salva no banco como decimal de horas (ex: 90min → 1.5)
-    fd.append("horas_manutencao", Number((diffMinutos / 60).toFixed(2)).toString());
-    fd.append("placa", selectedEq?.placa || "");
-
-    let result;
-    if (initialData) {
-      result = await atualizarOrdemServico(initialData.id, fd);
-    } else {
-      result = await criarOrdemServico(fd);
-    }
-
-    if (result?.error) alert("Erro: " + result.error);
-    else onClose();
-    setLoading(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh]">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{initialData ? "Editar OS" : "Nova OS"}</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800">
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Data/Hora Abertura *">
-              <input name="data_abertura" type="datetime-local" required value={dataAbertura} onChange={e => setDataAbertura(e.target.value)} className={inputCls} />
-            </Field>
-            <Field label="Data/Hora Fechamento">
-              <input name="data_fechamento" type="datetime-local" value={dataFechamento} onChange={e => setDataFechamento(e.target.value)} className={inputCls} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Status *">
-              <select name="status" required defaultValue={initialData?.status || "Aberta"} className={inputCls}>
-                <option value="Aberta">Aberta</option>
-                <option value="Em Andamento">Em Andamento</option>
-                <option value="Fechada">Fechada</option>
-              </select>
-            </Field>
-            <Field label="Placa *">
-              <select name="equipamento_id" required defaultValue={initialData?.equipamento_id || ""} onChange={e => setSelectedEq(equipamentos.find(eq => eq.id === e.target.value) || null)} className={inputCls}>
-                <option value="">Selecione a placa...</option>
-                {equipamentos.map(eq => <option key={eq.id} value={eq.id}>{eq.placa}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="Módulo">
-            <input name="modulo" type="text" readOnly value={selectedEq?.modulo || ""} className={`${inputCls} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed`} />
-          </Field>
-          <div className="grid grid-cols-3 gap-4">
-            <Field label="Horímetro">
-              <input name="horimetro" type="number" step="0.1" defaultValue={initialData?.horimetro || selectedEq?.ultimoHist || ""} className={inputCls} />
-            </Field>
-            <Field label="Operação (Tipo)">
-              {/* datalist = autocomplete livre: digita ou escolhe da lista */}
-              <input
-                name="operacao_tipo"
-                type="text"
-                list="lista-operacao-tipo"
-                defaultValue={initialData?.operacao_tipo || ""}
-                placeholder="Digite ou selecione..."
-                className={inputCls}
-              />
-              <datalist id="lista-operacao-tipo">
-                {operacoesTipo.map(op => (
-                  <option key={op} value={op} />
-                ))}
-              </datalist>
-            </Field>
-            <Field label="Local">
-              <input name="local" type="text" defaultValue={initialData?.local || ""} className={inputCls} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4 items-end">
-            <Field label="Classe">
-              <select name="classe" defaultValue={initialData?.classe || "CORRETIVA"} className={inputCls}>
-                <option value="CORRETIVA">CORRETIVA</option>
-                <option value="PREVENTIVA">PREVENTIVA</option>
-                <option value="PREDITIVA">PREDITIVA</option>
-              </select>
-            </Field>
-            <div className="flex items-center gap-3 pb-1">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" name="foi_enviado_reserva" defaultChecked={initialData?.foi_enviado_reserva || false} className="sr-only peer" />
-                <div className="w-10 h-5 bg-zinc-200 rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-                <span className="ms-2 text-sm text-zinc-600 dark:text-zinc-300">Foi enviado reserva?</span>
-              </label>
-            </div>
-          </div>
-          <Field label="Descrição da Atividade *">
-            <textarea name="descricao" required rows={3} defaultValue={initialData?.descricao || ""} placeholder="Descreva a atividade..." className={`${inputCls} resize-none`} />
-          </Field>
-          <div className="grid grid-cols-3 gap-4">
-            <Field label="Motivo">
-              <select name="motivo" defaultValue={initialData?.motivo || ""} className={inputCls}>
-                <option value="">Selecione</option>
-                {motivos.length > 0
-                  ? motivos.map(m => <option key={m} value={m}>{m}</option>)
-                  : (
-                    <>
-                      <option value="Desgaste Natural">Desgaste Natural</option>
-                      <option value="Quebra Operacional">Quebra Operacional</option>
-                      <option value="Falha Elétrica">Falha Elétrica</option>
-                    </>
-                  )
-                }
-              </select>
-            </Field>
-            <Field label="Sistema">
-              <select name="sistema" defaultValue={initialData?.sistema || ""} className={inputCls}>
-                <option value="">Selecione</option>
-                {sistemas.length > 0
-                  ? sistemas.map(s => <option key={s} value={s}>{s}</option>)
-                  : (
-                    <>
-                      <option value="Motor">Motor</option>
-                      <option value="Hidráulica">Hidráulica</option>
-                      <option value="Freios">Freios</option>
-                      <option value="Elétrico">Elétrico</option>
-                    </>
-                  )
-                }
-              </select>
-            </Field>
-            <Field label="Sub-Sistema">
-              <select name="sub_sistema" defaultValue={initialData?.sub_sistema || ""} className={inputCls}>
-                <option value="">Selecione</option>
-                {subSistemas.length > 0
-                  ? subSistemas.map(s => <option key={s} value={s}>{s}</option>)
-                  : (
-                    <>
-                      <option value="Bomba Injetora">Bomba Injetora</option>
-                      <option value="Cilindro Mestre">Cilindro Mestre</option>
-                      <option value="Alternador">Alternador</option>
-                    </>
-                  )
-                }
-              </select>
-            </Field>
-          </div>
-          <Field label="Observações">
-            <textarea name="observacoes" rows={2} defaultValue={initialData?.observacoes || ""} placeholder="Observações..." className={`${inputCls} resize-none`} />
-          </Field>
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-lg text-sm text-blue-900 dark:text-blue-300 font-medium">
-            Tempo Total: <span className="font-bold">{formatarTempo(diffMinutos)}</span>
-          </div>
-          <div className="flex justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
-            <button type="submit" disabled={loading} className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
-              {loading ? "Salvando..." : initialData ? "Salvar Alterações" : "Criar OS"}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

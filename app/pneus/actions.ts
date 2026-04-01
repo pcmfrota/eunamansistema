@@ -81,50 +81,114 @@ function sanitizeCondicao(raw: string | null | undefined, fallback: Condicao): C
 }
 
 // ─── Importação em massa ──────────────────────────────────────────────────────
-export async function importarInspecoesPneus(
-  rows: Array<{
-    placa: string;
-    data_inspecao: string;
-    km_atual?: number | null;
-    de?: number | null; dd?: number | null;
-    tei?: number | null; tee?: number | null; tdi?: number | null; tde?: number | null;
-    tei1?: number | null; tee1?: number | null; tdi1?: number | null; tde1?: number | null;
-    estepe?: number | null;
-    condicao?: string;
-    observacoes?: string;
-  }>
-) {
+export async function importarInspecoesPneus(rows: any[]) {
   const supabase = createClient()
 
-  // Buscar mapa placa → id
-  const { data: eqs } = await supabase.from('equipamentos').select('id, placa')
-  const placaMap: Record<string, string> = {}
-  for (const eq of eqs || []) placaMap[eq.placa.toUpperCase()] = eq.id
+  // Buscar mapa placa → id e ultimoHist
+  const { data: eqs } = await supabase.from('equipamentos').select('id, placa, ultimoHist')
+  const eqMap: Record<string, { id: string; ultimoHist: number | null }> = {}
+  for (const e of eqs || []) eqMap[e.placa.toUpperCase()] = { id: e.id, ultimoHist: e.ultimoHist }
 
   const inserts: any[] = []
+  const eqUpdates: Record<string, number> = {} // id -> new km/horimetro
   const erros: string[] = []
 
-  for (const row of rows) {
-    const eqId = placaMap[row.placa?.toUpperCase()]
-    if (!eqId) { erros.push(`Placa não encontrada: ${row.placa}`); continue }
-    if (!row.data_inspecao) { erros.push(`Data inválida para ${row.placa}`); continue }
+  function parsePossibleDate(d?: any) {
+    if (!d) return null;
+    if (typeof d === 'number' && d > 20000 && d < 100000) {
+      const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
+      return jsDate.toISOString();
+    }
+    const str = String(d).trim();
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(str)) {
+      const parts = str.split(' ');
+      const dateParts = parts[0].split('/');
+      const day = dateParts[0].padStart(2, '0');
+      const month = dateParts[1].padStart(2, '0');
+      let year = dateParts[2];
+      if (year.length === 2) year = '20' + year;
+      let timePart = parts[1] || '00:00:00';
+      if (timePart.split(':').length === 2) timePart += ':00';
+      return `${year}-${month}-${day}T${timePart}`;
+    }
+    const dt = new Date(str);
+    return !isNaN(dt.getTime()) ? dt.toISOString() : null;
+  }
 
-    // Parsear posições de sulco
-    const posicoes: Record<string, number | null> = {}
-    for (const pos of POSICOES) {
-      const v = (row as any)[pos]
-      posicoes[pos] = v != null && v !== '' ? parseFloat(String(v)) : null
+  function getVal(row: any, aliases: string[]) {
+    for (const alias of aliases) {
+      if (row[alias] !== undefined && row[alias] !== null && row[alias] !== '') return row[alias];
+      const key = Object.keys(row).find(k => k.toLowerCase() === alias.toLowerCase());
+      if (key && row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key];
+    }
+    return null;
+  }
+
+  const parseFloatSafe = (val: any) => {
+    if (val === null || val === undefined || val === '') return null;
+    if (typeof val === 'number') return val;
+    const strVal = String(val).trim();
+    if (strVal.includes(',')) {
+      const parsed = parseFloat(strVal.replace(/\./g, '').replace(',', '.'));
+      return isNaN(parsed) ? null : parsed;
+    }
+    const parsed = parseFloat(strVal);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  for (const row of rows) {
+    const placaRaw = getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa']) || ''
+    const placaUpper = String(placaRaw).toUpperCase().trim()
+    const eq = eqMap[placaUpper]
+
+    if (!eq) { 
+      erros.push(`Placa não encontrada: ${placaRaw}`); 
+      continue; 
     }
 
-    // Sanitizar condição — garante que só entra valor permitido pelo banco
+    const data_inspecao = parsePossibleDate(getVal(row, ['data_inspecao', 'Data', 'Data Inspeção', 'Dia']))
+    if (!data_inspecao) { 
+      erros.push(`Data inválida para ${placaRaw}`); 
+      continue; 
+    }
+
+    const km_atual = parseFloatSafe(getVal(row, ['km_atual', 'KM', 'Horímetro', 'KM Atual', 'Hori']))
+
+    // Sincronizar KM/Horímetro
+    if (km_atual && (!eq.ultimoHist || km_atual > eq.ultimoHist)) {
+      if (!eqUpdates[eq.id] || km_atual > eqUpdates[eq.id]) {
+        eqUpdates[eq.id] = km_atual
+      }
+    }
+
+    // Parsear posições de sulco com aliases
+    const posicoes: Record<string, number | null> = {}
+    const posAliases: Record<string, string[]> = {
+      de: ['de', 'DIANTEIRO ESQUERDO', 'DIANTEIRO ESQ', 'DE'],
+      dd: ['dd', 'DIANTEIRO DIREITO', 'DIANTEIRO DIR', 'DD'],
+      tei: ['tei', 'TRASEIRO ESQ INTERNO', 'TEI'],
+      tee: ['tee', 'TRASEIRO ESQ EXTERNO', 'TEE'],
+      tdi: ['tdi', 'TRASEIRO DIR INTERNO', 'TDI'],
+      tde: ['tde', 'TRASEIRO DIR EXTERNO', 'TDE'],
+      tei1: ['tei1', 'TRASEIRO ESQ INTERNO 2', 'TEI1'],
+      tee1: ['tee1', 'TRASEIRO ESQ EXTERNO 2', 'TEE1'],
+      tdi1: ['tdi1', 'TRASEIRO DIR INTERNO 2', 'TDI1'],
+      tde1: ['tde1', 'TRASEIRO DIR EXTERNO 2', 'TDE1'],
+      estepe: ['estepe', 'ESTEPE', 'RESERVA']
+    }
+
+    for (const [pos, aliases] of Object.entries(posAliases)) {
+      posicoes[pos] = parseFloatSafe(getVal(row, aliases))
+    }
+
     const condicaoFallback = calcCondicao(posicoes)
-    const condicao = sanitizeCondicao(row.condicao, condicaoFallback)
+    const condicao = sanitizeCondicao(getVal(row, ['condicao', 'Condição', 'Status']), condicaoFallback)
 
     inserts.push({
-      equipamento_id: eqId,
-      data_inspecao: row.data_inspecao,
-      km_atual: row.km_atual ?? null,
-      observacoes: row.observacoes ?? null,
+      equipamento_id: eq.id,
+      data_inspecao,
+      km_atual,
+      observacoes: getVal(row, ['observacoes', 'Observações', 'Notas']),
       condicao,
       ...posicoes,
     })
@@ -134,12 +198,17 @@ export async function importarInspecoesPneus(
     return { error: erros.join('\n') || 'Nenhuma linha válida para importar.' }
   }
 
-  // Inserir em lotes de 50 para evitar timeout com muitas linhas
+  // Inserir lotes
   const CHUNK = 50
   for (let i = 0; i < inserts.length; i += CHUNK) {
     const chunk = inserts.slice(i, i + CHUNK)
     const { error } = await supabase.from('inspecoes_pneus').insert(chunk)
     if (error) return { error: `Erro no lote ${Math.floor(i / CHUNK) + 1}: ${error.message}` }
+  }
+
+  // Atualizar equipamentos
+  for (const [id, value] of Object.entries(eqUpdates)) {
+    await supabase.from('equipamentos').update({ ultimoHist: value }).eq('id', id)
   }
 
   revalidatePath('/pneus')

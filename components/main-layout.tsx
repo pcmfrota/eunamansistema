@@ -26,6 +26,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import AlterarSenhaModal from './AlterarSenhaModal';
+import { Shield } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -46,9 +48,10 @@ const adminNavigation = [
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, loading: authLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -135,35 +138,45 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                 {profile?.full_name || 'Usuário'}
               </p>
-              <p className="text-[10px] font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                {profile?.role ? (
-                  profile.role === 'admin' ? 'Administrador' :
-                  profile.role === 'pcm' ? 'PCM' :
-                  profile.role === 'gestao' ? 'Gestão' : 'Visitante'
-                ) : 'Carregando...'}
+              <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-[0.1em]">
+                {authLoading ? 'CARREGANDO...' : (
+                  profile?.role === 'admin' ? 'Administrador' :
+                  profile?.role === 'pcm' ? 'PCM' :
+                  profile?.role === 'gestao' ? 'Gestão' : 'Visitante'
+                )}
               </p>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-2">
-            <Link 
-              href="/perfil"
-              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Link 
+                href="/perfil"
+                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-[11px] font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                <User size={12} />
+                Perfil
+              </Link>
+              <button 
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/20 text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
+              >
+                {isLoggingOut ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <LogOut size={12} />
+                )}
+                Sair
+              </button>
+            </div>
+            
+            <button
+               onClick={() => setIsPasswordModalOpen(true)}
+               className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600/5 hover:bg-blue-600/10 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-600/10 dark:border-blue-500/20 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
             >
-              <Settings size={12} />
-              Perfil
-            </Link>
-            <button 
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/20 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
-            >
-              {isLoggingOut ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <LogOut size={12} />
-              )}
-              Sair
+               <Shield size={12} />
+               Segurança / Alterar Senha
             </button>
           </div>
         </div>
@@ -284,6 +297,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <AlterarSenhaModal 
+        isOpen={isPasswordModalOpen} 
+        onClose={() => setIsPasswordModalOpen(false)} 
+      />
     </div>
   );
 }

@@ -18,11 +18,15 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 export default function PerfilPage() {
-  const { profile, user, loading: authLoading } = useAuth()
+  const { profile, user, loading: authLoading, updatePassword } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [pwLoading, setPwLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [pwMessage, setPwMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [fullName, setFullName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -59,6 +63,32 @@ export default function PerfilPage() {
     }
   }
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newPassword !== confirmPassword) {
+      setPwMessage({ type: 'error', text: 'As senhas não coincidem' })
+      return
+    }
+    if (newPassword.length < 6) {
+      setPwMessage({ type: 'error', text: 'A senha deve ter pelo menos 6 caracteres' })
+      return
+    }
+
+    setPwLoading(true)
+    setPwMessage(null)
+
+    try {
+      await updatePassword(newPassword)
+      setPwMessage({ type: 'success', text: 'Senha alterada com sucesso!' })
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error: any) {
+      setPwMessage({ type: 'error', text: error.message || 'Erro ao alterar senha' })
+    } finally {
+      setPwLoading(false)
+    }
+  }
+
   const handleUploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setLoading(true)
@@ -86,7 +116,7 @@ export default function PerfilPage() {
       await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl })
-        .eq('id', user.id)
+        .eq('id', user?.id || '')
 
       setMessage({ type: 'success', text: 'Foto atualizada!' })
     } catch (error: any) {
@@ -222,6 +252,66 @@ export default function PerfilPage() {
               </div>
             </form>
           </div>
+        </div>
+
+        {/* Change Password Card */}
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl p-8 space-y-6">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Segurança</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Altere sua senha de acesso ao sistema</p>
+          </div>
+
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-1">
+                  Nova Senha
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-1">
+                  Confirmar Nova Senha
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repita a nova senha"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 outline-none"
+                />
+              </div>
+            </div>
+
+            {pwMessage && (
+              <div className={cn(
+                "p-4 rounded-xl flex items-center gap-3 border",
+                pwMessage.type === 'success' 
+                  ? "bg-green-50 dark:bg-green-950/20 border-green-200 text-green-700"
+                  : "bg-red-50 dark:bg-red-950/20 border-red-200 text-red-700"
+              )}>
+                {pwMessage.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                <p className="text-sm font-medium">{pwMessage.text}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={pwLoading}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold transition-all hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50"
+              >
+                {pwLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield size={18} />}
+                Atualizar Senha
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Info Box */}
