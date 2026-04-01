@@ -37,14 +37,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (user) {
-          console.log('[Auth] Usuário detectado via getUser:', user.email)
+          console.log('[Auth] Usuário detectado via getUser:', user.email, 'ID:', user.id)
           setUser(user)
           
           // Buscar perfil do DB
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', session.user.id)
+            .eq('id', user.id)
             .single()
           
           if (profileError) {
@@ -64,9 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           console.log('[Auth] Role Final definida como:', finalRole)
           setProfile(profileWithRole)
+        } else {
+          setUser(null)
+          setProfile(null)
         }
       } catch (err) {
         console.error('Erro na sessão inicial:', err)
+        setUser(null)
+        setProfile(null)
       } finally {
         setLoading(false)
       }

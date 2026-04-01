@@ -49,12 +49,25 @@ export async function updateUserRole(userId: string, newRole: string) {
     return { error: "Apenas administradores podem alterar cargos." };
   }
 
-  const { error } = await supabase
+  // 1. Atualiza na tabela de perfis (para visualização no app)
+  const { error: profileError } = await supabase
     .from("profiles")
     .update({ role: newRole })
     .eq("id", userId);
 
-  if (error) return { error: error.message };
+  if (profileError) return { error: profileError.message };
+
+  // 2. Atualiza no Auth App Metadata (para permissões de fato no JWT)
+  try {
+    const adminClient = getAdminClient();
+    const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
+      app_metadata: { role: newRole }
+    });
+    if (authError) throw authError;
+  } catch (err: any) {
+    console.error("Erro ao sincronizar Auth Metadata:", err.message);
+    // Não paramos aqui pois o perfil já foi atualizado, mas avisamos o admin
+  }
   
   revalidatePath("/admin/usuarios");
   return { success: true };
@@ -74,7 +87,8 @@ export async function createNewUser(formData: FormData) {
       email,
       password,
       email_confirm: true, // Auto-confirmação
-      user_metadata: { full_name: fullName }
+      user_metadata: { full_name: fullName },
+      app_metadata: { role } // Define o cargo de imediato no token
     });
 
     if (authError) throw authError;

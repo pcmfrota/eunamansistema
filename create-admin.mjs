@@ -62,8 +62,18 @@ async function setupAdmin() {
     updated_at: new Date().toISOString()
   });
 
-  if (profileError) return console.error('Erro ao atualizar tabela Profiles:', profileError.message);
-  console.log('✅ Tabela Profiles sincronizada com cargo Admin.');
+  if (profileError) console.warn('[Aviso] Erro ao atualizar tabela Profiles:', profileError.message);
+  else console.log('✅ Tabela Profiles sincronizada com cargo Admin.');
+
+  // 3. Garantir compatibilidade com a tabela 'users' (legado/PCM)
+  const { error: usersError } = await supabase.from('users').upsert({
+    id: user.id,
+    nome: fullName,
+    perfil: 'ADM'
+  });
+
+  if (usersError) console.warn('[Aviso] Erro ao atualizar tabela Users (legado):', usersError.message);
+  else console.log('✅ Tabela Users sincronizada com perfil ADM.');
 
   console.log('\n-----------------------------------')
   console.log('CONFIGURAÇÃO CONCLUÍDA COM SUCESSO!')
@@ -71,6 +81,7 @@ async function setupAdmin() {
   console.log(`Senha: ${password}`)
   console.log('Cargo: Administrador')
   console.log('-----------------------------------\n')
+  console.log('DICA: Saia e entre novamente no sistema para atualizar as permissões.')
 }
 
 setupAdmin()

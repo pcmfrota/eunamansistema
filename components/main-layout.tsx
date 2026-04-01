@@ -136,7 +136,11 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 {profile?.full_name || 'Usuário'}
               </p>
               <p className="text-[10px] font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                {profile?.role || 'Visitante'}
+                {profile?.role ? (
+                  profile.role === 'admin' ? 'Administrador' :
+                  profile.role === 'pcm' ? 'PCM' :
+                  profile.role === 'gestao' ? 'Gestão' : 'Visitante'
+                ) : 'Carregando...'}
               </p>
             </div>
           </div>
