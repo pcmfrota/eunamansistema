@@ -12,7 +12,8 @@ import {
   Layers,
   ShieldAlert,
   ArrowRight,
-  Database
+  Database,
+  BarChart3
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
@@ -21,6 +22,7 @@ import { getBacklog, deleteBacklogItems } from './actions';
 import BacklogModal from './BacklogModal';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
+import BacklogDashboard from './BacklogDashboard';
 
 type Placa = { id: string; placa: string; modulo: string | null };
 
@@ -31,7 +33,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<'Geral' | 'Detalhamento'>('Geral');
+  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento'>('Geral');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -167,15 +169,17 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
         {/* Row 1: View tabs + refresh */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex gap-2 p-1.5 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-sm">
-            {(['Geral', 'Detalhamento'] as const).map(v => (
+            {(['Geral', 'Dashboard', 'Detalhamento'] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
                   "px-6 py-2 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all",
-                  view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600"
+                  view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600",
+                  v === 'Dashboard' && "flex items-center gap-1.5"
                 )}
               >
+                {v === 'Dashboard' && <BarChart3 size={12} />}
                 {v}
               </button>
             ))}
@@ -271,50 +275,57 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
         </div>
       </div>
 
-      {/* Multi-Select Floating Bar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 duration-500">
-           <div className="flex items-center gap-6 px-10 py-5 bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-              <div className="flex items-center gap-3 pr-6 border-r border-white/10">
-                 <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20">
-                    {selectedIds.size}
-                 </div>
-                 <div className="text-left">
-                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Selecionados</p>
-                    <p className="text-[9px] text-zinc-500 font-bold uppercase">Ações em massa habilitadas</p>
-                 </div>
-              </div>
-              <div className="flex items-center gap-6">
-                 <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
-                   <Plus size={18} className="rotate-45" /> EXCLUIR SELEÇÃO
-                 </button>
-                 <button onClick={() => setSelectedIds(new Set())} className="text-xs font-black text-zinc-400 hover:text-white transition-colors uppercase tracking-widest">
-                   LIMPAR
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
+      {view === 'Dashboard' ? (
+        /* Dashboard View */
+        <BacklogDashboard items={items} />
+      ) : (
+        <>
+          {/* Multi-Select Floating Bar */}
+          {selectedIds.size > 0 && (
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 duration-500">
+               <div className="flex items-center gap-6 px-10 py-5 bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                  <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+                     <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20">
+                        {selectedIds.size}
+                     </div>
+                     <div className="text-left">
+                        <p className="text-[10px] font-black text-white uppercase tracking-widest">Selecionados</p>
+                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Ações em massa habilitadas</p>
+                     </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                     <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
+                       <Plus size={18} className="rotate-45" /> EXCLUIR SELEÇÃO
+                     </button>
+                     <button onClick={() => setSelectedIds(new Set())} className="text-xs font-black text-zinc-400 hover:text-white transition-colors uppercase tracking-widest">
+                       LIMPAR
+                     </button>
+                  </div>
+               </div>
+            </div>
+          )}
 
-      {/* Main Table Content */}
-      <div className="flex-1 min-h-0">
-        <BacklogTable 
-          items={filteredItems}
-          selectedIds={selectedIds}
-          onToggleSelect={(id) => {
-            const next = new Set(selectedIds);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            setSelectedIds(next);
-          }}
-          onToggleSelectAll={() => {
-            if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
-            else setSelectedIds(new Set(filteredItems.map(i => i.id)));
-          }}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          view={view}
-        />
-      </div>
+          {/* Main Table Content */}
+          <div className="flex-1 min-h-0">
+            <BacklogTable 
+              items={filteredItems}
+              selectedIds={selectedIds}
+              onToggleSelect={(id) => {
+                const next = new Set(selectedIds);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                setSelectedIds(next);
+              }}
+              onToggleSelectAll={() => {
+                if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
+                else setSelectedIds(new Set(filteredItems.map(i => i.id)));
+              }}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              view={view as 'Geral' | 'Detalhamento'}
+            />
+          </div>
+        </>
+      )}
 
       {/* Global Persistence Notice */}
       <div className="flex items-center justify-center p-6 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-3xl border border-zinc-200 dark:border-zinc-800 border-dashed">
