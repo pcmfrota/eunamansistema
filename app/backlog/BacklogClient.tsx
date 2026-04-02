@@ -74,10 +74,34 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
     } else alert(res.error);
   };
 
-  const filteredItems = items.filter(i => 
-    i.frota?.toLowerCase().includes(search.toLowerCase()) ||
-    i.descricao?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter States
+  const [filterPlaca, setFilterPlaca] = useState("");
+  const [filterModulo, setFilterModulo] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+
+  const hasActiveFilters = search || filterPlaca || filterModulo || filterStatus;
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilterPlaca("");
+    setFilterModulo("");
+    setFilterStatus("");
+  };
+
+  // Dynamic options from data
+  const placaOptions = Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort();
+  const moduloOptions = Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort();
+  const statusOptions = Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort();
+
+  const filteredItems = items.filter(i => {
+    const matchSearch = !search || 
+      i.frota?.toLowerCase().includes(search.toLowerCase()) ||
+      i.descricao?.toLowerCase().includes(search.toLowerCase());
+    const matchPlaca = !filterPlaca || i.frota === filterPlaca;
+    const matchModulo = !filterModulo || i.modulo === filterModulo;
+    const matchStatus = !filterStatus || i.status === filterStatus;
+    return matchSearch && matchPlaca && matchModulo && matchStatus;
+  });
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -139,41 +163,112 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-         <div className="flex gap-2 p-1.5 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-sm self-start">
+      <div className="flex flex-col gap-3">
+        {/* Row 1: View tabs + refresh */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex gap-2 p-1.5 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-sm">
             {(['Geral', 'Detalhamento'] as const).map(v => (
-               <button 
-                 key={v}
-                 onClick={() => setView(v)}
-                 className={cn(
-                   "px-6 py-2 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all",
-                   view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600"
-                 )}
-               >
-                 {v}
-               </button>
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "px-6 py-2 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all",
+                  view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600"
+                )}
+              >
+                {v}
+              </button>
             ))}
-         </div>
+          </div>
 
-         <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:w-80 group">
-               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-               <input 
-                 type="text" 
-                 placeholder="BUSCAR NO BACKLOG..." 
-                 value={search}
-                 onChange={e => setSearch(e.target.value)}
-                 className="w-full pl-12 pr-6 py-3.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
-               />
-            </div>
-            
-            <button 
+          <div className="flex items-center gap-2">
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl">
+                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">
+                  {filteredItems.length} resultado{filteredItems.length !== 1 ? 's' : ''}
+                </span>
+                <button
+                  onClick={clearFilters}
+                  className="text-[9px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest transition-colors ml-1"
+                >
+                  ✕ Limpar
+                </button>
+              </div>
+            )}
+            <button
               onClick={refreshData}
-              className="p-3.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-400 hover:text-indigo-600 hover:border-indigo-500/30 transition-all shadow-sm group active:rotate-180 duration-500"
+              className="p-3.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-400 hover:text-indigo-600 hover:border-indigo-500/30 transition-all shadow-sm active:rotate-180 duration-500"
             >
-               <RefreshCcw size={20} className={loading ? "animate-spin" : ""} />
+              <RefreshCcw size={20} className={loading ? "animate-spin" : ""} />
             </button>
-         </div>
+          </div>
+        </div>
+
+        {/* Row 2: Search + Filters */}
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          {/* Text search */}
+          <div className="relative flex-1 group">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
+            <input
+              type="text"
+              placeholder="BUSCAR POR FROTA OU DESCRIÇÃO..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-12 pr-6 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+            />
+          </div>
+
+          {/* Placa filter */}
+          <select
+            value={filterPlaca}
+            onChange={e => setFilterPlaca(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[160px]",
+              filterPlaca
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">🚛 TODAS AS PLACAS</option>
+            {placaOptions.map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+
+          {/* Módulo filter */}
+          <select
+            value={filterModulo}
+            onChange={e => setFilterModulo(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[170px]",
+              filterModulo
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">📍 TODOS OS MÓDULOS</option>
+            {moduloOptions.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+
+          {/* Status filter */}
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[160px]",
+              filterStatus
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">📋 TODOS OS STATUS</option>
+            {statusOptions.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Multi-Select Floating Bar */}
