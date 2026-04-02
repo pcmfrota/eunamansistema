@@ -21,27 +21,33 @@ export class BacklogService {
   }
 
   static async import(rows: any[]) {
+    // Helper: returns trimmed string or null (never empty string)
+    const str = (val: any): string | null => {
+      const s = String(val ?? '').trim();
+      return s === '' ? null : s;
+    };
+
     const items: BacklogItemInsert[] = rows.map(r => ({
-      semana: String(r.semana || r.Semana || '').trim(),
-      mes: String(r.mes || r.Mês || r.Mes || '').trim(),
-      ano: String(r.ano || r.Ano || '').trim(),
-      data_evidencia: String(r.data_evidencia || r["Data Evidência"] || r["Data Evidencia"] || '').trim(),
-      modulo: String(r.modulo || r["Módulo"] || r.Modulo || '').trim(),
-      regiao_programa: String(r.regiao_programa || r["Região x Prog."] || r["Regiao x Prog"] || '').trim(),
-      frota: String(r.frota || r.Frota || r.Placa || '').trim().toUpperCase(),
-      tag: String(r.tag || r.TAG || '').trim().toUpperCase(),
-      tipo: String(r.tipo || r.Tipo || '').trim(),
-      descricao: String(r.descricao || r["Descrição"] || r.Descricao || '').trim(),
-      origem: String(r.origem || r.Origem || '').trim(),
-      criticidade: String(r.criticidade || r.Criticidade || '').trim(),
-      tempo_execucao: String(r.tempo_execucao || r["Tempo Exec."] || r["Tempo Execucao"] || '').trim(),
-      campo_base: String(r.campo_base || r["Campo/Base"] || '').trim(),
-      os: String(r.os || r.OS || r["O.S"] || '').trim(),
-      material: String(r.material || r.Material || '').trim(),
-      nr_rc: String(r.nr_rc || r["Nº RC"] || r["Nr RC"] || '').trim(),
-      nr_ordem: String(r.nr_ordem || r["Nº Ordem"] || r["Nr Ordem"] || '').trim(),
-      fornecedor: String(r.fornecedor || r.Fornecedor || '').trim(),
-      status: String(r.status || r.Status || 'Aberta').trim()
+      semana: str(r.semana ?? r.Semana),
+      mes: str(r.mes ?? r.Mês ?? r.Mes),
+      ano: str(r.ano ?? r.Ano),
+      data_evidencia: str(r.data_evidencia ?? r["Data Evidência"] ?? r["Data Evidencia"]),
+      modulo: str(r.modulo ?? r["Módulo"] ?? r.Modulo),
+      regiao_programa: str(r.regiao_programa ?? r["Região x Prog."] ?? r["Regiao x Prog"]),
+      frota: str(r.frota ?? r.Frota ?? r.Placa)?.toUpperCase() ?? null,
+      tag: str(r.tag ?? r.TAG)?.toUpperCase() ?? null,
+      tipo: str(r.tipo ?? r.Tipo),
+      descricao: str(r.descricao ?? r["Descrição"] ?? r.Descricao),
+      origem: str(r.origem ?? r.Origem),
+      criticidade: str(r.criticidade ?? r.Criticidade),
+      tempo_execucao: str(r.tempo_execucao ?? r["Tempo Exec."] ?? r["Tempo Execucao"]),
+      campo_base: str(r.campo_base ?? r["Campo/Base"]),
+      os: str(r.os ?? r.OS ?? r["O.S"]),
+      material: str(r.material ?? r.Material),
+      nr_rc: str(r.nr_rc ?? r["Nº RC"] ?? r["Nr RC"]),
+      nr_ordem: str(r.nr_ordem ?? r["Nº Ordem"] ?? r["Nr Ordem"]),
+      fornecedor: str(r.fornecedor ?? r.Fornecedor),
+      status: str(r.status ?? r.Status) ?? 'Aberta',
     }));
 
     const { error } = await BacklogRepository.insertMany(items);
