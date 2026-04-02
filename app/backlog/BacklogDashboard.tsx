@@ -110,7 +110,7 @@ export default function BacklogDashboard({ items }: Props) {
 
   // Chart 4: Criticidade por Módulo (Radar)
   const critPorModulo = useMemo(() => {
-    const top5 = [...new Set(filtered.map(i => i.modulo).filter(Boolean))].slice(0, 6)
+    const top5 = Array.from(new Set(filtered.map(i => i.modulo).filter(Boolean))).slice(0, 6)
     return top5.map(mod => ({
       modulo: mod,
       A: filtered.filter(i => i.modulo === mod && i.criticidade === 'A').length,
