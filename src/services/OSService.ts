@@ -53,7 +53,10 @@ export class OSService {
 
   static async updateOS(id: string, data: OSUpdate) {
     if (data.status === 'Fechada' || data.status === 'Concluída') {
-      data.data_fechamento = this.formatDateTime();
+      // Só define data_fechamento automaticamente se o formulário não enviou uma
+      if (!data.data_fechamento) {
+        data.data_fechamento = this.formatDateTime();
+      }
       data.status = 'Fechada';
     }
 
