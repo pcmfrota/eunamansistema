@@ -1,6 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
+// --- Configuração de Permissões (Point #5 do Blueprint) ---
+const MODULO_PERMISSOES: Record<string, string[]> = {
+  '/base-frotas': ['admin', 'gestor'],
+  '/usuarios': ['admin'],
+  '/pcm': ['admin', 'gestor', 'tecnico'],
+  '/preventivas': ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/os': ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/pneus': ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/horimetro': ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/backlog': ['admin', 'gestor', 'tecnico', 'visitante'],
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -17,59 +29,57 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          request.cookies.set({ name, value, ...options })
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
+            request: { headers: request.headers },
           })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          request.cookies.set({ name, value: '', ...options })
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
+            request: { headers: request.headers },
           })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          response.cookies.set({ name, value: '', ...options })
         },
       },
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Se não estiver logado e não estiver na página de login, redireciona
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  const pathname = request.nextUrl.pathname
+
+  // 1. Redirecionamento Base (Login / Auth)
+  if (!user && !pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Se estiver logado e tentar ir pro login, manda pra home
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  if (user && pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
+  }
+
+  // 2. Controle de Autorização por Módulo (Point #5)
+  if (user) {
+    const userRole = (user.user_metadata?.role || 'visitante').toLowerCase()
+    
+    // Verifica se a rota atual está no mapa de permissões
+    const moduloBase = Object.keys(MODULO_PERMISSOES).find(route => pathname.startsWith(route))
+    
+    if (moduloBase) {
+      const rolesPermitidos = MODULO_PERMISSOES[moduloBase]
+      if (!rolesPermitidos.includes(userRole)) {
+        // Redireciona para unauthorized ou home com aviso
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        // Poderíamos adicionar um searchParam ?error=unauthorized
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   return response
@@ -77,13 +87,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+
