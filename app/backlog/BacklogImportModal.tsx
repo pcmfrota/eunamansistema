@@ -67,11 +67,11 @@ export default function BacklogImportModal({ isOpen, onClose }: { isOpen: boolea
   const handleConfirm = async () => {
     setLoading(true)
     const res = await importarBacklog(rows)
-    if (res.success) {
+    if ('success' in res && res.success) {
       setResult(res)
       setTimeout(onClose, 2000)
     } else {
-      setResult({ error: res.error })
+      setResult({ error: 'error' in res ? res.error : 'Erro desconhecido' })
     }
     setLoading(false)
   }

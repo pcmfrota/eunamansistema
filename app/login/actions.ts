@@ -2,26 +2,16 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
+import { AuthService } from '@/src/services/AuthService'
 
 export async function login(formData: FormData) {
-  const supabase = createClient()
-  
-  // get data
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  if (!email || !password) {
-    redirect('/login?error=Preencha todos os campos')
-  }
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  if (error) {
-    redirect('/login?error=Credenciais inválidas')
+  try {
+    await AuthService.signIn(email, password);
+  } catch (error: any) {
+    redirect(`/login?error=${encodeURIComponent(error.message || 'Erro ao entrar')}`)
   }
 
   revalidatePath('/', 'layout')
@@ -29,9 +19,7 @@ export async function login(formData: FormData) {
 }
 
 export async function logout() {
-  const supabase = createClient()
-  await supabase.auth.signOut()
-
+  await AuthService.signOut();
   revalidatePath('/', 'layout')
   redirect('/login')
 }

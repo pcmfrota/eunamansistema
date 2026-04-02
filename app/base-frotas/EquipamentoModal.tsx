@@ -57,7 +57,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         ? await atualizarEquipamento(editingVehicle.id, formData)
         : await criarEquipamento(formData)
 
-      if (res.error) {
+      if ('error' in res) {
         alert(res.error)
       } else {
         clearDraft()

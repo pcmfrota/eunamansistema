@@ -2,9 +2,9 @@ import { createClient } from '@/utils/supabase/server';
 import { OSInsert, OSUpdate } from '../models/os';
 
 export class OSRepository {
-  static async create(data: OSInsert) {
+  static async create(data: OSInsert | OSInsert[]) {
     const supabase = createClient();
-    return await supabase.from('ordens_servico').insert(data);
+    return await supabase.from('ordens_servico').insert(data as any);
   }
 
   static async update(id: string, data: OSUpdate) {

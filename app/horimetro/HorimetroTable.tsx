@@ -41,7 +41,7 @@ export default function HorimetroTable({ data, onEdit }: HorimetroTableProps) {
   const handleDelete = async (id: string, placa: string) => {
     if (confirm(`Atenção: Deseja realmente excluir o apontamento de ${placa}? Esta ação é irreversível.`)) {
       const result = await excluirHorimetro(id)
-      if (result.error) alert(result.error)
+      if ('error' in result) alert(result.error)
     }
   }
 

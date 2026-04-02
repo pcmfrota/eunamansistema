@@ -32,9 +32,9 @@ export default function NovaInspecaoPneu({ equipamentos }: { equipamentos: any[]
     const formData = new FormData(e.currentTarget);
     const result = await registrarInspecaoPneu(formData);
     
-    if (result.error) {
+    if ('error' in result) {
       setMensagem({ tipo: 'erro', texto: result.error });
-    } else if (result.success) {
+    } else {
       setMensagem({ tipo: 'sucesso', texto: 'Inspeção registrada!' });
       clearDraft();
       setTimeout(() => { setIsOpen(false); setMensagem(null); }, 2000);

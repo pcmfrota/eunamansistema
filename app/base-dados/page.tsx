@@ -89,7 +89,7 @@ export default function BaseDadosPage() {
     if (!confirm(`Excluir permanentemente o item "${name}"?`)) return;
     
     const res = await excluirConfiguracao(id);
-    if (res.error) {
+    if ('error' in res) {
       alert("Erro ao excluir: " + res.error);
     } else {
       setSelectedItems(selectedItems.filter(i => i !== id));
@@ -101,7 +101,7 @@ export default function BaseDadosPage() {
     if (!confirm(`Deseja excluir permanentemente os ${selectedItems.length} itens selecionados?`)) return;
     
     const res = await excluirVariasConfiguracoes(selectedItems);
-    if (res.error) {
+    if ('error' in res) {
       alert("Erro ao excluir itens: " + res.error);
     } else {
       setSelectedItems([]);
@@ -121,7 +121,7 @@ export default function BaseDadosPage() {
 
     setAdding(true);
     const res = await salvarConfiguracao(activeTab, text);
-    if (res.error) {
+    if ('error' in res) {
       alert("Erro ao adicionar: " + res.error);
     } else {
       setNewItemText("");
@@ -186,9 +186,10 @@ export default function BaseDadosPage() {
         
         if (toImport.length > 0) {
           const res = await importarConfiguracoes(toImport);
-          if (res.error) alert("Erro ao importar: " + res.error);
+          if ('error' in res) alert("Erro ao importar: " + res.error);
           else {
-            alert(`${res.count} itens importados com sucesso!`);
+            const count = ('count' in res && typeof res.count === 'number') ? res.count : 0;
+            alert(`${count} itens importados com sucesso!`);
             loadData();
           }
         } else {

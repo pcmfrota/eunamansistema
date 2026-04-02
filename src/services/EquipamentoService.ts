@@ -1,5 +1,16 @@
+import { z } from 'zod';
 import { EquipamentoRepository } from '../repositories/EquipamentoRepository';
 import { EquipamentoInsert, EquipamentoUpdate } from '../models/equipamento';
+
+const EquipamentoSchema = z.object({
+  placa: z.string().min(1, 'Placa é obrigatória').transform((val: string) => val.toUpperCase().trim()),
+  tipo: z.string().min(1, 'Tipo é obrigatório').transform((val: string) => val.toUpperCase().trim()),
+  categoria: z.string().default('PESADA').transform((val: string) => val.toUpperCase().trim()),
+  modulo: z.string().default('BASE').transform((val: string) => val.trim()),
+  modelo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
+  horimetro_limite_preventiva: z.number().optional().default(500),
+  ultimoHist: z.number().optional().default(0),
+});
 
 export class EquipamentoService {
   static async getAll() {
@@ -9,30 +20,19 @@ export class EquipamentoService {
   }
 
   static async create(data: EquipamentoInsert) {
-    if (!data.placa || !data.tipo) {
-      throw new Error('Placa e Tipo são obrigatórios');
-    }
+    const validated = EquipamentoSchema.parse(data);
 
-    const { error } = await EquipamentoRepository.create({
-      ...data,
-      placa: data.placa.toUpperCase().trim(),
-      tipo: data.tipo.toUpperCase().trim(),
-      categoria: data.categoria?.toUpperCase().trim() || 'PESADA',
-      modulo: data.modulo?.trim() || 'BASE',
-    });
+    const { error } = await EquipamentoRepository.create(validated);
 
     if (error) throw new Error(error.message);
     return { success: true };
   }
 
   static async update(id: string, data: EquipamentoUpdate) {
-    const { error } = await EquipamentoRepository.update(id, {
-      ...data,
-      placa: data.placa?.toUpperCase().trim(),
-      tipo: data.tipo?.toUpperCase().trim(),
-      categoria: data.categoria?.toUpperCase().trim(),
-      modulo: data.modulo?.trim(),
-    });
+    const partialSchema = EquipamentoSchema.partial();
+    const validated = partialSchema.parse(data);
+
+    const { error } = await EquipamentoRepository.update(id, validated);
 
     if (error) throw new Error(error.message);
     return { success: true };
@@ -52,19 +52,24 @@ export class EquipamentoService {
 
   static async import(rows: any[]) {
     const inserts: EquipamentoInsert[] = rows.map(row => {
-      const placa = String(this.getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa']) || '').toUpperCase().trim();
-      if (!placa) return null;
-      
-      return {
-        placa,
-        tipo: String(this.getVal(row, ['tipo', 'Tipo', 'Modelo']) || 'OUTROS').toUpperCase().trim(),
-        categoria: String(this.getVal(row, ['categoria', 'Categoria', 'Classe']) || 'PESADA').toUpperCase().trim(),
-        modulo: String(this.getVal(row, ['modulo', 'Módulo', 'Setor']) || 'BASE').trim(),
-        ultimoHist: parseFloat(String(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori']) || '0').replace(',', '.')) || 0
-      };
+      try {
+        const raw = {
+          placa: String(this.getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa', 'Tag']) || '').trim(),
+          tipo: String(this.getVal(row, ['tipo', 'Tipo', 'Modelo', 'Descrição']) || 'OUTROS').trim(),
+          categoria: String(this.getVal(row, ['categoria', 'Categoria', 'Classe']) || 'PESADA').trim(),
+          modulo: String(this.getVal(row, ['modulo', 'Módulo', 'Setor']) || 'BASE').trim(),
+          horimetro_limite_preventiva: parseFloat(String(this.getVal(row, ['limite', 'Limite', 'Intervalo']) || '500').replace(',', '.')) || 500
+        };
+
+        if (!raw.placa) return null;
+        return EquipamentoSchema.parse(raw);
+      } catch (err) {
+        console.warn('Falha ao validar linha durante importação:', err);
+        return null;
+      }
     }).filter(Boolean) as EquipamentoInsert[];
 
-    if (inserts.length === 0) throw new Error('Nenhum equipamento válido encontrado');
+    if (inserts.length === 0) throw new Error('Nenhum equipamento válido encontrado para importação');
 
     const { error } = await EquipamentoRepository.upsertMany(inserts);
     if (error) throw new Error(error.message);

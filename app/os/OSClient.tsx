@@ -135,8 +135,11 @@ export default function ControleOSClient({
     if (confirm(`Tem certeza que deseja apagar ${selectedIds.size} chamados?`)) {
       startTransition(async () => {
         const res = await excluirOrdensMassivo(Array.from(selectedIds));
-        if (res?.error) alert(res.error);
-        else setSelectedIds(new Set());
+        if (res && 'error' in res) {
+          alert(`Erro: ${res.error}`);
+        } else {
+          setSelectedIds(new Set());
+        }
       });
     }
   };
@@ -170,8 +173,11 @@ export default function ControleOSClient({
       const data = XLSX.utils.sheet_to_json(ws);
       startTransition(async () => {
         const res = await importarOrdensServico(data);
-        if (res?.error) alert("Erro ao importar: " + res.error);
-        else alert("Importação concluída com sucesso!");
+        if (res && 'error' in res) {
+          alert("Erro ao importar: " + res.error);
+        } else {
+          alert("Importação concluída com sucesso!");
+        }
       });
       e.target.value = "";
     };
@@ -373,7 +379,10 @@ export default function ControleOSClient({
                           {os.status === "Aberta" && (
                             <button
                               title="Iniciar OS"
-                              onClick={() => startTransition(() => atualizarStatusOS(os.id, "Em Andamento"))}
+                              onClick={() => startTransition(async () => {
+                                const res = await atualizarStatusOS(os.id, "Em Andamento");
+                                if (res && 'error' in res) alert(res.error);
+                              })}
                               className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
                             >
                               <Check size={14} />
@@ -382,7 +391,10 @@ export default function ControleOSClient({
                           {os.status === "Em Andamento" && (
                             <button
                               title="Fechar OS"
-                              onClick={() => startTransition(() => atualizarStatusOS(os.id, "Fechada"))}
+                              onClick={() => startTransition(async () => {
+                                const res = await atualizarStatusOS(os.id, "Fechada");
+                                if (res && 'error' in res) alert(res.error);
+                              })}
                               className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
                             >
                               <Check size={14} />
@@ -447,7 +459,7 @@ export default function ControleOSClient({
                   startTransition(async () => {
                     if (deletingId) {
                       const res = await excluirOrdemServico(deletingId);
-                      if (res?.error) alert(res.error);
+                      if (res && 'error' in res) alert(res.error);
                     }
                     setDeletingId(null);
                   });

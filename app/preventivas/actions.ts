@@ -39,7 +39,7 @@ export async function excluirPreventiva(id: string) {
   }
 }
 
-export async function criarPreventivasEmMassa(data: any[]) {
+export async function importarPreventivas(data: any[]) {
   try {
     const result = await PreventivaService.importBulk(data);
     revalidatePath('/preventivas');

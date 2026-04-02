@@ -19,7 +19,7 @@ export default function PreventivasTable({ initialData, isVisitante }: Preventiv
   const handleDelete = async (id: string, placa: string) => {
     if (confirm(`Tem certeza que deseja excluir a programação preventiva de ${placa}?`)) {
       const res = await excluirPreventiva(id)
-      if (res.error) alert(res.error)
+      if ('error' in res) alert(res.error)
     }
   }
 
@@ -43,10 +43,16 @@ export default function PreventivasTable({ initialData, isVisitante }: Preventiv
         const json = XLSX.utils.sheet_to_json(worksheet)
         
         const res = await importarPreventivas(json)
-        if (res.errors > 0) {
-          alert(`Processado com ${res.errors} erros. Verifique os dados.`)
+        if ('error' in res) {
+          alert(`Erro na importação: ${res.error}`)
         } else {
-          alert(`${res.count} programações processadas com sucesso!`)
+          const erros = ('errors' in res && typeof res.errors === 'number') ? res.errors : 0
+          const count = ('count' in res && typeof res.count === 'number') ? res.count : 0
+          if (erros > 0) {
+            alert(`Processado com ${erros} erros. Verifique os dados.`)
+          } else {
+            alert(`${count} programações processadas com sucesso!`)
+          }
         }
       } catch (err) {
         console.error(err)

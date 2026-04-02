@@ -92,7 +92,7 @@ export default function PerfilPage() {
   const handleUploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setLoading(true)
-      if (!e.target.files || e.target.files.length === 0) return
+      if (!e.target.files || e.target.files.length === 0 || !user) return
       
       const file = e.target.files[0]
       const fileExt = file.name.split('.').pop()

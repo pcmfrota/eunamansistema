@@ -1,110 +1,124 @@
 -- Schema Initial Setup & Triggers para Gestão de Frota e PCM
 
--- 1. Users Extension Profile (já referenciado)
-create table if not exists public.users (
-  id uuid primary key references auth.users(id),
-  nome text,
-  perfil text check (perfil in ('ADM', 'PCM', 'OPERADOR')),
-  created_at timestamp default now()
+-- 1. Equipamentos
+CREATE TABLE IF NOT EXISTS public.equipamentos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    placa VARCHAR(50) UNIQUE NOT NULL,
+    modelo VARCHAR(100),
+    categoria VARCHAR(50),
+    modulo VARCHAR(50) DEFAULT 'BASE',
+    horimetro_limite_preventiva NUMERIC DEFAULT 500,
+    ultimoHist NUMERIC DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Equipamentos
-create table if not exists public.equipamentos (
-  id uuid primary key default gen_random_uuid(),
-  placa varchar(50) unique not null,
-  modelo varchar(100),
-  categoria varchar(50),
-  horimetro_limite_preventiva numeric default 500, -- Ex: 500 horas
-  created_at timestamp default now()
+-- 2. Horímetros
+CREATE TABLE IF NOT EXISTS public.horimetros (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    equipamento_id UUID REFERENCES public.equipamentos(id) ON DELETE CASCADE,
+    data_referencia DATE NOT NULL,
+    horimetro_inicial NUMERIC NOT NULL,
+    horimetro_final NUMERIC NOT NULL,
+    observacoes TEXT,
+    criado_por UUID REFERENCES auth.users(id), -- Referência direta ao Auth
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CHECK (horimetro_final >= horimetro_inicial)
 );
 
--- 3. Horímetros
-create table if not exists public.horimetros (
-  id uuid primary key default gen_random_uuid(),
-  equipamento_id uuid references public.equipamentos(id),
-  data_referencia date not null,
-  horimetro_inicial numeric not null,
-  horimetro_final numeric not null,
-  observacoes text,
-  criado_por uuid references public.users(id),
-  created_at timestamp default now(),
-  check (horimetro_final >= horimetro_inicial)
+-- 3. Programações (PCM)
+CREATE TABLE IF NOT EXISTS public.programacoes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    equipamento_id UUID REFERENCES public.equipamentos(id) ON DELETE CASCADE,
+    status TEXT CHECK(status IN ('pendente', 'em_andamento', 'concluida')),
+    tipo TEXT,
+    descricao TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. Triggers e Funções - Lógica Crítica Automática do Horímetro
--- "Se >= 90% -> Atenção", "Se >= 100% -> Manutenção Programada"
-create or replace function update_equipamento_status()
-returns trigger as $$
-declare
-  horas_acumuladas numeric;
-  limite_preventiva numeric;
-  percentual numeric;
-begin
-  -- Pega o limite de manutenção do equipamento
-  select horimetro_limite_preventiva into limite_preventiva 
-  from public.equipamentos where id = new.equipamento_id;
-
-  -- Na vida real, horas_acumuladas seria a soma total ou horímetro final atual vs ultima preventiva
-  -- Exemplo simplificado usando o último horímetro_final do apontamento
-  horas_acumuladas := new.horimetro_final;
-  
-  percentual := (horas_acumuladas / limite_preventiva) * 100;
-  
-  if percentual >= 100 then
-     -- Inserir na tabela de Programações (PCM)
-     insert into public.programacoes (equipamento_id, status, tipo, descricao)
-     values (new.equipamento_id, 'pendente', 'preventiva', 'Manutenção Programada Atingida (>100%)');
-  elsif percentual >= 90 then
-     -- Log ou Alerta de Atenção
-     raise notice 'Atenção: Equipamento % próximo da preventiva (%)', new.equipamento_id, percentual;
-  end if;
-
-  return new;
-end;
-$$ language plpgsql;
-
-create trigger tr_check_preventiva
-after insert on public.horimetros
-for each row execute function update_equipamento_status();
-
-
--- 5. Demais tabelas
-create table if not exists public.programacoes (
-  id uuid primary key default gen_random_uuid(),
-  equipamento_id uuid references public.equipamentos(id),
-  status text check(status in ('pendente', 'em_andamento', 'concluida')),
-  tipo text,
-  descricao text,
-  created_at timestamp default now()
+-- 4. Ordens de Serviço (Tabela Principal)
+CREATE TABLE IF NOT EXISTS public.ordens_servico (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    numero_os TEXT UNIQUE NOT NULL,
+    equipamento_id UUID REFERENCES public.equipamentos(id) ON DELETE CASCADE,
+    placa TEXT NOT NULL,
+    modulo TEXT,
+    status TEXT DEFAULT 'Aberta',
+    data_abertura TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    data_fechamento TIMESTAMP WITH TIME ZONE,
+    horimetro NUMERIC,
+    operacao_tipo TEXT,
+    local TEXT,
+    classe TEXT DEFAULT 'CORRETIVA',
+    foi_enviado_reserva BOOLEAN DEFAULT FALSE,
+    descricao TEXT,
+    motivo TEXT,
+    sistema TEXT,
+    sub_sistema TEXT,
+    horas_manutencao NUMERIC,
+    observacoes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-create table if not exists public.manutencoes (
-  id uuid primary key default gen_random_uuid(),
-  equipamento_id uuid references public.equipamentos(id),
-  horas_manutencao numeric default 0,
-  data_entrada timestamp default now(),
-  data_saida timestamp
+-- 5. Backlog
+CREATE TABLE IF NOT EXISTS public.backlog (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    equipamento_id UUID REFERENCES public.equipamentos(id) ON DELETE CASCADE,
+    falha TEXT,
+    prioridade VARCHAR(20),
+    relatado_por UUID REFERENCES auth.users(id), -- Referência direta ao Auth
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-create table if not exists public.pneus (
-  id uuid primary key default gen_random_uuid(),
-  equipamento_id uuid references public.equipamentos(id),
-  eixo varchar(50),
-  sulco_mm numeric,
-  status varchar(20),
-  created_at timestamp default now()
+-- 6. Pneus
+CREATE TABLE IF NOT EXISTS public.pneus (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    equipamento_id UUID REFERENCES public.equipamentos(id) ON DELETE CASCADE,
+    eixo VARCHAR(50),
+    sulco_mm NUMERIC,
+    status VARCHAR(20),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-create table if not exists public.backlog (
-  id uuid primary key default gen_random_uuid(),
-  equipamento_id uuid references public.equipamentos(id),
-  falha text,
-  prioridade varchar(20),
-  relatado_por uuid references public.users(id),
-  created_at timestamp default now()
-);
+-- 7. Triggers e Funções - Lógica Crítica Automática
+CREATE OR REPLACE FUNCTION public.update_equipamento_status()
+RETURNS TRIGGER AS $$
+DECLARE
+    horas_acumuladas NUMERIC;
+    limite_preventiva NUMERIC;
+    percentual NUMERIC;
+BEGIN
+    SELECT horimetro_limite_preventiva INTO limite_preventiva 
+    FROM public.equipamentos WHERE id = NEW.equipamento_id;
 
--- RLS
-alter table public.horimetros enable row level security;
-create policy "Operadores podem ver e inserir, mas não deletar" 
-  on public.horimetros for all using (true) with check (true);
+    horas_acumuladas := NEW.horimetro_final;
+    
+    IF limite_preventiva > 0 THEN
+        percentual := (horas_acumuladas / limite_preventiva) * 100;
+        
+        IF percentual >= 100 THEN
+            INSERT INTO public.programacoes (equipamento_id, status, tipo, descricao)
+            VALUES (NEW.equipamento_id, 'pendente', 'preventiva', 'Manutenção Programada Atingida (>100%)')
+            ON CONFLICT DO NOTHING;
+        END IF;
+    END IF;
+
+    -- Atualiza o último horímetro no equipamento
+    UPDATE public.equipamentos 
+    SET ultimoHist = NEW.horimetro_final 
+    WHERE id = NEW.equipamento_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Garantir que o trigger seja recriado sem erros
+DROP TRIGGER IF EXISTS tr_check_preventiva ON public.horimetros;
+CREATE TRIGGER tr_check_preventiva
+AFTER INSERT ON public.horimetros
+FOR EACH ROW EXECUTE FUNCTION public.update_equipamento_status();
+
+-- 8. RLS Básico (Será refinado pelo consolidate-security.sql)
+ALTER TABLE public.horimetros ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Operadores podem ver e inserir, mas não deletar" ON public.horimetros;
+CREATE POLICY "Operadores podem ver e inserir, mas não deletar" 
+ON public.horimetros FOR ALL USING (true) WITH CHECK (true);

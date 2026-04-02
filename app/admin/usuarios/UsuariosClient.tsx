@@ -40,7 +40,7 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
   const handleRoleChange = async (userId: string, newRole: string) => {
     startTransition(async () => {
       const result = await updateUserRole(userId, newRole);
-      if (result.error) {
+      if ('error' in result) {
         alert(result.error);
       } else {
         setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole } : p));
@@ -53,7 +53,7 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
 
     startTransition(async () => {
       const result = await deleteUser(userId);
-      if (result.error) {
+      if ('error' in result) {
         alert(result.error);
       } else {
         setProfiles(prev => prev.filter(p => p.id !== userId));
@@ -69,7 +69,7 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
     const formData = new FormData(e.currentTarget);
     const result = await createNewUser(formData);
 
-    if (result.error) {
+    if ('error' in result) {
       setError(result.error);
       setLoading(false);
     } else {

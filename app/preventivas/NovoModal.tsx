@@ -15,7 +15,7 @@ import {
   Clock,
   HardDrive
 } from "lucide-react";
-import { criarPreventiva, criarPreventivasEmMassa } from "./actions";
+import { criarPreventiva, importarPreventivas } from "./actions";
 import { useFormDraft } from '@/hooks/use-form-draft';
 
 type Equipamento = {
@@ -105,12 +105,12 @@ export default function NovaPreventivaModal({ equipamentos }: { equipamentos: Eq
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     const result = await criarPreventiva(formData);
-    if (result.success) {
+    if ('error' in result) {
+      alert("Erro: " + result.error);
+    } else {
       clearDraft();
       setIsOpen(false);
       setSelectedEq(null);
-    } else {
-      alert("Erro: " + result.error);
     }
     setLoading(false);
   };
@@ -138,12 +138,13 @@ export default function NovaPreventivaModal({ equipamentos }: { equipamentos: Eq
 
   const handleImportConfirm = async () => {
     setLoading(true);
-    const res = await criarPreventivasEmMassa(importRows);
-    if (res.success) {
+    const res = await importarPreventivas(importRows);
+    if ('error' in res) {
+      alert(`Erro na importação: ${res.error}`);
+    } else {
+      alert(`${res.count} programações processadas com sucesso!`);
       setIsOpen(false);
       setImportRows([]);
-    } else {
-      alert(res.error);
     }
     setLoading(false);
   };

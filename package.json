@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
@@ -18,9 +19,12 @@
     "react-dom": "^18",
     "recharts": "^2.10.3",
     "tailwind-merge": "^2.2.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
+    "vitest": "^1.2.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

@@ -1,13 +1,6 @@
 "use server";
 
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-
-function createClient() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+import { createClient } from "@/utils/supabase/server";
 
 // ─── Helper: get today in BR timezone ─────────────────────────────────────────
 function hojeBR() {
@@ -147,7 +140,7 @@ export async function getDashboardData(filtros?: {
   // ── 2. Buscar equipamentos do banco ────────────────────────────────────────
   const { data: equipamentos } = await supabase
     .from("equipamentos")
-    .select("id, placa, tipo, categoria, modulo");
+    .select("id, placa, tipo, categoria, modulo, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade");
 
   const totalEquipamentos = equipamentos?.length ?? 0;
 
@@ -372,21 +365,17 @@ export async function getDashboardData(filtros?: {
   });
   preventivas.sort((a, b) => a.horas_restantes - b.horas_restantes);
 
-  // ── 9. Documentos ──────────────────────────────────────────────────────────
+  // ── 9. Documentos (Usa os dados já buscados anteriormente) ─────────────────
   const hojeStr = hoje.toISOString().split("T")[0];
   const em30dias = new Date(hoje);
   em30dias.setDate(hoje.getDate() + 30);
   const em30Str = em30dias.toISOString().split("T")[0];
 
-  const { data: eqs } = await supabase
-    .from("equipamentos")
-    .select("laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade");
-
   let docsValidos = 0;
   let docsAVencer = 0;
   let docsVencidos = 0;
 
-  eqs?.forEach((eq) => {
+  equipamentos?.forEach((eq) => {
     [eq.laudo_validade, eq.crlv_validade, eq.implemento_validade, eq.tacografo_validade, eq.civ_validade]
       .filter(Boolean)
       .forEach((val) => {

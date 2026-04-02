@@ -94,7 +94,7 @@ export default function PneusModal({
         result = await registrarInspecaoCompleta(formData)
       }
 
-      if (result?.error) {
+      if (result && 'error' in result) {
         setError(result.error)
       } else {
         clearDraft()
@@ -203,7 +203,7 @@ export default function PneusModal({
                         type="number" 
                         step="0.1" 
                         min="0" 
-                        value={form[key]}
+                        value={form[key as keyof typeof form]}
                         onChange={handleInputChange}
                         placeholder="--" 
                         className="bg-transparent text-sm w-full outline-none text-zinc-900 dark:text-zinc-100 font-bold placeholder-zinc-300 dark:placeholder-zinc-700" 

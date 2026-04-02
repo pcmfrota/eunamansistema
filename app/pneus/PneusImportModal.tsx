@@ -157,7 +157,7 @@ export default function PneusImportModal({ isOpen, onClose }: { isOpen: boolean;
     try {
       const res = await importarInspecoesPneus(valid)
       setResult(res)
-      if (res.success) {
+      if (res && 'success' in res && res.success) {
         setTimeout(onClose, 2000)
       }
     } catch (err) {

@@ -16,11 +16,11 @@ export default function HorimetroForm({ equipamentos }: { equipamentos: any[] })
     const formData = new FormData(e.currentTarget);
     const result = await registrarHorimetro(formData);
     
-    if (result.error) {
+    if ('error' in result) {
       setMensagem({ tipo: 'erro', texto: result.error });
-    } else if (result.success) {
+    } else {
       setMensagem({ tipo: 'sucesso', texto: 'Apontamento registrado com sucesso!' });
-      (e.target as HTMLFormElement).reset(); // Limpa o form após sucesso
+      (e.target as HTMLFormElement).reset();
     }
     setLoading(false);
   };

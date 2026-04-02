@@ -79,7 +79,7 @@ export default function BaseFrotasPage() {
   const handleDelete = async (vehicle: any) => {
     if (confirm(`Tem certeza que deseja excluir o veículo ${vehicle.placa}?`)) {
       const res = await excluirEquipamento(vehicle.id);
-      if (res.error) alert(res.error);
+      if ('error' in res) alert(res.error);
       else loadData();
     }
   };
@@ -87,7 +87,7 @@ export default function BaseFrotasPage() {
   const handleBatchDelete = async () => {
     if (confirm(`Tem certeza que deseja excluir os ${selectedVehicles.length} veículos selecionados?`)) {
       const res = await excluirEquipamentosMassivo(selectedVehicles);
-      if (res.error) alert(res.error);
+      if ('error' in res) alert(res.error);
       else {
         setSelectedVehicles([]);
         loadData();
@@ -115,8 +115,9 @@ export default function BaseFrotasPage() {
         const json = XLSX.utils.sheet_to_json(worksheet);
         
         const res = await importarEquipamentos(json);
-        if (res.error) alert(res.error);
-        else {
+        if ('error' in res) {
+          alert(`Erro na importação: ${res.error}`);
+        } else {
           alert(`${res.count} veículos processados com sucesso!`);
           loadData();
         }

@@ -88,7 +88,7 @@ export default function HorimetroModal({
         result = await registrarHorimetro(formData)
       }
 
-      if (result.error) {
+      if ('error' in result) {
         setError(result.error)
       } else {
         clearDraft()

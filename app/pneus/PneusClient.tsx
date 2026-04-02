@@ -89,12 +89,12 @@ export default function PneusClient({
     if (selectedIds.size === 0) return;
     if (!confirm(`Confirmar exclusão de ${selectedIds.size} registros?`)) return;
     const res = await excluirInspecoesMassivo(Array.from(selectedIds));
-    if (res?.error) alert(res.error); else setSelectedIds(new Set());
+    if (res && "error" in res) alert(res.error); else setSelectedIds(new Set());
   };
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão definitiva?")) return;
     const res = await excluirInspecao(id);
-    if (res?.error) alert(res.error);
+    if (res && "error" in res) alert(res.error);
   };
 
   // ── Search & Filter ──

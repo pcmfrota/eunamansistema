@@ -162,7 +162,7 @@ export default function OSFormModal({
       result = await criarOrdemServico(formData);
     }
     
-    if (result.error) {
+    if ('error' in result) {
       alert("Erro: " + result.error);
     } else {
       if (!initialData) clearDraft();

@@ -1,5 +1,28 @@
+import { z } from 'zod';
 import { OSRepository } from '../repositories/OSRepository';
 import { OSInsert, OSUpdate } from '../models/os';
+
+const OSSchema = z.object({
+  id: z.string().uuid().optional(),
+  numero_os: z.string().min(1, 'Número da OS é obrigatório'),
+  equipamento_id: z.string().uuid('Equipamento é obrigatório'),
+  placa: z.string().min(1, 'Placa é obrigatória').transform((val: string) => val.toUpperCase().trim()),
+  modulo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
+  status: z.enum(['Aberta', 'Fechada', 'Cancelada', 'Concluída']).default('Aberta'),
+  data_abertura: z.string().min(1, 'Data de abertura é obrigatória'),
+  data_fechamento: z.string().optional().nullable(),
+  horimetro: z.number().optional().nullable(),
+  operacao_tipo: z.string().optional().nullable(),
+  local: z.string().optional().nullable(),
+  classe: z.string().default('CORRETIVA'),
+  foi_enviado_reserva: z.boolean().default(false),
+  descricao: z.string().min(1, 'Descrição é obrigatória'),
+  motivo: z.string().optional().nullable(),
+  sistema: z.string().optional().nullable(),
+  sub_sistema: z.string().optional().nullable(),
+  horas_manutencao: z.number().optional().nullable(),
+  observacoes: z.string().optional().nullable(),
+});
 
 export class OSService {
   static formatDateTime(date: Date = new Date()): string {
@@ -12,15 +35,13 @@ export class OSService {
   }
 
   static async createOS(data: OSInsert) {
-    if (!data.equipamento_id || !data.status || !data.data_abertura) {
-      throw new Error('Preencha os campos obrigatórios (Placa, Status, Data Inicial)');
-    }
-
     if (!data.numero_os) {
       data.numero_os = this.generateOSNumber();
     }
 
-    const { error } = await OSRepository.create(data);
+    const validated = OSSchema.parse(data);
+
+    const { error } = await OSRepository.create(validated);
     if (error) throw new Error(error.message);
     
     return { success: true };
@@ -32,7 +53,10 @@ export class OSService {
       data.status = 'Fechada';
     }
 
-    const { error } = await OSRepository.update(id, data);
+    const partialSchema = OSSchema.partial();
+    const validated = partialSchema.parse(data);
+
+    const { error } = await OSRepository.update(id, validated);
     if (error) throw new Error(error.message);
 
     return { success: true };
@@ -59,51 +83,60 @@ export class OSService {
     const eqUpdates: Record<string, number> = {};
 
     for (const row of rows) {
-      const placaRaw = this.getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa']) || '';
-      let placaUpper = String(placaRaw).toUpperCase().trim();
-      const eq = eqMap[placaUpper];
+      try {
+        const placaRaw = this.getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa']) || '';
+        let placaUpper = String(placaRaw).toUpperCase().trim();
+        const eq = eqMap[placaUpper];
 
-      const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori']));
-      
-      if (eq && horimetro && (!eq.ultimoHist || horimetro > eq.ultimoHist)) {
-        if (!eqUpdates[eq.id] || horimetro > eqUpdates[eq.id]) {
-          eqUpdates[eq.id] = horimetro;
+        const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori']));
+        
+        if (eq && horimetro && (!eq.ultimoHist || horimetro > eq.ultimoHist)) {
+          if (!eqUpdates[eq.id] || horimetro > eqUpdates[eq.id]) {
+            eqUpdates[eq.id] = horimetro;
+          }
         }
-      }
 
-      inserts.push({
-        numero_os: `${this.generateOSNumber()}-${Math.floor(Math.random() * 1000)}`,
-        equipamento_id: eq ? eq.id : '',
-        placa: eq ? placaUpper : 'EQUIPAMENTO_NAO_ENCONTRADO',
-        modulo: eq ? eq.modulo : (this.getVal(row, ['modulo', 'Módulo']) || null),
-        status: this.getVal(row, ['status', 'Situação', 'Estado']) || 'Aberta',
-        data_abertura: this.parsePossibleDate(this.getVal(row, ['data_abertura', 'Abertura', 'Data Início', 'Início'])) || new Date().toISOString(),
-        data_fechamento: this.parsePossibleDate(this.getVal(row, ['data_fechamento', 'Fechamento', 'Data Fim', 'Conclusão'])),
-        horimetro,
-        operacao_tipo: this.getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo']),
-        local: this.getVal(row, ['local', 'Local', 'Frente']),
-        classe: this.getVal(row, ['classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS']) || 'CORRETIVA',
-        foi_enviado_reserva: row.foi_enviado_reserva === true || String(row.foi_enviado_reserva).toUpperCase() === 'SIM',
-        descricao: this.getVal(row, ['descricao', 'Descrição', 'Serviço', 'Atividade']) || 'Importação via Planilha',
-        motivo: this.getVal(row, ['motivo', 'Motivo', 'Causa']),
-        sistema: this.getVal(row, ['sistema', 'Sistema']),
-        sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema']),
-        horas_manutencao: this.parseFloatSafe(this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo'])),
-        observacoes: this.getVal(row, ['observacoes', 'Observações', 'Notas'])
-      });
+        const raw = {
+          numero_os: `${this.generateOSNumber()}-${Math.floor(Math.random() * 1000)}`,
+          equipamento_id: eq ? eq.id : null,
+          placa: eq ? placaUpper : 'EQUIPAMENTO_NAO_ENCONTRADO',
+          modulo: eq ? eq.modulo : (this.getVal(row, ['modulo', 'Módulo']) || null),
+          status: this.getVal(row, ['status', 'Situação', 'Estado', 'Status']) || 'Aberta',
+          data_abertura: this.parsePossibleDate(this.getVal(row, ['data_abertura', 'Abertura', 'Data Início', 'Início'])) || new Date().toISOString(),
+          data_fechamento: this.parsePossibleDate(this.getVal(row, ['data_fechamento', 'Fechamento', 'Data Fim', 'Conclusão'])),
+          horimetro,
+          operacao_tipo: this.getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo']),
+          local: this.getVal(row, ['local', 'Local', 'Frente']),
+          classe: this.getVal(row, ['classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS']) || 'CORRETIVA',
+          foi_enviado_reserva: row.foi_enviado_reserva === true || String(row.foi_enviado_reserva).toUpperCase() === 'SIM',
+          descricao: this.getVal(row, ['descricao', 'Descrição', 'Serviço', 'Atividade']) || 'Importação via Planilha',
+          motivo: this.getVal(row, ['motivo', 'Motivo', 'Causa']),
+          sistema: this.getVal(row, ['sistema', 'Sistema']),
+          sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema']),
+          horas_manutencao: this.parseFloatSafe(this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo'])),
+          observacoes: this.getVal(row, ['observacoes', 'Observações', 'Notas'])
+        };
+
+        if (raw.equipamento_id) {
+          inserts.push(OSSchema.parse(raw));
+        }
+      } catch (err) {
+        console.warn('Falha ao validar linha de OS durante importação:', err);
+      }
     }
 
-    const { error: insError } = await OSRepository.create(inserts as any); // Using any for bulk insert support check
+    if (inserts.length === 0) throw new Error('Nenhuma OS válida encontrada para importação');
+
+    const { error: insError } = await OSRepository.create(inserts);
     if (insError) throw new Error(insError.message);
 
     for (const [id, value] of Object.entries(eqUpdates)) {
       await OSRepository.updateEquipamentoHorimetro(id, value);
     }
 
-    return { success: true };
+    return { success: true, count: inserts.length };
   }
 
-  // --- Internals copied for refactoring (Service is responsible for this logic) ---
   private static parsePossibleDate(d?: any) {
     if (!d) return null;
     if (typeof d === 'number' && d > 20000 && d < 100000) {
