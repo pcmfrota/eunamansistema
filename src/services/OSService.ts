@@ -2,9 +2,13 @@ import { z } from 'zod';
 import { OSRepository } from '../repositories/OSRepository';
 import { OSInsert, OSUpdate } from '../models/os';
 
+function generateOSNumber(): string {
+  return `OS-${Date.now()}`;
+}
+
 const OSSchema = z.object({
   id: z.string().uuid().optional(),
-  numero_os: z.string().min(1, 'Número da OS é obrigatório'),
+  numero_os: z.string().min(1, 'Número da OS é obrigatório').or(z.literal('').transform(() => generateOSNumber())),
   equipamento_id: z.string().uuid('Equipamento é obrigatório'),
   placa: z.string().min(1, 'Placa é obrigatória').transform((val: string) => val.toUpperCase().trim()),
   modulo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
@@ -31,7 +35,7 @@ export class OSService {
   }
 
   static generateOSNumber(): string {
-    return `OS-${Date.now()}`;
+    return generateOSNumber();
   }
 
   static async createOS(data: OSInsert) {
@@ -51,6 +55,11 @@ export class OSService {
     if (data.status === 'Fechada' || data.status === 'Concluída') {
       data.data_fechamento = this.formatDateTime();
       data.status = 'Fechada';
+    }
+
+    // Se numero_os vier vazio (OS importada sem número), gerar automaticamente
+    if (!data.numero_os || (data.numero_os as string).trim() === '') {
+      data.numero_os = generateOSNumber();
     }
 
     const partialSchema = OSSchema.partial();
