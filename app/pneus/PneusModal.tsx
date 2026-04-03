@@ -76,6 +76,24 @@ export default function PneusModal({
     }
   }, [editData, isLoaded, setForm])
 
+  // --- Automatic Condition Analysis ---
+  useEffect(() => {
+    const fields = ['de', 'dd', 'tei', 'tee', 'tdi', 'tde', 'tei1', 'tee1', 'tdi1', 'tde1', 'estepe'];
+    const values = fields.map(k => parseFloat((form as any)[k])).filter(v => !isNaN(v));
+    
+    if (values.length === 0) return;
+
+    const min = Math.min(...values);
+    let autoCond = 'BOM';
+    if (min < 3) autoCond = 'TROCAR';
+    else if (min <= 5) autoCond = 'CRITICO';
+    else if (min <= 9) autoCond = 'REGULAR';
+
+    if (form.condicao !== autoCond) {
+      setForm(prev => ({ ...prev, condicao: autoCond }));
+    }
+  }, [form.de, form.dd, form.tei, form.tee, form.tdi, form.tde, form.tei1, form.tee1, form.tdi1, form.tde1, form.estepe]);
+
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
