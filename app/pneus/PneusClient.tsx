@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import PneusModal from "./PneusModal";
 import PneusImportModal from "./PneusImportModal";
-import * as XLSX from "xlsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null };
@@ -75,6 +74,15 @@ export default function PneusClient({
   const [editingItem, setEditingItem] = useState<Inspecao | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Pré-carrega SheetJS via CDN para Export e Import
+  useEffect(() => {
+    if (!(window as any).XLSX) {
+      const script = document.createElement("script");
+      script.src = "https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js";
+      document.head.appendChild(script);
+    }
+  }, []);
+
   // ── Batch Actions ──
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
@@ -132,14 +140,19 @@ export default function PneusClient({
   }, {} as Record<string, Inspecao>));
 
   const exportExcel = () => {
+    const XLSXLib = (window as any).XLSX;
+    if (!XLSXLib) {
+      alert('Aguarde o carregamento da biblioteca Excel e tente novamente.');
+      return;
+    }
     const rows = inspecoes.map(i => ({
       Placa: i.equipamentos?.placa, Data: fmtDate(i.data_inspecao), Km: i.km_atual, Condicao: i.condicao,
       DE: i.de, DD: i.dd, TEI: i.tei, TEE: i.tee, TDI: i.tdi, TDE: i.tde, ESTEPE: i.estepe
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Pneus");
-    XLSX.writeFile(wb, "Relatorio_Pneus.xlsx");
+    const ws = XLSXLib.utils.json_to_sheet(rows);
+    const wb = XLSXLib.utils.book_new();
+    XLSXLib.utils.book_append_sheet(wb, ws, "Pneus");
+    XLSXLib.writeFile(wb, "Relatorio_Pneus.xlsx");
   };
 
   return (
