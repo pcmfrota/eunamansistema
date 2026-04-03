@@ -74,17 +74,7 @@ export default function PneusImportModal({ isOpen, onClose }: { isOpen: boolean;
   const [result, setResult] = useState<any>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (!isOpen) {
-      setRows([])
-      setResult(null)
-      setFileName("")
-    }
-  }, [isOpen])
-
-  if (!isOpen) return null
-
-  // SheetJS lazy load logic
+  // SheetJS lazy load logic — DEVE ficar antes de qualquer return condicional
   const [XLSX, setXLSX] = useState<any>(null)
   useEffect(() => {
     if ((window as any).XLSX) {
@@ -96,6 +86,16 @@ export default function PneusImportModal({ isOpen, onClose }: { isOpen: boolean;
       document.head.appendChild(script)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setRows([])
+      setResult(null)
+      setFileName("")
+    }
+  }, [isOpen])
+
+  if (!isOpen) return null
 
   const processDataRows = (matrix: any[][]): PreviewRow[] => {
     if (!matrix.length) return []
