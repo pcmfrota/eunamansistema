@@ -69,6 +69,20 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
     };
   }, [inspecoes]);
 
+  const downloadReportPDF = () => {
+    if (!(window as any).html2pdf) {
+      alert("Aguarde o carregamento do gerador de PDF."); return;
+    }
+    const element = document.getElementById("ai-report-content");
+    (window as any).html2pdf().set({
+      margin: 10,
+      filename: `Relatorio_Inteligencia_Pneus.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    }).from(element).save();
+  };
+
   if (!analysis) return null;
 
   return (
@@ -97,7 +111,7 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
         </div>
 
         {/* Corpo do Relatório */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
+        <div id="ai-report-content" className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8 bg-white dark:bg-zinc-950">
           
           {/* Dashboard Rápido */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -178,8 +192,8 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
                 />
               </div>
 
-              <div className="pt-4">
-                 <button className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-900/40 transition-all flex items-center justify-center gap-3 group">
+              <div className="pt-4" data-html2canvas-ignore="true">
+                 <button onClick={downloadReportPDF} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-900/40 transition-all flex items-center justify-center gap-3 group">
                    Baixar Relatório Executivo (PDF)
                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                  </button>

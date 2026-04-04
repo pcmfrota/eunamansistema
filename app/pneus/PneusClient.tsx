@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search } from "lucide-react";
+import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
@@ -84,6 +84,11 @@ export default function PneusClient({
       const script = document.createElement("script");
       script.src = "https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js";
       document.head.appendChild(script);
+    }
+    if (!(window as any).html2pdf) {
+      const script2 = document.createElement("script");
+      script2.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      document.head.appendChild(script2);
     }
   }, []);
 
@@ -176,6 +181,72 @@ export default function PneusClient({
     const wb = XLSXLib.utils.book_new();
     XLSXLib.utils.book_append_sheet(wb, ws, "Pneus");
     XLSXLib.writeFile(wb, "Relatorio_Pneus.xlsx");
+  };
+
+  const downloadBoletimPDF = (ins: Inspecao) => {
+    if (!(window as any).html2pdf) {
+      alert("Aguarde o carregamento do gerador de PDF."); return;
+    }
+    const html = `
+      <div style="padding: 40px; font-family: sans-serif; color: #333;">
+        <div style="text-align: center; border-bottom: 2px solid #f97316; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="margin:0; font-size: 24px; color: #18181b;">BOLETIM OFICIAL DE INSPEÇÃO DE PNEUS</h1>
+          <p style="margin:5px 0 0 0; color: #71717a;">Eunaman Sistemas Inteligentes</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 30px; background: #fafafa; padding: 15px; border-radius: 8px;">
+           <div><p style="margin:0; font-size:12px; color:#a1a1aa; text-transform:uppercase;">Placa do Veículo</p><h2 style="margin:0; font-size:20px;">${ins.equipamentos?.placa || 'N/A'}</h2></div>
+           <div><p style="margin:0; font-size:12px; color:#a1a1aa; text-transform:uppercase;">Data de Emissão</p><h2 style="margin:0; font-size:20px;">${fmtDate(ins.data_inspecao)}</h2></div>
+           <div><p style="margin:0; font-size:12px; color:#a1a1aa; text-transform:uppercase;">KM / Horímetro</p><h2 style="margin:0; font-size:20px;">${ins.km_atual || '??'}</h2></div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px;">
+          <thead>
+            <tr style="background: #f4f4f5;">
+               <th style="padding: 12px; border: 1px solid #e4e4e7; text-align: left;">Eixo / Posição</th>
+               <th style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">Dianteiras</th>
+               <th style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">Traction Interno</th>
+               <th style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">Traction Externo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; font-weight: bold;">Eixo Frontal</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">DE: ${ins.de || '-'} | DD: ${ins.dd || '-'}</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">-</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; font-weight: bold;">Eixo Traseiro 1</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">-</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">TEI: ${ins.tei || '-'} | TDI: ${ins.tdi || '-'}</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">TEE: ${ins.tee || '-'} | TDE: ${ins.tde || '-'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; font-weight: bold;">Eixo Traseiro 2</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">-</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">TEI1: ${ins.tei1 || '-'} | TDI1: ${ins.tdi1 || '-'}</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;">TEE1: ${ins.tee1 || '-'} | TDE1: ${ins.tde1 || '-'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; font-weight: bold;">Estepe</td>
+              <td style="padding: 12px; border: 1px solid #e4e4e7; text-align: center;" colspan="3">EST: ${ins.estepe || '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="background: ${ins.condicao === 'CRITICO' || ins.condicao === 'TROCAR' ? '#fef2f2' : '#f0fdf4'}; padding: 20px; border-radius: 8px;">
+          <h3 style="margin: 0 0 10px 0;">Condição Técnica Diagnosticada</h3>
+          <p style="margin: 0; font-size: 16px; font-weight: bold;">Nível Geral de Desgaste: ${ins.condicao}</p>
+        </div>
+      </div>
+    `;
+    const element = document.createElement("div");
+    element.innerHTML = html;
+    (window as any).html2pdf().set({
+      margin: 10,
+      filename: `Boletim_${ins.equipamentos?.placa}_${fmtDate(ins.data_inspecao).replace(/\//g, '-')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(element).save();
   };
 
   return (
@@ -438,6 +509,7 @@ export default function PneusClient({
                         <td className="px-4 py-4 text-right" colSpan={3}>
                            {!isVisitante && (
                               <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => downloadBoletimPDF(ins)} className="p-2 text-zinc-400 hover:text-orange-500" title="Imprimir PDF"><Printer size={16} /></button>
                                 <button onClick={() => { setEditingItem(ins); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-blue-500"><Plus size={16} /></button>
                                 <button onClick={() => handleDelete(ins.id)} className="p-2 text-zinc-400 hover:text-red-500"><Plus size={16} className="rotate-45" /></button>
                               </div>

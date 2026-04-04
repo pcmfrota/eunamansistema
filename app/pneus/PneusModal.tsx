@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Save, AlertCircle, Info, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Save, AlertCircle, Info, ChevronDown, Camera } from 'lucide-react'
 import { registrarInspecaoCompleta, atualizarInspecao } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 
@@ -132,6 +132,25 @@ export default function PneusModal({
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      // Não interromper Enter em botões ou textareas
+      if (target.tagName.toLowerCase() === 'textarea' || target.tagName.toLowerCase() === 'button' || target.getAttribute('type') === 'file') {
+        return;
+      }
+      e.preventDefault();
+      const form = e.currentTarget;
+      const elements = Array.from(form.elements).filter(
+        el => (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement) && !(el as any).disabled
+      ) as HTMLElement[];
+      const index = elements.indexOf(target);
+      if (index > -1 && elements[index + 1]) {
+        elements[index + 1].focus();
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 overflow-y-auto">
       <div className="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-8 animate-in fade-in zoom-in duration-200">
@@ -166,8 +185,8 @@ export default function PneusModal({
             </div>
           )}
 
-          <form id="pneus-form" onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <form id="pneus-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-6">
+            <div className="flex flex-col md:flex-row gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Equipamento *</label>
                 <div className="relative">
@@ -195,7 +214,7 @@ export default function PneusModal({
                   className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none font-medium text-zinc-900 dark:text-zinc-100" 
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 md:w-1/3">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Km Atual</label>
                 <input 
                   name="km_atual" 
@@ -238,8 +257,8 @@ export default function PneusModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="flex flex-col gap-1.5 md:w-1/3">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Condição Geral</label>
                 <div className="relative">
                   <select 
@@ -256,7 +275,20 @@ export default function PneusModal({
                   <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 md:w-1/3">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                   <Camera size={14} className="text-orange-500" /> Câmera / Foto
+                </label>
+                <div className="relative flex items-center">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment"
+                    className="w-full text-[10px] sm:text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-orange-500/10 file:text-orange-600 hover:file:bg-orange-500/20 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5 md:w-1/3">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Observações</label>
                 <textarea 
                   name="observacoes" 
