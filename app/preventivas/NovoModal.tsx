@@ -56,7 +56,7 @@ export default function NovaPreventivaModal({ equipamentos }: { equipamentos: Eq
     ultimo_horimetro: "",
     horimetro_atual: "",
     intervalo_horas: "500",
-    data_atualizacao: new Date().toISOString().split('T')[0],
+    data_atualizacao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
   };
 
   const { form, setForm, hasContent: hasDraft, clearDraft } = useFormDraft<PreventivaFormValues>('preventiva', initialValues);

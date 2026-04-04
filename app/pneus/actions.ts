@@ -13,7 +13,7 @@ export async function registrarInspecaoPneu(formData: FormData) {
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
-      data_inspecao: new Date().toISOString(),
+      data_inspecao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
       km_atual: null,
       condicao,
       ...posicoes

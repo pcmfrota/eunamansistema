@@ -183,7 +183,7 @@ export default function PreventivasTable({ initialData, isVisitante }: Preventiv
                     {falta}h
                   </td>
                   <td className="px-6 py-4 text-zinc-500">
-                    {prev.data_atualizacao ? new Date(prev.data_atualizacao).toLocaleDateString('pt-BR') : '-'}
+                    {prev.data_atualizacao ? prev.data_atualizacao.split('T')[0].split('-').reverse().join('/') : '-'}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${badgeClass}`}>

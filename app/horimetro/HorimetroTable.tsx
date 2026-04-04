@@ -59,7 +59,7 @@ export default function HorimetroTable({ data, onEdit }: HorimetroTableProps) {
     const ws = XLSX.utils.json_to_sheet(exportData)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Horimetros')
-    XLSX.writeFile(wb, `relatorio_horimetros_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.writeFile(wb, `relatorio_horimetros_${new Date(Date.now() - 3 * 3600 * 1000).toISOString().split('T')[0]}.xlsx`)
   }
 
   return (
@@ -114,7 +114,7 @@ export default function HorimetroTable({ data, onEdit }: HorimetroTableProps) {
                 </td>
                 <td className="px-6 py-4 text-center">
                   <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                    {new Date(reg.data_referencia).toLocaleDateString('pt-BR')}
+                    {reg.data_referencia ? reg.data_referencia.split('T')[0].split('-').reverse().join('/') : '-'}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right text-sm font-medium text-zinc-500 dark:text-zinc-400">

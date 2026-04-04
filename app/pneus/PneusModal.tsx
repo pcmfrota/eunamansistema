@@ -24,7 +24,7 @@ const POSI_LABELS: [string, string][] = [
 
 const INITIAL_FORM = {
   equipamento_id: '',
-  data_inspecao: new Date(Date.now() - 3 * 3600 * 1000).toISOString().split('T')[0],
+  data_inspecao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
   km_atual: '',
   condicao: 'BOM',
   observacoes: '',

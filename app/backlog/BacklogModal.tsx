@@ -32,7 +32,7 @@ const STEPS = [
 ]
 
 const initialValues = {
-  data_evidencia: new Date().toISOString().split('T')[0],
+  data_evidencia: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
   status: 'Aberta',
   criticidade: 'B',
   semana: '', mes: '', ano: '', modulo: '', regiao_programa: '',
@@ -77,14 +77,14 @@ export default function BacklogModal({
       setForm(editData)
     } else if (!form.data_evidencia) {
       // Garantir data atual se for novo e estiver vazio
-      setForm(prev => ({ ...prev, data_evidencia: new Date().toISOString().split('T')[0] }))
+      setForm(prev => ({ ...prev, data_evidencia: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }))
     }
   }, [editData, setForm, form.data_evidencia])
 
   // Auto-preencher data de conclusão ao encerrar
   useEffect(() => {
     if (form.status === 'Encerrada' && !form.data_conclusao) {
-      setForm(prev => ({ ...prev, data_conclusao: new Date().toISOString().split('T')[0] }))
+      setForm(prev => ({ ...prev, data_conclusao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }))
     }
   }, [form.status, form.data_conclusao, setForm])
 

@@ -23,8 +23,17 @@ export function useFormDraft<T extends Record<string, any>>(key: string | null, 
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
+        // Remove date fields from the draft so they always initialize with today's date
+        // and aren't cached from previous days.
+        const cleanParsed = { ...parsed }
+        Object.keys(cleanParsed).forEach(key => {
+          if (key.startsWith('data_') || key === 'ultimaAtualizacao') {
+            delete cleanParsed[key]
+          }
+        })
+        
         // Merge with initial values to ensure new fields are present
-        setForm(prev => ({ ...prev, ...parsed }))
+        setForm(prev => ({ ...prev, ...cleanParsed }))
       } catch (e) {
         console.error('Error parsing form draft:', e)
       }

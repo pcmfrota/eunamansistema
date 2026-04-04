@@ -135,7 +135,7 @@ export default function BacklogTable({
                     <td className="px-4 py-4">
                        <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-400">
                          <Calendar size={14} className="opacity-40" />
-                         {item.data_evidencia ? new Date(item.data_evidencia).toLocaleDateString('pt-BR') : '-'}
+                         {item.data_evidencia ? item.data_evidencia.split('T')[0].split('-').reverse().join('/') : '-'}
                        </div>
                     </td>
                     <td className="px-4 py-4 max-w-xs">
@@ -178,7 +178,7 @@ export default function BacklogTable({
                     <td className="px-4 py-4 text-center">
                        {item.data_programacao ? (
                          <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400">{new Date(item.data_programacao).toLocaleDateString('pt-BR')}</span>
+                            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400">{item.data_programacao.split('T')[0].split('-').reverse().join('/')}</span>
                             <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">{item.status_programacao}</span>
                          </div>
                        ) : (

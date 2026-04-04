@@ -27,7 +27,7 @@ interface HorimetroModalProps {
 
 const INITIAL_FORM = {
   equipamento_id: '',
-  data_referencia: new Date(Date.now() - 3 * 3600 * 1000).toISOString().split('T')[0],
+  data_referencia: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
   horimetro_inicial: '',
   horimetro_final: '',
   observacoes: ''

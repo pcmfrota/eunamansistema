@@ -20,7 +20,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
     categoria: '',
     modulo: '',
     horimetro: '',
-    ultimaAtualizacao: new Date().toISOString().split('T')[0]
+    ultimaAtualizacao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   }
 
   const { form, setForm, handleInputChange, clearDraft } = useFormDraft(
@@ -36,7 +36,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         categoria: editingVehicle.categoria || '',
         modulo: editingVehicle.modulo || '',
         horimetro: editingVehicle.ultimoHist?.toString() || editingVehicle.horimetro || '',
-        ultimaAtualizacao: editingVehicle.ultimaAtualizacao || new Date().toISOString().split('T')[0]
+        ultimaAtualizacao: editingVehicle.ultimaAtualizacao || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
       })
     } else {
       // If we are opening "New" and there was no editing previously, we keep the draft

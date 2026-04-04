@@ -366,10 +366,11 @@ export async function getDashboardData(filtros?: {
   preventivas.sort((a, b) => a.horas_restantes - b.horas_restantes);
 
   // ── 9. Documentos (Usa os dados já buscados anteriormente) ─────────────────
-  const hojeStr = hoje.toISOString().split("T")[0];
-  const em30dias = new Date(hoje);
-  em30dias.setDate(hoje.getDate() + 30);
-  const em30Str = em30dias.toISOString().split("T")[0];
+  const hojeStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const hojeSaoPaulo = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const em30dias = new Date(hojeSaoPaulo);
+  em30dias.setDate(em30dias.getDate() + 30);
+  const em30Str = em30dias.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
   let docsValidos = 0;
   let docsAVencer = 0;
