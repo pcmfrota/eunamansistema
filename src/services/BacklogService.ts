@@ -8,8 +8,12 @@ export class BacklogService {
     return data;
   }
 
-  static async upsert(item: BacklogItemInsert | BacklogItemUpdate) {
-    const { data, error } = await BacklogRepository.upsert(item);
+  static async upsert(item: any) {
+    // Sanitize all fields: '' -> null
+    const sanitized = Object.fromEntries(
+      Object.entries(item).map(([k, v]) => [k, v === '' ? null : v])
+    );
+    const { data, error } = await BacklogRepository.upsert(sanitized);
     if (error) throw new Error(error.message);
     return { data, success: true };
   }
@@ -21,33 +25,36 @@ export class BacklogService {
   }
 
   static async import(rows: any[]) {
-    // Helper: returns trimmed string or null (never empty string)
-    const str = (val: any): string | null => {
-      const s = String(val ?? '').trim();
-      return s === '' ? null : s;
+    const s = (val: any) => {
+      const v = String(val ?? '').trim();
+      return v === '' ? null : v;
     };
 
-    const items: BacklogItemInsert[] = rows.map(r => ({
-      semana: str(r.semana ?? r.Semana),
-      mes: str(r.mes ?? r.Mês ?? r.Mes),
-      ano: str(r.ano ?? r.Ano),
-      data_evidencia: str(r.data_evidencia ?? r["Data Evidência"] ?? r["Data Evidencia"]),
-      modulo: str(r.modulo ?? r["Módulo"] ?? r.Modulo),
-      regiao_programa: str(r.regiao_programa ?? r["Região x Prog."] ?? r["Regiao x Prog"]),
-      frota: str(r.frota ?? r.Frota ?? r.Placa)?.toUpperCase() ?? null,
-      tag: str(r.tag ?? r.TAG)?.toUpperCase() ?? null,
-      tipo: str(r.tipo ?? r.Tipo),
-      descricao: str(r.descricao ?? r["Descrição"] ?? r.Descricao),
-      origem: str(r.origem ?? r.Origem),
-      criticidade: str(r.criticidade ?? r.Criticidade),
-      tempo_execucao: str(r.tempo_execucao ?? r["Tempo Exec."] ?? r["Tempo Execucao"]),
-      campo_base: str(r.campo_base ?? r["Campo/Base"]),
-      os: str(r.os ?? r.OS ?? r["O.S"]),
-      material: str(r.material ?? r.Material),
-      nr_rc: str(r.nr_rc ?? r["Nº RC"] ?? r["Nr RC"]),
-      nr_ordem: str(r.nr_ordem ?? r["Nº Ordem"] ?? r["Nr Ordem"]),
-      fornecedor: str(r.fornecedor ?? r.Fornecedor),
-      status: str(r.status ?? r.Status) ?? 'Aberta',
+    const items: any[] = rows.map(r => ({
+      semana: s(r.semana ?? r.Semana),
+      mes: s(r.mes ?? r.Mês ?? r.Mes),
+      ano: s(r.ano ?? r.Ano),
+      data_evidencia: s(r.data_evidencia ?? r["Data Evidência"] ?? r["Data Evidencia"]),
+      modulo: s(r.modulo ?? r["Módulo"] ?? r.Modulo),
+      regiao_programa: s(r.regiao_programa ?? r["Região x Prog."] ?? r["Regiao x Prog"]),
+      frota: s(r.frota ?? r.Frota ?? r.Placa)?.toUpperCase() ?? null,
+      tag: s(r.tag ?? r.TAG)?.toUpperCase() ?? null,
+      tipo: s(r.tipo ?? r.Tipo),
+      descricao: s(r.descricao ?? r["Descrição"] ?? r.Descricao),
+      origem: s(r.origem ?? r.Origem),
+      criticidade: s(r.criticidade ?? r.Criticidade),
+      tempo_execucao: s(r.tempo_execucao ?? r["Tempo Exec."] ?? r["Tempo Execucao"]),
+      campo_base: s(r.campo_base ?? r["Campo/Base"]),
+      os: s(r.os ?? r.OS ?? r["O.S"]),
+      material: s(r.material ?? r.Material),
+      nr_rc: s(r.nr_rc ?? r["Nº RC"] ?? r["Nr RC"]),
+      nr_ordem: s(r.nr_ordem ?? r["Nº Ordem"] ?? r["Nr Ordem"]),
+      fornecedor: s(r.fornecedor ?? r.Fornecedor),
+      status: s(r.status ?? r.Status) ?? 'Aberta',
+      data_conclusao: s(r.data_conclusao ?? r["Data Conclusão"] ?? r["Data Conclusao"]),
+      data_programacao: s(r.data_programacao ?? r["Data Programação"] ?? r["Data Programacao"]),
+      status_programacao: s(r.status_programacao ?? r["Status Programação"] ?? r["Status Programacao"]),
+      observacao: s(r.observacao ?? r["Observação"] ?? r.Observacao),
     }));
 
     const { error } = await BacklogRepository.insertMany(items);

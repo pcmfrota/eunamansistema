@@ -75,8 +75,18 @@ export default function BacklogModal({
   useEffect(() => {
     if (editData) {
       setForm(editData)
+    } else if (!form.data_evidencia) {
+      // Garantir data atual se for novo e estiver vazio
+      setForm(prev => ({ ...prev, data_evidencia: new Date().toISOString().split('T')[0] }))
     }
-  }, [editData, setForm])
+  }, [editData, setForm, form.data_evidencia])
+
+  // Auto-preencher data de conclusão ao encerrar
+  useEffect(() => {
+    if (form.status === 'Encerrada' && !form.data_conclusao) {
+      setForm(prev => ({ ...prev, data_conclusao: new Date().toISOString().split('T')[0] }))
+    }
+  }, [form.status, form.data_conclusao, setForm])
 
   if (!isOpen) return null
 
@@ -252,19 +262,30 @@ export default function BacklogModal({
 
                {step === 5 && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Field label="Previsão Programação">
-                        <input className={inputCls} type="date" value={form.data_programacao} onChange={e => setForm({...form, data_programacao: e.target.value})} />
-                    </Field>
-                    <Field label="Status Programação">
-                        <select className={inputCls} value={form.status_programacao} onChange={e => setForm({...form, status_programacao: e.target.value})}>
-                           <option>Não Programado</option>
-                           <option>Programado</option>
-                           <option>Executado</option>
-                        </select>
-                    </Field>
-                    <Field label="Observações de Programação" span={2}>
-                       <textarea className={cn(inputCls, "min-h-[100px] resize-none")} value={form.observacao} onChange={e => setForm({...form, observacao: e.target.value})} />
-                    </Field>
+                     <Field label="Previsão Programação">
+                         <input className={inputCls} type="date" value={form.data_programacao || ''} onChange={e => setForm({...form, data_programacao: e.target.value})} />
+                     </Field>
+                     <Field label="Status Programação">
+                         <select className={inputCls} value={form.status_programacao || 'Não Programado'} onChange={e => setForm({...form, status_programacao: e.target.value})}>
+                            <option>Não Programado</option>
+                            <option>Programado</option>
+                            <option>Executado</option>
+                         </select>
+                     </Field>
+                     <Field label="Data de Conclusão (Opcional)">
+                        <input 
+                          className={inputCls} 
+                          type="date" 
+                          value={form.data_conclusao || ''} 
+                          onChange={e => setForm({...form, data_conclusao: e.target.value})} 
+                        />
+                     </Field>
+                     <Field label="Previsão Conclusão">
+                        <input className={inputCls} type="date" value={form.previsao_conclusao || ''} onChange={e => setForm({...form, previsao_conclusao: e.target.value})} />
+                     </Field>
+                     <Field label="Observações de Programação" span={2}>
+                        <textarea className={cn(inputCls, "min-h-[80px] resize-none")} value={form.observacao || ''} onChange={e => setForm({...form, observacao: e.target.value})} />
+                     </Field>
                     <div className="col-span-2 p-6 bg-zinc-50 dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 text-center">
                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">Pronto para salvar no sistema?</p>
                        <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">Todos os dados serão sincronizados agora</p>
