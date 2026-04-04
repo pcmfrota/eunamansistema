@@ -175,7 +175,8 @@ export class PneusService {
     if (!d) return null;
     if (typeof d === 'number' && d > 20000 && d < 100000) {
       const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
-      return jsDate.toISOString();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${jsDate.getUTCFullYear()}-${pad(jsDate.getUTCMonth() + 1)}-${pad(jsDate.getUTCDate())}T${pad(jsDate.getUTCHours())}:${pad(jsDate.getUTCMinutes())}`;
     }
     const str = String(d).trim();
     if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(str)) {
@@ -190,6 +191,10 @@ export class PneusService {
       return `${year}-${month}-${day}T${timePart}`;
     }
     const dt = new Date(str);
-    return !isNaN(dt.getTime()) ? dt.toISOString() : null;
+    if (!isNaN(dt.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    }
+    return null;
   }
 }

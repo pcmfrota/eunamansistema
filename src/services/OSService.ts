@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { OSRepository } from '../repositories/OSRepository';
 import { OSInsert, OSUpdate } from '../models/os';
+import { getCurrentLocalDatetime } from '../utils/dateUtils';
 
 function generateOSNumber(): string {
   return `OS-${Date.now()}`;
@@ -29,9 +30,8 @@ const OSSchema = z.object({
 });
 
 export class OSService {
-  static formatDateTime(date: Date = new Date()): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  static formatDateTime(): string {
+    return getCurrentLocalDatetime();
   }
 
   static generateOSNumber(): string {
@@ -114,7 +114,7 @@ export class OSService {
           placa: eq ? placaUpper : 'EQUIPAMENTO_NAO_ENCONTRADO',
           modulo: eq ? eq.modulo : (this.getVal(row, ['modulo', 'Módulo']) || null),
           status: this.getVal(row, ['status', 'Situação', 'Estado', 'Status']) || 'Aberta',
-          data_abertura: this.parsePossibleDate(this.getVal(row, ['data_abertura', 'Abertura', 'Data Início', 'Início'])) || new Date().toISOString(),
+          data_abertura: this.parsePossibleDate(this.getVal(row, ['data_abertura', 'Abertura', 'Data Início', 'Início'])) || getCurrentLocalDatetime(),
           data_fechamento: this.parsePossibleDate(this.getVal(row, ['data_fechamento', 'Fechamento', 'Data Fim', 'Conclusão'])),
           horimetro,
           operacao_tipo: this.getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo']),
@@ -153,7 +153,8 @@ export class OSService {
     if (!d) return null;
     if (typeof d === 'number' && d > 20000 && d < 100000) {
       const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
-      return jsDate.toISOString();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${jsDate.getUTCFullYear()}-${pad(jsDate.getUTCMonth() + 1)}-${pad(jsDate.getUTCDate())}T${pad(jsDate.getUTCHours())}:${pad(jsDate.getUTCMinutes())}`;
     }
     const str = String(d).trim();
     if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(str)) {
@@ -168,7 +169,10 @@ export class OSService {
       return `${year}-${month}-${day}T${timePart}`;
     }
     const dt = new Date(str);
-    if (!isNaN(dt.getTime())) return dt.toISOString();
+    if (!isNaN(dt.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    }
     return null;
   }
 

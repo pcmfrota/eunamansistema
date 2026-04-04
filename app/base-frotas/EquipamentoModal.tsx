@@ -20,7 +20,11 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
     categoria: '',
     modulo: '',
     horimetro: '',
-    ultimaAtualizacao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    ultimaAtualizacao: (() => {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    })()
   }
 
   const { form, setForm, handleInputChange, clearDraft } = useFormDraft(
@@ -36,7 +40,11 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         categoria: editingVehicle.categoria || '',
         modulo: editingVehicle.modulo || '',
         horimetro: editingVehicle.ultimoHist?.toString() || editingVehicle.horimetro || '',
-        ultimaAtualizacao: editingVehicle.ultimaAtualizacao || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+        ultimaAtualizacao: editingVehicle.ultimaAtualizacao || (() => {
+          const d = new Date();
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        })()
       })
     } else {
       // If we are opening "New" and there was no editing previously, we keep the draft

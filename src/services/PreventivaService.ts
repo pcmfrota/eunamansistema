@@ -1,6 +1,7 @@
 import { PreventivaRepository } from '../repositories/PreventivaRepository';
 import { EquipamentoRepository } from '../repositories/EquipamentoRepository';
 import { PreventivaInsert, PreventivaUpdate } from '../models/preventiva';
+import { getCurrentLocalDatetime } from '../utils/dateUtils';
 
 export class PreventivaService {
   static async getAll() {
@@ -64,7 +65,7 @@ export class PreventivaService {
           ultimo_horimetro: parseFloat(normalized.ultimo || normalized['último'] || normalized.ultimo_horimetro || 0),
           horimetro_atual: parseFloat(normalized.atual || normalized.horimetro_atual || 0),
           intervalo_horas: parseFloat(normalized.intervalo || normalized.intervalo_horas || 500),
-          data_atualizacao: normalized.data || normalized.data_atualizacao || new Date().toISOString()
+          data_atualizacao: normalized.data || normalized.data_atualizacao || getCurrentLocalDatetime()
         };
 
         const { error } = await PreventivaRepository.upsert(insertData);

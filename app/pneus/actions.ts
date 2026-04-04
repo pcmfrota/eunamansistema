@@ -2,6 +2,7 @@
 
 import { PneusService } from '@/src/services/PneusService';
 import { revalidatePath } from 'next/cache';
+import { getCurrentLocalDate } from '@/src/utils/dateUtils';
 
 const POSICOES = ['de','dd','tei','tee','tdi','tde','tei1','tee1','tdi1','tde1','estepe'] as const
 
@@ -13,7 +14,7 @@ export async function registrarInspecaoPneu(formData: FormData) {
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
-      data_inspecao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+      data_inspecao: getCurrentLocalDate(),
       km_atual: null,
       condicao,
       ...posicoes

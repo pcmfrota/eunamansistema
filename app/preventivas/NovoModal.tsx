@@ -49,6 +49,12 @@ export default function NovaPreventivaModal({ equipamentos }: { equipamentos: Eq
   const fileRef = useRef<HTMLInputElement>(null);
   const [XLSX, setXLSX] = useState<any>(null);
 
+  const getCurrentLocalDatetime = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const initialValues: PreventivaFormValues = {
     equipamento_id: "",
     tipo: "",
@@ -56,7 +62,7 @@ export default function NovaPreventivaModal({ equipamentos }: { equipamentos: Eq
     ultimo_horimetro: "",
     horimetro_atual: "",
     intervalo_horas: "500",
-    data_atualizacao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+    data_atualizacao: getCurrentLocalDatetime(),
   };
 
   const { form, setForm, hasContent: hasDraft, clearDraft } = useFormDraft<PreventivaFormValues>('preventiva', initialValues);
@@ -236,7 +242,7 @@ export default function NovaPreventivaModal({ equipamentos }: { equipamentos: Eq
                           <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                           <input 
                             name="data_atualizacao" 
-                            type="date" 
+                            type="datetime-local" 
                             required 
                             value={form.data_atualizacao}
                             onChange={handleInputChange}

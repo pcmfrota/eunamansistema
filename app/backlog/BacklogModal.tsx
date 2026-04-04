@@ -31,8 +31,14 @@ const STEPS = [
   { id: 5, label: "Programação",    icon: Calendar,      color: "bg-rose-500",    text: "text-rose-600"   },
 ]
 
+const getCurrentLocalDatetime = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const initialValues = {
-  data_evidencia: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+  data_evidencia: getCurrentLocalDatetime(),
   status: 'Aberta',
   criticidade: 'B',
   semana: '', mes: '', ano: '', modulo: '', regiao_programa: '',
@@ -77,14 +83,14 @@ export default function BacklogModal({
       setForm(editData)
     } else if (!form.data_evidencia) {
       // Garantir data atual se for novo e estiver vazio
-      setForm(prev => ({ ...prev, data_evidencia: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }))
+      setForm(prev => ({ ...prev, data_evidencia: getCurrentLocalDatetime() }))
     }
   }, [editData, setForm, form.data_evidencia])
 
   // Auto-preencher data de conclusão ao encerrar
   useEffect(() => {
     if (form.status === 'Encerrada' && !form.data_conclusao) {
-      setForm(prev => ({ ...prev, data_conclusao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) }))
+      setForm(prev => ({ ...prev, data_conclusao: getCurrentLocalDatetime() }))
     }
   }, [form.status, form.data_conclusao, setForm])
 
@@ -182,7 +188,7 @@ export default function BacklogModal({
                {step === 1 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <Field label="Data de Evidência" span={2}>
-                        <input className={inputCls} type="date" value={form.data_evidencia} onChange={e => setForm({...form, data_evidencia: e.target.value})} />
+                        <input className={inputCls} type="datetime-local" value={form.data_evidencia} onChange={e => setForm({...form, data_evidencia: e.target.value})} />
                      </Field>
                      <Field label="Criticidade">
                         <select className={inputCls} value={form.criticidade} onChange={e => setForm({...form, criticidade: e.target.value})}>
@@ -263,7 +269,7 @@ export default function BacklogModal({
                {step === 5 && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <Field label="Previsão Programação">
-                         <input className={inputCls} type="date" value={form.data_programacao || ''} onChange={e => setForm({...form, data_programacao: e.target.value})} />
+                         <input className={inputCls} type="datetime-local" value={form.data_programacao || ''} onChange={e => setForm({...form, data_programacao: e.target.value})} />
                      </Field>
                      <Field label="Status Programação">
                          <select className={inputCls} value={form.status_programacao || 'Não Programado'} onChange={e => setForm({...form, status_programacao: e.target.value})}>
@@ -275,13 +281,13 @@ export default function BacklogModal({
                      <Field label="Data de Conclusão (Opcional)">
                         <input 
                           className={inputCls} 
-                          type="date" 
+                          type="datetime-local" 
                           value={form.data_conclusao || ''} 
                           onChange={e => setForm({...form, data_conclusao: e.target.value})} 
                         />
                      </Field>
                      <Field label="Previsão Conclusão">
-                        <input className={inputCls} type="date" value={form.previsao_conclusao || ''} onChange={e => setForm({...form, previsao_conclusao: e.target.value})} />
+                        <input className={inputCls} type="datetime-local" value={form.previsao_conclusao || ''} onChange={e => setForm({...form, previsao_conclusao: e.target.value})} />
                      </Field>
                      <Field label="Observações de Programação" span={2}>
                         <textarea className={cn(inputCls, "min-h-[80px] resize-none")} value={form.observacao || ''} onChange={e => setForm({...form, observacao: e.target.value})} />

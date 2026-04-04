@@ -22,9 +22,15 @@ const POSI_LABELS: [string, string][] = [
   ["ESTEPE", "estepe"],
 ]
 
+const getCurrentLocalDatetime = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const INITIAL_FORM = {
   equipamento_id: '',
-  data_inspecao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+  data_inspecao: getCurrentLocalDatetime(),
   km_atual: '',
   condicao: 'BOM',
   observacoes: '',
@@ -55,7 +61,7 @@ export default function PneusModal({
     if (editData) {
       setForm({
         equipamento_id: editData.equipamento_id || '',
-        data_inspecao: editData.data_inspecao?.split('T')[0] || INITIAL_FORM.data_inspecao,
+        data_inspecao: editData.data_inspecao?.slice(0, 16) || INITIAL_FORM.data_inspecao,
         km_atual: editData.km_atual?.toString() || '',
         condicao: editData.condicao || 'BOM',
         observacoes: editData.observacoes || '',
@@ -182,7 +188,7 @@ export default function PneusModal({
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Data *</label>
                 <input 
                   name="data_inspecao" 
-                  type="date" 
+                  type="datetime-local" 
                   value={form.data_inspecao}
                   onChange={handleInputChange}
                   required 

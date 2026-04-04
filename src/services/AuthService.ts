@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { z } from 'zod';
+import { getCurrentLocalDatetime } from '../utils/dateUtils';
 
 const LoginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -50,7 +51,7 @@ export class AuthService {
         id,
         full_name: fullName || 'Usuário',
         role: standardRole,
-        updated_at: new Date().toISOString(),
+        updated_at: getCurrentLocalDatetime(),
       });
 
     if (error) {
