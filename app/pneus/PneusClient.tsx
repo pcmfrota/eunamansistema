@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { excluirInspecao, excluirInspecoesMassivo } from "./actions";
@@ -68,6 +69,7 @@ export default function PneusClient({
   equipamentos: Equipamento[];
   inspecoes: Inspecao[];
 }) {
+  const router = useRouter();
   const { profile } = useAuth();
   const isVisitante = profile?.role === "visitante";
 
@@ -147,7 +149,9 @@ export default function PneusClient({
   // ── Dashboard Logic (Latest per Plate) ──
   // Ponto 4: "Sempre que lançar um novo... deixar o mais recente no dashboard"
   const latestByEq = Object.values(filteredInspecoesRows.reduce((acc, current) => {
-    if (!acc[current.equipamento_id] || current.data_inspecao > acc[current.equipamento_id].data_inspecao) {
+    // Como os dados veem do Supabase ordenados do mais recente (DESC),
+    // a PRIMEIRA ocorrência é garantidamente o último boletim lançado
+    if (!acc[current.equipamento_id]) {
       acc[current.equipamento_id] = current;
     }
     return acc;
@@ -690,12 +694,13 @@ export default function PneusClient({
         onClose={() => setIsModalOpen(false)}
         equipamentos={equipamentos}
         editData={editingItem}
-        onSuccess={() => {}}
+        onSuccess={() => router.refresh()}
       />
       
       <PneusImportModal 
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
+        onSuccess={() => router.refresh()}
       />
 
       {isAIReportOpen && (

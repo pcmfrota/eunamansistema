@@ -66,7 +66,7 @@ function normalizeDate(v: unknown): string {
   return s;
 }
 
-export default function PneusImportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose: () => void; onSuccess?: () => void }) {
   const [rows, setRows] = useState<PreviewRow[]>([])
   const [loading, setLoading] = useState(false)
   const [parsing, setParsing] = useState(false)
@@ -158,6 +158,7 @@ export default function PneusImportModal({ isOpen, onClose }: { isOpen: boolean;
       const res = await importarInspecoesPneus(valid)
       setResult(res)
       if (res && 'success' in res && res.success) {
+        if (onSuccess) onSuccess()
         setTimeout(onClose, 2000)
       }
     } catch (err) {
