@@ -4,7 +4,9 @@ import { InspecaoPneuInsert, InspecaoPneuUpdate } from '../models/pneus'
 export class PneusRepository {
   static async list() {
     const supabase = createClient()
-    return await supabase.from('inspecoes_pneus').select('*, equipamentos(placa)').order('data_inspecao', { ascending: false })
+    return await supabase.from('inspecoes_pneus').select('*, equipamentos(placa)')
+      .order('data_inspecao', { ascending: false })
+      .order('created_at', { ascending: false })
   }
 
   static async create(data: InspecaoPneuInsert) {
