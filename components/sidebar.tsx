@@ -16,6 +16,7 @@ import {
   Calendar,
   User,
   Shield,
+  BarChart2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,6 +32,7 @@ const routes = [
   { name: "Ordens de Serviço", path: "/os", icon: FileText },
   { name: "Programação Preventiva", path: "/preventivas", icon: Calendar },
   { name: "Backlog", path: "/backlog", icon: Wrench },
+  { name: "Indicadores", path: "/indicadores", icon: BarChart2 },
   { name: "PCM", path: "/pcm", icon: Settings },
   { name: "Meu Perfil", path: "/perfil", icon: User },
 ];
