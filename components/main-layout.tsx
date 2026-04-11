@@ -23,7 +23,8 @@ import {
   Settings,
   ShieldCheck,
   Users,
-  Loader2
+  Loader2,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import AlterarSenhaModal from './AlterarSenhaModal';
@@ -36,6 +37,7 @@ const navigation = [
   { name: 'Boletim de Pneus', path: '/pneus', icon: CircleDot },
   { name: 'Programação Semanal', path: '/semanal', icon: CalendarDays },
   { name: 'Backlog', path: '/backlog', icon: FileText },
+  { name: 'Indicadores', path: '/indicadores', icon: BarChart2 },
   { name: 'Custos', path: '/custos', icon: BadgeDollarSign },
   { name: 'Base de Frotas', path: '/base-frotas', icon: Truck },
   { name: 'Base de Dados', path: '/base-dados', icon: Database },
