@@ -7,6 +7,17 @@ export interface InspecaoPneu {
   km_atual: number | null;
   condicao: CondicaoPneu;
   observacoes?: string | null;
+  
+  // Novos cabeçalhos Ficha Verde
+  ordem_servico?: string | null;
+  origem?: string | null;
+  funcionario?: string | null;
+  data_saida?: string | null;
+  horimetro_registro?: number | null;
+  
+  // Anexo fotográfico (JSONB mapeando posição do pneu -> base64 compressed)
+  fotos?: Record<string, string> | null;
+  
   de?: number | null;
   dd?: number | null;
   tei?: number | null;
