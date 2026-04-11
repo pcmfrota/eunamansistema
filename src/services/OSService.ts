@@ -10,10 +10,10 @@ function generateOSNumber(): string {
 const OSSchema = z.object({
   id: z.string().uuid().optional(),
   numero_os: z.string().min(1, 'Número da OS é obrigatório').or(z.literal('').transform(() => generateOSNumber())),
-  equipamento_id: z.string().uuid('Equipamento é obrigatório'),
+  equipamento_id: z.string().optional().nullable(),
   placa: z.string().min(1, 'Placa é obrigatória').transform((val: string) => val.toUpperCase().trim()),
   modulo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
-  status: z.enum(['Aberta', 'Fechada', 'Cancelada', 'Concluída']).default('Aberta'),
+  status: z.enum(['Aberta', 'Fechada', 'Cancelada', 'Concluída', 'Em Andamento']).default('Aberta'),
   data_abertura: z.string().min(1, 'Data de abertura é obrigatória'),
   data_fechamento: z.string().optional().nullable(),
   horimetro: z.number().optional().nullable(),
@@ -96,42 +96,71 @@ export class OSService {
 
     for (const row of rows) {
       try {
-        const placaRaw = this.getVal(row, ['placa', 'Equipamento', 'Veículo', 'Máquina', 'Placa']) || '';
-        let placaUpper = String(placaRaw).toUpperCase().trim();
+        // Suporte a nomes variados de coluna de placa
+        const placaRaw = this.getVal(row, [
+          'placa', 'Placa', 'PLACA',
+          'equipamento', 'Equipamento', 'EQUIPAMENTO',
+          'veiculo', 'Veículo', 'VEÍCULO', 'Veiculo',
+          'maquina', 'Máquina', 'MÁQUINA', 'Maquina',
+          'frota', 'Frota', 'FROTA',
+        ]) || '';
+        const placaUpper = String(placaRaw).toUpperCase().trim();
+
+        // Se a placa estiver totalmente vazia, pular a linha
+        if (!placaUpper) continue;
+
+        // Tenta encontrar o equipamento cadastrado; se não achar, importa mesmo assim
         const eq = eqMap[placaUpper];
 
-        const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori']));
-        
+        const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori', 'KM/H', 'Hodometro', 'Hodômetro']));
+
         if (eq && horimetro && (!eq.ultimoHist || horimetro > eq.ultimoHist)) {
           if (!eqUpdates[eq.id] || horimetro > eqUpdates[eq.id]) {
             eqUpdates[eq.id] = horimetro;
           }
         }
 
+        // Normaliza status
+        const statusRaw = String(this.getVal(row, ['status', 'Status', 'Situação', 'situacao', 'Estado']) || 'Aberta').trim();
+        const statusMap: Record<string, string> = {
+          'fechada': 'Fechada', 'fechado': 'Fechada', 'concluida': 'Fechada', 'concluído': 'Fechada',
+          'aberta': 'Aberta', 'aberto': 'Aberta', 'em aberto': 'Aberta',
+          'em andamento': 'Em Andamento', 'andamento': 'Em Andamento', 'em execução': 'Em Andamento',
+          'cancelada': 'Cancelada', 'cancelado': 'Cancelada',
+        };
+        const status = statusMap[statusRaw.toLowerCase()] || 'Aberta';
+
         const raw = {
-          numero_os: `${this.generateOSNumber()}-${Math.floor(Math.random() * 1000)}`,
+          numero_os: this.getVal(row, ['numero_os', 'Nº OS', 'N° OS', 'Numero OS', 'OS', 'num_os', 'NºOS']) ||
+                     `${this.generateOSNumber()}-${Math.floor(Math.random() * 1000)}`,
           equipamento_id: eq ? eq.id : null,
-          placa: eq ? placaUpper : 'EQUIPAMENTO_NAO_ENCONTRADO',
-          modulo: eq ? eq.modulo : (this.getVal(row, ['modulo', 'Módulo']) || null),
-          status: this.getVal(row, ['status', 'Situação', 'Estado', 'Status']) || 'Aberta',
-          data_abertura: this.parsePossibleDate(this.getVal(row, ['data_abertura', 'Abertura', 'Data Início', 'Início'])) || getCurrentLocalDatetime(),
-          data_fechamento: this.parsePossibleDate(this.getVal(row, ['data_fechamento', 'Fechamento', 'Data Fim', 'Conclusão'])),
+          placa: placaUpper,
+          modulo: this.getVal(row, ['modulo', 'Módulo', 'Modulo', 'MODULO']) ||
+                  (eq ? eq.modulo : null),
+          status,
+          data_abertura: this.parsePossibleDate(
+            this.getVal(row, ['data_abertura', 'Abertura', 'Data Abertura', 'Data Início', 'Inicio', 'DATA ABERTURA', 'Data'])
+          ) || getCurrentLocalDatetime(),
+          data_fechamento: this.parsePossibleDate(
+            this.getVal(row, ['data_fechamento', 'Fechamento', 'Data Fechamento', 'Data Fim', 'Conclusão', 'DATA FECHAMENTO'])
+          ),
           horimetro,
-          operacao_tipo: this.getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo']),
-          local: this.getVal(row, ['local', 'Local', 'Frente']),
-          classe: this.getVal(row, ['classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS']) || 'CORRETIVA',
-          foi_enviado_reserva: row.foi_enviado_reserva === true || String(row.foi_enviado_reserva).toUpperCase() === 'SIM',
-          descricao: this.getVal(row, ['descricao', 'Descrição', 'Serviço', 'Atividade']) || 'Importação via Planilha',
-          motivo: this.getVal(row, ['motivo', 'Motivo', 'Causa']),
-          sistema: this.getVal(row, ['sistema', 'Sistema']),
-          sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema']),
-          horas_manutencao: this.parseFloatSafe(this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo'])),
-          observacoes: this.getVal(row, ['observacoes', 'Observações', 'Notas'])
+          operacao_tipo: this.getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo', 'Tipo Operação']),
+          local: this.getVal(row, ['local', 'Local', 'Frente', 'LOCAL']),
+          classe: this.getVal(row, ['classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS', 'CLASSE', 'Tipo OS']) || 'CORRETIVA',
+          foi_enviado_reserva: row.foi_enviado_reserva === true || String(row.foi_enviado_reserva || '').toUpperCase() === 'SIM',
+          descricao: this.getVal(row, ['descricao', 'Descrição', 'Descricao', 'Serviço', 'Atividade', 'DESCRIÇÃO', 'Defeito', 'Problema']) ||
+                     'Importação via Planilha',
+          motivo: this.getVal(row, ['motivo', 'Motivo', 'Causa', 'MOTIVO']),
+          sistema: this.getVal(row, ['sistema', 'Sistema', 'SISTEMA']),
+          sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema', 'SUB-SISTEMA']),
+          horas_manutencao: this.parseFloatSafe(
+            this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo', 'Horas Manut', 'H. Manut', 'HORAS'])
+          ),
+          observacoes: this.getVal(row, ['observacoes', 'Observações', 'Observacoes', 'Notas', 'OBSERVAÇÕES']),
         };
 
-        if (raw.equipamento_id) {
-          inserts.push(OSSchema.parse(raw));
-        }
+        inserts.push(OSSchema.parse(raw));
       } catch (err) {
         console.warn('Falha ao validar linha de OS durante importação:', err);
       }

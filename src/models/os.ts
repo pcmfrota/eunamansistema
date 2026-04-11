@@ -1,10 +1,10 @@
 export interface OS {
   id?: string;
   numero_os: string;
-  equipamento_id: string;
+  equipamento_id?: string | null;
   placa: string;
   modulo: string | null;
-  status: 'Aberta' | 'Em Andamento' | 'Fechada' | string;
+  status: 'Aberta' | 'Em Andamento' | 'Fechada' | 'Cancelada' | 'Concluída' | string;
   data_abertura: string;
   data_fechamento?: string | null;
   horimetro?: number | null;
