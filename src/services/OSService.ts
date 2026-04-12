@@ -91,6 +91,27 @@ export class OSService {
     const eqMap: Record<string, { id: string; modulo: string; ultimoHist: number | null }> = {};
     equipamentos?.forEach(e => { eqMap[e.placa.toUpperCase()] = { id: e.id, modulo: e.modulo || '', ultimoHist: e.ultimoHist } });
 
+    const missingPlates = new Set<string>();
+
+    for (const row of rows) {
+      const placaRaw = this.getVal(row, [
+        'placa', 'Placa', 'PLACA',
+        'equipamento', 'Equipamento', 'EQUIPAMENTO',
+        'veiculo', 'Veículo', 'VEÍCULO', 'Veiculo',
+        'maquina', 'Máquina', 'MÁQUINA', 'Maquina',
+        'frota', 'Frota', 'FROTA',
+      ]) || '';
+      const placaUpper = String(placaRaw).toUpperCase().trim();
+
+      if (placaUpper && !eqMap[placaUpper]) {
+        missingPlates.add(placaUpper);
+      }
+    }
+
+    if (missingPlates.size > 0) {
+      throw new Error(`As seguintes placas não estão cadastradas na base de equipamentos: ${Array.from(missingPlates).join(', ')}. Por favor, cadastre-as antes de realizar a importação.`);
+    }
+
     const inserts: OSInsert[] = [];
     const eqUpdates: Record<string, number> = {};
 
@@ -109,7 +130,7 @@ export class OSService {
         // Se a placa estiver totalmente vazia, pular a linha
         if (!placaUpper) continue;
 
-        // Tenta encontrar o equipamento cadastrado; se não achar, importa mesmo assim
+        // O equipamento é garantido pois validamos antes
         const eq = eqMap[placaUpper];
 
         const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori', 'KM/H', 'Hodometro', 'Hodômetro']));
