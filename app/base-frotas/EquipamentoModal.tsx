@@ -123,6 +123,9 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
                       <option value="PIPA">PIPA</option>
                       <option value="ESCAVADEIRA">ESCAVADEIRA</option>
                       <option value="CARRETAGEM">CARRETAGEM</option>
+                      <option value="SAVEIRO">SAVEIRO</option>
+                      <option value="ESTRADA">ESTRADA</option>
+                      <option value="C3">C3</option>
                       <option value="OUTROS">OUTROS</option>
                     </select>
                   </div>
