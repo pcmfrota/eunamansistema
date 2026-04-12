@@ -146,6 +146,7 @@ export default function BaseFrotasPage() {
   );
 
   const getTipoColor = (tipo: string) => {
+    if (!tipo) return 'slate';
     const t = tipo.toUpperCase();
     if (t.includes('COMBOIO')) return 'blue';
     if (t.includes('MUNCK')) return 'amber';
