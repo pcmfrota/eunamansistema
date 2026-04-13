@@ -3,14 +3,19 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
 // --- Configuração de Permissões (Point #5 do Blueprint) ---
 const MODULO_PERMISSOES: Record<string, string[]> = {
-  '/base-frotas': ['admin', 'gestor'],
-  '/usuarios': ['admin'],
-  '/pcm': ['admin', 'gestor', 'tecnico'],
-  '/preventivas': ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/os': ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/pneus': ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/horimetro': ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/backlog': ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/admin':        ['admin'],
+  '/base-frotas':  ['admin', 'gestor'],
+  '/pcm':          ['admin', 'gestor', 'tecnico'],
+  '/indicadores':  ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/preventivas':  ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/os':           ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/pneus':        ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/horimetro':    ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/backlog':      ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/base-dados':   ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/semanal':      ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/custos':       ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/perfil':       ['admin', 'gestor', 'tecnico', 'visitante'],
 }
 
 export async function middleware(request: NextRequest) {
@@ -63,20 +68,40 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 2. Controle de Autorização por Módulo (Point #5)
+  // 2. Controle de Autorização por Módulo
   if (user) {
-    const userRole = (user.user_metadata?.role || 'visitante').toLowerCase()
-    
+    // Hard-override para admin conhecido
+    let userRole = 'visitante'
+    if (user.email?.includes('marcos.rocha')) {
+      userRole = 'admin'
+    } else {
+      // Prioridade: app_metadata > user_metadata > profiles table
+      const metaRole = user.app_metadata?.role || user.user_metadata?.role
+      if (metaRole) {
+        userRole = metaRole.toLowerCase()
+      } else {
+        // Fallback: busca no banco de perfis
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+          if (profile?.role) userRole = profile.role.toLowerCase()
+        } catch {
+          // silencia erro — mantém 'visitante'
+        }
+      }
+    }
+
     // Verifica se a rota atual está no mapa de permissões
     const moduloBase = Object.keys(MODULO_PERMISSOES).find(route => pathname.startsWith(route))
-    
+
     if (moduloBase) {
       const rolesPermitidos = MODULO_PERMISSOES[moduloBase]
       if (!rolesPermitidos.includes(userRole)) {
-        // Redireciona para unauthorized ou home com aviso
         const url = request.nextUrl.clone()
         url.pathname = '/'
-        // Poderíamos adicionar um searchParam ?error=unauthorized
         return NextResponse.redirect(url)
       }
     }

@@ -9,7 +9,7 @@ import {
   LayoutDashboard, 
   ClipboardList, 
   Calendar, 
-  CalendarDays, 
+  Gauge,
   Truck, 
   Database,
   Menu,
@@ -17,29 +17,27 @@ import {
   Moon,
   Sun,
   FileText,
-  BadgeDollarSign,
   User,
   LogOut,
   Settings,
   ShieldCheck,
+  Shield,
   Users,
   Loader2,
-  BarChart2,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import AlterarSenhaModal from './AlterarSenhaModal';
-import { Shield } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Controle de OS', path: '/os', icon: ClipboardList },
   { name: 'Programação Preventiva', path: '/preventivas', icon: Calendar },
   { name: 'Boletim de Pneus', path: '/pneus', icon: CircleDot },
-  { name: 'Programação Semanal', path: '/semanal', icon: CalendarDays },
+  { name: 'Horímetro', path: '/horimetro', icon: Gauge },
   { name: 'Backlog', path: '/backlog', icon: FileText },
-  { name: 'Custos', path: '/custos', icon: BadgeDollarSign },
   { name: 'Base de Frotas', path: '/base-frotas', icon: Truck },
   { name: 'Base de Dados', path: '/base-dados', icon: Database },
+  { name: 'PCM', path: '/pcm', icon: Settings },
 ];
 
 const adminNavigation = [

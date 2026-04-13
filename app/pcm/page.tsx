@@ -1,70 +1,61 @@
-"use client";
+import { createClient } from "@/utils/supabase/server";
+import PCMClient from "./PCMClient";
 
-import { Settings, Calendar, ShieldAlert } from "lucide-react";
-import { useAuth } from "@/components/auth-context";
+export const dynamic = "force-dynamic";
 
-export default function PCMPage() {
-  const { user, profile } = useAuth();
-  const isVisitante = profile?.role === "visitante";
+export default async function PCMPage() {
+  const supabase = createClient();
 
-  return (
-    <div className="p-4 md:p-8 flex flex-col gap-8 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400 rounded-lg">
-            <Settings size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Painel PCM</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Planejamento e Controle de Manutenção, alertas e agenda preventiva.
-            </p>
-          </div>
-        </div>
+  // Buscar preventivas com status calculado
+  const { data: prevRaw } = await supabase
+    .from("preventivas")
+    .select(
+      "id, equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, tipo_servico, equipamentos(placa, modelo)"
+    )
+    .order("created_at", { ascending: false });
 
-        {isVisitante && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
-            <ShieldAlert size={16} />
-            <span>Somente Leitura</span>
-          </div>
-        )}
-      </div>
+  // Calcular status e horas restantes de cada preventiva
+  const preventivas = (prevRaw ?? []).map((p: any) => {
+    const restantes =
+      Number(p.ultimo_horimetro) +
+      Number(p.intervalo_horas) -
+      Number(p.horimetro_atual);
+    const percentual =
+      p.intervalo_horas > 0
+        ? Math.min(
+            100,
+            Math.round(
+              ((Number(p.horimetro_atual) - Number(p.ultimo_horimetro)) /
+                Number(p.intervalo_horas)) *
+                100
+            )
+          )
+        : 0;
+    let status: "atrasado" | "atencao" | "no_prazo";
+    if (restantes < 0) status = "atrasado";
+    else if (restantes <= 50) status = "atencao";
+    else status = "no_prazo";
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Calendar size={20} className="text-blue-500" />
-            Agenda Semanal
-          </h2>
-          <div className="flex flex-col gap-3">
-            <div className="p-3 border border-zinc-100 dark:border-zinc-800 rounded-lg text-sm bg-zinc-50 dark:bg-zinc-900">
-              <span className="font-bold">29/03</span> - Preventiva 500h | <span className="text-zinc-500">EXC-01</span>
-            </div>
-            <div className="p-3 border border-zinc-100 dark:border-zinc-800 rounded-lg text-sm bg-zinc-50 dark:bg-zinc-900">
-              <span className="font-bold">30/03</span> - Revisão de Freios | <span className="text-zinc-500">CAM-05</span>
-            </div>
-          </div>
-        </div>
+    return {
+      id: p.id,
+      placa: p.equipamentos?.placa ?? "—",
+      modelo: p.equipamentos?.modelo ?? "",
+      tipo_servico: p.tipo_servico ?? "Preventiva",
+      horas_restantes: Math.round(restantes),
+      percentual,
+      status,
+    };
+  });
 
-        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
-          <h2 className="text-lg font-bold mb-4 text-red-500">Alertas Automáticos</h2>
-          <div className="flex flex-col gap-3">
-            <div className="p-4 border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900/50 rounded-lg">
-              <div className="flex justify-between font-bold mb-1">
-                <span>Manutenção Programada (100%)</span>
-              </div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">TRAT-02 atingiu o limite da preventiva de 1000h.</p>
-            </div>
-            
-            <div className="p-4 border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-900/50 rounded-lg">
-              <div className="flex justify-between font-bold mb-1">
-                <span>Atenção (92%)</span>
-              </div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">EXC-01 está se aproximando da manutenção de 250h.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  preventivas.sort((a, b) => a.horas_restantes - b.horas_restantes);
+
+  // Últimas OS abertas (pendentes)
+  const { data: osPendentes } = await supabase
+    .from("ordens_servico")
+    .select("id, placa, status, descricao_problema, data_abertura, motivo")
+    .eq("status", "Aberta")
+    .order("data_abertura", { ascending: false })
+    .limit(10);
+
+  return <PCMClient preventivas={preventivas} osPendentes={osPendentes ?? []} />;
 }
