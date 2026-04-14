@@ -9,7 +9,7 @@ const EquipamentoSchema = z.object({
   modulo: z.string().default('BASE').transform((val: string) => val.trim()),
   modelo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
   horimetro_limite_preventiva: z.number().optional().default(500),
-  ultimoHist: z.number().optional().default(0),
+  ultimo_hist: z.number().optional().default(0),
 });
 
 export class EquipamentoService {
@@ -58,7 +58,8 @@ export class EquipamentoService {
           tipo: String(this.getVal(row, ['tipo', 'Tipo', 'Modelo', 'Descrição']) || 'OUTROS').trim(),
           categoria: String(this.getVal(row, ['categoria', 'Categoria', 'Classe']) || 'PESADA').trim(),
           modulo: String(this.getVal(row, ['modulo', 'Módulo', 'Setor']) || 'BASE').trim(),
-          horimetro_limite_preventiva: parseFloat(String(this.getVal(row, ['limite', 'Limite', 'Intervalo']) || '500').replace(',', '.')) || 500
+          horimetro_limite_preventiva: parseFloat(String(this.getVal(row, ['limite', 'Limite', 'Intervalo']) || '500').replace(',', '.')) || 500,
+          ultimo_hist: parseFloat(String(this.getVal(row, ['ultimo_hist', 'Horímetro', 'Ultimo Hist']) || '0').replace(',', '.')) || 0
         };
 
         if (!raw.placa) return null;

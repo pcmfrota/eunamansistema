@@ -4,7 +4,7 @@ export interface Equipamento {
   tipo: string;
   categoria?: string | null;
   modulo: string;
-  ultimoHist?: number;
+  ultimo_hist?: number;
   created_at?: string;
 }
 

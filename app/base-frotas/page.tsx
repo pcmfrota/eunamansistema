@@ -257,7 +257,7 @@ export default function BaseFrotasPage() {
                     </span>
                   </td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 uppercase">{vehicle.modulo}</td>
-                  <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 font-mono">{vehicle.ultimoHist || 0}h</td>
+                  <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 font-mono">{vehicle.ultimo_hist || vehicle.ultimoHist || 0}h</td>
                   <td className="py-3.5 px-6">
                     <div className="flex items-center justify-end gap-2">
                       {!isVisitante && (

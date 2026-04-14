@@ -21,8 +21,8 @@ export class HorimetroService {
     const { error } = await HorimetroRepository.create(data);
     if (error) throw new Error(error.message);
 
-    // Sync equipment ultimoHist (Legacy implied behavior)
-    await EquipamentoRepository.update(data.equipamento_id, { ultimoHist: data.horimetro_final });
+    // Sync equipment ultimo_hist
+    await EquipamentoRepository.update(data.equipamento_id, { ultimo_hist: data.horimetro_final });
 
     return { success: true };
   }
@@ -38,7 +38,7 @@ export class HorimetroService {
     if (error) throw new Error(error.message);
 
     if (data.equipamento_id && data.horimetro_final) {
-      await EquipamentoRepository.update(data.equipamento_id, { ultimoHist: data.horimetro_final });
+      await EquipamentoRepository.update(data.equipamento_id, { ultimo_hist: data.horimetro_final });
     }
 
     return { success: true };

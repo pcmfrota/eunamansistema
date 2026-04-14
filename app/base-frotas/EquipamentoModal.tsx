@@ -39,7 +39,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         tipo: editingVehicle.tipo || '',
         categoria: editingVehicle.categoria || '',
         modulo: editingVehicle.modulo || '',
-        horimetro: editingVehicle.ultimoHist?.toString() || editingVehicle.horimetro || '',
+        horimetro: editingVehicle.ultimo_hist?.toString() || editingVehicle.ultimoHist?.toString() || editingVehicle.horimetro || '',
         ultimaAtualizacao: editingVehicle.ultimaAtualizacao || (() => {
           const d = new Date();
           const pad = (n: number) => String(n).padStart(2, '0');
