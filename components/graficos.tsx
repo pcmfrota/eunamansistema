@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  ResponsiveContainer, BarChart, Bar,
+  ResponsiveContainer, BarChart, Bar, PieChart, Pie, Legend,
   XAxis, YAxis, CartesianGrid, Tooltip, Cell, ReferenceLine
 } from "recharts";
 import {
@@ -302,9 +302,10 @@ interface GraficoVeiculosProps {
   periodoLabel?: string;
   mes?: number;
   ano?: number;
+  title?: string;
 }
 
-export function GraficoVeiculos({ dados, periodoLabel, mes, ano }: GraficoVeiculosProps) {
+export function GraficoVeiculos({ dados, periodoLabel, mes, ano, title = "Disponibilidade Operacional" }: GraficoVeiculosProps) {
   const [selected, setSelected] = useState<VeiculoDetalhe | null>(null);
 
   const chartData = (dados ?? []).map((v) => ({
@@ -320,7 +321,7 @@ export function GraficoVeiculos({ dados, periodoLabel, mes, ano }: GraficoVeicul
       <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
         <div className="flex items-center gap-3 mb-4">
           <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
-            Disponibilidade Operacional
+            {title}
           </h3>
           {periodoLabel && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
@@ -378,7 +379,7 @@ export function GraficoVeiculos({ dados, periodoLabel, mes, ano }: GraficoVeicul
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
-              Disponibilidade Operacional
+              {title}
             </h3>
             {periodoLabel && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
@@ -682,6 +683,244 @@ export function ResumoHoras({
           <span className="text-[26px] font-bold text-zinc-800 dark:text-zinc-100 leading-none">
             {totalEquipamentos}
           </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 13. Paradas por Categoria (Gráfico de Pizza) ───────────────────────────
+const COLORS_PIE = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#6366f1", "#ec4899", "#8b5cf6"];
+
+export function GraficoParadasCategoria({ dados }: { dados: { categoria: string; quantidade: number }[] }) {
+  if (!dados || dados.length === 0) return null;
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
+        Paradas por Categoria
+      </h3>
+      <ResponsiveContainer width="100%" height={240}>
+        <PieChart>
+          <Pie
+            data={dados}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={90}
+            paddingAngle={2}
+            dataKey="quantidade"
+            nameKey="categoria"
+            labelLine={false}
+          >
+            {dados.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
+            ))}
+          </Pie>
+          <Tooltip 
+            formatter={(val: number) => [`${val} OS`, "Quantidade"]}
+            contentStyle={{ backgroundColor: "#1a1f2e", border: "1px solid #3f3f46", borderRadius: "8px", fontSize: "12px", color: "#fff" }}
+          />
+          <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', color: '#a1a1aa' }} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── 14. Ranking de Falhas (Tabela) ──────────────────────────────────────────
+export function RankingFalhas({ dados }: { dados: { placa: string; falhas: number; mtbf: number }[] }) {
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
+        Ranking de Falhas (Top 10)
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-[13px] border-collapse">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500">
+              <th className="pb-3 px-2 font-medium">Equipamento</th>
+              <th className="pb-3 px-2 font-medium">Nº Falhas</th>
+              <th className="pb-3 px-2 font-medium text-right">MTBF</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dados.map((item, i) => (
+              <tr key={i} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/20 transition-colors">
+                <td className="py-3 px-2 font-semibold text-zinc-700 dark:text-zinc-300">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-500 font-bold">
+                      {i + 1}
+                    </div>
+                    {item.placa}
+                  </div>
+                </td>
+                <td className="py-3 px-2">
+                  <span className="px-2.5 py-1 rounded-md bg-amber-100/50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500 font-semibold">
+                    {item.falhas}
+                  </span>
+                </td>
+                <td className="py-3 px-2 text-right text-zinc-500">
+                  {item.mtbf > 0 ? `${item.mtbf} h` : "—"}
+                </td>
+              </tr>
+            ))}
+            {dados.length === 0 && (
+              <tr>
+                <td colSpan={3} className="py-8 text-center text-zinc-500">Nenhum dado no período</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── 15. Manutenção por Tipo (Gráfico de Barras) ─────────────────────────────
+export function GraficoManuTipo({ dados }: { dados: { tipo: string; quantidade: number }[] }) {
+  if (!dados || dados.length === 0) return null;
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
+        Composição da Manutenção (Tipos de OS)
+      </h3>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }} barCategoryGap="15%">
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" className="dark:stroke-zinc-800" />
+          <XAxis type="number" tick={{ fontSize: 10, fill: "#71717a" }} axisLine={false} tickLine={false} />
+          <YAxis dataKey="tipo" type="category" tick={{ fontSize: 10, fill: "#71717a", fontWeight: 600 }} axisLine={false} tickLine={false} />
+          <Tooltip 
+            cursor={{ fill: "rgba(148,163,184,0.08)" }}
+            formatter={(val: number) => [`${val} OS`, "Quantidade"]}
+          />
+          <Bar dataKey="quantidade" radius={[0, 4, 4, 0]} fill="#3b82f6" >
+            {dados.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── 16. Disponibilidade por Categoria (Gráfico de Barras) ─────────────────
+export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilidade: number; total: number }[] }) {
+  if (!dados || dados.length === 0) return null;
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
+        Disponibilidade Operacional por Categoria de Veículo
+      </h3>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={dados} margin={{ top: 10, right: 0, left: -20, bottom: 5 }} barSize={35}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" className="dark:stroke-zinc-800" />
+          <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: "#71717a", fontWeight: 600 }} axisLine={false} tickLine={false} dy={5} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#71717a" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
+          <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} formatter={(val: number) => [`${val}%`, "Disponibilidade Méd."]} />
+          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: '#71717a', fontSize: 10, fontWeight: 600, formatter: (v: number) => `${v}%` }}>
+            {dados.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={getColorDisp(entry.disponibilidade)} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── 17. Mapa de Status da Frota (Tabela Dinâmica) ───────────────────────────
+export function TabelaStatusFrota({ dados }: { dados: { placa: string; tipo: string; status: string; disponibilidade: number; modulo: string }[] }) {
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm w-full">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
+        Mapa de Status da Frota
+      </h3>
+      <div className="overflow-x-auto max-h-[400px]">
+        <table className="w-full text-left text-[13px] border-collapse relative">
+          <thead className="sticky top-0 bg-white dark:bg-[#0f1115] z-10 shadow-[0_1px_0_0_#e4e4e7] dark:shadow-[0_1px_0_0_#27272a]">
+            <tr className="text-zinc-500">
+              <th className="pb-3 px-3 font-medium">Placa</th>
+              <th className="pb-3 px-3 font-medium">Equipamento</th>
+              <th className="pb-3 px-3 font-medium">Status Atual</th>
+              <th className="pb-3 px-3 font-medium">Disp. no Período</th>
+              <th className="pb-3 px-3 font-medium">Módulo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dados.map((item, i) => {
+              let statusBadgeClass = "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400";
+              if (item.status === "Manutenção") statusBadgeClass = "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500";
+              if (item.status === "Disponível") statusBadgeClass = "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-500";
+              if (item.status === "Atenção") statusBadgeClass = "bg-yellow-100 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-500";
+              if (item.status === "Crítico") statusBadgeClass = "bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-500";
+
+              return (
+                <tr key={i} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/20 transition-colors">
+                  <td className="py-3 px-3 font-bold text-zinc-700 dark:text-zinc-200">{item.placa}</td>
+                  <td className="py-3 px-3 text-zinc-600 dark:text-zinc-400">{item.tipo}</td>
+                  <td className="py-3 px-3">
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadgeClass}`}>
+                      {item.status}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="font-semibold" style={{ color: getColorDisp(item.disponibilidade) }}>
+                      {item.disponibilidade}%
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-zinc-500 text-xs">{item.modulo}</td>
+                </tr>
+              )
+            })}
+            {dados.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-zinc-500">Nenhuma placa encontrada no filtro</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── 18. Painel de Fórmulas ──────────────────────────────────────────────────
+export function PainelFormulas() {
+  return (
+    <div className="bg-zinc-50 dark:bg-zinc-900/40 rounded-3xl border border-zinc-200 dark:border-zinc-800/50 p-6 flex flex-col w-full text-[13px] text-zinc-600 dark:text-zinc-400">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-blue-500" /> Entenda os Indicadores (Fórmulas PCM Florestal)
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Disponibilidade Operacional (DO)</strong>
+          <p className="mb-2">Mede qual proporção da frota está apta para operação (sem OS aberta ou com disp. geral alta).</p>
+          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-blue-600 dark:text-blue-400 font-mono block w-fit">
+            DO = (Disp. / Total) × 100
+          </code>
+        </div>
+        <div>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Disponibilidade Mecânica (DM)</strong>
+          <p className="mb-2">Mede o tempo real livre de manutenção em oficinas e frentes de serviço.</p>
+          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-emerald-600 dark:text-emerald-400 font-mono block w-fit">
+            DM = (HT - Hm) / HT × 100
+          </code>
+        </div>
+        <div>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">MTBF & MTTR</strong>
+          <p className="mb-2">Confiabilidade e Eficiência de reparo. Quantas horas roda até falhar (MTBF) e o tempo médio para consertar (MTTR).</p>
+          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-purple-600 dark:text-purple-400 font-mono block w-fit">
+            MTBF = H.Oper. / Falhas
+          </code>
+        </div>
+        <div>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Backlog de Manutenção</strong>
+          <p className="mb-2">Carga de trabalho pendente. Representa dias úteis para equipe limpar a fila de OS abertas.</p>
+          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-amber-600 dark:text-amber-500 font-mono block w-fit">
+            BkLg = Hm Pendentes / Cap.Diária
+          </code>
         </div>
       </div>
     </div>

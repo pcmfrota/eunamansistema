@@ -33,14 +33,23 @@ export type FiltroOpcoes = {
 
 export type DispSemanal = { semana: string; disp: number };
 
+export type ParadaCategoria = { categoria: string; quantidade: number };
+export type RankFalha = { placa: string; falhas: number; mtbf: number };
+export type DispTipo = { tipo: string; disponibilidade: number; total: number };
+export type StatusFrotaItem = { placa: string; tipo: string; status: string; disponibilidade: number; modulo: string };
+export type ManutTipo = { tipo: string; quantidade: number };
+
 export type DashboardData = {
   totalOS: number;
   emAndamento: number;
   osFechadas: number;
   disponibilidadeMedia: number;
+  dm: number;
+  doOperacional: number;
   horasManutencao: number;
   mttr: number;
   mtbf: number;
+  backlog: number;
   totalEquipamentos: number;
   veiculos: VeiculoDisp[];
   preventivas: PreventivaStatus[];
@@ -50,6 +59,11 @@ export type DashboardData = {
   filtroOpcoes: FiltroOpcoes;
   periodoLabel: string;
   dispSemanal: DispSemanal[];
+  paradasPorCategoria: ParadaCategoria[];
+  rankingFalhas: RankFalha[];
+  dispPorTipo: DispTipo[];
+  statusFrota: StatusFrotaItem[];
+  manutPorTipo: ManutTipo[];
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -129,7 +143,7 @@ export async function getDashboardData(filtros?: {
   // ── 1. Buscar TODAS as OS do período ───────────────────────────────────────
   let osQuery = supabase
     .from("ordens_servico")
-    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa");
+    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe");
 
   if (inicioFiltro) osQuery = osQuery.gte("data_abertura", inicioFiltro);
   if (fimFiltro)    osQuery = osQuery.lte("data_abertura", fimFiltro);
@@ -462,14 +476,106 @@ export async function getDashboardData(filtros?: {
     statusList: Array.from(statusSet).sort(),
   };
 
+  // ── 12. NOVOS KPIs ──────────────────────────────────────────────────────────
+
+  // DM = (HT - HM) / HT × 100  (Disponibilidade Mecânica)
+  const dm = horasTotaisFrota > 0
+    ? Math.round(((horasTotaisFrota - horasIndispFrota) / horasTotaisFrota) * 1000) / 10
+    : 0;
+
+  // DO = Equipamentos Disponíveis / Total × 100 (Disponibilidade Operacional)
+  const eqParados = veiculos.filter(v => v.totalOS > 0 && v.disponibilidade < 90).length;
+  const eqDisponiveis = veiculos.length - eqParados;
+  const doOperacional = veiculos.length > 0
+    ? Math.round((eqDisponiveis / veiculos.length) * 1000) / 10
+    : 0;
+
+  // Backlog = Horas pendentes (OS abertas) / Capacidade (8h/dia × equipe estimada)
+  const horasPendentes = osFinal
+    .filter(o => o.status === "Aberta")
+    .reduce((acc, o) => acc + (Number(o.horas_manutencao) || 8), 0);
+  const capacidadeDiaria = 8; // 8h/dia por mecânico
+  const backlog = Math.round((horasPendentes / capacidadeDiaria) * 10) / 10;
+
+  // Paradas por Categoria (agrupa OS por classe)
+  const paradasMap: Record<string, number> = {};
+  osFinal.forEach(os => {
+    const classe = (os as any).classe || "Outros";
+    paradasMap[classe] = (paradasMap[classe] || 0) + 1;
+  });
+  const paradasPorCategoria = Object.entries(paradasMap)
+    .map(([categoria, quantidade]) => ({ categoria, quantidade }))
+    .sort((a, b) => b.quantidade - a.quantidade);
+
+  // Ranking de Falhas (top 10 equipamentos com mais OS)
+  const rankingFalhas = veiculos
+    .filter(v => v.totalOS > 0)
+    .map(v => ({
+      placa: v.placa,
+      falhas: v.totalOS,
+      mtbf: v.osFechadas > 0
+        ? Math.round(((horasTotaisPeriodo - v.horasManut) / v.totalOS) * 10) / 10
+        : 0,
+    }))
+    .sort((a, b) => b.falhas - a.falhas)
+    .slice(0, 10);
+
+  // Manutenção por Tipo (Preventiva, Corretiva, etc.)
+  const manutTipoMap: Record<string, number> = {};
+  osFinal.forEach(os => {
+    const tipo = (os as any).classe || "Outros";
+    manutTipoMap[tipo] = (manutTipoMap[tipo] || 0) + 1;
+  });
+  const manutPorTipo = Object.entries(manutTipoMap)
+    .map(([tipo, quantidade]) => ({ tipo, quantidade }))
+    .sort((a, b) => b.quantidade - a.quantidade);
+
+  // Disponibilidade por Tipo de Equipamento
+  const tipoMap: Record<string, { somaDisp: number; count: number }> = {};
+  veiculos.forEach(v => {
+    const eq = equipamentos?.find(e => e.placa?.toUpperCase() === v.placa);
+    const tipo = eq?.tipo || "OUTROS";
+    if (!tipoMap[tipo]) tipoMap[tipo] = { somaDisp: 0, count: 0 };
+    tipoMap[tipo].somaDisp += v.disponibilidade;
+    tipoMap[tipo].count += 1;
+  });
+  const dispPorTipo = Object.entries(tipoMap)
+    .map(([tipo, d]) => ({
+      tipo,
+      disponibilidade: Math.round((d.somaDisp / d.count) * 10) / 10,
+      total: d.count,
+    }))
+    .sort((a, b) => a.disponibilidade - b.disponibilidade);
+
+  // Status da Frota (tabela dinâmica)
+  const statusFrota = veiculos.map(v => {
+    const eq = equipamentos?.find(e => e.placa?.toUpperCase() === v.placa);
+    const osAbertas = (osPorPlaca[v.placa] || []).filter(o => o.status === "Aberta").length;
+    let status = "Disponível";
+    if (osAbertas > 0) status = "Manutenção";
+    else if (v.disponibilidade >= 95) status = "Disponível";
+    else if (v.disponibilidade >= 90) status = "Atenção";
+    else status = "Crítico";
+    return {
+      placa: v.placa,
+      tipo: eq?.tipo || "—",
+      status,
+      disponibilidade: v.disponibilidade,
+      modulo: eq?.modulo || "—",
+    };
+  }).sort((a, b) => a.disponibilidade - b.disponibilidade);
+
   return {
     totalOS,
     emAndamento,
     osFechadas,
     disponibilidadeMedia: Math.round(disponibilidadeMedia * 10) / 10,
+    dm,
+    doOperacional,
     horasManutencao: Math.round(horasManutTotal * 10) / 10,
     mttr,
     mtbf,
+    backlog,
     totalEquipamentos,
     veiculos,
     preventivas,
@@ -479,5 +585,10 @@ export async function getDashboardData(filtros?: {
     filtroOpcoes,
     periodoLabel,
     dispSemanal,
+    paradasPorCategoria,
+    rankingFalhas,
+    dispPorTipo,
+    statusFrota,
+    manutPorTipo,
   };
 }

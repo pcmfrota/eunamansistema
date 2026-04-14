@@ -7,8 +7,14 @@ import {
   GraficoPreventivas,
   GraficoSemanal,
   ResumoHoras,
+  GraficoParadasCategoria,
+  RankingFalhas,
+  GraficoManuTipo,
+  GraficoDispTipo,
+  TabelaStatusFrota,
+  PainelFormulas,
 } from "@/components/graficos";
-import { FileText, Clock, CheckCircle2, TrendingUp, PenTool, Timer, Loader2 } from "lucide-react";
+import { FileText, Clock, CheckCircle2, TrendingUp, PenTool, Timer, Loader2, Activity, CalendarClock, AlertCircle } from "lucide-react";
 import { getDashboardData, type DashboardData, type FiltroOpcoes } from "@/app/actions/dashboard";
 
 interface DashboardClientProps {
@@ -92,31 +98,10 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       <div className="flex overflow-x-auto gap-4 pb-2 -mx-5 px-5 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <KpiCard
-          title="Total de OS"
-          value={String(data.totalOS)}
-          subtitle="Total registradas"
-          icon={<FileText size={18} className="text-zinc-500 dark:text-zinc-400" />}
-          iconBg="bg-zinc-100 dark:bg-zinc-800"
-        />
-        <KpiCard
-          title="Em Andamento"
-          value={String(data.emAndamento)}
-          subtitle="OS abertas"
-          icon={<Clock size={18} className="text-amber-500" />}
-          iconBg="bg-amber-100/50 dark:bg-amber-500/10"
-        />
-        <KpiCard
-          title="OS Fechadas"
-          value={String(data.osFechadas)}
-          subtitle="Concluídas"
-          icon={<CheckCircle2 size={18} className="text-emerald-500" />}
-          iconBg="bg-emerald-100/50 dark:bg-emerald-500/10"
-        />
-        <KpiCard
-          title="Disponibilidade"
+          title="DM (Mecânica)"
           value={
-            <span className={`font-bold ${data.disponibilidadeMedia >= 95 ? "text-emerald-500" : data.disponibilidadeMedia >= 90 ? "text-amber-500" : "text-red-500"}`}>
-              {data.disponibilidadeMedia.toFixed(1)}%
+            <span className={`font-bold ${data.dm >= 95 ? "text-emerald-500" : data.dm >= 90 ? "text-amber-500" : "text-red-500"}`}>
+              {data.dm.toFixed(1)}%
             </span>
           }
           subtitle="Meta: ≥ 95%"
@@ -124,37 +109,80 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           iconBg="bg-emerald-100/50 dark:bg-emerald-500/10"
         />
         <KpiCard
-          title="MTTR"
-          value={mttrLabel}
-          subtitle={<>Tempo <br/>Médio <br/>Reparo</>}
-          icon={<PenTool size={18} className="text-[#a855f7]" />}
-          iconBg="bg-purple-100/40 dark:bg-purple-500/10"
+          title="DO (Operacional)"
+          value={
+            <span className={`font-bold ${data.doOperacional >= 95 ? "text-blue-500" : data.doOperacional >= 90 ? "text-indigo-500" : "text-violet-500"}`}>
+              {data.doOperacional.toFixed(1)}%
+            </span>
+          }
+          subtitle="Equipamentos Aptos"
+          icon={<Activity size={18} className="text-blue-500" />}
+          iconBg="bg-blue-100/50 dark:bg-blue-500/10"
         />
         <KpiCard
           title="MTBF"
           value={mtbfLabel}
-          subtitle={<>Tempo <br/>Entre <br/>Falhas</>}
+          subtitle={<>Tempo <br/>Entre Falhas</>}
           icon={<Timer size={18} className="text-indigo-500" />}
           iconBg="bg-indigo-100/50 dark:bg-indigo-500/10"
         />
-        <KpiCardDocs
-          title="Docs"
-          v={data.docsValidos}
-          av={data.docsAVencer}
-          venc={data.docsVencidos}
-          icon={<FileText size={18} className="text-blue-500" />}
-          iconBg="bg-blue-100/50 dark:bg-blue-500/10"
+        <KpiCard
+          title="MTTR"
+          value={mttrLabel}
+          subtitle={<>Tempo Médio <br/>de Reparo</>}
+          icon={<PenTool size={18} className="text-[#a855f7]" />}
+          iconBg="bg-purple-100/40 dark:bg-purple-500/10"
+        />
+        <KpiCard
+          title="Backlog"
+          value={data.backlog > 0 ? `${data.backlog}d` : "—"}
+          subtitle="Dias Pendentes"
+          icon={<CalendarClock size={18} className="text-amber-500" />}
+          iconBg="bg-amber-100/50 dark:bg-amber-500/10"
+        />
+        <KpiCard
+          title="Total de OS"
+          value={String(data.totalOS)}
+          subtitle={`${data.emAndamento} abertas | ${data.osFechadas} fechadas`}
+          icon={<FileText size={18} className="text-zinc-500 dark:text-zinc-400" />}
+          iconBg="bg-zinc-100 dark:bg-zinc-800"
         />
       </div>
 
       <div className="flex flex-col gap-6 w-full">
-        <GraficoVeiculos dados={data.veiculos} periodoLabel={data.periodoLabel} mes={filtros.mes || undefined} ano={filtros.ano || undefined} />
-        <GraficoPreventivas dados={data.preventivas} />
-        <GraficoSemanal dados={data.dispSemanal} periodoLabel={data.periodoLabel} />
-        <ResumoHoras
-          horasManutencao={data.horasManutencao}
-          totalEquipamentos={data.totalEquipamentos}
+        <GraficoVeiculos 
+          title="Disponibilidade Mecânica (DM) por Placa"
+          dados={data.veiculos} 
+          periodoLabel={data.periodoLabel} 
+          mes={filtros.mes || undefined} 
+          ano={filtros.ano || undefined} 
         />
+        <GraficoVeiculos 
+          title="Disponibilidade Operacional (DO) por Placa"
+          dados={data.veiculos} 
+          periodoLabel={data.periodoLabel} 
+          mes={filtros.mes || undefined} 
+          ano={filtros.ano || undefined} 
+        />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <GraficoParadasCategoria dados={data.paradasPorCategoria} />
+          <RankingFalhas dados={data.rankingFalhas} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <GraficoDispTipo dados={data.dispPorTipo} />
+          <GraficoManuTipo dados={data.manutPorTipo} />
+        </div>
+
+        <TabelaStatusFrota dados={data.statusFrota} />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <GraficoSemanal dados={data.dispSemanal} periodoLabel={data.periodoLabel} />
+          <GraficoPreventivas dados={data.preventivas} />
+        </div>
+
+        <PainelFormulas />
       </div>
     </div>
   );
