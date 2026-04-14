@@ -13,9 +13,31 @@ const EquipamentoSchema = z.object({
 
 export class EquipamentoService {
   static async getAll() {
-    const { data, error } = await EquipamentoRepository.list();
+    const { data: equipamentos, error } = await EquipamentoRepository.list();
     if (error) throw new Error(error.message);
-    return data;
+    if (!equipamentos || equipamentos.length === 0) return [];
+
+    // Buscar o último horímetro de cada equipamento
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+    const { data: horimetros } = await supabase
+      .from('horimetros')
+      .select('equipamento_id, horimetro_final, data_referencia')
+      .order('data_referencia', { ascending: false });
+
+    // Mapa: equipamento_id → último horimetro_final
+    const horimMap = new Map<string, number>();
+    horimetros?.forEach((h: any) => {
+      if (!horimMap.has(h.equipamento_id)) {
+        horimMap.set(h.equipamento_id, h.horimetro_final);
+      }
+    });
+
+    // Merge: adiciona ultimo_hist ao resultado
+    return equipamentos.map((eq: any) => ({
+      ...eq,
+      ultimo_hist: horimMap.get(eq.id) || 0,
+    }));
   }
 
   static async create(data: EquipamentoInsert) {
