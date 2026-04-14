@@ -34,11 +34,11 @@ export class OSRepository {
 
   static async getEquipamentos() {
     const supabase = createClient();
-    return await supabase.from('equipamentos').select('id, placa, ultimoHist, modulo');
+    return await supabase.from('equipamentos').select('id, placa, modulo');
   }
 
-  static async updateEquipamentoHorimetro(id: string, value: number) {
-    const supabase = createClient();
-    return await supabase.from('equipamentos').update({ ultimoHist: value }).eq('id', id);
+  static async updateEquipamentoHorimetro(_id: string, _value: number) {
+    // Horímetro agora é gerenciado pela tabela horimetros
+    return;
   }
 }

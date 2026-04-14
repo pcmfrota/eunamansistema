@@ -88,8 +88,8 @@ export class OSService {
 
   static async importOS(rows: any[]) {
     const { data: equipamentos } = await OSRepository.getEquipamentos();
-    const eqMap: Record<string, { id: string; modulo: string; ultimoHist: number | null }> = {};
-    equipamentos?.forEach(e => { eqMap[e.placa.toUpperCase()] = { id: e.id, modulo: e.modulo || '', ultimoHist: e.ultimoHist } });
+    const eqMap: Record<string, { id: string; modulo: string }> = {};
+    equipamentos?.forEach(e => { eqMap[e.placa.toUpperCase()] = { id: e.id, modulo: e.modulo || '' } });
 
     const missingPlates = new Set<string>();
 
@@ -135,11 +135,7 @@ export class OSService {
 
         const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori', 'KM/H', 'Hodometro', 'Hodômetro']));
 
-        if (eq && horimetro && (!eq.ultimoHist || horimetro > eq.ultimoHist)) {
-          if (!eqUpdates[eq.id] || horimetro > eqUpdates[eq.id]) {
-            eqUpdates[eq.id] = horimetro;
-          }
-        }
+
 
         // Normaliza status
         const statusRaw = String(this.getVal(row, ['status', 'Status', 'Situação', 'situacao', 'Estado']) || 'Aberta').trim();
