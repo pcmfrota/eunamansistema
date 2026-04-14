@@ -37,6 +37,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   };
 
   const [filtros, setFiltros] = useState<FiltrosValues>(defaultFiltros);
+  const [mostrarIndisp, setMostrarIndisp] = useState(false);
 
   function handleFilterChange(key: keyof FiltrosValues, value: string | number) {
     const newFiltros = { ...filtros, [key]: value };
@@ -149,20 +150,41 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         />
       </div>
 
+      </div>
+
       <div className="flex flex-col gap-6 w-full">
+        <div className="flex justify-end">
+          <button
+            onClick={() => setMostrarIndisp(!mostrarIndisp)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${
+              mostrarIndisp 
+                ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-100' 
+                : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100'
+            }`}
+          >
+            {mostrarIndisp ? (
+              <><AlertCircle size={16} /> Ocultar Indisponibilidade</>
+            ) : (
+              <><AlertCircle size={16} /> Mostrar Indisponibilidade</>
+            )}
+          </button>
+        </div>
+
         <GraficoVeiculos 
-          title="Disponibilidade Mecânica (DM) por Placa"
+          title={mostrarIndisp ? "Indisponibilidade Mecânica (IM) por Placa" : "Disponibilidade Mecânica (DM) por Placa"}
           dados={data.veiculos} 
           periodoLabel={data.periodoLabel} 
           mes={filtros.mes || undefined} 
           ano={filtros.ano || undefined} 
+          mostrarIndisponibilidade={mostrarIndisp}
         />
         <GraficoVeiculos 
-          title="Disponibilidade Operacional (DO) por Placa"
+          title={mostrarIndisp ? "Indisponibilidade Operacional (IO) por Placa" : "Disponibilidade Operacional (DO) por Placa"}
           dados={data.veiculos} 
           periodoLabel={data.periodoLabel} 
           mes={filtros.mes || undefined} 
           ano={filtros.ano || undefined} 
+          mostrarIndisponibilidade={mostrarIndisp}
         />
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -303,18 +303,32 @@ interface GraficoVeiculosProps {
   mes?: number;
   ano?: number;
   title?: string;
+  mostrarIndisponibilidade?: boolean;
 }
 
-export function GraficoVeiculos({ dados, periodoLabel, mes, ano, title = "Disponibilidade Operacional" }: GraficoVeiculosProps) {
+export function GraficoVeiculos({ 
+  dados, 
+  periodoLabel, 
+  mes, 
+  ano, 
+  title = "Disponibilidade Operacional",
+  mostrarIndisponibilidade = false 
+}: GraficoVeiculosProps) {
   const [selected, setSelected] = useState<VeiculoDetalhe | null>(null);
 
-  const chartData = (dados ?? []).map((v) => ({
-    nome: v.placa,
-    disp: v.disponibilidade,
-    totalOS: v.totalOS,
-    osFechadas: v.osFechadas,
-    horasManut: v.horasManut,
-  }));
+  const chartData = (dados ?? []).map((v) => {
+    let dispReal = v.disponibilidade;
+    let dispExibida = mostrarIndisponibilidade ? Number((100 - v.disponibilidade).toFixed(1)) : v.disponibilidade;
+    
+    return {
+      nome: v.placa,
+      disp: dispExibida,
+      dispReal: dispReal,
+      totalOS: v.totalOS,
+      osFechadas: v.osFechadas,
+      horasManut: v.horasManut,
+    };
+  });
 
   if (chartData.length === 0) {
     return (
@@ -344,8 +358,8 @@ export function GraficoVeiculos({ dados, periodoLabel, mes, ano, title = "Dispon
         <p className="font-bold text-sm text-zinc-100 mb-1.5">{d.nome}</p>
         <div className="flex flex-col gap-1 text-zinc-400">
           <p>
-            Disponibilidade:{" "}
-            <span className="font-semibold" style={{ color: getColorDisp(d.disp) }}>
+            {mostrarIndisponibilidade ? "Indisponibilidade: " : "Disponibilidade: "}
+            <span className="font-semibold" style={{ color: mostrarIndisponibilidade ? "#ef4444" : getColorDisp(d.dispReal) }}>
               {d.disp}%
             </span>
           </p>
@@ -388,15 +402,25 @@ export function GraficoVeiculos({ dados, periodoLabel, mes, ano, title = "Dispon
             )}
           </div>
           <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> ≥ 95%
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> 90-94%
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> &lt; 90%
-            </div>
+            {!mostrarIndisponibilidade ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> ≥ 95%
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> 90-94%
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> &lt; 90%
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> Quanto maior, pior
+                </div>
+              </>
+            )}
             <span className="text-zinc-400 dark:text-zinc-600 border-l border-zinc-200 dark:border-zinc-700 pl-3 ml-1">
               Clique na barra para detalhes
             </span>
@@ -453,9 +477,12 @@ export function GraficoVeiculos({ dados, periodoLabel, mes, ano, title = "Dispon
                 formatter: (v: number) => `${v}%`,
               }}
             >
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={getColorDisp(entry.disp)} />
-              ))}
+              {chartData.map((entry, index) => {
+                let color = mostrarIndisponibilidade 
+                  ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
+                  : getColorDisp(entry.dispReal);
+                return <Cell key={`cell-${index}`} fill={color} />;
+              })}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
