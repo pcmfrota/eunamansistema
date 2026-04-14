@@ -19,19 +19,32 @@ export class EquipamentoService {
   }
 
   static async create(data: EquipamentoInsert) {
-    const validated = EquipamentoSchema.parse(data);
+    if (!data.placa || !data.tipo) {
+      throw new Error('Placa e Tipo são obrigatórios');
+    }
 
-    const { error } = await EquipamentoRepository.create(validated);
+    const cleanData = {
+      placa: String(data.placa).toUpperCase().trim(),
+      tipo: String(data.tipo).toUpperCase().trim(),
+      categoria: String(data.categoria || 'PESADA').toUpperCase().trim(),
+      modulo: String(data.modulo || 'BASE').trim(),
+    };
+
+    const { error } = await EquipamentoRepository.create(cleanData);
 
     if (error) throw new Error(error.message);
     return { success: true };
   }
 
   static async update(id: string, data: EquipamentoUpdate) {
-    const partialSchema = EquipamentoSchema.partial();
-    const validated = partialSchema.parse(data);
+    // Envia somente os campos existentes (sem defaults do Zod que podem criar colunas inexistentes)
+    const cleanData: Record<string, any> = {};
+    if (data.placa) cleanData.placa = String(data.placa).toUpperCase().trim();
+    if (data.tipo) cleanData.tipo = String(data.tipo).toUpperCase().trim();
+    if (data.categoria) cleanData.categoria = String(data.categoria).toUpperCase().trim();
+    if (data.modulo !== undefined) cleanData.modulo = String(data.modulo).trim();
 
-    const { error } = await EquipamentoRepository.update(id, validated);
+    const { error } = await EquipamentoRepository.update(id, cleanData);
 
     if (error) throw new Error(error.message);
     return { success: true };
