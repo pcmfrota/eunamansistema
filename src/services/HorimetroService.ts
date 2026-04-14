@@ -1,5 +1,4 @@
 import { HorimetroRepository } from '../repositories/HorimetroRepository';
-import { EquipamentoRepository } from '../repositories/EquipamentoRepository';
 import { HorimetroInsert, HorimetroUpdate } from '../models/horimetro';
 
 export class HorimetroService {
@@ -21,9 +20,6 @@ export class HorimetroService {
     const { error } = await HorimetroRepository.create(data);
     if (error) throw new Error(error.message);
 
-    // Sync equipment ultimo_hist
-    await EquipamentoRepository.update(data.equipamento_id, { ultimo_hist: data.horimetro_final });
-
     return { success: true };
   }
 
@@ -36,10 +32,6 @@ export class HorimetroService {
 
     const { error } = await HorimetroRepository.update(id, data);
     if (error) throw new Error(error.message);
-
-    if (data.equipamento_id && data.horimetro_final) {
-      await EquipamentoRepository.update(data.equipamento_id, { ultimo_hist: data.horimetro_final });
-    }
 
     return { success: true };
   }

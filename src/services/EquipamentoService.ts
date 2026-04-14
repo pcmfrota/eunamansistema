@@ -9,7 +9,6 @@ const EquipamentoSchema = z.object({
   modulo: z.string().default('BASE').transform((val: string) => val.trim()),
   modelo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
   horimetro_limite_preventiva: z.number().optional().default(500),
-  ultimo_hist: z.number().optional().default(0),
 });
 
 export class EquipamentoService {

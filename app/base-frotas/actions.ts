@@ -14,7 +14,6 @@ export async function criarEquipamento(formData: FormData) {
       tipo: (formData.get('tipo') as string),
       categoria: (formData.get('categoria') as string),
       modulo: (formData.get('modulo') as string),
-      ultimo_hist: parseFloat(formData.get('horimetro') as string) || 0
     };
 
     await EquipamentoService.create(data);
@@ -34,7 +33,6 @@ export async function atualizarEquipamento(id: string, formData: FormData) {
       tipo: (formData.get('tipo') as string),
       categoria: (formData.get('categoria') as string),
       modulo: (formData.get('modulo') as string),
-      ultimo_hist: parseFloat(formData.get('horimetro') as string) || 0
     };
 
     await EquipamentoService.update(id, data);
