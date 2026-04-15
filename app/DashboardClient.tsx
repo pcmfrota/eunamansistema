@@ -1,21 +1,44 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
+import React, { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { Filtros, type FiltrosValues } from "@/components/filtros";
+
+// Componentes estáticos que não usam bibliotecas pesadas de gráficos
+import { PainelFormulas } from "@/components/graficos";
+
+// Importação dinâmica dos gráficos pesados (Recharts) para deixar o carregamento inicial mais leve
+const GraficoVeiculos = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoVeiculos), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoPreventivas = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoPreventivas), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoSemanal = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoSemanal), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoParadasCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoParadasCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
+const RankingFalhas = dynamic(() => import("@/components/graficos").then((mod) => mod.RankingFalhas), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoManuTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoManuTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoDispTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
+const TabelaStatusFrota = dynamic(() => import("@/components/graficos").then((mod) => mod.TabelaStatusFrota), { ssr: false, loading: () => <CarregandoGrafico /> });
+
+function CarregandoGrafico() {
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex items-center justify-center h-full min-h-[300px]">
+      <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+    </div>
+  );
+}
 import {
-  GraficoVeiculos,
-  GraficoPreventivas,
-  GraficoSemanal,
-  ResumoHoras,
-  GraficoParadasCategoria,
-  RankingFalhas,
-  GraficoManuTipo,
-  GraficoDispTipo,
-  TabelaStatusFrota,
-  PainelFormulas,
-} from "@/components/graficos";
-import { FileText, Clock, CheckCircle2, TrendingUp, PenTool, Timer, Loader2, Activity, CalendarClock, AlertCircle } from "lucide-react";
-import { getDashboardData, type DashboardData, type FiltroOpcoes } from "@/app/actions/dashboard";
+  FileText,
+  CheckCircle2,
+  TrendingUp,
+  PenTool,
+  Timer,
+  Loader2,
+  Activity,
+  CalendarClock,
+  AlertCircle,
+} from "lucide-react";
+import {
+  getDashboardData,
+  type DashboardData,
+} from "@/app/actions/dashboard";
 
 interface DashboardClientProps {
   initialData: DashboardData;
@@ -82,6 +105,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
       )}
 
+      {/* Cabeçalho */}
       <div className="flex flex-col mb-1 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight text-[#1e293b] dark:text-zinc-100">Dashboard Operacional</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
@@ -89,6 +113,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         </p>
       </div>
 
+      {/* Filtros */}
       <Filtros
         opcoes={data.filtroOpcoes}
         valores={filtros}
@@ -97,6 +122,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         periodoLabel={data.periodoLabel}
       />
 
+      {/* KPIs */}
       <div className="flex overflow-x-auto gap-4 pb-2 -mx-5 px-5 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <KpiCard
           title="DM (Mecânica)"
@@ -123,14 +149,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         <KpiCard
           title="MTBF"
           value={mtbfLabel}
-          subtitle={<>Tempo <br/>Entre Falhas</>}
+          subtitle={<>Tempo <br />Entre Falhas</>}
           icon={<Timer size={18} className="text-indigo-500" />}
           iconBg="bg-indigo-100/50 dark:bg-indigo-500/10"
         />
         <KpiCard
           title="MTTR"
           value={mttrLabel}
-          subtitle={<>Tempo Médio <br/>de Reparo</>}
+          subtitle={<>Tempo Médio <br />de Reparo</>}
           icon={<PenTool size={18} className="text-[#a855f7]" />}
           iconBg="bg-purple-100/40 dark:bg-purple-500/10"
         />
@@ -150,16 +176,15 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         />
       </div>
 
-      </div>
-
+      {/* Gráficos e tabelas */}
       <div className="flex flex-col gap-6 w-full">
         <div className="flex justify-end">
           <button
             onClick={() => setMostrarIndisp(!mostrarIndisp)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${
-              mostrarIndisp 
-                ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-100' 
-                : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100'
+              mostrarIndisp
+                ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-100"
+                : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100"
             }`}
           >
             {mostrarIndisp ? (
@@ -170,23 +195,23 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           </button>
         </div>
 
-        <GraficoVeiculos 
+        <GraficoVeiculos
           title={mostrarIndisp ? "Indisponibilidade Mecânica (IM) por Placa" : "Disponibilidade Mecânica (DM) por Placa"}
-          dados={data.veiculos} 
-          periodoLabel={data.periodoLabel} 
-          mes={filtros.mes || undefined} 
-          ano={filtros.ano || undefined} 
+          dados={data.veiculos}
+          periodoLabel={data.periodoLabel}
+          mes={filtros.mes || undefined}
+          ano={filtros.ano || undefined}
           mostrarIndisponibilidade={mostrarIndisp}
         />
-        <GraficoVeiculos 
+        <GraficoVeiculos
           title={mostrarIndisp ? "Indisponibilidade Operacional (IO) por Placa" : "Disponibilidade Operacional (DO) por Placa"}
-          dados={data.veiculos} 
-          periodoLabel={data.periodoLabel} 
-          mes={filtros.mes || undefined} 
-          ano={filtros.ano || undefined} 
+          dados={data.veiculos}
+          periodoLabel={data.periodoLabel}
+          mes={filtros.mes || undefined}
+          ano={filtros.ano || undefined}
           mostrarIndisponibilidade={mostrarIndisp}
         />
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <GraficoParadasCategoria dados={data.paradasPorCategoria} />
           <RankingFalhas dados={data.rankingFalhas} />
@@ -198,7 +223,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         <TabelaStatusFrota dados={data.statusFrota} />
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <GraficoSemanal dados={data.dispSemanal} periodoLabel={data.periodoLabel} />
           <GraficoPreventivas dados={data.preventivas} />
@@ -210,7 +235,19 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   );
 }
 
-function KpiCard({ title, value, subtitle, icon, iconBg }: any) {
+function KpiCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  iconBg,
+}: {
+  title: string;
+  value: React.ReactNode;
+  subtitle: React.ReactNode;
+  icon: React.ReactNode;
+  iconBg: string;
+}) {
   return (
     <div className="bg-white dark:bg-zinc-950 rounded-2xl p-5 px-6 border border-zinc-100 dark:border-zinc-800 flex flex-col justify-between shadow-sm min-w-[160px] flex-shrink-0">
       <div className="flex justify-between items-start mb-5">
@@ -223,29 +260,6 @@ function KpiCard({ title, value, subtitle, icon, iconBg }: any) {
         <div className="text-[28px] font-bold text-zinc-800 dark:text-zinc-100 leading-none mb-1">{value}</div>
         <p className="text-[11px] text-[#94a3b8] dark:text-zinc-500 leading-tight">
           {subtitle}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function KpiCardDocs({ title, v, av, venc, icon, iconBg }: any) {
-  return (
-    <div className="bg-white dark:bg-zinc-950 rounded-2xl p-5 px-6 border border-zinc-100 dark:border-zinc-800 flex flex-col justify-between shadow-sm min-w-[170px] flex-shrink-0">
-      <div className="flex justify-between items-start mb-5">
-        <h3 className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{title}</h3>
-        <div className={`p-2 rounded-xl ${iconBg}`}>
-          {icon}
-        </div>
-      </div>
-      <div>
-        <div className="flex items-baseline gap-1.5 mb-1">
-          <span className="text-[28px] font-bold text-emerald-500 leading-none">{v}</span>
-          <span className="text-[28px] font-bold text-amber-500 leading-none">{av}</span>
-          <span className="text-[28px] font-bold text-rose-500 leading-none">{venc}</span>
-        </div>
-        <p className="text-[11px] font-medium text-[#94a3b8] dark:text-zinc-500 uppercase tracking-wider">
-          V / AV / Venc
         </p>
       </div>
     </div>
