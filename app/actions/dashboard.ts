@@ -306,7 +306,7 @@ export async function getDashboardData(filtros?: {
       } else if (os.data_abertura) {
         // Calcula a duração real pela diferença de datas
         const inicioManut = new Date(os.data_abertura);
-        const fimManut = os.data_fechamento ? new Date(os.data_fechamento) : nowLocal;
+        const fimManut = os.data_fechamento ? new Date(os.data_fechamento) : hoje;
         currentMec = Math.max(0, (fimManut.getTime() - inicioManut.getTime()) / (1000 * 60 * 60));
       }
       
