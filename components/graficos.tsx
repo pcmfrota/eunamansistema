@@ -468,7 +468,7 @@ export function GraficoVeiculos({
             />
             <XAxis
               dataKey="nome"
-              tick={{ fontSize: 9, fill: "#71717a", fontWeight: 600 }}
+              tick={{ fontSize: 10, fill: "#f4f4f5", fontWeight: 600 }}
               tickLine={false}
               axisLine={{ stroke: "#e4e4e7" }}
               interval={0}
@@ -478,7 +478,7 @@ export function GraficoVeiculos({
             />
             <YAxis
               domain={[0, 100]}
-              tick={{ fontSize: 10, fill: "#71717a" }}
+              tick={{ fontSize: 11, fill: "#f4f4f5", fontWeight: 500 }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `${v}%`}
@@ -492,8 +492,8 @@ export function GraficoVeiculos({
               radius={[3, 3, 0, 0]}
               label={{
                 position: "top",
-                fill: "#3f3f46",
-                fontSize: 9,
+                fill: "#ffffff",
+                fontSize: 10,
                 fontWeight: 600,
                 formatter: (v: number) => `${v}%`,
               }}

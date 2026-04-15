@@ -297,30 +297,23 @@ export async function getDashboardData(filtros?: {
     let fechadasVeiculo = 0;
 
     for (const os of osDoVeiculo) {
-      const horasDeclaradas = Number(os.horas_manutencao) || 0;
-      let currentMec = 0;
-
-      if (horasDeclaradas > 0) {
-        // Campo declarado pelo usuário — usa diretamente
-        currentMec = horasDeclaradas;
-      } else if (os.data_abertura) {
-        // Calcula a duração real pela diferença de datas
-        const inicioManut = new Date(os.data_abertura);
-        const fimManut = os.data_fechamento ? new Date(os.data_fechamento) : hoje;
-        currentMec = Math.max(0, (fimManut.getTime() - inicioManut.getTime()) / (1000 * 60 * 60));
-      }
+      // 1. Cálculo da Indisponibilidade Mecânica (DM)
+      // Usamos o Horário Real da Parada como início absoluto da perda mecânica.
+      const inicioMec = os.horario_parada ? new Date(os.horario_parada) : (os.data_abertura ? new Date(os.data_abertura) : hoje);
+      const fimMec = os.data_fechamento ? new Date(os.data_fechamento) : hoje;
       
+      const currentMec = Math.max(0, (fimMec.getTime() - inicioMec.getTime()) / (1000 * 60 * 60));
       horasIndisp += currentMec;
 
-      // Cálculo Operacional (Caminhão Reserva)
-      let currentOp = currentMec; // Por padrão, impacto operacional = mecânico
+      // 2. Cálculo da Indisponibilidade Operacional (DO)
+      let currentOp = currentMec; // Padrão: Operacional = Mecânico
 
-      if (os.foi_enviado_reserva) {
-        // REGRA PCM: Se houve reserva, o impacto na operação é menor.
-        // Como o banco não tem a hora exata da chegada, assumimos o padrão de 2 horas de indisponibilidade operacional (tempo de troca).
-        currentOp = Math.min(currentMec, 2);
+      if (os.foi_enviado_reserva && os.horario_parada && os.horas_reserva_chegou) {
+        // Se houve reserva, a perda operacional é apenas o tempo entre a Parada e a Chegada do Reserva.
+        const parada = new Date(os.horario_parada);
+        const chegada = new Date(os.horas_reserva_chegou);
+        currentOp = Math.max(0, (chegada.getTime() - parada.getTime()) / (1000 * 60 * 60));
       }
-
       horasIndispOp += currentOp;
 
       if (os.status === "Fechada") fechadasVeiculo++;

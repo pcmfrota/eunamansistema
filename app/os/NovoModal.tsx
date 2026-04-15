@@ -351,12 +351,18 @@ export default function OSFormModal({
             <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-medium text-orange-700 dark:text-orange-400">Qual o Caminhão Reserva? *</label>
-                <input name="qual_reserva" type="text" required={form.foi_enviado_reserva}
-                  placeholder="EX: PLACA-1234"
+                <select 
+                  name="qual_reserva" 
+                  required={form.foi_enviado_reserva}
                   value={form.qual_reserva}
                   onChange={handleInputChange}
-                  className={`${inputCls} border-orange-200 focus:border-orange-400 focus:ring-orange-500/20`} 
-                />
+                  className={`${inputCls} border-orange-200 focus:border-orange-400 focus:ring-orange-500/20`}
+                >
+                  <option value="">Selecione o reserva...</option>
+                  {equipamentos.map(eq => (
+                    <option key={`res-${eq.id}`} value={eq.placa}>{eq.placa}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-medium text-orange-700 dark:text-orange-400">Que Horas o Reserva Chegou? *</label>
