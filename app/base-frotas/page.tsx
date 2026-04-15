@@ -232,6 +232,7 @@ export default function BaseFrotasPage() {
                 <th className="py-4 px-6 font-semibold">Categoria</th>
                 <th className="py-4 px-6 font-semibold">Módulo</th>
                 <th className="py-4 px-6 font-semibold">Horímetro Atual</th>
+                <th className="py-4 px-6 font-semibold">Status</th>
                 <th className="py-4 px-6 font-semibold text-right">Ações</th>
               </tr>
             </thead>
@@ -245,7 +246,14 @@ export default function BaseFrotasPage() {
                   <td className="py-3.5 px-6">
                     <input type="checkbox" onChange={() => handleSelectVehicle(vehicle.id)} checked={selectedVehicles.includes(vehicle.id)} className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500" />
                   </td>
-                  <td className="py-3.5 px-6 font-medium text-slate-900 dark:text-white uppercase">{vehicle.placa}</td>
+                  <td className="py-3.5 px-6 font-bold text-blue-600 dark:text-blue-400 uppercase">
+                    <button 
+                      onClick={() => { setEditingVehicle(vehicle); setIsModalOpen(true); }}
+                      className="hover:underline focus:outline-none"
+                    >
+                      {vehicle.placa}
+                    </button>
+                  </td>
                   <td className="py-3.5 px-6">
                     <span className={cn("px-2.5 py-1 text-xs font-semibold rounded-md uppercase tracking-wide", colorMap[getTipoColor(vehicle.tipo)] || colorMap.slate)}>
                       {vehicle.tipo}
@@ -258,6 +266,16 @@ export default function BaseFrotasPage() {
                   </td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 uppercase">{vehicle.modulo}</td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 font-mono">{vehicle.ultimo_hist || vehicle.ultimoHist || 0}h</td>
+                  <td className="py-3.5 px-6">
+                    <span className={cn(
+                      "px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider border",
+                      vehicle.status === 'Inativo' 
+                        ? "bg-red-50 text-red-600 border-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-900/30" 
+                        : "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/30"
+                    )}>
+                      {vehicle.status || 'Ativo'}
+                    </span>
+                  </td>
                   <td className="py-3.5 px-6">
                     <div className="flex items-center justify-end gap-2">
                       {!isVisitante && (
