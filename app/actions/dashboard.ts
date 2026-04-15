@@ -133,6 +133,8 @@ export async function getDashboardData(filtros?: {
   }
 
   // 2. Buscar OS e Equipamentos
+  console.log("DEBUG DASHBOARD: Filtros recebidos:", { inicioFiltro, fimFiltro });
+  
   const [osRes, eqRes] = await Promise.all([
     supabase.from("ordens_servico").select(`
       id, status, horas_manutencao, data_abertura, data_fechamento, 
@@ -140,10 +142,15 @@ export async function getDashboardData(filtros?: {
       horario_parada, horas_reserva_chegou
     `)
     .lte("data_abertura", fimFiltro)
-    // Filtro mais resiliente para data de fechamento
     .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
     supabase.from("equipamentos").select("*")
   ]);
+
+  console.log("DEBUG DASHBOARD: Resultado OS:", { 
+    count: osRes.data?.length, 
+    error: osRes.error?.message,
+    totalNoBanco: (await supabase.from("ordens_servico").select("id", { count: "exact", head: true })).count
+  });
 
   const allOS = osRes.data ?? [];
   const todasAsEquips = eqRes.data ?? [];
@@ -169,14 +176,43 @@ export async function getDashboardData(filtros?: {
     });
   }
 
-  // 3. Cálculos
-  const horasTotaisPorVeiculo = diasReferencia * 24;
+  // 3. Buscar Escala da Frota
+  const { data: escalas } = await supabase.from("escala_frota").select("*");
+  const escalaMap = new Map();
+  escalas?.forEach(e => escalaMap.set(e.placa.toUpperCase().trim(), e));
+
+  // 4. Cálculos
   const veiculos: VeiculoDisp[] = [];
   const periodoInicioObj = new Date(inicioFiltro);
   const periodoFimObj = new Date(fimFiltro);
 
-  for (const placa of placasFiltradas) {
+  // Helper para calcular interseção de tempo em um dia específico
+  const calcularIntersecaoDia = (
+    dataBase: Date, 
+    inicioOS: Date, 
+    fimOS: Date, 
+    hInicioEscala: string, 
+    hFimEscala: string
+  ) => {
+    const dStr = dataBase.toISOString().split('T')[0];
+    const shiftStart = new Date(`${dStr}T${hInicioEscala}`);
+    const shiftEnd = new Date(`${dStr}T${hFimEscala}`);
+    
+    // Ajuste para turnos que cruzam a meia-noite (Ex: 08:00 -> 00:00 conta como 16h no mesmo dia)
+    // Se shiftEnd <= shiftStart, assumimos que termina no dia seguinte
+    if (shiftEnd <= shiftStart) {
+      shiftEnd.setDate(shiftEnd.getDate() + 1);
+    }
 
+    const interInicio = inicioOS > shiftStart ? inicioOS : shiftStart;
+    const interFim = fimOS < shiftEnd ? fimOS : shiftEnd;
+
+    const diffMs = interFim.getTime() - interInicio.getTime();
+    return Math.max(0, diffMs) / 3600000;
+  };
+
+  for (const placa of placasFiltradas) {
+    const escala = escalaMap.get(placa);
     const osDoVeiculo = allOS.filter(o => {
       let osPlaca = o.placa?.toUpperCase().trim();
       if (!osPlaca && o.equipamento_id) {
@@ -187,42 +223,85 @@ export async function getDashboardData(filtros?: {
 
     let hIndispDM = 0;
     let hIndispDO = 0;
+    let hPlanejadasTotal = 0;
     let fechadas = 0;
 
-    osDoVeiculo.forEach(os => {
-      // 1. Início e Fim Efetivos dentro do período
-      let inicioOriginal = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
-      let inicioEfetivo = inicioOriginal < periodoInicioObj ? periodoInicioObj : inicioOriginal;
+    // Iterar por cada dia do período para calcular horas planejadas e interseção de OS
+    for (let d = 0; d < diasReferencia; d++) {
+      const dataCorrente = new Date(periodoInicioObj);
+      dataCorrente.setDate(periodoInicioObj.getDate() + d);
 
-      let fimOriginal = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-      // Clipping D-1: Nunca ultrapassar periodoFimObj (que já foi ajustado para D-1 se necessário)
-      let fimEfetivo = fimOriginal > periodoFimObj ? periodoFimObj : fimOriginal;
-
-      if (inicioEfetivo < fimEfetivo) {
-        // Cálculo DM (Disponibilidade Mecânica - Tempo Parado)
-        const duracaoDM = (fimEfetivo.getTime() - inicioEfetivo.getTime()) / 3600000;
-        hIndispDM += Math.max(0, duracaoDM);
-
-        // Cálculo DO (Disponibilidade Operacional - Impacto na Produção)
-        if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
-          const reservaChegou = new Date(os.horas_reserva_chegou);
-          // O impacto para quando a reserva chega ou o período acaba
-          let fimDO = reservaChegou > fimEfetivo ? fimEfetivo : reservaChegou;
-          const duracaoDO = (fimDO.getTime() - inicioEfetivo.getTime()) / 3600000;
-          hIndispDO += Math.max(0, duracaoDO);
-        } else {
-          // Sem reserva, o impacto é o tempo total da oficina
-          hIndispDO += Math.max(0, duracaoDM);
-        }
+      // Horas planejadas no dia
+      if (escala) {
+        hPlanejadasTotal += Number(escala.carga_horaria);
+      } else {
+        hPlanejadasTotal += 24; // Default se não houver escala
       }
 
+      // Interseção de cada OS com o turno do dia
+      osDoVeiculo.forEach(os => {
+        let inicioOriginal = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
+        let fimOriginal = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
+        
+        // Clipping D-1
+        let fimLimpo = fimOriginal > periodoFimObj ? periodoFimObj : fimOriginal;
+
+        if (escala) {
+          const overlappingDM = calcularIntersecaoDia(
+            dataCorrente, 
+            inicioOriginal, 
+            fimLimpo, 
+            escala.periodo_inicio, 
+            escala.periodo_fim
+          );
+          hIndispDM += overlappingDM;
+
+          // Cálculo DO
+          if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+            const reservaChegou = new Date(os.horas_reserva_chegou);
+            let fimDO = reservaChegou > fimLimpo ? fimLimpo : reservaChegou;
+            hIndispDO += calcularIntersecaoDia(
+              dataCorrente, 
+              inicioOriginal, 
+              fimDO, 
+              escala.periodo_inicio, 
+              escala.periodo_fim
+            );
+          } else {
+            hIndispDO += overlappingDM;
+          }
+        } else {
+          // Fallback para 24h se não houver escala
+          const diaInicio = new Date(dataCorrente); diaInicio.setHours(0,0,0,0);
+          const diaFim = new Date(dataCorrente); diaFim.setHours(23,59,59,999);
+          
+          const interInicio = inicioOriginal > diaInicio ? inicioOriginal : diaInicio;
+          const interFim = fimLimpo < diaFim ? fimLimpo : diaFim;
+          
+          if (interInicio < interFim) {
+             const duracao = (interFim.getTime() - interInicio.getTime()) / 3600000;
+             hIndispDM += Math.max(0, duracao);
+             
+             if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+               const resChegou = new Date(os.horas_reserva_chegou);
+               const interFimDO = resChegou < interFim ? resChegou : interFim;
+               hIndispDO += Math.max(0, (interFimDO.getTime() - interInicio.getTime()) / 3600000);
+             } else {
+               hIndispDO += Math.max(0, duracao);
+             }
+          }
+        }
+      });
+    }
+
+    osDoVeiculo.forEach(os => {
       if (os.status === "Fechada" || os.status === "Concluída") fechadas++;
     });
 
     veiculos.push({
       placa,
-      disponibilidade: Math.round(Math.max(0, Math.min(100, ((horasTotaisPorVeiculo - hIndispDM) / horasTotaisPorVeiculo) * 100)) * 10) / 10,
-      disponibilidade_operacional: Math.round(Math.max(0, Math.min(100, ((horasTotaisPorVeiculo - hIndispDO) / horasTotaisPorVeiculo) * 100)) * 10) / 10,
+      disponibilidade: hPlanejadasTotal > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasTotal - hIndispDM) / hPlanejadasTotal) * 100)) * 10) / 10 : 100,
+      disponibilidade_operacional: hPlanejadasTotal > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasTotal - hIndispDO) / hPlanejadasTotal) * 100)) * 10) / 10 : 100,
       totalOS: osDoVeiculo.length,
       osFechadas: fechadas,
       horasManut: Math.round(hIndispDM * 10) / 10,
@@ -231,20 +310,25 @@ export async function getDashboardData(filtros?: {
     });
   }
 
-  // 4. Consolidação Final (Métricas PCM)
+  // 5. Consolidação Final (Métricas PCM)
   const hIndispDMTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
   const hIndispDOTotal = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
-  const hTotalFrota = horasTotaisPorVeiculo * veiculos.length;
+  
+  // Total de horas planejadas da frota no período
+  const hTotalFrotaPlanejada = veiculos.reduce((acc, v) => {
+    const escala = escalaMap.get(v.placa);
+    return acc + (escala ? Number(escala.carga_horaria) * diasReferencia : 24 * diasReferencia);
+  }, 0);
 
-  const dm = hTotalFrota > 0 ? Math.round(((hTotalFrota - hIndispDMTotal) / hTotalFrota) * 1000) / 10 : 0;
-  const doOp = hTotalFrota > 0 ? Math.round(((hTotalFrota - hIndispDOTotal) / hTotalFrota) * 1000) / 10 : 0;
+  const dm = hTotalFrotaPlanejada > 0 ? Math.round(((hTotalFrotaPlanejada - hIndispDMTotal) / hTotalFrotaPlanejada) * 1000) / 10 : 0;
+  const doOp = hTotalFrotaPlanejada > 0 ? Math.round(((hTotalFrotaPlanejada - hIndispDOTotal) / hTotalFrotaPlanejada) * 1000) / 10 : 0;
 
   // MTTR/MTBF baseados apenas em Corretivas (Padrão PCM)
   const osCorretivas = allOS.filter(o => o.classe === 'CORRETIVA');
   const osCorretivasFechadas = osCorretivas.filter(o => o.status === 'Fechada' || o.status === 'Concluída');
   
   const mttr = osCorretivasFechadas.length > 0 ? Math.round((hIndispDMTotal / osCorretivasFechadas.length) * 10) / 10 : 0;
-  const hOperacionaisTotal = Math.max(0, hTotalFrota - hIndispDMTotal);
+  const hOperacionaisTotal = Math.max(0, hTotalFrotaPlanejada - hIndispDMTotal);
   const mtbf = osCorretivas.length > 0 ? Math.round((hOperacionaisTotal / osCorretivas.length) * 10) / 10 : 0;
 
   // 5. Ranking de Falhas (Top 10 veículos que mais deram corretiva)
@@ -315,7 +399,20 @@ export async function getDashboardData(filtros?: {
       disponibilidade: v.disponibilidade,
       modulo: eq?.modulo || "BASE"
     };
-  }).sort((a, b) => a.disponibilidade - b.disponibilidade);
+  });
+
+  // 6. Aplicar Filtro de Status (se fornecido)
+  let statusFrotaFinal = statusFrota;
+  if (filtros?.status && filtros.status !== "Todos") {
+    statusFrotaFinal = statusFrota.filter(s => s.status === filtros.status);
+    // Também filtrar a lista de veículos usada nos gráficos
+    const placasNoStatus = new Set(statusFrotaFinal.map(s => s.placa));
+    // veiculos = veiculos.filter(v => placasNoStatus.has(v.placa)); // veiculos é const, precisamos filtrar os que sobraram
+  }
+
+  const veiculosFiltrados = (filtros?.status && filtros.status !== "Todos") 
+    ? veiculos.filter(v => statusFrotaFinal.some(sf => sf.placa === v.placa))
+    : veiculos;
 
   // E. Disponibilidade Semanal
   const dispSemanal = [];
@@ -379,12 +476,12 @@ export async function getDashboardData(filtros?: {
     backlog: Math.round((allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
     totalEquipamentos: frotaAtiva.length,
     totalVeiculosAtivos: frotaAtiva.length,
-    veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
+    veiculos: veiculosFiltrados.sort((a, b) => a.disponibilidade - b.disponibilidade),
     rankingFalhas,
     paradasPorCategoria,
     manutPorTipo,
     dispPorTipo,
-    statusFrota,
+    statusFrota: statusFrotaFinal.sort((a, b) => a.disponibilidade - b.disponibilidade),
     dispSemanal,
     preventivas: preventivasChart,
     docsValidos: 0, docsAVencer: 0, docsVencidos: 0,
@@ -394,7 +491,7 @@ export async function getDashboardData(filtros?: {
       categorias: Array.from(categoriasSet),
       placas: placasFiltradas.sort(),
       modulos: Array.from(modulosSet),
-      statusList: Array.from(new Set(allOS.map(o => o.status || "")))
+      statusList: ["Disponível", "Manutenção", "Atenção", "Crítico"]
     },
     periodoLabel: filtros?.dataInicio && filtros?.dataFim 
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`

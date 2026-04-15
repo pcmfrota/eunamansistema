@@ -954,31 +954,29 @@ export function PainelFormulas() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div>
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Disponibilidade Operacional (DO)</strong>
-          <p className="mb-2">Mede qual proporção da frota está apta para operação (sem OS aberta ou com disp. geral alta).</p>
+          <p className="mb-2">Mede a proporção do tempo em que o veículo esteve operando ou apto, considerando apenas as horas da escala Suzano.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-blue-600 dark:text-blue-400 font-mono block w-fit">
-            DO = (Disp. / Total) × 100
+            DO = (Ht - Indisp. Shift) / Ht × 100
           </code>
         </div>
         <div>
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Disponibilidade Mecânica (DM)</strong>
-          <p className="mb-2">Mede o tempo real livre de manutenção em oficinas e frentes de serviço.</p>
+          <p className="mb-2">Mede o tempo real livre de manutenção dentro do período planejado de trabalho (Escala).</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-emerald-600 dark:text-emerald-400 font-mono block w-fit">
-            DM = (HT - Hm) / HT × 100
+            DM = (Ht - H.Manut Shift) / Ht × 100
           </code>
         </div>
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">MTBF & MTTR</strong>
-          <p className="mb-2">Confiabilidade e Eficiência de reparo. Quantas horas roda até falhar (MTBF) e o tempo médio para consertar (MTTR).</p>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Ht = Horas Planejadas</strong>
+          <p className="mb-2">Baseado no cadastro de Escala da Frota (Ex: 16h/dia de 08:00 às 00:00). Se não cadastrado, assume 24h.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-purple-600 dark:text-purple-400 font-mono block w-fit">
-            MTBF = H.Oper. / Falhas
+            Ht = Dias × Carga Horária
           </code>
         </div>
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Backlog de Manutenção</strong>
-          <p className="mb-2">Carga de trabalho pendente. Representa dias úteis para equipe limpar a fila de OS abertas.</p>
-          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-amber-600 dark:text-amber-500 font-mono block w-fit">
-            BkLg = Hm Pendentes / Cap.Diária
-          </code>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">D-1 (Ontem)</strong>
+          <p className="mb-2">Todos os dados de hoje são consolidados apenas no dia seguinte. O dashboard reflete o fechamento de ontem.</p>
+          <span className="text-[10px] text-zinc-400">Referência: Regra PCM Suzano</span>
         </div>
       </div>
     </div>
