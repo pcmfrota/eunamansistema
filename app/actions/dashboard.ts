@@ -139,7 +139,9 @@ export async function getDashboardData(filtros?: {
       id, status, horas_manutencao, data_abertura, data_fechamento, 
       equipamento_id, placa, classe, foi_enviado_reserva, 
       horario_parada, horas_reserva_chegou
-    `).gte("data_abertura", inicioFiltro).lte("data_abertura", fimFiltro),
+    `)
+    .lte("data_abertura", fimFiltro)
+    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
     supabase.from("equipamentos").select("*")
   ]);
 
@@ -180,19 +182,38 @@ export async function getDashboardData(filtros?: {
     let hIndispDO = 0;
     let fechadas = 0;
 
+    const periodoInicioObj = new Date(inicioFiltro);
+    const periodoFimObj = new Date(fimFiltro);
+
     osDoVeiculo.forEach(os => {
-      const inicio = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
-      const fim = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-      const duracao = Math.max(0, (fim.getTime() - inicio.getTime()) / 3600000);
-      hIndispDM += duracao;
+      // 1. Definir Início Real da Indisponibilidade (Recortado pelo período)
+      let inicioOriginal = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
+      let inicioEfetivo = inicioOriginal < periodoInicioObj ? periodoInicioObj : inicioOriginal;
+
+      // 2. Definir Fim Real da Indisponibilidade (Recortado pelo período/agora)
+      let fimOriginal = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
+      if (fimOriginal > periodoFimObj) fimOriginal = periodoFimObj;
+      let fimEfetivo = fimOriginal;
+
+      // Cálculo DM
+      const duracaoDM = Math.max(0, (fimEfetivo.getTime() - inicioEfetivo.getTime()) / 3600000);
+      hIndispDM += duracaoDM;
+
+      // Cálculo DO (Considerando Reserva)
       if (os.foi_enviado_reserva && os.horario_parada && os.horas_reserva_chegou) {
-        const p = new Date(os.horario_parada);
-        const c = new Date(os.horas_reserva_chegou);
-        hIndispDO += Math.max(0, (c.getTime() - p.getTime()) / 3600000);
+        const pOriginal = new Date(os.horario_parada);
+        const cOriginal = new Date(os.horas_reserva_chegou);
+        
+        // Recortar p e c para dentro do período
+        const pEfetivo = pOriginal < periodoInicioObj ? periodoInicioObj : (pOriginal > periodoFimObj ? periodoFimObj : pOriginal);
+        const cEfetivo = cOriginal < periodoInicioObj ? periodoInicioObj : (cOriginal > periodoFimObj ? periodoFimObj : cOriginal);
+        
+        hIndispDO += Math.max(0, (cEfetivo.getTime() - pEfetivo.getTime()) / 3600000);
       } else {
-        hIndispDO += duracao;
+        hIndispDO += duracaoDM;
       }
-      if (os.status === "Fechada") fechadas++;
+
+      if (os.status === "Fechada" || os.status === "Concluída") fechadas++;
     });
 
     veiculos.push({
