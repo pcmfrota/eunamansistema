@@ -82,24 +82,23 @@ export async function getDashboardData(filtros?: {
   let fimFiltro: string;
   let diasReferencia: number;
 
+  // 1. Definir Limite D-1 (Ontem 23:59:59) para o período atual
+  const dataLimiteD1 = new Date(agoraRef);
+  dataLimiteD1.setDate(agoraRef.getDate() - 1);
+  dataLimiteD1.setHours(23, 59, 59, 999);
+
   if (filtros?.dataInicio && filtros?.dataFim) {
-    // Uso de Filtro Customizado (Superior ao Calendário)
     inicioFiltro = filtros.dataInicio;
     fimFiltro = `${filtros.dataFim}T23:59:59`;
     
-    const diffMs = new Date(filtros.dataFim).getTime() - new Date(filtros.dataInicio).getTime();
-    const totalDiasFiltro = Math.floor(diffMs / 86400000) + 1;
-
-    // Se o filtro inclui hoje, calculamos a referência até agora (D-1)
-    if (agoraRef >= new Date(filtros.dataInicio) && agoraRef <= new Date(filtros.dataFim + 'T23:59:59')) {
-       const msPassados = agoraRef.getTime() - new Date(filtros.dataInicio).getTime();
-       const diasPassados = Math.floor(msPassados / 86400000);
-       diasReferencia = diasPassados > 0 ? diasPassados : 1;
-    } else {
-       diasReferencia = totalDiasFiltro;
-    }
+    const dInicio = new Date(filtros.dataInicio);
+    const dFim = new Date(filtros.dataFim);
+    
+    // Se o filtro inclui o futuro ou hoje, limitamos a D-1
+    const fimEfetivoFiltro = dFim > dataLimiteD1 ? dataLimiteD1 : dFim;
+    const diffMs = Math.max(0, fimEfetivoFiltro.getTime() - dInicio.getTime());
+    diasReferencia = Math.floor(diffMs / 86400000) + 1;
   } else {
-    // 1. Buscar Período no Calendário Suzano
     const { data: calSuzano } = await supabase
       .from("calendario_suzano")
       .select("*")
@@ -109,31 +108,32 @@ export async function getDashboardData(filtros?: {
 
     if (calSuzano) {
       inicioFiltro = calSuzano.data_inicio;
-      fimFiltro = `${calSuzano.data_fim}T23:59:59`;
       
-      const dataFimCal = new Date(calSuzano.data_fim);
-      if (agoraRef >= new Date(calSuzano.data_inicio) && agoraRef <= dataFimCal) {
-         const diffMs = agoraRef.getTime() - new Date(calSuzano.data_inicio).getTime();
-         const diasPassados = Math.floor(diffMs / 86400000);
-         diasReferencia = diasPassados > 0 ? diasPassados : 1;
-      } else {
-         diasReferencia = calSuzano.total_dias;
-      }
+      const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
+      const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
+      
+      // Se o calendário de Suzano termina depois de D-1, usamos D-1
+      const fimEfetivoCal = dFimCal > dataLimiteD1 ? dataLimiteD1 : dFimCal;
+      
+      const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
+      diasReferencia = Math.floor(diffMs / 86400000) + 1;
+      fimFiltro = fimEfetivoCal.toISOString();
     } else {
-      // Fallback para calendário civil
       inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
       const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
-      fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${diasNoMes}T23:59:59`;
+      const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMes, 23, 59, 59);
       
-      if (anoFiltro === anoAtualRef && mesFiltro === mesAtualRef) {
-        diasReferencia = diaHoje > 1 ? diaHoje - 1 : 1;
-      } else {
-        diasReferencia = diasNoMes;
-      }
+      const fimEfetivoCivil = dFimCivil > dataLimiteD1 ? dataLimiteD1 : dFimCivil;
+      const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
+      
+      const diffMs = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
+      diasReferencia = Math.floor(diffMs / 86400000) + 1;
+      fimFiltro = fimEfetivoCivil.toISOString();
     }
   }
 
   // 2. Buscar OS e Equipamentos
+  // Ajuste na consulta para capturar OS que se sobrepõem ao período
   const [osRes, eqRes] = await Promise.all([
     supabase.from("ordens_servico").select(`
       id, status, horas_manutencao, data_abertura, data_fechamento, 
@@ -141,7 +141,7 @@ export async function getDashboardData(filtros?: {
       horario_parada, horas_reserva_chegou
     `)
     .lte("data_abertura", fimFiltro)
-    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
+    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}T00:00:00`),
     supabase.from("equipamentos").select("*")
   ]);
 
@@ -185,27 +185,30 @@ export async function getDashboardData(filtros?: {
     let fechadas = 0;
 
     osDoVeiculo.forEach(os => {
-      // 1. Início e Fim Efetivos
+      // 1. Início e Fim Efetivos dentro do período
       let inicioOriginal = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
       let inicioEfetivo = inicioOriginal < periodoInicioObj ? periodoInicioObj : inicioOriginal;
 
       let fimOriginal = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-      if (fimOriginal > periodoFimObj) fimOriginal = periodoFimObj;
-      let fimEfetivo = fimOriginal;
+      // Clipping D-1: Nunca ultrapassar periodoFimObj (que já foi ajustado para D-1 se necessário)
+      let fimEfetivo = fimOriginal > periodoFimObj ? periodoFimObj : fimOriginal;
 
-      // Cálculo DM (Disponibilidade Mecânica - Tempo Parado Total)
-      const duracaoDM = Math.max(0, (fimEfetivo.getTime() - inicioEfetivo.getTime()) / 3600000);
-      hIndispDM += duracaoDM;
+      if (inicioEfetivo < fimEfetivo) {
+        // Cálculo DM (Disponibilidade Mecânica - Tempo Parado)
+        const duracaoDM = (fimEfetivo.getTime() - inicioEfetivo.getTime()) / 3600000;
+        hIndispDM += Math.max(0, duracaoDM);
 
-      // Cálculo DO (Disponibilidade Operacional - Tempo afetado pela reserva)
-      if (os.foi_enviado_reserva && os.horario_parada && os.horas_reserva_chegou) {
-        const pOriginal = new Date(os.horario_parada);
-        const cOriginal = new Date(os.horas_reserva_chegou);
-        const pEfetivo = pOriginal < periodoInicioObj ? periodoInicioObj : (pOriginal > periodoFimObj ? periodoFimObj : pOriginal);
-        const cEfetivo = cOriginal < periodoInicioObj ? periodoInicioObj : (cOriginal > periodoFimObj ? periodoFimObj : cOriginal);
-        hIndispDO += Math.max(0, (cEfetivo.getTime() - pEfetivo.getTime()) / 3600000);
-      } else {
-        hIndispDO += duracaoDM;
+        // Cálculo DO (Disponibilidade Operacional - Impacto na Produção)
+        if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+          const reservaChegou = new Date(os.horas_reserva_chegou);
+          // O impacto para quando a reserva chega ou o período acaba
+          let fimDO = reservaChegou > fimEfetivo ? fimEfetivo : reservaChegou;
+          const duracaoDO = (fimDO.getTime() - inicioEfetivo.getTime()) / 3600000;
+          hIndispDO += Math.max(0, duracaoDO);
+        } else {
+          // Sem reserva, o impacto é o tempo total da oficina
+          hIndispDO += Math.max(0, duracaoDM);
+        }
       }
 
       if (os.status === "Fechada" || os.status === "Concluída") fechadas++;
@@ -387,12 +390,6 @@ export async function getDashboardData(filtros?: {
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`
       : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
     data_inicio: inicioFiltro,
-    data_fim: fimFiltro.split("T")[0],
-    dispSemanal: [],
-    paradasPorCategoria: [],
-    rankingFalhas: [],
-    dispPorTipo: [],
-    statusFrota: [],
-    manutPorTipo: []
+    data_fim: fimFiltro.split("T")[0]
   };
 }
