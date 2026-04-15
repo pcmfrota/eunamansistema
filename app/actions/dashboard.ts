@@ -103,17 +103,17 @@ export async function getDashboardData(filtros?: {
     const fimMesDate = new Date(anoFiltro, mesFiltro, 0);
     diasNoMes = fimMesDate.getDate();
     fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${String(diasNoMes).padStart(2, "0")}T23:59:59`;
-    diasTranscorridos =
-      mesFiltro === mesAtual && anoFiltro === anoAtual ? hoje.getDate() : diasNoMes;
+    
+    // MÊS FECHADO PCM: Usa a quantidade bruta de dias do mês ao invés de limitar os dias transcorridos apenas até o dia atual
+    diasTranscorridos = diasNoMes;
   } else if (anoFiltro && !mesFiltro) {
     // ── Ano inteiro, sem mês ───────────────────────────────────────────────────
     inicioFiltro = `${anoFiltro}-01-01`;
-    const isCurrentYear = anoFiltro === anoAtual;
-    fimFiltro = isCurrentYear ? null : `${anoFiltro}-12-31T23:59:59`;
-    const fim = isCurrentYear ? hoje : new Date(anoFiltro, 11, 31);
-    diasTranscorridos = Math.floor(
-      (fim.getTime() - new Date(anoFiltro, 0, 1).getTime()) / 86400000
-    ) + 1;
+    fimFiltro = `${anoFiltro}-12-31T23:59:59`;
+    
+    // ANO FECHADO PCM: O ano sempre terá o calendário cheio nas horas totais
+    const isBissexto = (anoFiltro % 4 === 0 && (anoFiltro % 100 !== 0 || anoFiltro % 400 === 0));
+    diasTranscorridos = isBissexto ? 366 : 365;
     diasNoMes = 31;
   } else if (mesFiltro && !anoFiltro) {
     // ── Mês específico, todos os anos ─────────────────────────────────────────
@@ -123,14 +123,13 @@ export async function getDashboardData(filtros?: {
     diasNoMes = new Date(anoAtual, mesFiltro, 0).getDate();
     diasTranscorridos = diasNoMes;
   } else {
-    // ── Sem filtro: todos os registros ────────────────────────────────────────
+    // ── Sem filtro: usa o Ano Atual como fechado ──────────────────────────────
     inicioFiltro = null;
     fimFiltro = null;
     diasNoMes = 31;
-    // Usa todos os dias desde o começo do ano
-    diasTranscorridos = Math.floor(
-      (hoje.getTime() - new Date(anoAtual, 0, 1).getTime()) / 86400000
-    ) + 1;
+    // PCM ANO FECHADO (padrão quando sem filtros)
+    const isBissexto = (anoAtual % 4 === 0 && (anoAtual % 100 !== 0 || anoAtual % 400 === 0));
+    diasTranscorridos = isBissexto ? 366 : 365;
   }
 
   // Label legível do período selecionado
