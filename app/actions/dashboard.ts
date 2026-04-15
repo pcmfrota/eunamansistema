@@ -133,7 +133,6 @@ export async function getDashboardData(filtros?: {
   }
 
   // 2. Buscar OS e Equipamentos
-  // Ajuste na consulta para capturar OS que se sobrepõem ao período
   const [osRes, eqRes] = await Promise.all([
     supabase.from("ordens_servico").select(`
       id, status, horas_manutencao, data_abertura, data_fechamento, 
@@ -141,7 +140,8 @@ export async function getDashboardData(filtros?: {
       horario_parada, horas_reserva_chegou
     `)
     .lte("data_abertura", fimFiltro)
-    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}T00:00:00`),
+    // Filtro mais resiliente para data de fechamento
+    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
     supabase.from("equipamentos").select("*")
   ]);
 
@@ -158,12 +158,15 @@ export async function getDashboardData(filtros?: {
     if (eq.modulo) modulosSet.add(eq.modulo);
   });
 
-  const categoriaFiltroEfetivo = filtros?.categoria === undefined ? "PESADA" : filtros.categoria;
+  const categoriaFiltroEfetivo = filtros?.categoria;
   let placasFiltradas = frotaAtiva.map(eq => eq.placa?.toUpperCase().trim()).filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
 
   if (filtros?.placa) placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
   if (categoriaFiltroEfetivo && categoriaFiltroEfetivo !== "Todas") {
-    placasFiltradas = placasFiltradas.filter(p => frotaAtiva.find(e => e.placa?.toUpperCase().trim() === p)?.categoria?.toUpperCase() === categoriaFiltroEfetivo.toUpperCase());
+    placasFiltradas = placasFiltradas.filter(p => {
+      const eq = frotaAtiva.find(e => e.placa?.toUpperCase().trim() === p);
+      return eq?.categoria?.toUpperCase() === categoriaFiltroEfetivo.toUpperCase();
+    });
   }
 
   // 3. Cálculos
@@ -173,11 +176,13 @@ export async function getDashboardData(filtros?: {
   const periodoFimObj = new Date(fimFiltro);
 
   for (const placa of placasFiltradas) {
+
     const osDoVeiculo = allOS.filter(o => {
-      let p = o.placa?.toUpperCase().trim();
-      const eq = o.equipamento_id ? eqMap.get(o.equipamento_id) : null;
-      if (eq) p = eq.placa.toUpperCase().trim();
-      return p === placa;
+      let osPlaca = o.placa?.toUpperCase().trim();
+      if (!osPlaca && o.equipamento_id) {
+        osPlaca = eqMap.get(o.equipamento_id)?.placa?.toUpperCase().trim();
+      }
+      return osPlaca === placa;
     });
 
     let hIndispDM = 0;
@@ -287,12 +292,17 @@ export async function getDashboardData(filtros?: {
 
   // D. Status da Frota (Tabela Dinâmica)
   const statusFrota = veiculos.map(v => {
-    const eq = todasAsEquips.find(e => e.placa === v.placa);
-    const osAbertaAtiva = allOS.find(o => 
-      o.placa === v.placa && 
-      (o.status === 'Aberta' || o.status === 'Em Andamento')
-    );
+    const eq = todasAsEquips.find(e => e.placa?.toUpperCase().trim() === v.placa.toUpperCase().trim());
     
+    // Busca OS aberta usando placa ou equipamento_id para garantir vínculo
+    const osAbertaAtiva = allOS.find(o => {
+      let osPlaca = o.placa?.toUpperCase().trim();
+      if (!osPlaca && o.equipamento_id) {
+        osPlaca = eqMap.get(o.equipamento_id)?.placa?.toUpperCase().trim();
+      }
+      return osPlaca === v.placa && (o.status === 'Aberta' || o.status === 'Em Andamento');
+    });
+
     let statusLabel = "Disponível";
     if (osAbertaAtiva) statusLabel = "Manutenção";
     else if (v.disponibilidade < 90) statusLabel = "Crítico";
@@ -300,7 +310,7 @@ export async function getDashboardData(filtros?: {
 
     return {
       placa: v.placa,
-      tipo: eq?.modelo || "—",
+      tipo: eq?.modelo || "N/A",
       status: statusLabel,
       disponibilidade: v.disponibilidade,
       modulo: eq?.modulo || "BASE"
@@ -366,7 +376,7 @@ export async function getDashboardData(filtros?: {
     horasManutencao: Math.round(hIndispDMTotal * 10) / 10,
     mttr,
     mtbf,
-    backlog: allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length,
+    backlog: Math.round((allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
     totalEquipamentos: frotaAtiva.length,
     totalVeiculosAtivos: frotaAtiva.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
