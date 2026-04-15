@@ -161,17 +161,18 @@ export async function getDashboardData(filtros?: {
   // ── 2. Buscar equipamentos do banco ────────────────────────────────────────
   const { data: equipamentos, error: eqError } = await supabase
     .from("equipamentos")
-    .select("id, placa, tipo, categoria, modulo, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade")
+    .select("id, placa, tipo, categoria, modulo, status, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade")
     .order("placa", { ascending: true });
 
   if (eqError) {
     console.error("❌ Erro ao buscar equipamentos:", eqError);
   }
 
-  // Se a coluna 'status' não existir no banco ainda, assumimos todos como 'Ativo'
-  // Quando você adicionar a coluna, o Supabase passará a enviá-la se usarmos select('*') ou se adicionarmos aqui.
-  // Vou usar um fallback seguro aqui:
-  const frotaAtiva = equipamentos?.filter(eq => (eq as any).status !== "Inativo") ?? [];
+  // Filtragem robusta: ignora maiúsculas/minúsculas e espaços
+  const frotaAtiva = equipamentos?.filter(eq => {
+    const s = String(eq.status || 'Ativo').toUpperCase().trim();
+    return s !== "INATIVO";
+  }) ?? [];
   
   const totalVeiculosAtivos = frotaAtiva.length;
   const totalEquipamentos = totalVeiculosAtivos;
