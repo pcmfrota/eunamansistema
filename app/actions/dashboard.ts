@@ -66,6 +66,8 @@ export async function getDashboardData(filtros?: {
   placa?: string;
   modulo?: string;
   status?: string;
+  dataInicio?: string;
+  dataFim?: string;
 }): Promise<DashboardData> {
   const supabase = createClient();
   const agoraRef = new Date();
@@ -76,42 +78,58 @@ export async function getDashboardData(filtros?: {
   const mesFiltro = filtros?.mes && filtros.mes > 0 ? filtros.mes : mesAtualRef;
   const anoFiltro = filtros?.ano && filtros.ano > 0 ? filtros.ano : anoAtualRef;
 
-  // 1. Buscar Período no Calendário Suzano
-  const { data: calSuzano } = await supabase
-    .from("calendario_suzano")
-    .select("*")
-    .eq("mes", mesFiltro)
-    .eq("ano", anoFiltro)
-    .single();
-
   let inicioFiltro: string;
   let fimFiltro: string;
   let diasReferencia: number;
 
-  if (calSuzano) {
-    inicioFiltro = calSuzano.data_inicio;
-    fimFiltro = `${calSuzano.data_fim}T23:59:59`;
+  if (filtros?.dataInicio && filtros?.dataFim) {
+    // Uso de Filtro Customizado (Superior ao Calendário)
+    inicioFiltro = filtros.dataInicio;
+    fimFiltro = `${filtros.dataFim}T23:59:59`;
     
-    // Conceito D-1: Se estivermos dentro do período atual, calculamos até ontem
-    const dataFimCal = new Date(calSuzano.data_fim);
-    if (agoraRef >= new Date(calSuzano.data_inicio) && agoraRef <= dataFimCal) {
-       // Estamos no meio do mês Suzano atual
-       const diffMs = agoraRef.getTime() - new Date(calSuzano.data_inicio).getTime();
-       const diasPassados = Math.floor(diffMs / 86400000);
+    const diffMs = new Date(filtros.dataFim).getTime() - new Date(filtros.dataInicio).getTime();
+    const totalDiasFiltro = Math.floor(diffMs / 86400000) + 1;
+
+    // Se o filtro inclui hoje, calculamos a referência até agora (D-1)
+    if (agoraRef >= new Date(filtros.dataInicio) && agoraRef <= new Date(filtros.dataFim + 'T23:59:59')) {
+       const msPassados = agoraRef.getTime() - new Date(filtros.dataInicio).getTime();
+       const diasPassados = Math.floor(msPassados / 86400000);
        diasReferencia = diasPassados > 0 ? diasPassados : 1;
     } else {
-       diasReferencia = calSuzano.total_dias;
+       diasReferencia = totalDiasFiltro;
     }
   } else {
-    // Fallback para calendário civil
-    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
-    const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
-    fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${diasNoMes}T23:59:59`;
-    
-    if (anoFiltro === anoAtualRef && mesFiltro === mesAtualRef) {
-      diasReferencia = diaHoje > 1 ? diaHoje - 1 : 1;
+    // 1. Buscar Período no Calendário Suzano
+    const { data: calSuzano } = await supabase
+      .from("calendario_suzano")
+      .select("*")
+      .eq("mes", mesFiltro)
+      .eq("ano", anoFiltro)
+      .single();
+
+    if (calSuzano) {
+      inicioFiltro = calSuzano.data_inicio;
+      fimFiltro = `${calSuzano.data_fim}T23:59:59`;
+      
+      const dataFimCal = new Date(calSuzano.data_fim);
+      if (agoraRef >= new Date(calSuzano.data_inicio) && agoraRef <= dataFimCal) {
+         const diffMs = agoraRef.getTime() - new Date(calSuzano.data_inicio).getTime();
+         const diasPassados = Math.floor(diffMs / 86400000);
+         diasReferencia = diasPassados > 0 ? diasPassados : 1;
+      } else {
+         diasReferencia = calSuzano.total_dias;
+      }
     } else {
-      diasReferencia = diasNoMes;
+      // Fallback para calendário civil
+      inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
+      const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
+      fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${diasNoMes}T23:59:59`;
+      
+      if (anoFiltro === anoAtualRef && mesFiltro === mesAtualRef) {
+        diasReferencia = diaHoje > 1 ? diaHoje - 1 : 1;
+      } else {
+        diasReferencia = diasNoMes;
+      }
     }
   }
 

@@ -57,6 +57,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     placa: "",
     modulo: "",
     status: "",
+    dataInicio: "",
+    dataFim: "",
   };
 
   const [filtros, setFiltros] = useState<FiltrosValues>(defaultFiltros);
@@ -75,6 +77,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         placa: newFiltros.placa || undefined,
         modulo: newFiltros.modulo || undefined,
         status: newFiltros.status || undefined,
+        dataInicio: newFiltros.dataInicio || undefined,
+        dataFim: newFiltros.dataFim || undefined,
       });
       setData(result);
     });
@@ -86,6 +90,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       const result = await getDashboardData({
         mes: defaultFiltros.mes,
         ano: defaultFiltros.ano,
+        dataInicio: undefined,
+        dataFim: undefined,
       });
       setData(result);
     });
