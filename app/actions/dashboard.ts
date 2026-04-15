@@ -169,6 +169,8 @@ export async function getDashboardData(filtros?: {
   // 3. Cálculos
   const horasTotaisPorVeiculo = diasReferencia * 24;
   const veiculos: VeiculoDisp[] = [];
+  const periodoInicioObj = new Date(inicioFiltro);
+  const periodoFimObj = new Date(fimFiltro);
 
   for (const placa of placasFiltradas) {
     const osDoVeiculo = allOS.filter(o => {
@@ -181,9 +183,6 @@ export async function getDashboardData(filtros?: {
     let hIndispDM = 0;
     let hIndispDO = 0;
     let fechadas = 0;
-
-    const periodoInicioObj = new Date(inicioFiltro);
-    const periodoFimObj = new Date(fimFiltro);
 
     osDoVeiculo.forEach(os => {
       // 1. Início e Fim Efetivos
