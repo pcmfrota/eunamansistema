@@ -38,6 +38,7 @@ const navigation = [
   { name: 'Base de Frotas', path: '/base-frotas', icon: Truck },
   { name: 'Base de Dados', path: '/base-dados', icon: Database },
   { name: 'PCM', path: '/pcm', icon: Settings },
+  { name: 'Calendário Suzano', path: '/calendario', icon: Calendar },
 ];
 
 const adminNavigation = [
