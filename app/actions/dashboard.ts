@@ -159,20 +159,28 @@ export async function getDashboardData(filtros?: {
   console.log(`📊 Dashboard: Encontradas ${allOS.length} O.S no período ${inicioFiltro} até ${fimFiltro}`);
 
   // ── 2. Buscar equipamentos do banco ────────────────────────────────────────
-  const { data: equipamentos } = await supabase
+  const { data: equipamentos, error: eqError } = await supabase
     .from("equipamentos")
-    .select("id, placa, tipo, categoria, modulo, status, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade")
-    .or("status.eq.Ativo,status.is.null") // Garante que nulos também venham (compatibilidade)
+    .select("id, placa, tipo, categoria, modulo, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade")
     .order("placa", { ascending: true });
 
-  const totalVeiculosAtivos = equipamentos?.length ?? 0;
-  const totalEquipamentos = totalVeiculosAtivos; // Mudando o total para focar nos ativos
+  if (eqError) {
+    console.error("❌ Erro ao buscar equipamentos:", eqError);
+  }
+
+  // Se a coluna 'status' não existir no banco ainda, assumimos todos como 'Ativo'
+  // Quando você adicionar a coluna, o Supabase passará a enviá-la se usarmos select('*') ou se adicionarmos aqui.
+  // Vou usar um fallback seguro aqui:
+  const frotaAtiva = equipamentos?.filter(eq => (eq as any).status !== "Inativo") ?? [];
+  
+  const totalVeiculosAtivos = frotaAtiva.length;
+  const totalEquipamentos = totalVeiculosAtivos;
 
   // Mapa de equipamento_id → placa (do banco de equipamentos)
   const eqMap = new Map<string, { placa: string; categoria?: string; modulo?: string }>();
   const categoriasSet = new Set<string>();
   const modulosSet = new Set<string>();
-  equipamentos?.forEach((eq) => {
+  frotaAtiva.forEach((eq: any) => {
     if (eq.placa) eqMap.set(eq.id, { placa: eq.placa, categoria: eq.categoria, modulo: eq.modulo });
     if (eq.categoria) categoriasSet.add(eq.categoria);
     if (eq.modulo) modulosSet.add(eq.modulo);
@@ -210,7 +218,7 @@ export async function getDashboardData(filtros?: {
   const placasBloqueadas = new Set(["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"]);
 
   const todasPlacas = new Set<string>();
-  equipamentos?.forEach((eq) => {
+  frotaAtiva.forEach((eq: any) => {
     if (eq.placa) {
       const p = eq.placa.toUpperCase().trim();
       if (!placasBloqueadas.has(p)) todasPlacas.add(p);
@@ -230,7 +238,7 @@ export async function getDashboardData(filtros?: {
 
   if (categoriaFiltroEfetivo || filtros?.modulo) {
     const eqFiltradas = new Set<string>();
-    equipamentos?.forEach((eq) => {
+    frotaAtiva.forEach((eq: any) => {
       if (categoriaFiltroEfetivo && categoriaFiltroEfetivo !== "Todas" && categoriaFiltroEfetivo !== "" && eq.categoria?.toUpperCase() !== categoriaFiltroEfetivo.toUpperCase()) return;
       if (filtros?.modulo && filtros.modulo !== "Todos" && filtros.modulo !== "" && eq.modulo?.toUpperCase() !== filtros.modulo.toUpperCase()) return;
       if (eq.placa) eqFiltradas.add(eq.placa.toUpperCase());
