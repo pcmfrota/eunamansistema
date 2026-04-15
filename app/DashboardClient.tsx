@@ -61,6 +61,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
   const [filtros, setFiltros] = useState<FiltrosValues>(defaultFiltros);
   const [mostrarIndisp, setMostrarIndisp] = useState(false);
+  const [availabilityType, setAvailabilityType] = useState<"DM" | "DO">("DM");
 
   function handleFilterChange(key: keyof FiltrosValues, value: string | number) {
     const newFiltros = { ...filtros, [key]: value };
@@ -178,39 +179,46 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       {/* Gráficos e tabelas */}
       <div className="flex flex-col gap-6 w-full">
-        <div className="flex justify-end">
-          <button
-            onClick={() => setMostrarIndisp(!mostrarIndisp)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${
-              mostrarIndisp
-                ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-100"
-                : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100"
-            }`}
-          >
-            {mostrarIndisp ? (
-              <><AlertCircle size={16} /> Ocultar Indisponibilidade</>
-            ) : (
-              <><AlertCircle size={16} /> Mostrar Indisponibilidade</>
-            )}
-          </button>
-        </div>
+        <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-4">
+               <button 
+                 onClick={() => setAvailabilityType("DM")}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}
+               >
+                 Mecânica (DM)
+               </button>
+               <button 
+                 onClick={() => setAvailabilityType("DO")}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}
+               >
+                 Operacional (DO)
+               </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMostrarIndisp(!mostrarIndisp)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tighter transition-colors border ${
+                  mostrarIndisp
+                    ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50"
+                    : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800"
+                }`}
+              >
+                {mostrarIndisp ? "Ver Disponibilidade" : "Ver Indisponibilidade"}
+              </button>
+            </div>
+          </div>
 
-        <GraficoVeiculos
-          title={mostrarIndisp ? "Indisponibilidade Mecânica (IM) por Placa" : "Disponibilidade Mecânica (DM) por Placa"}
-          dados={data.veiculos}
-          periodoLabel={data.periodoLabel}
-          mes={filtros.mes || undefined}
-          ano={filtros.ano || undefined}
-          mostrarIndisponibilidade={mostrarIndisp}
-        />
-        <GraficoVeiculos
-          title={mostrarIndisp ? "Indisponibilidade Operacional (IO) por Placa" : "Disponibilidade Operacional (DO) por Placa"}
-          dados={data.veiculos}
-          periodoLabel={data.periodoLabel}
-          mes={filtros.mes || undefined}
-          ano={filtros.ano || undefined}
-          mostrarIndisponibilidade={mostrarIndisp}
-        />
+          <GraficoVeiculos
+            title={availabilityType === "DM" ? (mostrarIndisp ? "Indisponibilidade Mecânica (IM)" : "Disponibilidade Mecânica (DM)") : (mostrarIndisp ? "Indisponibilidade Operacional (IO)" : "Disponibilidade Operacional (DO)")}
+            dados={data.veiculos}
+            periodoLabel={data.periodoLabel}
+            mes={filtros.mes || undefined}
+            ano={filtros.ano || undefined}
+            mostrarIndisponibilidade={mostrarIndisp}
+            tipoAvailability={availabilityType}
+          />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <GraficoParadasCategoria dados={data.paradasPorCategoria} />

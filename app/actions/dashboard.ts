@@ -11,9 +11,11 @@ function hojeBR() {
 export type VeiculoDisp = {
   placa: string;
   disponibilidade: number;
+  disponibilidade_operacional: number;
   totalOS: number;
   osFechadas: number;
   horasManut: number;
+  horasOperacional: number;
 };
 
 export type PreventivaStatus = {
@@ -142,7 +144,7 @@ export async function getDashboardData(filtros?: {
   // ── 1. Buscar TODAS as OS do período ───────────────────────────────────────
   let osQuery = supabase
     .from("ordens_servico")
-    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe");
+    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe, foi_enviado_reserva, horario_parada, horas_reserva_chegou");
 
   if (inicioFiltro) osQuery = osQuery.gte("data_abertura", inicioFiltro);
   if (fimFiltro)    osQuery = osQuery.lte("data_abertura", fimFiltro);
@@ -264,9 +266,11 @@ export async function getDashboardData(filtros?: {
       veiculos.push({
         placa,
         disponibilidade: 100,
+        disponibilidade_operacional: 100,
         totalOS: 0,
         osFechadas: 0,
         horasManut: 0,
+        horasOperacional: 0,
       });
       continue;
     }
@@ -277,48 +281,74 @@ export async function getDashboardData(filtros?: {
     //   2º usa data_fechamento - data_abertura  (cálculo real da duração)
     //   3º usa 0  (não assume valor se não há dado suficiente)
     let horasIndisp = 0;
+    let horasIndispOp = 0;
     let totalOSVeiculo = osDoVeiculo.length;
     let fechadasVeiculo = 0;
 
     for (const os of osDoVeiculo) {
       const horasDeclaradas = Number(os.horas_manutencao) || 0;
+      let currentMec = 0;
 
       if (horasDeclaradas > 0) {
         // Campo declarado pelo usuário — usa diretamente
-        horasIndisp += horasDeclaradas;
+        currentMec = horasDeclaradas;
       } else if (os.data_abertura && os.data_fechamento) {
         // Calcula a duração real pela diferença de datas (sem cap artificioso)
         const abertura = new Date(os.data_abertura).getTime();
         const fechamento = new Date(os.data_fechamento).getTime();
-        const diffHoras = Math.max(0, (fechamento - abertura) / (1000 * 60 * 60));
-        horasIndisp += diffHoras;
+        currentMec = Math.max(0, (fechamento - abertura) / (1000 * 60 * 60));
       } else if (os.status === "Aberta" && os.data_abertura) {
         // OS ainda aberta: conta desde a abertura até agora
         const abertura = new Date(os.data_abertura).getTime();
         const agora = Date.now();
-        const diffHoras = Math.max(0, (agora - abertura) / (1000 * 60 * 60));
+        currentMec = Math.max(0, (agora - abertura) / (1000 * 60 * 60));
         // Limita ao máximo do período para não ultrapassar 100% indisponível
-        horasIndisp += Math.min(diffHoras, horasTotaisPeriodo);
+        currentMec = Math.min(currentMec, horasTotaisPeriodo);
       }
-      // Se não há nenhum dado (horas=0, sem datas, status desconhecido) → soma 0
+      
+      horasIndisp += currentMec;
+
+      // Cálculo Operacional (Caminhão Reserva)
+      let currentOp = currentMec; // Por padrão, impacto operacional = mecânico
+
+      if (os.foi_enviado_reserva && os.horario_parada) {
+        const parada = new Date(os.horario_parada).getTime();
+        if (os.horas_reserva_chegou) {
+          const reserva = new Date(os.horas_reserva_chegou).getTime();
+          currentOp = Math.max(0, (reserva - parada) / (1000 * 60 * 60));
+        } else if (os.status === "Aberta") {
+          const agora = Date.now();
+          currentOp = Math.max(0, (agora - parada) / (1000 * 60 * 60));
+        }
+      }
+
+      horasIndispOp += currentOp;
 
       if (os.status === "Fechada") fechadasVeiculo++;
     }
 
-    // Limitar horasIndisp ao máximo do período (impossível ser > 100% indisponível)
+    // Limitar ao máximo do período (impossível ser > 100% indisponível)
     horasIndisp = Math.min(horasIndisp, horasTotaisPeriodo);
+    horasIndispOp = Math.min(horasIndispOp, horasTotaisPeriodo);
 
     const disp =
       horasTotaisPeriodo > 0
         ? Math.max(0, Math.min(100, ((horasTotaisPeriodo - horasIndisp) / horasTotaisPeriodo) * 100))
         : 100;
 
+    const dispOp =
+      horasTotaisPeriodo > 0
+        ? Math.max(0, Math.min(100, ((horasTotaisPeriodo - horasIndispOp) / horasTotaisPeriodo) * 100))
+        : 100;
+
     veiculos.push({
       placa,
       disponibilidade: Math.round(disp * 10) / 10,
+      disponibilidade_operacional: Math.round(dispOp * 10) / 10,
       totalOS: totalOSVeiculo,
       osFechadas: fechadasVeiculo,
       horasManut: Math.round(horasIndisp * 10) / 10,
+      horasOperacional: Math.round(horasIndispOp * 10) / 10,
     });
   }
 
@@ -482,11 +512,10 @@ export async function getDashboardData(filtros?: {
     ? Math.round(((horasTotaisFrota - horasIndispFrota) / horasTotaisFrota) * 1000) / 10
     : 0;
 
-  // DO = Equipamentos Disponíveis / Total × 100 (Disponibilidade Operacional)
-  const eqParados = veiculos.filter(v => v.totalOS > 0 && v.disponibilidade < 90).length;
-  const eqDisponiveis = veiculos.length - eqParados;
-  const doOperacional = veiculos.length > 0
-    ? Math.round((eqDisponiveis / veiculos.length) * 1000) / 10
+  // DO = (HT - HO) / HT * 100 (Disponibilidade Operacional Real baseada no PCM)
+  const horasIndispOpFrota = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
+  const doOperacional = horasTotaisFrota > 0
+    ? Math.round(((horasTotaisFrota - horasIndispOpFrota) / horasTotaisFrota) * 1000) / 10
     : 0;
 
   // Backlog = Horas pendentes (OS abertas) / Capacidade (8h/dia × equipe estimada)

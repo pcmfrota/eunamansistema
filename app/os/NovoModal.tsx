@@ -21,6 +21,9 @@ type OS = {
   motivo: string | null;
   sistema: string | null;
   sub_sistema: string | null;
+  horario_parada: string | null;
+  qual_reserva: string | null;
+  horas_reserva_chegou: string | null;
   observacoes: string | null;
   equipamento_id: string;
 };
@@ -46,6 +49,9 @@ interface OSFormValues {
   motivo: string;
   sistema: string;
   sub_sistema: string;
+  horario_parada: string;
+  qual_reserva: string;
+  horas_reserva_chegou: string;
   observacoes: string;
 }
 
@@ -88,6 +94,9 @@ export default function OSFormModal({
     local: initialData?.local || "",
     classe: initialData?.classe || "CORRETIVA",
     foi_enviado_reserva: initialData?.foi_enviado_reserva || false,
+    horario_parada: initialData?.horario_parada ? initialData.horario_parada.slice(0, 16) : "",
+    qual_reserva: initialData?.qual_reserva || "",
+    horas_reserva_chegou: initialData?.horas_reserva_chegou ? initialData.horas_reserva_chegou.slice(0, 16) : "",
     descricao: initialData?.descricao || "",
     motivo: initialData?.motivo || "",
     sistema: initialData?.sistema || "",
@@ -203,9 +212,17 @@ export default function OSFormModal({
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           
           {/* Row 1: Dates */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Data/Hora Abertura *</label>
+              <label className="text-xs font-medium text-red-500 flex items-center gap-1">Horário Real da Parada do Caminhão</label>
+              <input name="horario_parada" type="datetime-local" required 
+                value={form.horario_parada}
+                onChange={handleInputChange}
+                className={`${inputCls} border-red-200 focus:border-red-400 focus:ring-red-500/20`}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-zinc-500">Data/Hora de Início da Manutenção *</label>
               <input name="data_abertura" type="datetime-local" required 
                 value={form.data_abertura}
                 onChange={handleInputChange}
@@ -213,7 +230,7 @@ export default function OSFormModal({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Data/Hora Fechamento</label>
+              <label className="text-xs font-medium text-zinc-500">Data/Hora Fechamento da OS</label>
               <input name="data_fechamento" type="datetime-local" 
                 value={form.data_fechamento}
                 onChange={handleInputChange}
@@ -321,10 +338,36 @@ export default function OSFormModal({
                   onChange={handleInputChange}
                 />
                 <div className="w-11 h-6 bg-zinc-200 rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-blue-600"></div>
-                <span className="ms-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Foi enviado reserva?</span>
+                <span className="ms-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 flex flex-col">
+                  Foi enviado reserva?
+                  <span className="text-[10px] text-zinc-500 font-normal">Impacta o medidor de parada operacional</span>
+                </span>
               </label>
             </div>
           </div>
+
+          {/* Conditional Reservation Details */}
+          {form.foi_enviado_reserva && (
+            <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-orange-700 dark:text-orange-400">Qual o Caminhão Reserva? *</label>
+                <input name="qual_reserva" type="text" required={form.foi_enviado_reserva}
+                  placeholder="EX: PLACA-1234"
+                  value={form.qual_reserva}
+                  onChange={handleInputChange}
+                  className={`${inputCls} border-orange-200 focus:border-orange-400 focus:ring-orange-500/20`} 
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-orange-700 dark:text-orange-400">Que Horas o Reserva Chegou? *</label>
+                <input name="horas_reserva_chegou" type="datetime-local" required={form.foi_enviado_reserva}
+                  value={form.horas_reserva_chegou}
+                  onChange={handleInputChange}
+                  className={`${inputCls} border-orange-200 focus:border-orange-400 focus:ring-orange-500/20`} 
+                />
+              </div>
+            </div>
+          )}
 
           {/* Row 6: Description */}
           <div className="flex flex-col gap-2">

@@ -17,6 +17,9 @@ export interface OS {
   sistema?: string | null;
   sub_sistema?: string | null;
   horas_manutencao?: number | null;
+  horario_parada?: string | null;
+  qual_reserva?: string | null;
+  horas_reserva_chegou?: string | null;
   observacoes?: string | null;
   created_at?: string;
 }

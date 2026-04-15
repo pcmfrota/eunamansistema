@@ -36,10 +36,13 @@ function fmtDate(d: string | null) {
 // ─── Modal ───────────────────────────────────────────────────────────────────
 interface VeiculoDetalhe {
   nome: string;
-  disp: number;
+  disp: number; // For plotting
+  dispDM: number;
+  dispDO: number;
   totalOS: number;
   osFechadas: number;
   horasManut: number;
+  horasOperacional: number;
 }
 
 function ModalDetalhe({
@@ -61,9 +64,9 @@ function ModalDetalhe({
     veiculo.osFechadas > 0
       ? (veiculo.horasManut / veiculo.osFechadas).toFixed(1)
       : "—";
-  const dispColor = getColorDisp(veiculo.disp);
-  const dispLabel =
-    veiculo.disp >= 95 ? "Operacional" : veiculo.disp >= 90 ? "Atenção" : "Crítico";
+  const displayDisp = veiculo.dispDM; // Use DM for main status badge color/label
+  const dispColor = getColorDisp(displayDisp);
+  const dispLabel = displayDisp >= 95 ? "Operacional" : displayDisp >= 90 ? "Atenção" : "Crítico";
 
   useEffect(() => {
     let cancelled = false;
@@ -118,20 +121,25 @@ function ModalDetalhe({
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-4 pb-4 pt-2 flex flex-col gap-3">
 
-          {/* ── KPI: Disponibilidade (full width) */}
-          <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/15">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
-              </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col justify-between">
               <div>
-                <p className="text-xs font-medium text-zinc-300">Disponibilidade</p>
-                <p className="text-[11px] text-zinc-500">Meta: ≥ 95%</p>
+                <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
+                <p className="text-2xl font-bold text-emerald-400" style={{ color: getColorDisp(veiculo.dispDM) }}>
+                  {veiculo.dispDM}%
+                </p>
               </div>
+              <p className="text-[9px] text-zinc-500 mt-1">Impacto: {veiculo.horasManut}h</p>
             </div>
-            <span className="text-[32px] font-bold leading-none" style={{ color: dispColor }}>
-              {veiculo.disp}%
-            </span>
+            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DO (Operacional)</p>
+                <p className="text-2xl font-bold text-blue-400" style={{ color: getColorDisp(veiculo.dispDO) }}>
+                  {veiculo.dispDO}%
+                </p>
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1">Impacto: {veiculo.horasOperacional}h</p>
+            </div>
           </div>
 
           {/* ── KPI Grid 2x2 */}
@@ -304,6 +312,7 @@ interface GraficoVeiculosProps {
   ano?: number;
   title?: string;
   mostrarIndisponibilidade?: boolean;
+  tipoAvailability?: "DM" | "DO";
 }
 
 export function GraficoVeiculos({ 
@@ -312,21 +321,26 @@ export function GraficoVeiculos({
   mes, 
   ano, 
   title = "Disponibilidade Operacional",
-  mostrarIndisponibilidade = false 
+  mostrarIndisponibilidade = false,
+  tipoAvailability = "DM"
 }: GraficoVeiculosProps) {
   const [selected, setSelected] = useState<VeiculoDetalhe | null>(null);
 
   const chartData = (dados ?? []).map((v) => {
-    let dispReal = v.disponibilidade;
-    let dispExibida = mostrarIndisponibilidade ? Number((100 - v.disponibilidade).toFixed(1)) : v.disponibilidade;
+    const isDO = tipoAvailability === "DO";
+    const valBase = isDO ? v.disponibilidade_operacional : v.disponibilidade;
+    
+    let dispExibida = mostrarIndisponibilidade ? Number((100 - valBase).toFixed(1)) : valBase;
     
     return {
       nome: v.placa,
       disp: dispExibida,
-      dispReal: dispReal,
+      dispDM: v.disponibilidade,
+      dispDO: v.disponibilidade_operacional,
       totalOS: v.totalOS,
       osFechadas: v.osFechadas,
       horasManut: v.horasManut,
+      horasOperacional: v.horasOperacional,
     };
   });
 
@@ -357,20 +371,27 @@ export function GraficoVeiculos({
       <div className="bg-[#1a1f2e] rounded-lg shadow-lg border border-zinc-700 p-3 text-xs pointer-events-none">
         <p className="font-bold text-sm text-zinc-100 mb-1.5">{d.nome}</p>
         <div className="flex flex-col gap-1 text-zinc-400">
-          <p>
-            {mostrarIndisponibilidade ? "Indisponibilidade: " : "Disponibilidade: "}
-            <span className="font-semibold" style={{ color: mostrarIndisponibilidade ? "#ef4444" : getColorDisp(d.dispReal) }}>
-              {d.disp}%
+          <p className="flex justify-between gap-4">
+            <span>DM (Mecânica):</span>
+            <span className="font-semibold text-emerald-400" style={{ color: getColorDisp(d.dispDM) }}>
+              {d.dispDM}%
             </span>
           </p>
+          <p className="flex justify-between gap-4">
+            <span>DO (Operacional):</span>
+            <span className="font-semibold text-blue-400" style={{ color: getColorDisp(d.dispDO) }}>
+              {d.dispDO}%
+            </span>
+          </p>
+          <div className="h-[1px] bg-zinc-700/50 my-1" />
           <p>
             Total de OS: <span className="font-semibold text-zinc-200">{d.totalOS}</span>
           </p>
           <p>
-            OS Fechadas: <span className="font-semibold text-zinc-200">{d.osFechadas}</span>
+            Hs Manut (Impacto DM): <span className="font-semibold text-zinc-200">{d.horasManut}h</span>
           </p>
           <p>
-            Hs Manutenção: <span className="font-semibold text-zinc-200">{d.horasManut}h</span>
+            Hs Indisp (Impacto DO): <span className="font-semibold text-zinc-200">{d.horasOperacional}h</span>
           </p>
         </div>
         <p className="mt-2 text-[10px] text-zinc-600 italic">Clique para ver detalhes e OS</p>
@@ -478,9 +499,19 @@ export function GraficoVeiculos({
               }}
             >
               {chartData.map((entry, index) => {
-                let color = mostrarIndisponibilidade 
-                  ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
-                  : getColorDisp(entry.dispReal);
+                let color = "#3b82f6"; // default blue for DO
+                
+                if (tipoAvailability === "DM") {
+                  color = mostrarIndisponibilidade 
+                    ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
+                    : getColorDisp(entry.dispDM);
+                } else {
+                  // DO colors: Blue shades
+                  color = mostrarIndisponibilidade 
+                    ? (entry.disp > 0 ? "#6366f1" : "#e4e4e7") 
+                    : (entry.dispDO >= 95 ? "#3b82f6" : entry.dispDO >= 90 ? "#6366f1" : "#8b5cf6");
+                }
+                
                 return <Cell key={`cell-${index}`} fill={color} />;
               })}
             </Bar>

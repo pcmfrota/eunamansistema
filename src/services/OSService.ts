@@ -26,6 +26,9 @@ const OSSchema = z.object({
   sistema: z.string().optional().nullable(),
   sub_sistema: z.string().optional().nullable(),
   horas_manutencao: z.number().optional().nullable(),
+  horario_parada: z.string().optional().nullable(),
+  qual_reserva: z.string().optional().nullable(),
+  horas_reserva_chegou: z.string().optional().nullable(),
   observacoes: z.string().optional().nullable(),
 });
 
