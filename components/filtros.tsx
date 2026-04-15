@@ -59,7 +59,7 @@ export function Filtros({ opcoes, valores, onChange, onReset, periodoLabel }: Fi
           placeholder="Todos os Anos"
         />
 
-        <div className="h-8 w-[1px] bg-zinc-100 dark:bg-zinc-800 hidden sm:block mx-1"></div>
+        <div className="h-8 w-[1px] bg-zinc-100 dark:bg-zinc-800 mx-1"></div>
 
         <div className="flex items-center gap-2">
            <div className="relative">
@@ -67,22 +67,22 @@ export function Filtros({ opcoes, valores, onChange, onReset, periodoLabel }: Fi
                type="date"
                value={valores.dataInicio}
                onChange={(e) => onChange("dataInicio", e.target.value)}
-               className="bg-white dark:bg-[#0f1115] border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900 w-[145px]"
+               className="bg-blue-50/30 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-900/30 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm transition-colors hover:bg-blue-50 dark:hover:bg-blue-500/10 w-[145px]"
              />
-             <div className="absolute -top-2 left-2 px-1 bg-white dark:bg-[#0f1115] text-[10px] text-zinc-400 font-medium">Data Início</div>
+             <div className="absolute -top-2 left-2 px-1 bg-white dark:bg-[#0f1115] text-[10px] text-blue-500 font-bold">Data Início</div>
            </div>
            <div className="relative">
              <input
                type="date"
                value={valores.dataFim}
                onChange={(e) => onChange("dataFim", e.target.value)}
-               className="bg-white dark:bg-[#0f1115] border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900 w-[145px]"
+               className="bg-blue-50/30 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-900/30 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm transition-colors hover:bg-blue-50 dark:hover:bg-blue-500/10 w-[145px]"
              />
-             <div className="absolute -top-2 left-2 px-1 bg-white dark:bg-[#0f1115] text-[10px] text-zinc-400 font-medium">Data Fim</div>
+             <div className="absolute -top-2 left-2 px-1 bg-white dark:bg-[#0f1115] text-[10px] text-blue-500 font-bold">Data Fim</div>
            </div>
         </div>
 
-        <div className="h-8 w-[1px] bg-zinc-100 dark:bg-zinc-800 hidden sm:block mx-1"></div>
+        <div className="h-8 w-[1px] bg-zinc-100 dark:bg-zinc-800 mx-1"></div>
 
         {/* Categoria */}
         <SelectFilter
