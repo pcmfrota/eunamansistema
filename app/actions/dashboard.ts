@@ -239,9 +239,11 @@ export async function getDashboardData(filtros?: {
       modulos: Array.from(modulosSet),
       statusList: Array.from(new Set(allOS.map(o => o.status || "")))
     },
-    periodoLabel: `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
-    data_inicio: calSuzano?.data_inicio,
-    data_fim: calSuzano?.data_fim,
+    periodoLabel: filtros?.dataInicio && filtros?.dataFim 
+      ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`
+      : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
+    data_inicio: inicioFiltro,
+    data_fim: fimFiltro.split("T")[0],
     dispSemanal: [],
     paradasPorCategoria: [],
     rankingFalhas: [],
