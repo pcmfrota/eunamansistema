@@ -101,12 +101,11 @@ export async function getDashboardData(filtros?: {
 
   if (mesFiltro && anoFiltro) {
     // ── Mês + Ano específicos ──────────────────────────────────────────────────
-    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
+    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01T00:00:00`;
     const fimMesDate = new Date(anoFiltro, mesFiltro, 0);
     diasNoMes = fimMesDate.getDate();
     fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${String(diasNoMes).padStart(2, "0")}T23:59:59`;
     
-    // MÊS FECHADO PCM: Usa a quantidade bruta de dias do mês ao invés de limitar os dias transcorridos apenas até o dia atual
     diasTranscorridos = diasNoMes;
   } else if (anoFiltro && !mesFiltro) {
     // ── Ano inteiro, sem mês ───────────────────────────────────────────────────
@@ -219,8 +218,8 @@ export async function getDashboardData(filtros?: {
   if (filtros?.categoria || filtros?.modulo) {
     const eqFiltradas = new Set<string>();
     equipamentos?.forEach((eq) => {
-      if (filtros?.categoria && eq.categoria?.toUpperCase() !== filtros.categoria.toUpperCase()) return;
-      if (filtros?.modulo && eq.modulo?.toUpperCase() !== filtros.modulo.toUpperCase()) return;
+      if (filtros?.categoria && filtros.categoria !== "Todas" && filtros.categoria !== "" && eq.categoria?.toUpperCase() !== filtros.categoria.toUpperCase()) return;
+      if (filtros?.modulo && filtros.modulo !== "Todos" && filtros.modulo !== "" && eq.modulo?.toUpperCase() !== filtros.modulo.toUpperCase()) return;
       if (eq.placa) eqFiltradas.add(eq.placa.toUpperCase());
     });
     placasFiltradas = placasFiltradas.filter(p => eqFiltradas.has(p));
@@ -236,8 +235,14 @@ export async function getDashboardData(filtros?: {
     }
     if (!placa) return false;
     placa = placa.toUpperCase().trim();
-    if (filtros?.placa && placa !== filtros.placa.toUpperCase()) return false;
-    if (filtros?.status && os.status !== filtros.status) return false;
+
+    // Filtros de Placa
+    if (filtros?.placa && filtros.placa !== "" && placa !== filtros.placa.toUpperCase()) return false;
+    
+    // Filtro de Status
+    if (filtros?.status && filtros.status !== "Todos" && filtros.status !== "" && os.status !== filtros.status) return false;
+
+    // Filtro de Categoria e Módulo (se estiverem filtrando placas)
     return placasFiltradas.includes(placa);
   });
 
