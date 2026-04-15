@@ -15,8 +15,8 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
   const [loading, setLoading] = useState(false)
   
   const initialForm = {
-    placa: '',
     tipo: '',
+    customTipo: '',
     categoria: '',
     modulo: '',
     horimetro: '',
@@ -36,8 +36,8 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
   useEffect(() => {
     if (editingVehicle) {
       setForm({
-        placa: editingVehicle.placa || '',
         tipo: editingVehicle.tipo || '',
+        customTipo: '',
         categoria: editingVehicle.categoria || '',
         modulo: editingVehicle.modulo || '',
         horimetro: editingVehicle.ultimo_hist?.toString() || editingVehicle.ultimoHist?.toString() || editingVehicle.horimetro || '',
@@ -56,13 +56,27 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
 
   if (!isOpen) return null
 
+  const handleTipoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setForm(prev => ({ 
+      ...prev, 
+      tipo: val,
+      customTipo: val === 'OUTROS' ? '' : prev.customTipo 
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     
-    const formData = new FormData(e.currentTarget)
-    
     try {
+      const formData = new FormData(e.currentTarget)
+      
+      // Se for OUTROS, usamos o valor do customTipo
+      if (form.tipo === 'OUTROS') {
+        formData.set('tipo', form.customTipo)
+      }
+      
       const res = editingVehicle 
         ? await atualizarEquipamento(editingVehicle.id, formData)
         : await criarEquipamento(formData)
@@ -117,19 +131,24 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Tipo <span className="text-red-500">*</span></label>
-                    <select name="tipo" required value={form.tipo} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white">
-                      <option value="">Selecione</option>
-                      <option value="COMBOIO">COMBOIO</option>
-                      <option value="MUNCK">MUNCK</option>
-                      <option value="MULTIFUNCIONAL">MULTIFUNCIONAL</option>
-                      <option value="PIPA">PIPA</option>
-                      <option value="ESCAVADEIRA">ESCAVADEIRA</option>
-                      <option value="CARRETAGEM">CARRETAGEM</option>
-                      <option value="SAVEIRO">SAVEIRO</option>
-                      <option value="ESTRADA">ESTRADA</option>
-                      <option value="C3">C3</option>
-                      <option value="OUTROS">OUTROS</option>
-                    </select>
+                    <div className="space-y-2">
+                      <select name="tipo" required value={form.tipo} onChange={handleTipoChange} className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white">
+                        <option value="">Selecione</option>
+                        <option value="COMBOIO">COMBOIO</option>
+                        <option value="MUNCK">MUNCK</option>
+                        <option value="MULTIFUNCIONAL">MULTIFUNCIONAL</option>
+                        <option value="PIPA">PIPA</option>
+                        <option value="ESCAVADEIRA">ESCAVADEIRA</option>
+                        <option value="CARRETAGEM">CARRETAGEM</option>
+                        <option value="SAVEIRO">SAVEIRO</option>
+                        <option value="ESTRADA">ESTRADA</option>
+                        <option value="C3">C3</option>
+                        <option value="OUTROS">OUTROS (Escrever abaixo)</option>
+                      </select>
+                      {form.tipo === 'OUTROS' && (
+                        <input name="customTipo" required value={form.customTipo} onChange={handleInputChange} type="text" placeholder="Digite o tipo aqui..." className="w-full px-4 py-2.5 border border-blue-200 dark:border-blue-900/50 rounded-lg bg-blue-50/30 dark:bg-blue-900/10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white" />
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Categoria <span className="text-red-500">*</span></label>
