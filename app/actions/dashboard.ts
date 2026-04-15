@@ -272,7 +272,7 @@ export async function getDashboardData(filtros?: {
   // C. Disponibilidade por Modelo (Agrupado)
   const modelosMap = new Map<string, { soma: number, count: number }>();
   veiculos.forEach(v => {
-    const eq = allEquipamentos.find(e => e.placa === v.placa);
+    const eq = todasAsEquips.find(e => e.placa === v.placa);
     const mod = eq?.modelo || "Outros";
     const curr = modelosMap.get(mod) || { soma: 0, count: 0 };
     modelosMap.set(mod, { soma: curr.soma + v.disponibilidade_operacional, count: curr.count + 1 });
@@ -285,7 +285,7 @@ export async function getDashboardData(filtros?: {
 
   // D. Status da Frota (Tabela Dinâmica)
   const statusFrota = veiculos.map(v => {
-    const eq = allEquipamentos.find(e => e.placa === v.placa);
+    const eq = todasAsEquips.find(e => e.placa === v.placa);
     const osAbertaAtiva = allOS.find(o => 
       o.placa === v.placa && 
       (o.status === 'Aberta' || o.status === 'Em Andamento')
