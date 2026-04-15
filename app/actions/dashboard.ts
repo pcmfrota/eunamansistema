@@ -186,28 +186,24 @@ export async function getDashboardData(filtros?: {
     const periodoFimObj = new Date(fimFiltro);
 
     osDoVeiculo.forEach(os => {
-      // 1. Definir Início Real da Indisponibilidade (Recortado pelo período)
+      // 1. Início e Fim Efetivos
       let inicioOriginal = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
       let inicioEfetivo = inicioOriginal < periodoInicioObj ? periodoInicioObj : inicioOriginal;
 
-      // 2. Definir Fim Real da Indisponibilidade (Recortado pelo período/agora)
       let fimOriginal = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
       if (fimOriginal > periodoFimObj) fimOriginal = periodoFimObj;
       let fimEfetivo = fimOriginal;
 
-      // Cálculo DM
+      // Cálculo DM (Disponibilidade Mecânica - Tempo Parado Total)
       const duracaoDM = Math.max(0, (fimEfetivo.getTime() - inicioEfetivo.getTime()) / 3600000);
       hIndispDM += duracaoDM;
 
-      // Cálculo DO (Considerando Reserva)
+      // Cálculo DO (Disponibilidade Operacional - Tempo afetado pela reserva)
       if (os.foi_enviado_reserva && os.horario_parada && os.horas_reserva_chegou) {
         const pOriginal = new Date(os.horario_parada);
         const cOriginal = new Date(os.horas_reserva_chegou);
-        
-        // Recortar p e c para dentro do período
         const pEfetivo = pOriginal < periodoInicioObj ? periodoInicioObj : (pOriginal > periodoFimObj ? periodoFimObj : pOriginal);
         const cEfetivo = cOriginal < periodoInicioObj ? periodoInicioObj : (cOriginal > periodoFimObj ? periodoFimObj : cOriginal);
-        
         hIndispDO += Math.max(0, (cEfetivo.getTime() - pEfetivo.getTime()) / 3600000);
       } else {
         hIndispDO += duracaoDM;
@@ -224,9 +220,11 @@ export async function getDashboardData(filtros?: {
       osFechadas: fechadas,
       horasManut: Math.round(hIndispDM * 10) / 10,
       horasOperacional: Math.round(hIndispDO * 10) / 10,
+      falhas: osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length
     });
   }
 
+  // 4. Consolidação Final (Métricas PCM)
   const hIndispDMTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
   const hIndispDOTotal = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
   const hTotalFrota = horasTotaisPorVeiculo * veiculos.length;
@@ -234,23 +232,149 @@ export async function getDashboardData(filtros?: {
   const dm = hTotalFrota > 0 ? Math.round(((hTotalFrota - hIndispDMTotal) / hTotalFrota) * 1000) / 10 : 0;
   const doOp = hTotalFrota > 0 ? Math.round(((hTotalFrota - hIndispDOTotal) / hTotalFrota) * 1000) / 10 : 0;
 
+  // MTTR/MTBF baseados apenas em Corretivas (Padrão PCM)
+  const osCorretivas = allOS.filter(o => o.classe === 'CORRETIVA');
+  const osCorretivasFechadas = osCorretivas.filter(o => o.status === 'Fechada' || o.status === 'Concluída');
+  
+  const mttr = osCorretivasFechadas.length > 0 ? Math.round((hIndispDMTotal / osCorretivasFechadas.length) * 10) / 10 : 0;
+  const hOperacionaisTotal = Math.max(0, hTotalFrota - hIndispDMTotal);
+  const mtbf = osCorretivas.length > 0 ? Math.round((hOperacionaisTotal / osCorretivas.length) * 10) / 10 : 0;
+
+  // 5. Ranking de Falhas (Top 10 veículos que mais deram corretiva)
+  const rankingFalhas = veiculos
+    .filter(v => v.falhas > 0)
+    .sort((a, b) => b.falhas - a.falhas)
+    .slice(0, 10)
+    .map(v => ({
+      placa: v.placa,
+      falhas: v.falhas,
+      mtbf: v.falhas > 0 ? Math.round(((horasTotaisPorVeiculo - v.horasManut) / v.falhas) * 10) / 10 : 0
+    }));
+
+  // 6. Dados para Gráficos Extras
+  // A. Paradas por Categoria
+  const categoriasMap = new Map<string, number>();
+  allOS.forEach(os => {
+    const eq = os.equipamento_id ? eqMap.get(os.equipamento_id) : null;
+    const cat = eq?.categoria || "Outros";
+    categoriasMap.set(cat, (categoriasMap.get(cat) || 0) + 1);
+  });
+  const paradasPorCategoria = Array.from(categoriasMap.entries()).map(([categoria, quantidade]) => ({ categoria, quantidade }));
+
+  // B. Manutenção por Tipo
+  const manutPorTipoMap = new Map<string, number>();
+  allOS.forEach(os => {
+    const tipo = os.classe || "Sem Classe";
+    manutPorTipoMap.set(tipo, (manutPorTipoMap.get(tipo) || 0) + 1);
+  });
+  const manutPorTipo = Array.from(manutPorTipoMap.entries()).map(([tipo, quantidade]) => ({ tipo, quantidade }));
+
+  // C. Disponibilidade por Modelo (Agrupado)
+  const modelosMap = new Map<string, { soma: number, count: number }>();
+  veiculos.forEach(v => {
+    const eq = allEquipamentos.find(e => e.placa === v.placa);
+    const mod = eq?.modelo || "Outros";
+    const curr = modelosMap.get(mod) || { soma: 0, count: 0 };
+    modelosMap.set(mod, { soma: curr.soma + v.disponibilidade_operacional, count: curr.count + 1 });
+  });
+  const dispPorTipo = Array.from(modelosMap.entries()).map(([tipo, data]) => ({
+    tipo,
+    disponibilidade: Math.round((data.soma / data.count) * 10) / 10,
+    total: data.count
+  }));
+
+  // D. Status da Frota (Tabela Dinâmica)
+  const statusFrota = veiculos.map(v => {
+    const eq = allEquipamentos.find(e => e.placa === v.placa);
+    const osAbertaAtiva = allOS.find(o => 
+      o.placa === v.placa && 
+      (o.status === 'Aberta' || o.status === 'Em Andamento')
+    );
+    
+    let statusLabel = "Disponível";
+    if (osAbertaAtiva) statusLabel = "Manutenção";
+    else if (v.disponibilidade < 90) statusLabel = "Crítico";
+    else if (v.disponibilidade < 95) statusLabel = "Atenção";
+
+    return {
+      placa: v.placa,
+      tipo: eq?.modelo || "—",
+      status: statusLabel,
+      disponibilidade: v.disponibilidade,
+      modulo: eq?.modulo || "BASE"
+    };
+  }).sort((a, b) => a.disponibilidade - b.disponibilidade);
+
+  // E. Disponibilidade Semanal
+  const dispSemanal = [];
+  const diasPeriodo = Math.ceil((periodoFimObj.getTime() - periodoInicioObj.getTime()) / 86400000);
+  const semanas = Math.ceil(diasPeriodo / 7);
+  for (let s = 1; s <= semanas; s++) {
+    const sInicio = new Date(periodoInicioObj.getTime() + (s-1) * 7 * 86400000);
+    const sFim = new Date(Math.min(periodoFimObj.getTime(), sInicio.getTime() + 6 * 86400000 + 23*3600000));
+    
+    let hIndispSemanaTotal = 0;
+    allOS.forEach(os => {
+      let oInicio = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
+      let oFim = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
+      
+      const eInicio = oInicio < sInicio ? sInicio : oInicio;
+      const eFim = oFim > sFim ? sFim : oFim;
+      
+      if (eInicio < eFim) {
+        hIndispSemanaTotal += (eFim.getTime() - eInicio.getTime()) / 3600000;
+      }
+    });
+
+    const hTotaisSemana = (veiculos.length || 1) * Math.min(168, (sFim.getTime() - sInicio.getTime()) / 3600000);
+    dispSemanal.push({
+      semana: `Semana ${s}`,
+      disp: Math.round(Math.max(0, ((hTotaisSemana - hIndispSemanaTotal) / hTotaisSemana) * 100) * 10) / 10
+    });
+  }
+
+  // 7. Preventivas (Buscar dados reais)
+  const { data: prevData } = await supabase
+    .from("preventivas")
+    .select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa)");
+  
+  const preventivasChart = (prevData ?? []).map((p: any) => {
+    const restantes = Number(p.ultimo_horimetro) + Number(p.intervalo_horas) - Number(p.horimetro_atual);
+    let status: "atrasado" | "atencao" | "no_prazo";
+    if (restantes < 0) status = "atrasado";
+    else if (restantes <= 50) status = "atencao";
+    else status = "no_prazo";
+
+    return {
+      placa: p.equipamentos?.placa || "—",
+      horas_restantes: Math.round(restantes),
+      status
+    };
+  }).sort((a, b) => a.horas_restantes - b.horas_restantes).slice(0, 10);
+
   const MESES_NOME = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   return {
     totalOS: allOS.length,
-    emAndamento: allOS.filter(o => o.status === "Aberta").length,
-    osFechadas: veiculos.reduce((acc, v) => acc + v.osFechadas, 0),
+    emAndamento: allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length,
+    osFechadas: allOS.filter(o => o.status === "Fechada" || o.status === "Concluída").length,
     disponibilidadeMedia: dm,
     dm,
     doOperacional: doOp,
     horasManutencao: Math.round(hIndispDMTotal * 10) / 10,
-    mttr: veiculos.reduce((acc, v) => acc + v.osFechadas, 0) > 0 ? Math.round((hIndispDMTotal / veiculos.reduce((acc, v) => acc + v.osFechadas, 0)) * 10) / 10 : 0,
-    mtbf: allOS.length > 0 ? Math.round(((hTotalFrota - hIndispDMTotal) / allOS.length) * 10) / 10 : 0,
-    backlog: Math.round((allOS.filter(o => o.status === "Aberta").length * 8 / 8) * 10) / 10,
+    mttr,
+    mtbf,
+    backlog: allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length,
     totalEquipamentos: frotaAtiva.length,
     totalVeiculosAtivos: frotaAtiva.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
-    preventivas: [],
+    rankingFalhas,
+    paradasPorCategoria,
+    manutPorTipo,
+    dispPorTipo,
+    statusFrota,
+    dispSemanal,
+    preventivas: preventivasChart,
     docsValidos: 0, docsAVencer: 0, docsVencidos: 0,
     filtroOpcoes: {
       meses: MESES_NOME.slice(1).map((m, i) => ({ value: i + 1, label: m })),
