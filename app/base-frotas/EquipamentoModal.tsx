@@ -20,6 +20,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
     categoria: '',
     modulo: '',
     horimetro: '',
+    status: 'Ativo',
     ultimaAtualizacao: (() => {
       const d = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
@@ -40,6 +41,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         categoria: editingVehicle.categoria || '',
         modulo: editingVehicle.modulo || '',
         horimetro: editingVehicle.ultimo_hist?.toString() || editingVehicle.ultimoHist?.toString() || editingVehicle.horimetro || '',
+        status: editingVehicle.status || 'Ativo',
         ultimaAtualizacao: editingVehicle.ultimaAtualizacao || (() => {
           const d = new Date();
           const pad = (n: number) => String(n).padStart(2, '0');
@@ -140,6 +142,13 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Módulo <span className="text-red-500">*</span></label>
                     <input name="modulo" required value={form.modulo} onChange={handleInputChange} type="text" placeholder="BASE" className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-red-500 mb-1.5">Status <span className="text-red-500">*</span></label>
+                    <select name="status" required value={form.status} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-red-200 dark:border-red-900/50 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all dark:text-red-400">
+                      <option value="Ativo">Ativo</option>
+                      <option value="Inativo">Inativo</option>
+                    </select>
                   </div>
                 </div>
               </div>

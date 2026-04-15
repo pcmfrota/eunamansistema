@@ -53,7 +53,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const defaultFiltros: FiltrosValues = {
     mes: now.getMonth() + 1,
     ano: now.getFullYear(),
-    categoria: "",
+    categoria: "PESADA",
     placa: "",
     modulo: "",
     status: "",
@@ -125,6 +125,13 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       {/* KPIs */}
       <div className="flex overflow-x-auto gap-4 pb-2 -mx-5 px-5 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <KpiCard
+          title="Frota Ativa"
+          value={String(data.totalVeiculosAtivos || 0)}
+          subtitle="Veículos em operação"
+          icon={<Activity size={18} className="text-[#3b82f6]" />}
+          iconBg="bg-blue-100/50 dark:bg-blue-500/10"
+        />
         <KpiCard
           title="DM (Mecânica)"
           value={

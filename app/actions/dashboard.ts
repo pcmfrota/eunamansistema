@@ -53,6 +53,7 @@ export type DashboardData = {
   mtbf: number;
   backlog: number;
   totalEquipamentos: number;
+  totalVeiculosAtivos: number;
   veiculos: VeiculoDisp[];
   preventivas: PreventivaStatus[];
   docsValidos: number;
@@ -160,9 +161,12 @@ export async function getDashboardData(filtros?: {
   // ── 2. Buscar equipamentos do banco ────────────────────────────────────────
   const { data: equipamentos } = await supabase
     .from("equipamentos")
-    .select("id, placa, tipo, categoria, modulo, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade");
+    .select("id, placa, tipo, categoria, modulo, status, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade")
+    .or("status.eq.Ativo,status.is.null") // Garante que nulos também venham (compatibilidade)
+    .order("placa", { ascending: true });
 
-  const totalEquipamentos = equipamentos?.length ?? 0;
+  const totalVeiculosAtivos = equipamentos?.length ?? 0;
+  const totalEquipamentos = totalVeiculosAtivos; // Mudando o total para focar nos ativos
 
   // Mapa de equipamento_id → placa (do banco de equipamentos)
   const eqMap = new Map<string, { placa: string; categoria?: string; modulo?: string }>();
@@ -173,6 +177,9 @@ export async function getDashboardData(filtros?: {
     if (eq.categoria) categoriasSet.add(eq.categoria);
     if (eq.modulo) modulosSet.add(eq.modulo);
   });
+
+  // Se o filtro de categoria inicial for null/undefined, usamos o padrão solicitados: "PESADA"
+  const categoriaFiltroEfetivo = (filtros?.categoria === undefined) ? "PESADA" : filtros.categoria;
 
   // ── 3. Construir mapa de placas reais das OS ──────────────────────────────
   // Usar a PLACA da OS diretamente (campo 'placa' da tabela ordens_servico)
@@ -221,10 +228,10 @@ export async function getDashboardData(filtros?: {
     placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
   }
 
-  if (filtros?.categoria || filtros?.modulo) {
+  if (categoriaFiltroEfetivo || filtros?.modulo) {
     const eqFiltradas = new Set<string>();
     equipamentos?.forEach((eq) => {
-      if (filtros?.categoria && filtros.categoria !== "Todas" && filtros.categoria !== "" && eq.categoria?.toUpperCase() !== filtros.categoria.toUpperCase()) return;
+      if (categoriaFiltroEfetivo && categoriaFiltroEfetivo !== "Todas" && categoriaFiltroEfetivo !== "" && eq.categoria?.toUpperCase() !== categoriaFiltroEfetivo.toUpperCase()) return;
       if (filtros?.modulo && filtros.modulo !== "Todos" && filtros.modulo !== "" && eq.modulo?.toUpperCase() !== filtros.modulo.toUpperCase()) return;
       if (eq.placa) eqFiltradas.add(eq.placa.toUpperCase());
     });
@@ -597,6 +604,7 @@ export async function getDashboardData(filtros?: {
     mtbf,
     backlog,
     totalEquipamentos,
+    totalVeiculosAtivos,
     veiculos,
     preventivas,
     docsValidos,

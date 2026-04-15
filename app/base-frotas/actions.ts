@@ -15,6 +15,7 @@ export async function criarEquipamento(formData: FormData) {
       tipo: (formData.get('tipo') as string),
       categoria: (formData.get('categoria') as string),
       modulo: (formData.get('modulo') as string),
+      status: (formData.get('status') as string) || 'Ativo',
     };
 
     await EquipamentoService.create(data);
@@ -56,6 +57,7 @@ export async function atualizarEquipamento(id: string, formData: FormData) {
       tipo: (formData.get('tipo') as string),
       categoria: (formData.get('categoria') as string),
       modulo: (formData.get('modulo') as string),
+      status: (formData.get('status') as string) || 'Ativo',
     };
 
     await EquipamentoService.update(id, data);
