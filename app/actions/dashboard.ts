@@ -316,11 +316,9 @@ export async function getDashboardData(filtros?: {
       let currentOp = currentMec; // Por padrão, impacto operacional = mecânico
 
       if (os.foi_enviado_reserva) {
-        // Se houve reserva, o impacto operacional é apenas o tempo até a reserva chegar.
-        // Como as colunas de horário de reserva não existem no banco, reduziremos o impacto
-        // ou manteremos o padrão mecânico para evitar erros. 
-        // Para agora, o impacto operacional será o tempo total da OS (padrão conservador).
-        currentOp = currentMec;
+        // REGRA PCM: Se houve reserva, o impacto na operação é menor.
+        // Como o banco não tem a hora exata da chegada, assumimos o padrão de 2 horas de indisponibilidade operacional (tempo de troca).
+        currentOp = Math.min(currentMec, 2);
       }
 
       horasIndispOp += currentOp;

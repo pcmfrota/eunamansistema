@@ -506,10 +506,10 @@ export function GraficoVeiculos({
                     ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
                     : getColorDisp(entry.dispDM);
                 } else {
-                  // DO colors: Blue shades
+                  // DO colors: Now using the same status palette as DM
                   color = mostrarIndisponibilidade 
-                    ? (entry.disp > 0 ? "#6366f1" : "#e4e4e7") 
-                    : (entry.dispDO >= 95 ? "#3b82f6" : entry.dispDO >= 90 ? "#6366f1" : "#8b5cf6");
+                    ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
+                    : getColorDisp(entry.dispDO);
                 }
                 
                 return <Cell key={`cell-${index}`} fill={color} />;
