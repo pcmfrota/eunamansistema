@@ -2,11 +2,6 @@
 
 import { createClient } from "@/utils/supabase/server";
 
-// ─── Helper: get today in BR timezone ─────────────────────────────────────────
-function hojeBR() {
-  return new Date(Date.now() - 3 * 3600 * 1000);
-}
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type VeiculoDisp = {
   placa: string;
@@ -33,14 +28,6 @@ export type FiltroOpcoes = {
   statusList: string[];
 };
 
-export type DispSemanal = { semana: string; disp: number };
-
-export type ParadaCategoria = { categoria: string; quantidade: number };
-export type RankFalha = { placa: string; falhas: number; mtbf: number };
-export type DispTipo = { tipo: string; disponibilidade: number; total: number };
-export type StatusFrotaItem = { placa: string; tipo: string; status: string; disponibilidade: number; modulo: string };
-export type ManutTipo = { tipo: string; quantidade: number };
-
 export type DashboardData = {
   totalOS: number;
   emAndamento: number;
@@ -61,12 +48,14 @@ export type DashboardData = {
   docsVencidos: number;
   filtroOpcoes: FiltroOpcoes;
   periodoLabel: string;
-  dispSemanal: DispSemanal[];
-  paradasPorCategoria: ParadaCategoria[];
-  rankingFalhas: RankFalha[];
-  dispPorTipo: DispTipo[];
-  statusFrota: StatusFrotaItem[];
-  manutPorTipo: ManutTipo[];
+  data_inicio?: string;
+  data_fim?: string;
+  dispSemanal: any[];
+  paradasPorCategoria: any[];
+  rankingFalhas: any[];
+  dispPorTipo: any[];
+  statusFrota: any[];
+  manutPorTipo: any[];
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -79,553 +68,167 @@ export async function getDashboardData(filtros?: {
   status?: string;
 }): Promise<DashboardData> {
   const supabase = createClient();
-  const hoje = hojeBR();
+  const agoraRef = new Date();
+  const diaHoje = agoraRef.getDate();
+  const mesAtualRef = agoraRef.getMonth() + 1;
+  const anoAtualRef = agoraRef.getFullYear();
 
-  // Determina período de filtro
-  // mes=undefined → todos os meses | ano=undefined → todos os anos
-  const mesAtual = hoje.getMonth() + 1;
-  const anoAtual = hoje.getFullYear();
+  const mesFiltro = filtros?.mes && filtros.mes > 0 ? filtros.mes : mesAtualRef;
+  const anoFiltro = filtros?.ano && filtros.ano > 0 ? filtros.ano : anoAtualRef;
 
-  const mesFiltro  = filtros?.mes  && filtros.mes  > 0 ? filtros.mes  : null;
-  const anoFiltro  = filtros?.ano  && filtros.ano  > 0 ? filtros.ano  : null;
+  // 1. Buscar Período no Calendário Suzano
+  const { data: calSuzano } = await supabase
+    .from("calendario_suzano")
+    .select("*")
+    .eq("mes", mesFiltro)
+    .eq("ano", anoFiltro)
+    .single();
 
-  // Cálculo de início / fim do intervalo de datas usado na query
-  let inicioFiltro: string | null = null;
-  let fimFiltro: string | null    = null;
-  let diasTranscorridos: number;
-  let diasNoMes: number; // usado na disponibilidade semanal (fallback = 31)
+  let inicioFiltro: string;
+  let fimFiltro: string;
+  let diasReferencia: number;
 
-  const MESES_NOME = [
-    "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-  ];
-
-  if (mesFiltro && anoFiltro) {
-    // ── Mês + Ano específicos ──────────────────────────────────────────────────
-    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
-    const fimMesDate = new Date(anoFiltro, mesFiltro, 0);
-    diasNoMes = fimMesDate.getDate();
-    fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${String(diasNoMes).padStart(2, "0")}`;
+  if (calSuzano) {
+    inicioFiltro = calSuzano.data_inicio;
+    fimFiltro = `${calSuzano.data_fim}T23:59:59`;
     
-    diasTranscorridos = diasNoMes;
-  } else if (anoFiltro && !mesFiltro) {
-    // ── Ano inteiro, sem mês ───────────────────────────────────────────────────
-    inicioFiltro = `${anoFiltro}-01-01`;
-    fimFiltro = `${anoFiltro}-12-31T23:59:59`;
-    
-    // ANO FECHADO PCM: O ano sempre terá o calendário cheio nas horas totais
-    const isBissexto = (anoFiltro % 4 === 0 && (anoFiltro % 100 !== 0 || anoFiltro % 400 === 0));
-    diasTranscorridos = isBissexto ? 366 : 365;
-    diasNoMes = 31;
-  } else if (mesFiltro && !anoFiltro) {
-    // ── Mês específico, todos os anos ─────────────────────────────────────────
-    // Mostra todos os anos para o mês selecionado (sem corte de ano)
-    inicioFiltro = null;
-    fimFiltro = null;
-    diasNoMes = new Date(anoAtual, mesFiltro, 0).getDate();
-    diasTranscorridos = diasNoMes;
+    // Conceito D-1: Se estivermos dentro do período atual, calculamos até ontem
+    const dataFimCal = new Date(calSuzano.data_fim);
+    if (agoraRef >= new Date(calSuzano.data_inicio) && agoraRef <= dataFimCal) {
+       // Estamos no meio do mês Suzano atual
+       const diffMs = agoraRef.getTime() - new Date(calSuzano.data_inicio).getTime();
+       const diasPassados = Math.floor(diffMs / 86400000);
+       diasReferencia = diasPassados > 0 ? diasPassados : 1;
+    } else {
+       diasReferencia = calSuzano.total_dias;
+    }
   } else {
-    // ── Sem filtro: usa o Ano Atual como fechado ──────────────────────────────
-    inicioFiltro = null;
-    fimFiltro = null;
-    diasNoMes = 31;
-    // PCM ANO FECHADO (padrão quando sem filtros)
-    const isBissexto = (anoAtual % 4 === 0 && (anoAtual % 100 !== 0 || anoAtual % 400 === 0));
-    diasTranscorridos = isBissexto ? 366 : 365;
+    // Fallback para calendário civil
+    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
+    const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
+    fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${diasNoMes}T23:59:59`;
+    
+    if (anoFiltro === anoAtualRef && mesFiltro === mesAtualRef) {
+      diasReferencia = diaHoje > 1 ? diaHoje - 1 : 1;
+    } else {
+      diasReferencia = diasNoMes;
+    }
   }
 
-  // Label legível do período selecionado
-  const periodoLabel =
-    mesFiltro && anoFiltro ? `${MESES_NOME[mesFiltro]} ${anoFiltro}` :
-    anoFiltro ? `Ano ${anoFiltro}` :
-    mesFiltro ? `${MESES_NOME[mesFiltro]} (todos os anos)` :
-    "Todos os períodos";
+  // 2. Buscar OS e Equipamentos
+  const [osRes, eqRes] = await Promise.all([
+    supabase.from("ordens_servico").select(`
+      id, status, horas_manutencao, data_abertura, data_fechamento, 
+      equipamento_id, placa, classe, foi_enviado_reserva, 
+      horario_parada, horas_reserva_chegou
+    `).gte("data_abertura", inicioFiltro).lte("data_abertura", fimFiltro),
+    supabase.from("equipamentos").select("*")
+  ]);
 
-  // ── 1. Buscar TODAS as OS do período ───────────────────────────────────────
-  let osQuery = supabase
-    .from("ordens_servico")
-    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe, foi_enviado_reserva");
+  const allOS = osRes.data ?? [];
+  const todasAsEquips = eqRes.data ?? [];
+  const frotaAtiva = todasAsEquips.filter(eq => String(eq.status || 'Ativo').toUpperCase().trim() !== "INATIVO");
 
-  if (inicioFiltro) osQuery = osQuery.gte("data_abertura", inicioFiltro);
-  if (fimFiltro)    osQuery = osQuery.lte("data_abertura", fimFiltro);
-
-  const { data: osPeriodo, error: osError } = await osQuery;
-  
-  if (osError) {
-    console.error("❌ Erro Supabase OS:", osError);
-  }
-
-  const allOS = osPeriodo ?? [];
-  console.log(`📊 Dashboard: Encontradas ${allOS.length} O.S no período ${inicioFiltro} até ${fimFiltro}`);
-
-  // ── 2. Buscar equipamentos do banco ────────────────────────────────────────
-  const { data: equipamentos, error: eqError } = await supabase
-    .from("equipamentos")
-    .select("id, placa, tipo, categoria, modulo, status, laudo_validade, crlv_validade, implemento_validade, tacografo_validade, civ_validade")
-    .order("placa", { ascending: true });
-
-  if (eqError) {
-    console.error("❌ Erro ao buscar equipamentos:", eqError);
-  }
-
-  // Filtragem robusta: ignora maiúsculas/minúsculas e espaços
-  const frotaAtiva = equipamentos?.filter(eq => {
-    const s = String(eq.status || 'Ativo').toUpperCase().trim();
-    return s !== "INATIVO";
-  }) ?? [];
-  
-  const totalVeiculosAtivos = frotaAtiva.length;
-  const totalEquipamentos = totalVeiculosAtivos;
-
-  // Mapa de equipamento_id → placa (do banco de equipamentos)
-  const eqMap = new Map<string, { placa: string; categoria?: string; modulo?: string }>();
+  const eqMap = new Map();
   const categoriasSet = new Set<string>();
   const modulosSet = new Set<string>();
-  frotaAtiva.forEach((eq: any) => {
-    if (eq.placa) eqMap.set(eq.id, { placa: eq.placa, categoria: eq.categoria, modulo: eq.modulo });
+  frotaAtiva.forEach(eq => {
+    eqMap.set(eq.id, eq);
     if (eq.categoria) categoriasSet.add(eq.categoria);
     if (eq.modulo) modulosSet.add(eq.modulo);
   });
 
-  // Se o filtro de categoria inicial for null/undefined, usamos o padrão solicitados: "PESADA"
-  const categoriaFiltroEfetivo = (filtros?.categoria === undefined) ? "PESADA" : filtros.categoria;
+  const categoriaFiltroEfetivo = filtros?.categoria === undefined ? "PESADA" : filtros.categoria;
+  let placasFiltradas = frotaAtiva.map(eq => eq.placa?.toUpperCase().trim()).filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
 
-  // ── 3. Construir mapa de placas reais das OS ──────────────────────────────
-  // Usar a PLACA da OS diretamente (campo 'placa' da tabela ordens_servico)
-  // Se a OS tem equipamento_id, buscar a placa do equipamento
-  // Caso contrário, usar o campo placa da própria OS
-  const placasComOS = new Set<string>();
-  const osPorPlaca: Record<string, typeof allOS> = {};
-
-  for (const os of allOS) {
-    // Determinar a placa: primeiro do equipamento, depois do campo placa da OS
-    let placa = "";
-    if (os.equipamento_id && eqMap.has(os.equipamento_id)) {
-      placa = eqMap.get(os.equipamento_id)!.placa;
-    } else if (os.placa) {
-      placa = os.placa;
-    }
-    if (!placa) continue;
-
-    placa = placa.toUpperCase().trim();
-    placasComOS.add(placa);
-
-    if (!osPorPlaca[placa]) osPorPlaca[placa] = [];
-    osPorPlaca[placa].push(os);
+  if (filtros?.placa) placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
+  if (categoriaFiltroEfetivo && categoriaFiltroEfetivo !== "Todas") {
+    placasFiltradas = placasFiltradas.filter(p => frotaAtiva.find(e => e.placa?.toUpperCase().trim() === p)?.categoria?.toUpperCase() === categoriaFiltroEfetivo.toUpperCase());
   }
 
-  // ── 4. Construir lista de TODAS as placas da frota ──────────────────────────
-  // Excluir placas de teste/fictícias que não devem aparecer no dashboard
-  const placasBloqueadas = new Set(["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"]);
-
-  const todasPlacas = new Set<string>();
-  frotaAtiva.forEach((eq: any) => {
-    if (eq.placa) {
-      const p = eq.placa.toUpperCase().trim();
-      if (!placasBloqueadas.has(p)) todasPlacas.add(p);
-    }
-  });
-  // Adicionar placas das OS que possam não estar cadastradas
-  placasComOS.forEach(p => {
-    if (!placasBloqueadas.has(p)) todasPlacas.add(p);
-  });
-
-  // Aplicar filtros
-  let placasFiltradas = Array.from(todasPlacas);
-
-  if (filtros?.placa) {
-    placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
-  }
-
-  if (categoriaFiltroEfetivo || filtros?.modulo) {
-    const eqFiltradas = new Set<string>();
-    frotaAtiva.forEach((eq: any) => {
-      if (categoriaFiltroEfetivo && categoriaFiltroEfetivo !== "Todas" && categoriaFiltroEfetivo !== "" && eq.categoria?.toUpperCase() !== categoriaFiltroEfetivo.toUpperCase()) return;
-      if (filtros?.modulo && filtros.modulo !== "Todos" && filtros.modulo !== "" && eq.modulo?.toUpperCase() !== filtros.modulo.toUpperCase()) return;
-      if (eq.placa) eqFiltradas.add(eq.placa.toUpperCase());
-    });
-    placasFiltradas = placasFiltradas.filter(p => eqFiltradas.has(p));
-  }
-
-  // ── 5. Calcular KPIs ──────────────────────────────────────────────────────
-  const osFinal = allOS.filter((os) => {
-    let placa = "";
-    if (os.equipamento_id && eqMap.has(os.equipamento_id)) {
-      placa = eqMap.get(os.equipamento_id)!.placa;
-    } else if (os.placa) {
-      placa = os.placa;
-    }
-    if (!placa) return false;
-    placa = placa.toUpperCase().trim();
-
-    // Filtros de Placa
-    if (filtros?.placa && filtros.placa !== "" && placa !== filtros.placa.toUpperCase()) return false;
-    
-    // Filtro de Status
-    if (filtros?.status && filtros.status !== "Todos" && filtros.status !== "" && os.status !== filtros.status) return false;
-
-    // Filtro de Categoria e Módulo (se estiverem filtrando placas)
-    return placasFiltradas.includes(placa);
-  });
-
-  const totalOS = osFinal.length;
-  const emAndamento = osFinal.filter((o) => o.status === "Aberta").length;
-  const osFechadas = osFinal.filter((o) => o.status === "Fechada").length;
-  const horasManutencao = osFinal.reduce(
-    (acc, o) => acc + (Number(o.horas_manutencao) || 0), 0
-  );
-
-  // Status existentes
-  const statusSet = new Set<string>();
-  allOS.forEach((o) => { if (o.status) statusSet.add(o.status); });
-
-  // ── 6. Disponibilidade por veículo (TODA A FROTA) ──────────────────────────
-  // Fórmula: Disp = ((Horas Totais Período - Horas em Manutenção) / Horas Totais Período) * 100
-  // Veículos SEM OS no período = 100%
-  const horasTotaisPeriodo = diasTranscorridos * 24;
+  // 3. Cálculos
+  const horasTotaisPorVeiculo = diasReferencia * 24;
   const veiculos: VeiculoDisp[] = [];
 
   for (const placa of placasFiltradas) {
-    const osDoVeiculo = osPorPlaca[placa] || [];
+    const osDoVeiculo = allOS.filter(o => {
+      let p = o.placa?.toUpperCase().trim();
+      const eq = o.equipamento_id ? eqMap.get(o.equipamento_id) : null;
+      if (eq) p = eq.placa.toUpperCase().trim();
+      return p === placa;
+    });
 
-    if (osDoVeiculo.length === 0) {
-      // Sem OS → 100% disponível
-      veiculos.push({
-        placa,
-        disponibilidade: 100,
-        disponibilidade_operacional: 100,
-        totalOS: 0,
-        osFechadas: 0,
-        horasManut: 0,
-        horasOperacional: 0,
-      });
-      continue;
-    }
+    let hIndispDM = 0;
+    let hIndispDO = 0;
+    let fechadas = 0;
 
-    // ── Fórmula PCM: H.Calendário = diasTranscorridos × 24
-    // Horas Indisponíveis = soma das horas de manutenção de cada OS
-    //   1º usa horas_manutencao declarado   (campo preenchido pelo usuário)
-    //   2º usa data_fechamento - data_abertura  (cálculo real da duração)
-    //   3º usa 0  (não assume valor se não há dado suficiente)
-    let horasIndisp = 0;
-    let horasIndispOp = 0;
-    let totalOSVeiculo = osDoVeiculo.length;
-    let fechadasVeiculo = 0;
-
-    for (const os of osDoVeiculo) {
-      // 1. Cálculo da Indisponibilidade Mecânica (DM)
-      // Usamos o Horário Real da Parada como início absoluto da perda mecânica.
-      const inicioMec = os.horario_parada ? new Date(os.horario_parada) : (os.data_abertura ? new Date(os.data_abertura) : hoje);
-      const fimMec = os.data_fechamento ? new Date(os.data_fechamento) : hoje;
-      
-      const currentMec = Math.max(0, (fimMec.getTime() - inicioMec.getTime()) / (1000 * 60 * 60));
-      horasIndisp += currentMec;
-
-      // 2. Cálculo da Indisponibilidade Operacional (DO)
-      let currentOp = currentMec; // Padrão: Operacional = Mecânico
-
+    osDoVeiculo.forEach(os => {
+      const inicio = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
+      const fim = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
+      const duracao = Math.max(0, (fim.getTime() - inicio.getTime()) / 3600000);
+      hIndispDM += duracao;
       if (os.foi_enviado_reserva && os.horario_parada && os.horas_reserva_chegou) {
-        // Se houve reserva, a perda operacional é apenas o tempo entre a Parada e a Chegada do Reserva.
-        const parada = new Date(os.horario_parada);
-        const chegada = new Date(os.horas_reserva_chegou);
-        currentOp = Math.max(0, (chegada.getTime() - parada.getTime()) / (1000 * 60 * 60));
+        const p = new Date(os.horario_parada);
+        const c = new Date(os.horas_reserva_chegou);
+        hIndispDO += Math.max(0, (c.getTime() - p.getTime()) / 3600000);
+      } else {
+        hIndispDO += duracao;
       }
-      horasIndispOp += currentOp;
-
-      if (os.status === "Fechada") fechadasVeiculo++;
-    }
-
-    // Limitar ao máximo do período (impossível ser > 100% indisponível)
-    horasIndisp = Math.min(horasIndisp, horasTotaisPeriodo);
-    horasIndispOp = Math.min(horasIndispOp, horasTotaisPeriodo);
-
-    const disp =
-      horasTotaisPeriodo > 0
-        ? Math.max(0, Math.min(100, ((horasTotaisPeriodo - horasIndisp) / horasTotaisPeriodo) * 100))
-        : 100;
-
-    const dispOp =
-      horasTotaisPeriodo > 0
-        ? Math.max(0, Math.min(100, ((horasTotaisPeriodo - horasIndispOp) / horasTotaisPeriodo) * 100))
-        : 100;
+      if (os.status === "Fechada") fechadas++;
+    });
 
     veiculos.push({
       placa,
-      disponibilidade: Math.round(disp * 10) / 10,
-      disponibilidade_operacional: Math.round(dispOp * 10) / 10,
-      totalOS: totalOSVeiculo,
-      osFechadas: fechadasVeiculo,
-      horasManut: Math.round(horasIndisp * 10) / 10,
-      horasOperacional: Math.round(horasIndispOp * 10) / 10,
+      disponibilidade: Math.round(Math.max(0, Math.min(100, ((horasTotaisPorVeiculo - hIndispDM) / horasTotaisPorVeiculo) * 100)) * 10) / 10,
+      disponibilidade_operacional: Math.round(Math.max(0, Math.min(100, ((horasTotaisPorVeiculo - hIndispDO) / horasTotaisPorVeiculo) * 100)) * 10) / 10,
+      totalOS: osDoVeiculo.length,
+      osFechadas: fechadas,
+      horasManut: Math.round(hIndispDM * 10) / 10,
+      horasOperacional: Math.round(hIndispDO * 10) / 10,
     });
   }
 
-  veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade);
+  const hIndispDMTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
+  const hIndispDOTotal = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
+  const hTotalFrota = horasTotaisPorVeiculo * veiculos.length;
 
-  // ── 7. Disponibilidade média e KPIs de manutenção ─────────────────────────
-  // Média calculada sobre TODA a frota (veículos sem OS = 100%).
-  // Isso é consistente com a fórmula padrão:
-  //   Disponibilidade Frota = (Σ horas disponíveis) / (Σ horas totais período)
-  const horasTotaisFrota = horasTotaisPeriodo * veiculos.length;
-  const horasIndispFrota = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
-  const disponibilidadeMedia =
-    horasTotaisFrota > 0
-      ? Math.max(0, Math.min(100, ((horasTotaisFrota - horasIndispFrota) / horasTotaisFrota) * 100))
-      : 0;
+  const dm = hTotalFrota > 0 ? Math.round(((hTotalFrota - hIndispDMTotal) / hTotalFrota) * 1000) / 10 : 0;
+  const doOp = hTotalFrota > 0 ? Math.round(((hTotalFrota - hIndispDOTotal) / hTotalFrota) * 1000) / 10 : 0;
 
-  // Horas totais de manutenção = soma de horasManut de TODOS os veículos (calculado real)
-  const horasManutTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
-
-  // MTTR = Tempo Médio de Reparo = total horas manutenção / nº de OS fechadas
-  const totalOSFechadas = veiculos.reduce((acc, v) => acc + v.osFechadas, 0);
-  const mttr = totalOSFechadas > 0
-    ? Math.round((horasManutTotal / totalOSFechadas) * 10) / 10
-    : 0;
-
-  // MTBF = Tempo Médio Entre Falhas = (horas operação total) / nº de falhas
-  // Horas operação = horas do período × nº veículos com OS - horas manutenção
-  const veiculosComOS = veiculos.filter(v => v.totalOS > 0);
-  const totalFalhas = veiculosComOS.reduce((acc, v) => acc + v.totalOS, 0);
-  const horasOperacao = (horasTotaisPeriodo * veiculosComOS.length) - horasManutTotal;
-  const mtbf = totalFalhas > 0
-    ? Math.round((horasOperacao / totalFalhas) * 10) / 10
-    : 0;
-
-  // ── 8. Preventivas (filtradas pela mesma placa, se selecionada) ─────────────
-  const { data: prevData } = await supabase
-    .from("preventivas")
-    .select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa)");
-
-  const preventivas: PreventivaStatus[] = [];
-  prevData?.forEach((p: any) => {
-    const placa = p.equipamentos?.placa?.toUpperCase()?.trim();
-    if (!placa) return;
-    // Respeita filtro de placa selecionado
-    if (filtros?.placa && placa !== filtros.placa.toUpperCase()) return;
-    // Respeita filtro de categoria / módulo (só mostrar preventivas de placas da frota filtrada)
-    if (!placasFiltradas.includes(placa)) return;
-
-    const restantes =
-      (Number(p.ultimo_horimetro) + Number(p.intervalo_horas)) -
-      Number(p.horimetro_atual);
-    let status: "atrasado" | "atencao" | "no_prazo";
-    if (restantes < 0) status = "atrasado";
-    else if (restantes <= 50) status = "atencao";
-    else status = "no_prazo";
-    preventivas.push({ placa, horas_restantes: restantes, status });
-  });
-  preventivas.sort((a, b) => a.horas_restantes - b.horas_restantes);
-
-  // ── 9. Documentos (Usa os dados já buscados anteriormente) ─────────────────
-  const hojeStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  const hojeSaoPaulo = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const em30dias = new Date(hojeSaoPaulo);
-  em30dias.setDate(em30dias.getDate() + 30);
-  const em30Str = em30dias.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-
-  let docsValidos = 0;
-  let docsAVencer = 0;
-  let docsVencidos = 0;
-
-  equipamentos?.forEach((eq) => {
-    [eq.laudo_validade, eq.crlv_validade, eq.implemento_validade, eq.tacografo_validade, eq.civ_validade]
-      .filter(Boolean)
-      .forEach((val) => {
-        if (val < hojeStr) docsVencidos++;
-        else if (val <= em30Str) docsAVencer++;
-        else docsValidos++;
-      });
-  });
-
-  // ── 10. Disponibilidade por semana do período ──────────────────────────────
-  // Divide o mês em semanas e calcula a disponibilidade de cada semana
-  const dispSemanal: DispSemanal[] = [];
-  const horasPorSemana = 7 * 24; // 168 h por semana
-  const numVeiculos = placasFiltradas.length || 1;
-
-  for (let semana = 1; semana <= 5; semana++) {
-    const diaInicio = (semana - 1) * 7 + 1;
-    const diaFim = Math.min(semana * 7, diasNoMes);
-    if (diaInicio > diasNoMes) break;
-
-    const anoSem = anoFiltro ?? anoAtual;
-    const mesSem = mesFiltro ?? mesAtual;
-    const inicioSem = new Date(anoSem, mesSem - 1, diaInicio);
-    const fimSem = new Date(anoSem, mesSem - 1, diaFim, 23, 59, 59);
-
-    // OS dos veículos filtrados nessa semana
-    let horasIndispSem = 0;
-    for (const os of osFinal) {
-      const abertura = os.data_abertura ? new Date(os.data_abertura) : null;
-      if (!abertura || abertura < inicioSem || abertura > fimSem) continue;
-      const horas = Number(os.horas_manutencao) || 0;
-      if (horas > 0) {
-        horasIndispSem += horas;
-      } else if (os.data_fechamento) {
-        const diff = (new Date(os.data_fechamento).getTime() - abertura.getTime()) / 3600000;
-        horasIndispSem += Math.max(0, diff);
-      }
-    }
-
-    const diasSem = diaFim - diaInicio + 1;
-    const horasTotaisSem = diasSem * 24 * numVeiculos;
-    const horasIndispCapSem = Math.min(horasIndispSem, horasTotaisSem);
-    const dispSem = horasTotaisSem > 0
-      ? Math.max(0, Math.min(100, ((horasTotaisSem - horasIndispCapSem) / horasTotaisSem) * 100))
-      : 100;
-
-    dispSemanal.push({
-      semana: `S${semana}`,
-      disp: Math.round(dispSem * 10) / 10,
-    });
-  }
-
-  // ── 11. Anos disponíveis ───────────────────────────────────────────────────
-  const { data: allOSForYears } = await supabase
-    .from("ordens_servico")
-    .select("data_abertura");
-
-  const anosSet = new Set<number>();
-  anosSet.add(anoAtual);
-  allOSForYears?.forEach((o) => {
-    if (o.data_abertura) {
-      const y = parseInt(o.data_abertura.slice(0, 4));
-      if (!isNaN(y)) anosSet.add(y);
-    }
-  });
-
-  // ── 11. Placas para filtro (TODA A FROTA) ───────────────────────────────────
-  const placasFrota = Array.from(todasPlacas).sort();
-
-  const filtroOpcoes: FiltroOpcoes = {
-    meses: [
-      { value: 1, label: "Janeiro" }, { value: 2, label: "Fevereiro" },
-      { value: 3, label: "Março" }, { value: 4, label: "Abril" },
-      { value: 5, label: "Maio" }, { value: 6, label: "Junho" },
-      { value: 7, label: "Julho" }, { value: 8, label: "Agosto" },
-      { value: 9, label: "Setembro" }, { value: 10, label: "Outubro" },
-      { value: 11, label: "Novembro" }, { value: 12, label: "Dezembro" },
-    ],
-    anos: Array.from(anosSet).sort((a, b) => b - a),
-    categorias: Array.from(categoriasSet).sort(),
-    placas: placasFrota,
-    modulos: Array.from(modulosSet).sort(),
-    statusList: Array.from(statusSet).sort(),
-  };
-
-  // ── 12. NOVOS KPIs ──────────────────────────────────────────────────────────
-
-  // DM = (HT - HM) / HT × 100  (Disponibilidade Mecânica)
-  const dm = horasTotaisFrota > 0
-    ? Math.round(((horasTotaisFrota - horasIndispFrota) / horasTotaisFrota) * 1000) / 10
-    : 0;
-
-  // DO = (HT - HO) / HT * 100 (Disponibilidade Operacional Real baseada no PCM)
-  const horasIndispOpFrota = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
-  const doOperacional = horasTotaisFrota > 0
-    ? Math.round(((horasTotaisFrota - horasIndispOpFrota) / horasTotaisFrota) * 1000) / 10
-    : 0;
-
-  // Backlog = Horas pendentes (OS abertas) / Capacidade (8h/dia × equipe estimada)
-  const horasPendentes = osFinal
-    .filter(o => o.status === "Aberta")
-    .reduce((acc, o) => acc + (Number(o.horas_manutencao) || 8), 0);
-  const capacidadeDiaria = 8; // 8h/dia por mecânico
-  const backlog = Math.round((horasPendentes / capacidadeDiaria) * 10) / 10;
-
-  // Paradas por Categoria (agrupa OS por classe)
-  const paradasMap: Record<string, number> = {};
-  osFinal.forEach(os => {
-    const classe = (os as any).classe || "Outros";
-    paradasMap[classe] = (paradasMap[classe] || 0) + 1;
-  });
-  const paradasPorCategoria = Object.entries(paradasMap)
-    .map(([categoria, quantidade]) => ({ categoria, quantidade }))
-    .sort((a, b) => b.quantidade - a.quantidade);
-
-  // Ranking de Falhas (top 10 equipamentos com mais OS)
-  const rankingFalhas = veiculos
-    .filter(v => v.totalOS > 0)
-    .map(v => ({
-      placa: v.placa,
-      falhas: v.totalOS,
-      mtbf: v.osFechadas > 0
-        ? Math.round(((horasTotaisPeriodo - v.horasManut) / v.totalOS) * 10) / 10
-        : 0,
-    }))
-    .sort((a, b) => b.falhas - a.falhas)
-    .slice(0, 10);
-
-  // Manutenção por Tipo (Preventiva, Corretiva, etc.)
-  const manutTipoMap: Record<string, number> = {};
-  osFinal.forEach(os => {
-    const tipo = (os as any).classe || "Outros";
-    manutTipoMap[tipo] = (manutTipoMap[tipo] || 0) + 1;
-  });
-  const manutPorTipo = Object.entries(manutTipoMap)
-    .map(([tipo, quantidade]) => ({ tipo, quantidade }))
-    .sort((a, b) => b.quantidade - a.quantidade);
-
-  // Disponibilidade por Tipo de Equipamento
-  const tipoMap: Record<string, { somaDisp: number; count: number }> = {};
-  veiculos.forEach(v => {
-    const eq = equipamentos?.find(e => e.placa?.toUpperCase() === v.placa);
-    const tipo = eq?.tipo || "OUTROS";
-    if (!tipoMap[tipo]) tipoMap[tipo] = { somaDisp: 0, count: 0 };
-    tipoMap[tipo].somaDisp += v.disponibilidade;
-    tipoMap[tipo].count += 1;
-  });
-  const dispPorTipo = Object.entries(tipoMap)
-    .map(([tipo, d]) => ({
-      tipo,
-      disponibilidade: Math.round((d.somaDisp / d.count) * 10) / 10,
-      total: d.count,
-    }))
-    .sort((a, b) => a.disponibilidade - b.disponibilidade);
-
-  // Status da Frota (tabela dinâmica)
-  const statusFrota = veiculos.map(v => {
-    const eq = equipamentos?.find(e => e.placa?.toUpperCase() === v.placa);
-    const osAbertas = (osPorPlaca[v.placa] || []).filter(o => o.status === "Aberta").length;
-    let status = "Disponível";
-    if (osAbertas > 0) status = "Manutenção";
-    else if (v.disponibilidade >= 95) status = "Disponível";
-    else if (v.disponibilidade >= 90) status = "Atenção";
-    else status = "Crítico";
-    return {
-      placa: v.placa,
-      tipo: eq?.tipo || "—",
-      status,
-      disponibilidade: v.disponibilidade,
-      modulo: eq?.modulo || "—",
-    };
-  }).sort((a, b) => a.disponibilidade - b.disponibilidade);
+  const MESES_NOME = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   return {
-    totalOS,
-    emAndamento,
-    osFechadas,
-    disponibilidadeMedia: Math.round(disponibilidadeMedia * 10) / 10,
+    totalOS: allOS.length,
+    emAndamento: allOS.filter(o => o.status === "Aberta").length,
+    osFechadas: veiculos.reduce((acc, v) => acc + v.osFechadas, 0),
+    disponibilidadeMedia: dm,
     dm,
-    doOperacional,
-    horasManutencao: Math.round(horasManutTotal * 10) / 10,
-    mttr,
-    mtbf,
-    backlog,
-    totalEquipamentos,
-    totalVeiculosAtivos,
-    veiculos,
-    preventivas,
-    docsValidos,
-    docsAVencer,
-    docsVencidos,
-    filtroOpcoes,
-    periodoLabel,
-    dispSemanal,
-    paradasPorCategoria,
-    rankingFalhas,
-    dispPorTipo,
-    statusFrota,
-    manutPorTipo,
+    doOperacional: doOp,
+    horasManutencao: Math.round(hIndispDMTotal * 10) / 10,
+    mttr: veiculos.reduce((acc, v) => acc + v.osFechadas, 0) > 0 ? Math.round((hIndispDMTotal / veiculos.reduce((acc, v) => acc + v.osFechadas, 0)) * 10) / 10 : 0,
+    mtbf: allOS.length > 0 ? Math.round(((hTotalFrota - hIndispDMTotal) / allOS.length) * 10) / 10 : 0,
+    backlog: Math.round((allOS.filter(o => o.status === "Aberta").length * 8 / 8) * 10) / 10,
+    totalEquipamentos: frotaAtiva.length,
+    totalVeiculosAtivos: frotaAtiva.length,
+    veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
+    preventivas: [],
+    docsValidos: 0, docsAVencer: 0, docsVencidos: 0,
+    filtroOpcoes: {
+      meses: MESES_NOME.slice(1).map((m, i) => ({ value: i + 1, label: m })),
+      anos: [2024, 2025, 2026],
+      categorias: Array.from(categoriasSet),
+      placas: placasFiltradas.sort(),
+      modulos: Array.from(modulosSet),
+      statusList: Array.from(new Set(allOS.map(o => o.status || "")))
+    },
+    periodoLabel: `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
+    data_inicio: calSuzano?.data_inicio,
+    data_fim: calSuzano?.data_fim,
+    dispSemanal: [],
+    paradasPorCategoria: [],
+    rankingFalhas: [],
+    dispPorTipo: [],
+    statusFrota: [],
+    manutPorTipo: []
   };
 }

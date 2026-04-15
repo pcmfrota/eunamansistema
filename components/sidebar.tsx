@@ -33,6 +33,7 @@ const routes = [
   { name: "Programação Preventiva", path: "/preventivas", icon: Calendar },
   { name: "Backlog", path: "/backlog", icon: Wrench },
   { name: "PCM", path: "/pcm", icon: Settings },
+  { name: "Calendário Suzano", path: "/calendario", icon: Calendar },
   { name: "Meu Perfil", path: "/perfil", icon: User },
 ];
 

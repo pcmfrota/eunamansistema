@@ -125,6 +125,24 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       {/* KPIs */}
       <div className="flex overflow-x-auto gap-4 pb-2 -mx-5 px-5 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {data.data_inicio && (
+          <>
+            <KpiCard
+              title="Início do Período"
+              value={new Date(data.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
+              subtitle="Calendário Suzano"
+              icon={<CalendarClock size={18} className="text-zinc-500" />}
+              iconBg="bg-zinc-100 dark:bg-zinc-800"
+            />
+            <KpiCard
+              title="Fim do Período"
+              value={new Date(data.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}
+              subtitle="Calendário Suzano"
+              icon={<CalendarClock size={18} className="text-zinc-500" />}
+              iconBg="bg-zinc-100 dark:bg-zinc-800"
+            />
+          </>
+        )}
         <KpiCard
           title="Frota Ativa"
           value={String(data.totalVeiculosAtivos || 0)}
