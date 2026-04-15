@@ -101,10 +101,10 @@ export async function getDashboardData(filtros?: {
 
   if (mesFiltro && anoFiltro) {
     // ── Mês + Ano específicos ──────────────────────────────────────────────────
-    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01T00:00:00`;
+    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
     const fimMesDate = new Date(anoFiltro, mesFiltro, 0);
     diasNoMes = fimMesDate.getDate();
-    fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${String(diasNoMes).padStart(2, "0")}T23:59:59`;
+    fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-${String(diasNoMes).padStart(2, "0")}`;
     
     diasTranscorridos = diasNoMes;
   } else if (anoFiltro && !mesFiltro) {
@@ -143,13 +143,19 @@ export async function getDashboardData(filtros?: {
   // ── 1. Buscar TODAS as OS do período ───────────────────────────────────────
   let osQuery = supabase
     .from("ordens_servico")
-    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe, foi_enviado_reserva, horario_parada, horas_reserva_chegou");
+    .select("id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe, foi_enviado_reserva");
 
   if (inicioFiltro) osQuery = osQuery.gte("data_abertura", inicioFiltro);
   if (fimFiltro)    osQuery = osQuery.lte("data_abertura", fimFiltro);
 
-  const { data: osPeriodo } = await osQuery;
+  const { data: osPeriodo, error: osError } = await osQuery;
+  
+  if (osError) {
+    console.error("❌ Erro Supabase OS:", osError);
+  }
+
   const allOS = osPeriodo ?? [];
+  console.log(`📊 Dashboard: Encontradas ${allOS.length} O.S no período ${inicioFiltro} até ${fimFiltro}`);
 
   // ── 2. Buscar equipamentos do banco ────────────────────────────────────────
   const { data: equipamentos } = await supabase
@@ -297,18 +303,11 @@ export async function getDashboardData(filtros?: {
       if (horasDeclaradas > 0) {
         // Campo declarado pelo usuário — usa diretamente
         currentMec = horasDeclaradas;
-      } else if (os.data_abertura && os.data_fechamento) {
-        // Calcula a duração real pela diferença de datas (sem cap artificioso)
-        const abertura = new Date(os.data_abertura).getTime();
-        const fechamento = new Date(os.data_fechamento).getTime();
-        currentMec = Math.max(0, (fechamento - abertura) / (1000 * 60 * 60));
-      } else if (os.status === "Aberta" && os.data_abertura) {
-        // OS ainda aberta: conta desde a abertura até agora
-        const abertura = new Date(os.data_abertura).getTime();
-        const agora = Date.now();
-        currentMec = Math.max(0, (agora - abertura) / (1000 * 60 * 60));
-        // Limita ao máximo do período para não ultrapassar 100% indisponível
-        currentMec = Math.min(currentMec, horasTotaisPeriodo);
+      } else if (os.data_abertura) {
+        // Calcula a duração real pela diferença de datas
+        const inicioManut = new Date(os.data_abertura);
+        const fimManut = os.data_fechamento ? new Date(os.data_fechamento) : nowLocal;
+        currentMec = Math.max(0, (fimManut.getTime() - inicioManut.getTime()) / (1000 * 60 * 60));
       }
       
       horasIndisp += currentMec;
@@ -316,15 +315,12 @@ export async function getDashboardData(filtros?: {
       // Cálculo Operacional (Caminhão Reserva)
       let currentOp = currentMec; // Por padrão, impacto operacional = mecânico
 
-      if (os.foi_enviado_reserva && os.horario_parada) {
-        const parada = new Date(os.horario_parada).getTime();
-        if (os.horas_reserva_chegou) {
-          const reserva = new Date(os.horas_reserva_chegou).getTime();
-          currentOp = Math.max(0, (reserva - parada) / (1000 * 60 * 60));
-        } else if (os.status === "Aberta") {
-          const agora = Date.now();
-          currentOp = Math.max(0, (agora - parada) / (1000 * 60 * 60));
-        }
+      if (os.foi_enviado_reserva) {
+        // Se houve reserva, o impacto operacional é apenas o tempo até a reserva chegar.
+        // Como as colunas de horário de reserva não existem no banco, reduziremos o impacto
+        // ou manteremos o padrão mecânico para evitar erros. 
+        // Para agora, o impacto operacional será o tempo total da OS (padrão conservador).
+        currentOp = currentMec;
       }
 
       horasIndispOp += currentOp;
