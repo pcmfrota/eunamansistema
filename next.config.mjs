@@ -1,14 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true, // Garante que a minificação nativa rápida esteja ativa (ajuda a deixar mais leve)
   eslint: {
-    // Evita que avisos/erros de lint quebrem o build no Vercel
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // Evita que problemas de tipagem quebrem o build no Vercel
     ignoreBuildErrors: true,
+  },
+  // Otimização de imagens (compressão automática)
+  images: {
+    formats: ["image/avif", "image/webp"],
+  },
+  // Compressão gzip/brotli das respostas HTTP
+  compress: true,
+  // Evita bundling server-only packages no client
+  serverExternalPackages: [],
+  experimental: {
+    // Otimiza Server Actions (reduz roundtrips)
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
   },
 };
 

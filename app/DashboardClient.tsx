@@ -2,8 +2,10 @@
 
 import React, { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
+import { Loader2 } from "lucide-react";
 import { Filtros, type FiltrosValues } from "@/components/filtros";
 import { gerarSlideHTML } from "@/lib/gerar-slide";
+import { getDashboardData, type DashboardData } from "@/app/actions/dashboard";
 
 // Componentes estáticos que não usam bibliotecas pesadas de gráficos
 import { PainelFormulas } from "@/components/graficos";
@@ -25,11 +27,6 @@ function CarregandoGrafico() {
     </div>
   );
 }
-import { Loader2 } from "lucide-react";
-import {
-  getDashboardData,
-  type DashboardData,
-} from "@/app/actions/dashboard";
 
 interface DashboardClientProps {
   initialData: DashboardData;
