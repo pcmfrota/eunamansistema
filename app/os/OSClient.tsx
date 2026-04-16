@@ -194,8 +194,15 @@ export default function ControleOSClient({
         const res = await importarOrdensServico(data);
         if (res && 'error' in res) {
           alert("Erro ao importar: " + res.error);
-        } else {
-          alert("Importação concluída com sucesso!");
+        } else if (res && 'count' in res) {
+          const r = res as any;
+          let msg = `✅ Importação concluída!\n\n📋 ${r.count} OS importadas com sucesso.`;
+          if (r.semCadastro > 0) {
+            msg += `\n\n⚠️ ${r.semCadastro} OS com placas não cadastradas na Base de Frotas.\n`;
+            msg += `Essas OS ficam ocultas na lista, mas são contabilizadas no Dashboard.\n\n`;
+            msg += `Placas: ${r.placasNaoCadastradas.slice(0, 10).join(', ')}${r.placasNaoCadastradas.length > 10 ? '...' : ''}`;
+          }
+          alert(msg);
         }
       });
       e.target.value = "";

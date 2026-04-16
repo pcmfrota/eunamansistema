@@ -21,7 +21,7 @@ const OSSchema = z.object({
   local: z.string().optional().nullable(),
   classe: z.string().default('CORRETIVA'),
   foi_enviado_reserva: z.boolean().default(false),
-  descricao: z.string().min(1, 'Descrição é obrigatória'),
+  descricao: z.string().optional().nullable().default('Importação via Planilha'),
   motivo: z.string().optional().nullable(),
   sistema: z.string().optional().nullable(),
   sub_sistema: z.string().optional().nullable(),
@@ -94,6 +94,7 @@ export class OSService {
     const eqMap: Record<string, { id: string; modulo: string }> = {};
     equipamentos?.forEach(e => { eqMap[e.placa.toUpperCase()] = { id: e.id, modulo: e.modulo || '' } });
 
+    // Rastreia placas não cadastradas (para informar no retorno, mas NÃO bloqueia)
     const missingPlates = new Set<string>();
 
     for (const row of rows) {
@@ -103,6 +104,9 @@ export class OSService {
         'veiculo', 'Veículo', 'VEÍCULO', 'Veiculo',
         'maquina', 'Máquina', 'MÁQUINA', 'Maquina',
         'frota', 'Frota', 'FROTA',
+        'TAG/FUNAMAN', 'TAG FUNAMAN', 'TAGFUNAMAN', 'Tag Funaman',
+        'TAG/SUZANO', 'TAG SUZANO', 'TAGSUZANO',
+        'NRUI', 'NR UI',
       ]) || '';
       const placaUpper = String(placaRaw).toUpperCase().trim();
 
@@ -110,10 +114,8 @@ export class OSService {
         missingPlates.add(placaUpper);
       }
     }
-
-    if (missingPlates.size > 0) {
-      throw new Error(`As seguintes placas não estão cadastradas na base de equipamentos: ${Array.from(missingPlates).join(', ')}. Por favor, cadastre-as antes de realizar a importação.`);
-    }
+    // Não bloqueia mais — placas não cadastradas terão equipamento_id = null
+    // e ficam ocultas na lista, mas visíveis no dashboard
 
     const inserts: OSInsert[] = [];
     const eqUpdates: Record<string, number> = {};
@@ -127,6 +129,9 @@ export class OSService {
           'veiculo', 'Veículo', 'VEÍCULO', 'Veiculo',
           'maquina', 'Máquina', 'MÁQUINA', 'Maquina',
           'frota', 'Frota', 'FROTA',
+          'TAG/FUNAMAN', 'TAG FUNAMAN', 'TAGFUNAMAN', 'Tag Funaman',
+          'TAG/SUZANO', 'TAG SUZANO', 'TAGSUZANO',
+          'NRUI', 'NR UI',
         ]) || '';
         const placaUpper = String(placaRaw).toUpperCase().trim();
 
@@ -136,12 +141,17 @@ export class OSService {
         // O equipamento é garantido pois validamos antes
         const eq = eqMap[placaUpper];
 
-        const horimetro = this.parseFloatSafe(this.getVal(row, ['horimetro', 'Horímetro', 'KM', 'Hori', 'KM/H', 'Hodometro', 'Hodômetro']));
-
-
+        const horimetro = this.parseFloatSafe(this.getVal(row, [
+          'horimetro', 'Horímetro', 'KM', 'Hori', 'KM/H', 'Hodometro', 'Hodômetro',
+          'HORÍMETRO', 'HORIMETRO', 'Horimetro', 'HR', 'HRS', 'Hrs',
+          'N. ENTRADA NO MED', 'N ENTRADA NO MED', 'ENTRADA MED', 'MEDIDOR',
+        ]));
 
         // Normaliza status
-        const statusRaw = String(this.getVal(row, ['status', 'Status', 'Situação', 'situacao', 'Estado']) || 'Aberta').trim();
+        const statusRaw = String(this.getVal(row, [
+          'status', 'Status', 'Situação', 'situacao', 'Estado',
+          'STATUS/O.S', 'STATUS OS', 'STATUS/OS', 'STATUSOS', 'STATUS',
+        ]) || 'Aberta').trim();
         const statusMap: Record<string, string> = {
           'fechada': 'Fechada', 'fechado': 'Fechada', 'concluida': 'Fechada', 'concluído': 'Fechada',
           'aberta': 'Aberta', 'aberto': 'Aberta', 'em aberto': 'Aberta',
@@ -151,33 +161,55 @@ export class OSService {
         const status = statusMap[statusRaw.toLowerCase()] || 'Aberta';
 
         const raw = {
-          numero_os: this.getVal(row, ['numero_os', 'Nº OS', 'N° OS', 'Numero OS', 'OS', 'num_os', 'NºOS']) ||
-                     `${this.generateOSNumber()}-${Math.floor(Math.random() * 1000)}`,
+          numero_os: this.getVal(row, [
+            'numero_os', 'Nº OS', 'N° OS', 'Numero OS', 'OS', 'num_os', 'NºOS',
+            'N.O.S', 'N.O.S.', 'NOS', 'Nº O.S', 'N° O.S', 'NUMERO OS', 'N OS', 'N°O.S',
+          ]) || `${this.generateOSNumber()}-${Math.floor(Math.random() * 1000)}`,
           equipamento_id: eq ? eq.id : null,
           placa: placaUpper,
-          modulo: this.getVal(row, ['modulo', 'Módulo', 'Modulo', 'MODULO']) ||
-                  (eq ? eq.modulo : null),
+          modulo: this.getVal(row, [
+            'modulo', 'Módulo', 'Modulo', 'MODULO', 'MÓDULO', 'MOD', 'Mod', 'Mód',
+          ]) || (eq ? eq.modulo : null),
           status,
           data_abertura: this.parsePossibleDate(
-            this.getVal(row, ['data_abertura', 'Abertura', 'Data Abertura', 'Data Início', 'Inicio', 'DATA ABERTURA', 'Data'])
+            this.getVal(row, [
+              'data_abertura', 'Abertura', 'Data Abertura', 'Data Início', 'Inicio', 'DATA ABERTURA', 'Data',
+              'DATA/HORA ABERTURA', 'DT ABERTURA', 'ABERTURA', 'Data de Abertura', 'Dt Abertura',
+              'DATA HORA ABERTURA', 'DT/HR ABERTURA',
+            ])
           ) || getCurrentLocalDatetime(),
           data_fechamento: this.parsePossibleDate(
-            this.getVal(row, ['data_fechamento', 'Fechamento', 'Data Fechamento', 'Data Fim', 'Conclusão', 'DATA FECHAMENTO'])
+            this.getVal(row, [
+              'data_fechamento', 'Fechamento', 'Data Fechamento', 'Data Fim', 'Conclusão', 'DATA FECHAMENTO',
+              'DATA/HORA FECHA', 'DATA HORA FECHA', 'DT FECHAMENTO', 'FECHAMENTO', 'Data de Fechamento',
+              'DT/HR FECHAMENTO', 'Dt Fechamento',
+            ])
           ),
           horimetro,
-          operacao_tipo: this.getVal(row, ['operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo', 'Tipo Operação']),
+          operacao_tipo: this.getVal(row, [
+            'operacao_tipo', 'Operação (Tipo)', 'Operação', 'Tipo', 'Tipo Operação',
+            'OPERAÇÃO', 'OPERACAO', 'Operacao', 'TIPO OPERAÇÃO', 'OP', 'Tipo Op',
+          ]),
           local: this.getVal(row, ['local', 'Local', 'Frente', 'LOCAL']),
-          classe: this.getVal(row, ['classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS', 'CLASSE', 'Tipo OS']) || 'CORRETIVA',
+          classe: this.getVal(row, [
+            'classe', 'Classe', 'Tipo Manutenção', 'Tipo de OS', 'CLASSE', 'Tipo OS',
+            'TIPO', 'Tipo', 'Tipo Serviço', 'TIPO SERVICO',
+          ]) || 'CORRETIVA',
           foi_enviado_reserva: row.foi_enviado_reserva === true || String(row.foi_enviado_reserva || '').toUpperCase() === 'SIM',
-          descricao: this.getVal(row, ['descricao', 'Descrição', 'Descricao', 'Serviço', 'Atividade', 'DESCRIÇÃO', 'Defeito', 'Problema']) ||
-                     'Importação via Planilha',
+          descricao: this.getVal(row, [
+            'descricao', 'Descrição', 'Descricao', 'Serviço', 'Atividade', 'DESCRIÇÃO', 'Defeito', 'Problema',
+            'SERVIÇO', 'SERVICO', 'Defeito Informado', 'Desc', 'DESC',
+          ]) || 'Importação via Planilha',
           motivo: this.getVal(row, ['motivo', 'Motivo', 'Causa', 'MOTIVO']),
           sistema: this.getVal(row, ['sistema', 'Sistema', 'SISTEMA']),
           sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema', 'SUB-SISTEMA']),
           horas_manutencao: this.parseFloatSafe(
-            this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo', 'Horas Manut', 'H. Manut', 'HORAS'])
+            this.getVal(row, [
+              'horas_manutencao', 'Horas', 'Tempo', 'Horas Manut', 'H. Manut', 'HORAS',
+              'HRS MANUT', 'H MANUT', 'Hs Manut', 'DURAÇÃO', 'Duração',
+            ])
           ),
-          observacoes: this.getVal(row, ['observacoes', 'Observações', 'Observacoes', 'Notas', 'OBSERVAÇÕES']),
+          observacoes: this.getVal(row, ['observacoes', 'Observações', 'Observacoes', 'Notas', 'OBSERVAÇÕES', 'OBS', 'Obs']),
         };
 
         inserts.push(OSSchema.parse(raw));
@@ -195,7 +227,12 @@ export class OSService {
       await OSRepository.updateEquipamentoHorimetro(id, value);
     }
 
-    return { success: true, count: inserts.length };
+    return { 
+      success: true, 
+      count: inserts.length,
+      semCadastro: missingPlates.size,
+      placasNaoCadastradas: Array.from(missingPlates),
+    };
   }
 
   private static parsePossibleDate(d?: any) {

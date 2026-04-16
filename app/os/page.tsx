@@ -23,10 +23,12 @@ export default async function ControleOSPage() {
     };
   }) || [];
 
-  // Ordens de serviço
+  // Ordens de serviço — lista mostra apenas OS com placa cadastrada.
+  // OS importadas sem cadastro ficam ocultas aqui mas visíveis no dashboard.
   const { data: ordens } = await supabase
     .from('ordens_servico')
     .select('*')
+    .not('equipamento_id', 'is', null)
     .order('data_abertura', { ascending: false })
 
   // Catálogo Sistema → Sub-Sistema → Componente
