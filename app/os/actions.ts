@@ -22,8 +22,14 @@ const parseFormData = (formData: FormData): OSInsert => ({
   sub_sistema: formData.get('sub_sistema') as string,
   horas_manutencao: formData.get('horas_manutencao') ? parseFloat(formData.get('horas_manutencao') as string) : null,
   observacoes: formData.get('observacoes') as string,
+  // Campos críticos para cálculo PCM DM/DO
+  horario_parada: (formData.get('horario_parada') as string) || null,
+  qual_reserva: (formData.get('qual_reserva') as string) || null,
+  horas_reserva_chegou: (formData.get('horas_reserva_chegou') as string) || null,
+  componente: (formData.get('componente') as string) || null,
   numero_os: '' // Generator will handle this if empty
 })
+
 
 export async function criarOrdemServico(formData: FormData) {
   try {

@@ -7,6 +7,7 @@ import {
   Disc,
   Clipboard,
   Settings,
+  Settings2,
   Menu,
   X,
   Moon,
@@ -26,16 +27,18 @@ import { logout } from "@/app/login/actions";
 import AlterarSenhaModal from "./AlterarSenhaModal";
 
 const routes = [
-  { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Horímetro", path: "/horimetro", icon: Clipboard },
-  { name: "Boletim de Pneus", path: "/pneus", icon: Disc },
-  { name: "Ordens de Serviço", path: "/os", icon: FileText },
-  { name: "Programação Preventiva", path: "/preventivas", icon: Calendar },
-  { name: "Backlog", path: "/backlog", icon: Wrench },
-  { name: "PCM", path: "/pcm", icon: Settings },
-  { name: "Calendário Suzano", path: "/calendario", icon: Calendar },
-  { name: "Meu Perfil", path: "/perfil", icon: User },
+  { name: "Dashboard",                path: "/",                        icon: LayoutDashboard },
+  { name: "Controle de OS",           path: "/os",                      icon: FileText },
+  { name: "Controle de Horímetros",   path: "/preventivas",             icon: Calendar },
+  { name: "Boletim de Pneus",         path: "/pneus",                   icon: Disc },
+  { name: "Horímetro",                path: "/horimetro",               icon: Clipboard },
+  { name: "Backlog",                  path: "/backlog",                 icon: Wrench },
+  { name: "Prog. Preventiva",         path: "/programacao-preventiva",  icon: Settings2 },
+  { name: "Base de Frotas",           path: "/base-frotas",             icon: LayoutDashboard },
+  { name: "Base de Dados",            path: "/base-dados",              icon: LayoutDashboard },
+  { name: "PCM",                      path: "/pcm",                     icon: Settings },
 ];
+
 
 export function Sidebar() {
   const pathname = usePathname();

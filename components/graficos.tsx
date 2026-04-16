@@ -49,11 +49,15 @@ function ModalDetalhe({
   veiculo,
   mes,
   ano,
+  dataInicio,
+  dataFim,
   onClose,
 }: {
   veiculo: VeiculoDetalhe;
   mes?: number;
   ano?: number;
+  dataInicio?: string;
+  dataFim?: string;
   onClose: () => void;
 }) {
   const [osList, setOsList] = useState<OrdemServicoResumo[] | null>(null);
@@ -72,14 +76,14 @@ function ModalDetalhe({
     let cancelled = false;
     setLoading(true);
     import("@/app/actions/os-placa").then(({ buscarOSporPlaca }) =>
-      buscarOSporPlaca(veiculo.nome, mes, ano)
+      buscarOSporPlaca(veiculo.nome, mes, ano, dataInicio, dataFim)
     ).then((data) => {
       if (!cancelled) { setOsList(data); setLoading(false); }
     }).catch(() => {
       if (!cancelled) { setOsList([]); setLoading(false); }
     });
     return () => { cancelled = true; };
-  }, [veiculo.nome, mes, ano]);
+  }, [veiculo.nome, mes, ano, dataInicio, dataFim]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -233,18 +237,22 @@ function ModalDetalhe({
             ) : (
               <div className="flex flex-col gap-2">
                 {osList.map((os) => (
-                  <div
+                  <a
                     key={os.id}
-                    className="rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3.5"
+                    href={`/os?abrir=${os.id}`}
+                    className="group rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3.5 hover:border-blue-500/50 hover:bg-zinc-800/70 transition-all cursor-pointer block"
                   >
-                    {/* Row 1: número + status */}
+                    {/* Row 1: número + status + seta */}
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[13px] font-bold text-zinc-100">
+                      <span className="text-[13px] font-bold text-zinc-100 group-hover:text-blue-300 transition-colors">
                         OS: {os.numero_os}
                       </span>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(os.status)}`}>
-                        {os.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(os.status)}`}>
+                          {os.status}
+                        </span>
+                        <TrendingUp className="w-3.5 h-3.5 text-zinc-600 group-hover:text-blue-400 transition-colors" />
+                      </div>
                     </div>
 
                     {/* Classe / sistema */}
@@ -283,9 +291,13 @@ function ModalDetalhe({
                         <span className="text-zinc-500 truncate max-w-[120px]">{os.motivo}</span>
                       )}
                     </div>
-                  </div>
+                    <p className="text-[9px] text-blue-500/60 mt-2 group-hover:text-blue-400 transition-colors">
+                      Clique para abrir a O.S completa →
+                    </p>
+                  </a>
                 ))}
               </div>
+
             )}
           </div>
         </div>
@@ -310,6 +322,8 @@ interface GraficoVeiculosProps {
   periodoLabel?: string;
   mes?: number;
   ano?: number;
+  dataInicio?: string;
+  dataFim?: string;
   title?: string;
   mostrarIndisponibilidade?: boolean;
   tipoAvailability?: "DM" | "DO";
@@ -319,7 +333,9 @@ export function GraficoVeiculos({
   dados, 
   periodoLabel, 
   mes, 
-  ano, 
+  ano,
+  dataInicio,
+  dataFim, 
   title = "Disponibilidade Operacional",
   mostrarIndisponibilidade = false,
   tipoAvailability = "DM"
@@ -406,6 +422,8 @@ export function GraficoVeiculos({
           veiculo={selected}
           mes={mes}
           ano={ano}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
           onClose={() => setSelected(null)}
         />
       )}

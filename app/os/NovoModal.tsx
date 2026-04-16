@@ -1,7 +1,7 @@
+"use client";
 import { useState, useEffect } from "react";
-import { X, RotateCcw } from "lucide-react";
+import { X } from "lucide-react";
 import { criarOrdemServico, atualizarOrdemServico } from "./actions";
-import { useFormDraft } from '@/hooks/use-form-draft'
 
 type OS = {
   id: string;
@@ -21,6 +21,7 @@ type OS = {
   motivo: string | null;
   sistema: string | null;
   sub_sistema: string | null;
+  componente: string | null;
   horario_parada: string | null;
   qual_reserva: string | null;
   horas_reserva_chegou: string | null;
@@ -28,32 +29,17 @@ type OS = {
   equipamento_id: string;
 };
 
-type Equipamento = {
-  id: string;
-  placa: string;
-  modulo?: string;
-  ultimoHist?: number;
-};
+type Equipamento = { id: string; placa: string; modulo?: string; ultimoHist?: number };
 
-interface OSFormValues {
-  data_abertura: string;
-  data_fechamento: string;
-  status: string;
-  equipamento_id: string;
-  horimetro: string;
-  operacao_tipo: string;
-  local: string;
-  classe: string;
-  foi_enviado_reserva: boolean;
-  descricao: string;
-  motivo: string;
+type CatalogoItem = {
+  id: number;
   sistema: string;
-  sub_sistema: string;
-  horario_parada: string;
-  qual_reserva: string;
-  horas_reserva_chegou: string;
-  observacoes: string;
-}
+  sistema_codigo: number;
+  subsistema: string;
+  subsistema_codigo: number;
+  componente: string;
+  componente_codigo: number;
+};
 
 interface OSFormModalProps {
   equipamentos: Equipamento[];
@@ -61,416 +47,274 @@ interface OSFormModalProps {
   onClose: () => void;
   operacoesTipo?: string[];
   motivos?: string[];
-  sistemas?: string[];
-  subSistemas?: string[];
+  catalogo?: CatalogoItem[];
 }
 
-export default function OSFormModal({ 
-  equipamentos, 
-  initialData, 
-  onClose,
-  operacoesTipo = [],
-  motivos = [],
-  sistemas = [],
-  subSistemas = []
+function getLocalDT() {
+  const now = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}`;
+}
+
+export default function OSFormModal({
+  equipamentos, initialData, onClose,
+  operacoesTipo = [], motivos = [], catalogo = [],
 }: OSFormModalProps) {
   const [loading, setLoading] = useState(false);
-  const [selectedEq, setSelectedEq] = useState<Equipamento | null>(null);
+  const [equip, setEquip] = useState<Equipamento | null>(null);
+  const [foiReserva, setFoiReserva] = useState(initialData?.foi_enviado_reserva || false);
+  const [sistema, setSistema] = useState(initialData?.sistema || "");
+  const [subSistema, setSubSistema] = useState(initialData?.sub_sistema || "");
+  const [componente, setComponente] = useState(initialData?.componente || "");
+  const [dataAbertura, setDataAbertura] = useState(initialData?.data_abertura?.slice(0,16) || getLocalDT());
+  const [dataFechamento, setDataFechamento] = useState(initialData?.data_fechamento?.slice(0,16) || "");
 
-  // Formata a data atual no horário LOCAL no formato YYYY-MM-DDTHH:mm
-  const getLocalDateTimeStr = () => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  };
+  // Catalogos em cascata
+  const sistemasUnicos = Array.from(new Set(catalogo.map(c => c.sistema))).sort();
+  const subsistemasFiltrados = sistema
+    ? Array.from(new Set(catalogo.filter(c => c.sistema === sistema).map(c => c.subsistema))).sort()
+    : [];
+  const componentesFiltrados = sistema && subSistema
+    ? Array.from(new Set(catalogo.filter(c => c.sistema === sistema && c.subsistema === subSistema).map(c => c.componente))).sort()
+    : [];
 
-  const initialValues: OSFormValues = {
-    data_abertura: initialData ? initialData.data_abertura.slice(0, 16) : getLocalDateTimeStr(),
-    data_fechamento: initialData?.data_fechamento ? initialData.data_fechamento.slice(0, 16) : "",
-    status: initialData?.status || "Aberta",
-    equipamento_id: initialData?.equipamento_id || "",
-    horimetro: initialData?.horimetro?.toString() || "",
-    operacao_tipo: initialData?.operacao_tipo || "",
-    local: initialData?.local || "",
-    classe: initialData?.classe || "CORRETIVA",
-    foi_enviado_reserva: initialData?.foi_enviado_reserva || false,
-    horario_parada: initialData?.horario_parada ? initialData.horario_parada.slice(0, 16) : "",
-    qual_reserva: initialData?.qual_reserva || "",
-    horas_reserva_chegou: initialData?.horas_reserva_chegou ? initialData.horas_reserva_chegou.slice(0, 16) : "",
-    descricao: initialData?.descricao || "",
-    motivo: initialData?.motivo || "",
-    sistema: initialData?.sistema || "",
-    sub_sistema: initialData?.sub_sistema || "",
-    observacoes: initialData?.observacoes || "",
-  };
-
-  // Draft hook - only use draft if creating NEW OS
-  const { form, setForm, clearDraft, hasContent: hasDraft } = useFormDraft<OSFormValues>(
-    initialData ? null : 'os-new', 
-    initialValues
-  );
-
-  // Sincronizar selectedEq
-  useEffect(() => {
-    if (form.equipamento_id && equipamentos.length > 0) {
-      const eq = equipamentos.find(e => e.id === form.equipamento_id);
-      if (eq) setSelectedEq(eq);
-    }
-  }, [form.equipamento_id, equipamentos]);
-
-  // Armazena a diferença em minutos inteiros
-  const [diffMinutos, setDiffMinutos] = useState(0);
-
-  const formatarTempo = (totalMinutos: number): string => {
-    if (totalMinutos <= 0) return "00:00";
-    const horas = Math.floor(totalMinutos / 60);
-    const minutos = totalMinutos % 60;
-    return `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}`;
-  };
-
-  const minutosParaHorasDecimal = (min: number) => Number((min / 60).toFixed(2));
+  // Calcular tempo total de manutenção
+  const diffMin = (() => {
+    if (!dataAbertura || !dataFechamento) return 0;
+    const d = Math.floor((new Date(dataFechamento).getTime() - new Date(dataAbertura).getTime()) / 60000);
+    return d > 0 ? d : 0;
+  })();
+  const tempoFmt = `${String(Math.floor(diffMin/60)).padStart(2,"0")}:${String(diffMin%60).padStart(2,"0")}`;
 
   useEffect(() => {
-    if (form.data_abertura && form.data_fechamento) {
-      const start = new Date(form.data_abertura).getTime();
-      const end = new Date(form.data_fechamento).getTime();
-      const diff = Math.floor((end - start) / (1000 * 60));
-      setDiffMinutos(diff > 0 ? diff : 0);
-    } else {
-      setDiffMinutos(0);
+    if (initialData?.equipamento_id) {
+      setEquip(equipamentos.find(e => e.id === initialData.equipamento_id) || null);
     }
-  }, [form.data_abertura, form.data_fechamento]);
+  }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-    
-    setForm(prev => ({ ...prev, [name]: val }));
-
-    if (name === 'equipamento_id') {
-      const eq = equipamentos.find(eq => eq.id === (value as string));
-      setSelectedEq(eq || null);
-      if (eq?.ultimoHist && !initialData) {
-        setForm(prev => ({ ...prev, horimetro: eq.ultimoHist?.toString() || "" }));
-      }
-    }
+  const handleEquipChange = (id: string) => {
+    const eq = equipamentos.find(e => e.id === id) || null;
+    setEquip(eq);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    
-    const formData = new FormData(e.currentTarget);
-    formData.append("horas_manutencao", minutosParaHorasDecimal(diffMinutos).toString());
-    formData.append("placa", selectedEq?.placa || "");
+    const fd = new FormData(e.currentTarget);
+    fd.set("placa", equip?.placa || "");
+    fd.set("horas_manutencao", String(Number((diffMin/60).toFixed(2))));
+    fd.set("sistema", sistema);
+    fd.set("sub_sistema", subSistema);
+    fd.set("componente", componente);
 
-    let result;
-    if (initialData) {
-      result = await atualizarOrdemServico(initialData.id, formData);
-    } else {
-      result = await criarOrdemServico(formData);
-    }
-    
-    if ('error' in result) {
-      alert("Erro: " + result.error);
-    } else {
-      if (!initialData) clearDraft();
-      onClose();
-    }
+    const res = initialData
+      ? await atualizarOrdemServico(initialData.id, fd)
+      : await criarOrdemServico(fd);
+
+    if ("error" in res) { alert("Erro: " + res.error); }
+    else { onClose(); }
     setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scroll">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[92vh]">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold">{initialData ? "Editar OS" : "Nova OS"}</h2>
-            {hasDraft && !initialData && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 uppercase tracking-wider">
-                Rascunho Ativo
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {hasDraft && !initialData && (
-              <button 
-                type="button" 
-                onClick={clearDraft}
-                title="Limpar Rascunho"
-                className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
-              >
-                <RotateCcw size={18} />
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
-              <X size={20} />
-            </button>
-          </div>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            {initialData ? "Editar OS" : "Nova OS"}
+          </h2>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          
-          {/* Row 1: Dates */}
-          <div className="grid grid-cols-3 gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-red-500 flex items-center gap-1">Horário Real da Parada do Caminhão</label>
-              <input name="horario_parada" type="datetime-local" required 
-                value={form.horario_parada}
-                onChange={handleInputChange}
-                className={`${inputCls} border-red-200 focus:border-red-400 focus:ring-red-500/20`}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Data/Hora de Início da Manutenção *</label>
-              <input name="data_abertura" type="datetime-local" required 
-                value={form.data_abertura}
-                onChange={handleInputChange}
-                className={inputCls} 
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Data/Hora Fechamento da OS</label>
-              <input name="data_fechamento" type="datetime-local" 
-                value={form.data_fechamento}
-                onChange={handleInputChange}
-                className={inputCls} 
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+          {/* Datas */}
+          <div className="grid grid-cols-3 gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <Field label="Horário Real da Parada *">
+              <input name="horario_parada" type="datetime-local" required
+                defaultValue={initialData?.horario_parada?.slice(0,16) || ""}
+                className={`${I} border-red-200 dark:border-red-800`} />
+            </Field>
+            <Field label="Início Manutenção *">
+              <input name="data_abertura" type="datetime-local" required
+                value={dataAbertura} onChange={e => setDataAbertura(e.target.value)}
+                className={I} />
+            </Field>
+            <Field label="Fechamento da OS">
+              <input name="data_fechamento" type="datetime-local"
+                value={dataFechamento} onChange={e => setDataFechamento(e.target.value)}
+                className={I} />
+            </Field>
           </div>
 
-          {/* Row 2: Status and Placa */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Status *</label>
-              <select 
-                name="status" 
-                required 
-                value={form.status}
-                onChange={handleInputChange}
-                className={inputCls}
-              >
-                <option value="Aberta">Aberta</option>
-                <option value="Em Andamento">Em Andamento</option>
-                <option value="Fechada">Fechada</option>
+          {/* Status + Placa */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Status *">
+              <select name="status" required defaultValue={initialData?.status || "Aberta"} className={I}>
+                <option>Aberta</option>
+                <option>Em Andamento</option>
+                <option>Fechada</option>
               </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Placa *</label>
-              <select 
-                name="equipamento_id" 
-                required 
-                value={form.equipamento_id}
-                onChange={handleInputChange} 
-                className={inputCls}
-              >
+            </Field>
+            <Field label="Placa *">
+              <select name="equipamento_id" required
+                defaultValue={initialData?.equipamento_id || ""}
+                onChange={e => handleEquipChange(e.target.value)}
+                className={I}>
                 <option value="">Selecione a placa...</option>
                 {equipamentos.map(eq => (
                   <option key={eq.id} value={eq.id}>{eq.placa}</option>
                 ))}
               </select>
-            </div>
+            </Field>
           </div>
 
-          {/* Row 3: Modulo */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-zinc-500">Módulo</label>
-            <input name="modulo" type="text"
-              value={selectedEq?.modulo || ""} 
-              readOnly
-              className={`${inputCls} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed`} 
-            />
-          </div>
+          {/* Módulo só leitura */}
+          <Field label="Módulo">
+            <input type="text" readOnly value={equip?.modulo || ""}
+              className={`${I} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed`} />
+          </Field>
 
-          {/* Row 4: Details */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Horímetro</label>
-              <input name="horimetro" type="number" step="0.1" 
-                value={form.horimetro}
-                onChange={handleInputChange}
-                className={inputCls} 
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Operação (Tipo)</label>
-              <input name="operacao_tipo" type="text" list="lista-operacao-tipo"
-                value={form.operacao_tipo}
-                onChange={handleInputChange}
-                className={inputCls} 
-              />
-              <datalist id="lista-operacao-tipo">
-                {operacoesTipo.map(op => <option key={op} value={op} />)}
+          {/* Horímetro, Operação, Local */}
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Horímetro">
+              <input name="horimetro" type="number" step="0.1"
+                defaultValue={initialData?.horimetro ?? equip?.ultimoHist ?? ""}
+                className={I} />
+            </Field>
+            <Field label="Operação (Tipo)">
+              <input name="operacao_tipo" type="text" list="lista-op"
+                defaultValue={initialData?.operacao_tipo || ""}
+                className={I} />
+              <datalist id="lista-op">
+                {operacoesTipo.map(o => <option key={o} value={o} />)}
               </datalist>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Local</label>
-              <input name="local" type="text" 
-                value={form.local}
-                onChange={handleInputChange}
-                className={inputCls} 
-              />
-            </div>
+            </Field>
+            <Field label="Local">
+              <input name="local" type="text"
+                defaultValue={initialData?.local || ""}
+                className={I} />
+            </Field>
           </div>
 
-          {/* Row 5: Class and Toggle */}
-          <div className="grid grid-cols-2 gap-4 items-center">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Classe</label>
-              <select 
-                name="classe" 
-                value={form.classe}
-                onChange={handleInputChange}
-                className={inputCls}
-              >
+          {/* Tipo de Manutenção + Reserva */}
+          <div className="grid grid-cols-2 gap-3 items-center">
+            <Field label="Tipo de Manutenção">
+              <select name="classe" defaultValue={initialData?.classe || "CORRETIVA"} className={I}>
                 <option value="CORRETIVA">CORRETIVA</option>
                 <option value="PREVENTIVA">PREVENTIVA</option>
                 <option value="PREDITIVA">PREDITIVA</option>
+                <option value="REFORMA">REFORMA</option>
               </select>
-            </div>
-            <div className="flex items-center gap-3 pt-4">
+            </Field>
+            <div className="pt-4 flex items-center gap-3">
               <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  name="foi_enviado_reserva" 
-                  className="sr-only peer"
-                  checked={form.foi_enviado_reserva}
-                  onChange={handleInputChange}
-                />
-                <div className="w-11 h-6 bg-zinc-200 rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-blue-600"></div>
-                <span className="ms-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 flex flex-col">
+                <input type="checkbox" name="foi_enviado_reserva"
+                  checked={foiReserva}
+                  onChange={e => setFoiReserva(e.target.checked)}
+                  className="sr-only peer" />
+                <div className="w-11 h-6 bg-zinc-200 dark:bg-zinc-700 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                <span className="ml-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Foi enviado reserva?
-                  <span className="text-[10px] text-zinc-500 font-normal">Impacta o medidor de parada operacional</span>
+                  <br /><span className="text-[10px] text-zinc-400 font-normal">Impacta o medidor de parada operacional</span>
                 </span>
               </label>
             </div>
           </div>
 
-          {/* Conditional Reservation Details */}
-          {form.foi_enviado_reserva && (
-            <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800 animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium text-orange-700 dark:text-orange-400">Qual o Caminhão Reserva? *</label>
-                <select 
-                  name="qual_reserva" 
-                  required={form.foi_enviado_reserva}
-                  value={form.qual_reserva}
-                  onChange={handleInputChange}
-                  className={`${inputCls} border-orange-200 focus:border-orange-400 focus:ring-orange-500/20`}
-                >
-                  <option value="">Selecione o reserva...</option>
+          {/* Reserva details */}
+          {foiReserva && (
+            <div className="grid grid-cols-2 gap-3 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
+              <Field label="Qual o Caminhão Reserva?">
+                <select name="qual_reserva" required
+                  defaultValue={initialData?.qual_reserva || ""}
+                  className={`${I} border-orange-200`}>
+                  <option value="">Selecione...</option>
                   {equipamentos.map(eq => (
-                    <option key={`res-${eq.id}`} value={eq.placa}>{eq.placa}</option>
+                    <option key={`r-${eq.id}`} value={eq.placa}>{eq.placa}</option>
                   ))}
                 </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium text-orange-700 dark:text-orange-400">Que Horas o Reserva Chegou? *</label>
-                <input name="horas_reserva_chegou" type="datetime-local" required={form.foi_enviado_reserva}
-                  value={form.horas_reserva_chegou}
-                  onChange={handleInputChange}
-                  className={`${inputCls} border-orange-200 focus:border-orange-400 focus:ring-orange-500/20`} 
-                />
-              </div>
+              </Field>
+              <Field label="Que Horas o Reserva Chegou?">
+                <input name="horas_reserva_chegou" type="datetime-local" required
+                  defaultValue={initialData?.horas_reserva_chegou?.slice(0,16) || ""}
+                  className={`${I} border-orange-200`} />
+              </Field>
             </div>
           )}
 
-          {/* Row 6: Description */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-zinc-500">Descrição da Atividade *</label>
+          {/* Descrição */}
+          <Field label="Descrição da Atividade *">
             <textarea name="descricao" required rows={3}
-              value={form.descricao}
-              onChange={handleInputChange}
+              defaultValue={initialData?.descricao || ""}
               placeholder="Descreva a falha ou manutenção..."
-              className={`${inputCls} resize-none`} 
-            ></textarea>
-          </div>
+              className={`${I} resize-none`} />
+          </Field>
 
-          {/* Row 7: Motivo, Sistema, Sub */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Motivo</label>
-              <select 
-                name="motivo" 
-                value={form.motivo}
-                onChange={handleInputChange}
-                className={inputCls}
-              >
-                <option value="">Selecione</option>
-                {motivos.length > 0 ? (
-                  motivos.map(m => <option key={m} value={m}>{m}</option>)
-                ) : (
-                  <>
-                    <option value="Desgaste Natural">Desgaste Natural</option>
-                    <option value="Quebra Operacional">Quebra Operacional</option>
-                    <option value="Falha Elétrica">Falha Elétrica</option>
-                  </>
-                )}
-              </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Sistema</label>
-              <select 
-                name="sistema" 
-                value={form.sistema}
-                onChange={handleInputChange}
-                className={inputCls}
-              >
-                <option value="">Selecione</option>
-                {sistemas.length > 0 ? (
-                  sistemas.map(s => <option key={s} value={s}>{s}</option>)
-                ) : (
-                  <>
-                    <option value="Motor">Motor</option>
-                    <option value="Hidráulica">Hidráulica</option>
-                    <option value="Freios">Freios</option>
-                    <option value="Elétrico">Elétrico</option>
-                  </>
-                )}
-              </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-zinc-500">Sub-Sistema</label>
-              <select 
-                name="sub_sistema" 
-                value={form.sub_sistema}
-                onChange={handleInputChange}
-                className={inputCls}
-              >
-                <option value="">Selecione</option>
-                {subSistemas.length > 0 ? (
-                  subSistemas.map(s => <option key={s} value={s}>{s}</option>)
-                ) : (
-                  <>
-                    <option value="Bomba Injetora">Bomba Injetora</option>
-                    <option value="Cilindro Mestre">Cilindro Mestre</option>
-                    <option value="Alternador">Alternador</option>
-                  </>
-                )}
-              </select>
+          {/* Motivo */}
+          <Field label="Motivo">
+            <select name="motivo" defaultValue={initialData?.motivo || ""} className={I}>
+              <option value="">Selecione</option>
+              {motivos.map(m => <option key={m} value={m}>{m}</option>)}
+              {motivos.length === 0 && (
+                <>
+                  <option>Desgaste Natural</option>
+                  <option>Quebra Operacional</option>
+                  <option>Falha Elétrica</option>
+                </>
+              )}
+            </select>
+          </Field>
+
+          {/* Sistema / Subsistema / Componente em cascata */}
+          <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
+            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Sistema / Sub-Sistema / Componente</p>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Sistema">
+                <select value={sistema} onChange={e => { setSistema(e.target.value); setSubSistema(""); setComponente(""); }} className={I}>
+                  <option value="">Selecione...</option>
+                  {sistemasUnicos.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="Sub-Sistema">
+                <select value={subSistema} onChange={e => { setSubSistema(e.target.value); setComponente(""); }} disabled={!sistema} className={`${I} disabled:opacity-50`}>
+                  <option value="">Selecione...</option>
+                  {subsistemasFiltrados.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="Componente">
+                <select value={componente} onChange={e => setComponente(e.target.value)} disabled={!subSistema} className={`${I} disabled:opacity-50`}>
+                  <option value="">Selecione...</option>
+                  {componentesFiltrados.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </Field>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-zinc-500">Observações</label>
+          {/* Observações */}
+          <Field label="Observações">
             <textarea name="observacoes" rows={2}
-              value={form.observacoes}
-              onChange={handleInputChange}
-              className={`${inputCls} resize-none`} 
-            ></textarea>
+              defaultValue={initialData?.observacoes || ""}
+              className={`${I} resize-none`} />
+          </Field>
+
+          {/* Tempo total */}
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-300 font-medium">
+            Tempo Total de Manutenção: <span className="font-bold">{tempoFmt}</span>
           </div>
 
-          {/* Footer Total */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-lg text-sm text-blue-900 dark:text-blue-300 font-medium">
-            Tempo Total de Manutenção: <span className="font-bold">{formatarTempo(diffMinutos)}</span>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-medium rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+          {/* Botões */}
+          <div className="flex justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
               Cancelar
             </button>
-            <button type="submit" disabled={loading} className="px-5 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
-              {loading ? 'Salvando...' : initialData ? 'Salvar Alterações' : 'Criar OS'}
+            <button type="submit" disabled={loading}
+              className="px-5 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm">
+              {loading ? "Salvando..." : initialData ? "Salvar Alterações" : "Criar OS"}
             </button>
           </div>
         </form>
@@ -479,4 +323,13 @@ export default function OSFormModal({
   );
 }
 
-const inputCls = "w-full px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 transition-all";
+const I = "w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</label>
+      {children}
+    </div>
+  );
+}

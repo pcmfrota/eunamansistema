@@ -82,22 +82,20 @@ export async function getDashboardData(filtros?: {
   let fimFiltro: string;
   let diasReferencia: number;
 
-  // 1. Definir Limite D-1 (Ontem 23:59:59) para o período atual
-  const dataLimiteD1 = new Date(agoraRef);
-  dataLimiteD1.setDate(agoraRef.getDate() - 1);
-  dataLimiteD1.setHours(23, 59, 59, 999);
+  // 1. Definir limite máximo para consultas (agora = momento atual)
+  const agora = new Date();
 
   if (filtros?.dataInicio && filtros?.dataFim) {
     inicioFiltro = filtros.dataInicio;
     fimFiltro = `${filtros.dataFim}T23:59:59`;
     
-    const dInicio = new Date(filtros.dataInicio);
-    const dFim = new Date(filtros.dataFim);
-    
-    // Se o filtro inclui o futuro ou hoje, limitamos a D-1
-    const fimEfetivoFiltro = dFim > dataLimiteD1 ? dataLimiteD1 : dFim;
-    const diffMs = Math.max(0, fimEfetivoFiltro.getTime() - dInicio.getTime());
+    const dInicio = new Date(inicioFiltro);
+    const dFim = new Date(fimFiltro);
+    // Não deixa passar do momento atual
+    const fimEfetivo = dFim > agora ? agora : dFim;
+    const diffMs = Math.max(0, fimEfetivo.getTime() - dInicio.getTime());
     diasReferencia = Math.floor(diffMs / 86400000) + 1;
+    fimFiltro = fimEfetivo.toISOString();
   } else {
     const { data: calSuzano } = await supabase
       .from("calendario_suzano")
@@ -112,8 +110,8 @@ export async function getDashboardData(filtros?: {
       const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
       const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
       
-      // Se o calendário de Suzano termina depois de D-1, usamos D-1
-      const fimEfetivoCal = dFimCal > dataLimiteD1 ? dataLimiteD1 : dFimCal;
+      // Limite = agora (não amanhã, não ontem)
+      const fimEfetivoCal = dFimCal > agora ? agora : dFimCal;
       
       const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
@@ -123,7 +121,8 @@ export async function getDashboardData(filtros?: {
       const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
       const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMes, 23, 59, 59);
       
-      const fimEfetivoCivil = dFimCivil > dataLimiteD1 ? dataLimiteD1 : dFimCivil;
+      // Limite = agora
+      const fimEfetivoCivil = dFimCivil > agora ? agora : dFimCivil;
       const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
       
       const diffMs = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
@@ -133,12 +132,10 @@ export async function getDashboardData(filtros?: {
   }
 
   // 2. Buscar OS e Equipamentos
-  console.log("DEBUG DASHBOARD: Filtros recebidos:", { inicioFiltro, fimFiltro });
-  
   const [osRes, eqRes] = await Promise.all([
     supabase.from("ordens_servico").select(`
       id, status, horas_manutencao, data_abertura, data_fechamento, 
-      equipamento_id, placa, classe, foi_enviado_reserva, 
+      equipamento_id, placa, classe, foi_enviado_reserva,
       horario_parada, horas_reserva_chegou
     `)
     .lte("data_abertura", fimFiltro)
@@ -146,11 +143,9 @@ export async function getDashboardData(filtros?: {
     supabase.from("equipamentos").select("*")
   ]);
 
-  console.log("DEBUG DASHBOARD: Resultado OS:", { 
-    count: osRes.data?.length, 
-    error: osRes.error?.message,
-    totalNoBanco: (await supabase.from("ordens_servico").select("id", { count: "exact", head: true })).count
-  });
+  if (osRes.error) {
+    console.error("DASHBOARD OS QUERY ERROR:", osRes.error.message);
+  }
 
   const allOS = osRes.data ?? [];
   const todasAsEquips = eqRes.data ?? [];
@@ -238,58 +233,41 @@ export async function getDashboardData(filtros?: {
         hPlanejadasTotal += 24; // Default se não houver escala
       }
 
-      // Interseção de cada OS com o turno do dia
+      // Interseção de cada OS com o turno do dia — Lógica PCM DM vs DO
       osDoVeiculo.forEach(os => {
-        let inicioOriginal = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
-        let fimOriginal = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-        
-        // Clipping D-1
-        let fimLimpo = fimOriginal > periodoFimObj ? periodoFimObj : fimOriginal;
+        // ── DM: Início real da parada mecânica (horario_parada > data_abertura como fallback)
+        const inicioDM = os.horario_parada
+          ? new Date(os.horario_parada)
+          : new Date(os.data_abertura);
+        const fimDM = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
+        const fimDMClip = fimDM > periodoFimObj ? periodoFimObj : fimDM;
+
+        // ── DO: Impacto operacional termina quando o reserva chegou (se enviado)
+        //    Se não foi enviado reserva, DO = DM (perda operacional total)
+        //    Se foi enviado reserva, DO termina em horas_reserva_chegou
+        const inicioParadaDO = inicioDM; // DO começa igual ao DM
+        let fimParadaDO = fimDMClip;     // Default: igual ao DM
+        if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+          const reservaChegou = new Date(os.horas_reserva_chegou);
+          // DO termina quando o reserva chegou (antes do fim da manutenção mecânica)
+          fimParadaDO = reservaChegou < fimDMClip ? reservaChegou : fimDMClip;
+        }
 
         if (escala) {
-          const overlappingDM = calcularIntersecaoDia(
-            dataCorrente, 
-            inicioOriginal, 
-            fimLimpo, 
-            escala.periodo_inicio, 
-            escala.periodo_fim
-          );
-          hIndispDM += overlappingDM;
-
-          // Cálculo DO
-          if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
-            const reservaChegou = new Date(os.horas_reserva_chegou);
-            let fimDO = reservaChegou > fimLimpo ? fimLimpo : reservaChegou;
-            hIndispDO += calcularIntersecaoDia(
-              dataCorrente, 
-              inicioOriginal, 
-              fimDO, 
-              escala.periodo_inicio, 
-              escala.periodo_fim
-            );
-          } else {
-            hIndispDO += overlappingDM;
-          }
+          hIndispDM += calcularIntersecaoDia(dataCorrente, inicioDM, fimDMClip, escala.periodo_inicio, escala.periodo_fim);
+          hIndispDO += calcularIntersecaoDia(dataCorrente, inicioParadaDO, fimParadaDO, escala.periodo_inicio, escala.periodo_fim);
         } else {
-          // Fallback para 24h se não houver escala
-          const diaInicio = new Date(dataCorrente); diaInicio.setHours(0,0,0,0);
-          const diaFim = new Date(dataCorrente); diaFim.setHours(23,59,59,999);
-          
-          const interInicio = inicioOriginal > diaInicio ? inicioOriginal : diaInicio;
-          const interFim = fimLimpo < diaFim ? fimLimpo : diaFim;
-          
-          if (interInicio < interFim) {
-             const duracao = (interFim.getTime() - interInicio.getTime()) / 3600000;
-             hIndispDM += Math.max(0, duracao);
-             
-             if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
-               const resChegou = new Date(os.horas_reserva_chegou);
-               const interFimDO = resChegou < interFim ? resChegou : interFim;
-               hIndispDO += Math.max(0, (interFimDO.getTime() - interInicio.getTime()) / 3600000);
-             } else {
-               hIndispDO += Math.max(0, duracao);
-             }
-          }
+          // Fallback 24h
+          const d0 = new Date(dataCorrente); d0.setHours(0,0,0,0);
+          const d24 = new Date(dataCorrente); d24.setHours(23,59,59,999);
+
+          const intDMini = inicioDM > d0 ? inicioDM : d0;
+          const intDMfim = fimDMClip < d24 ? fimDMClip : d24;
+          if (intDMini < intDMfim) hIndispDM += (intDMfim.getTime() - intDMini.getTime()) / 3600000;
+
+          const intDOini = inicioParadaDO > d0 ? inicioParadaDO : d0;
+          const intDOfim = fimParadaDO < d24 ? fimParadaDO : d24;
+          if (intDOini < intDOfim) hIndispDO += (intDOfim.getTime() - intDOini.getTime()) / 3600000;
         }
       });
     }
@@ -333,14 +311,18 @@ export async function getDashboardData(filtros?: {
 
   // 5. Ranking de Falhas (Top 10 veículos que mais deram corretiva)
   const rankingFalhas = veiculos
-    .filter(v => v.falhas > 0)
-    .sort((a, b) => b.falhas - a.falhas)
+    .filter(v => (v as any).falhas > 0)
+    .sort((a, b) => (b as any).falhas - (a as any).falhas)
     .slice(0, 10)
-    .map(v => ({
-      placa: v.placa,
-      falhas: v.falhas,
-      mtbf: v.falhas > 0 ? Math.round(((horasTotaisPorVeiculo - v.horasManut) / v.falhas) * 10) / 10 : 0
-    }));
+    .map(v => {
+      const escala = escalaMap.get(v.placa);
+      const horasTotaisVeiculo = escala ? Number(escala.carga_horaria) * diasReferencia : 24 * diasReferencia;
+      return {
+        placa: v.placa,
+        falhas: (v as any).falhas,
+        mtbf: (v as any).falhas > 0 ? Math.round(((horasTotaisVeiculo - v.horasManut) / (v as any).falhas) * 10) / 10 : 0
+      };
+    });
 
   // 6. Dados para Gráficos Extras
   // A. Paradas por Categoria
@@ -475,7 +457,7 @@ export async function getDashboardData(filtros?: {
     mtbf,
     backlog: Math.round((allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
     totalEquipamentos: frotaAtiva.length,
-    totalVeiculosAtivos: frotaAtiva.length,
+    totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculosFiltrados.sort((a, b) => a.disponibilidade - b.disponibilidade),
     rankingFalhas,
     paradasPorCategoria,

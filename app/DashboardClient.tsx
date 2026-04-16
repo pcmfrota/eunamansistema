@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { Filtros, type FiltrosValues } from "@/components/filtros";
+import { gerarSlideHTML } from "@/lib/gerar-slide";
 
 // Componentes estáticos que não usam bibliotecas pesadas de gráficos
 import { PainelFormulas } from "@/components/graficos";
@@ -24,17 +25,7 @@ function CarregandoGrafico() {
     </div>
   );
 }
-import {
-  FileText,
-  CheckCircle2,
-  TrendingUp,
-  PenTool,
-  Timer,
-  Loader2,
-  Activity,
-  CalendarClock,
-  AlertCircle,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   getDashboardData,
   type DashboardData,
@@ -90,6 +81,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       const result = await getDashboardData({
         mes: defaultFiltros.mes,
         ano: defaultFiltros.ano,
+        categoria: defaultFiltros.categoria || undefined,
         dataInicio: undefined,
         dataFim: undefined,
       });
@@ -100,10 +92,37 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const mttrLabel = data.mttr > 0 ? `${data.mttr}h` : "—";
   const mtbfLabel = data.mtbf > 0 ? `${data.mtbf}h` : "—";
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function exportarRelatorio() {
+    setIsExporting(true);
+    try {
+      // Sempre busca dados de frota PESADA para o relatório
+      const dadosPesada = await getDashboardData({
+        mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
+        ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
+        categoria: 'PESADA',
+        dataInicio: filtros.dataInicio || undefined,
+        dataFim: filtros.dataFim || undefined,
+      });
+      const periodo = dadosPesada.periodoLabel || 'Período';
+      const html = gerarSlideHTML(dadosPesada, periodo, 'Frota Pesada');
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-pcm-pesada-${periodo.replace(/\s/g, '-')}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <div className="p-5 md:p-8 flex flex-col gap-6 bg-[#f8fafc] dark:bg-[#0f1115] min-h-screen relative">
       {/* Loading overlay */}
-      {isPending && (
+      {(isPending || isExporting) && (
         <div className="fixed inset-0 bg-black/10 dark:bg-black/30 z-50 flex items-center justify-center backdrop-blur-[1px]">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl px-6 py-4 flex items-center gap-3 shadow-2xl border border-zinc-200 dark:border-zinc-800">
             <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
@@ -113,11 +132,24 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       )}
 
       {/* Cabeçalho */}
-      <div className="flex flex-col mb-1 shrink-0">
-        <h1 className="text-2xl font-bold tracking-tight text-[#1e293b] dark:text-zinc-100">Dashboard Operacional</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Visão geral da manutenção e disponibilidade da frota
-        </p>
+      <div className="flex items-start justify-between mb-1 shrink-0">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#1e293b] dark:text-zinc-100">Dashboard Operacional</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            Visão geral da manutenção e disponibilidade da frota
+          </p>
+        </div>
+        <button
+          onClick={exportarRelatorio}
+          disabled={isExporting}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all"
+        >
+          {isExporting ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</>
+          ) : (
+            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg> Exportar Relatório PCM</>
+          )}
+        </button>
       </div>
 
       {/* Filtros */}
@@ -129,83 +161,30 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         periodoLabel={data.periodoLabel}
       />
 
-      {/* KPIs */}
-      <div className="flex overflow-x-auto gap-4 pb-2 -mx-5 px-5 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {data.data_inicio && (
-          <>
-            <KpiCard
-              title="Início do Período"
-              value={new Date(data.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
-              subtitle="Calendário Suzano"
-              icon={<CalendarClock size={18} className="text-zinc-500" />}
-              iconBg="bg-zinc-100 dark:bg-zinc-800"
-            />
-            <KpiCard
-              title="Fim do Período"
-              value={new Date(data.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}
-              subtitle="Calendário Suzano"
-              icon={<CalendarClock size={18} className="text-zinc-500" />}
-              iconBg="bg-zinc-100 dark:bg-zinc-800"
-            />
-          </>
-        )}
-        <KpiCard
-          title="Frota Ativa"
-          value={String(data.totalVeiculosAtivos || 0)}
-          subtitle="Veículos em operação"
-          icon={<Activity size={18} className="text-[#3b82f6]" />}
-          iconBg="bg-blue-100/50 dark:bg-blue-500/10"
-        />
-        <KpiCard
-          title="DM (Mecânica)"
-          value={
-            <span className={`font-bold ${data.dm >= 95 ? "text-emerald-500" : data.dm >= 90 ? "text-amber-500" : "text-red-500"}`}>
-              {data.dm.toFixed(1)}%
-            </span>
-          }
-          subtitle="Meta: ≥ 95%"
-          icon={<TrendingUp size={18} className="text-emerald-500" />}
-          iconBg="bg-emerald-100/50 dark:bg-emerald-500/10"
-        />
-        <KpiCard
-          title="DO (Operacional)"
-          value={
-            <span className={`font-bold ${data.doOperacional >= 95 ? "text-blue-500" : data.doOperacional >= 90 ? "text-indigo-500" : "text-violet-500"}`}>
-              {data.doOperacional.toFixed(1)}%
-            </span>
-          }
-          subtitle="Equipamentos Aptos"
-          icon={<Activity size={18} className="text-blue-500" />}
-          iconBg="bg-blue-100/50 dark:bg-blue-500/10"
-        />
-        <KpiCard
-          title="MTBF"
-          value={mtbfLabel}
-          subtitle={<>Tempo <br />Entre Falhas</>}
-          icon={<Timer size={18} className="text-indigo-500" />}
-          iconBg="bg-indigo-100/50 dark:bg-indigo-500/10"
-        />
-        <KpiCard
-          title="MTTR"
-          value={mttrLabel}
-          subtitle={<>Tempo Médio <br />de Reparo</>}
-          icon={<PenTool size={18} className="text-[#a855f7]" />}
-          iconBg="bg-purple-100/40 dark:bg-purple-500/10"
-        />
-        <KpiCard
-          title="Backlog"
-          value={data.backlog > 0 ? `${data.backlog}d` : "—"}
-          subtitle="Dias Pendentes"
-          icon={<CalendarClock size={18} className="text-amber-500" />}
-          iconBg="bg-amber-100/50 dark:bg-amber-500/10"
-        />
-        <KpiCard
-          title="Total de OS"
-          value={String(data.totalOS)}
-          subtitle={`${data.emAndamento} abertas | ${data.osFechadas} fechadas`}
-          icon={<FileText size={18} className="text-zinc-500 dark:text-zinc-400" />}
-          iconBg="bg-zinc-100 dark:bg-zinc-800"
-        />
+      {/* ── Período inline (pequeno, abaixo dos filtros) ── */}
+      {data.data_inicio && (
+        <div className="flex items-center gap-2 -mt-3 pb-1">
+          <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Período:</span>
+          <span className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 font-mono">
+            {new Date(data.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
+          </span>
+          <span className="text-zinc-600 text-xs">{'->'}</span>
+          <span className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 font-mono">
+            {new Date(data.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}
+          </span>
+        </div>
+      )}
+
+      {/* ── KPI Mini Cards — todos em uma linha ── */}
+      <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+        <MiniCard label="Frota Ativa" value={String(data.totalVeiculosAtivos || 0)} sub="veículos" color="text-blue-400" />
+        <MiniCard label="DM (Mecânica)" value={`${data.dm.toFixed(1)}%`} sub="meta ≥ 95%" color={data.dm >= 95 ? 'text-emerald-400' : data.dm >= 90 ? 'text-amber-400' : 'text-red-400'} />
+        <MiniCard label="DO (Operacional)" value={`${data.doOperacional.toFixed(1)}%`} sub="equip. aptos" color={data.doOperacional >= 95 ? 'text-blue-400' : data.doOperacional >= 90 ? 'text-indigo-400' : 'text-violet-400'} />
+        <MiniCard label="MTBF" value={mtbfLabel} sub="entre falhas" color="text-indigo-300" />
+        <MiniCard label="MTTR" value={mttrLabel} sub="médio reparo" color="text-purple-300" />
+        <MiniCard label="Backlog" value={data.backlog > 0 ? `${data.backlog}d` : '—'} sub="dias pendentes" color="text-amber-300" />
+        <MiniCard label="Total de OS" value={String(data.totalOS)} sub={`${data.emAndamento}ab | ${data.osFechadas}fech`} color="text-zinc-300" />
+        <MiniCard label="Horas Mec." value={`${data.horasManutencao}h`} sub={availabilityType === 'DM' ? 'total frota (DM)' : 'total frota (DO)'} color={availabilityType === 'DM' ? 'text-orange-300' : 'text-cyan-300'} />
       </div>
 
       {/* Gráficos e tabelas */}
@@ -246,6 +225,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             periodoLabel={data.periodoLabel}
             mes={filtros.mes || undefined}
             ano={filtros.ano || undefined}
+            dataInicio={data.data_inicio || undefined}
+            dataFim={data.data_fim || undefined}
             mostrarIndisponibilidade={mostrarIndisp}
             tipoAvailability={availabilityType}
           />
@@ -274,33 +255,16 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  iconBg,
-}: {
-  title: string;
-  value: React.ReactNode;
-  subtitle: React.ReactNode;
-  icon: React.ReactNode;
-  iconBg: string;
+function MiniCard({ label, value, sub, color = 'text-zinc-100' }: {
+  label: string; value: string; sub: string; color?: string
 }) {
   return (
-    <div className="bg-white dark:bg-zinc-950 rounded-2xl p-5 px-6 border border-zinc-100 dark:border-zinc-800 flex flex-col justify-between shadow-sm min-w-[160px] flex-shrink-0">
-      <div className="flex justify-between items-start mb-5">
-        <h3 className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{title}</h3>
-        <div className={`p-2 rounded-xl ${iconBg} ml-4`}>
-          {icon}
-        </div>
-      </div>
-      <div>
-        <div className="text-[28px] font-bold text-zinc-800 dark:text-zinc-100 leading-none mb-1">{value}</div>
-        <p className="text-[11px] text-[#94a3b8] dark:text-zinc-500 leading-tight">
-          {subtitle}
-        </p>
-      </div>
+    <div className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+      <p className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider truncate">{label}</p>
+      <p className={`text-lg font-black leading-tight ${color}`}>{value}</p>
+      <p className="text-[9px] text-zinc-600 truncate">{sub}</p>
     </div>
-  );
+  )
 }
+
+

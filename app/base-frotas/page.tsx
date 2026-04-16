@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
 import EquipamentoModal from './EquipamentoModal';
 import { 
-  buscarEquipamentos, 
+  buscarEquipamentosComEscala, 
   excluirEquipamento, 
   excluirEquipamentosMassivo, 
   importarEquipamentos 
@@ -47,7 +47,7 @@ export default function BaseFrotasPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await buscarEquipamentos();
+      const data = await buscarEquipamentosComEscala();
       setVehicles(data);
     } catch (err) {
       console.error(err);
@@ -232,15 +232,17 @@ export default function BaseFrotasPage() {
                 <th className="py-4 px-6 font-semibold">Categoria</th>
                 <th className="py-4 px-6 font-semibold">Módulo</th>
                 <th className="py-4 px-6 font-semibold">Horímetro Atual</th>
+                <th className="py-4 px-6 font-semibold">Carga Horária</th>
+                <th className="py-4 px-6 font-semibold">Período</th>
                 <th className="py-4 px-6 font-semibold">Status</th>
                 <th className="py-4 px-6 font-semibold text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
               {loading ? (
-                <tr><td colSpan={7} className="py-12 text-center text-slate-400">Carregando frota...</td></tr>
+                <tr><td colSpan={9} className="py-12 text-center text-slate-400">Carregando frota...</td></tr>
               ) : filteredVehicles.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center text-slate-400">Nenhum veículo encontrado.</td></tr>
+                <tr><td colSpan={9} className="py-12 text-center text-slate-400">Nenhum veículo encontrado.</td></tr>
               ) : filteredVehicles.map((vehicle) => (
                 <tr key={vehicle.id} className={cn("transition-colors", selectedVehicles.includes(vehicle.id) ? "bg-blue-50/50 dark:bg-blue-500/5" : "hover:bg-slate-50/50 dark:hover:bg-slate-800/50")}>
                   <td className="py-3.5 px-6">
@@ -266,6 +268,24 @@ export default function BaseFrotasPage() {
                   </td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 uppercase">{vehicle.modulo}</td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 font-mono">{vehicle.ultimo_hist || vehicle.ultimoHist || 0}h</td>
+                  <td className="py-3.5 px-6">
+                    {vehicle.escala ? (
+                      <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 uppercase">
+                        {vehicle.escala.carga_horaria}h/dia
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">—</span>
+                    )}
+                  </td>
+                  <td className="py-3.5 px-6">
+                    {vehicle.escala ? (
+                      <span className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 font-mono">
+                        {vehicle.escala.periodo_inicio?.slice(0,5)} → {vehicle.escala.periodo_fim?.slice(0,5)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">24h (padrão)</span>
+                    )}
+                  </td>
                   <td className="py-3.5 px-6">
                     <span className={cn(
                       "px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider border",
