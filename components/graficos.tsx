@@ -44,6 +44,9 @@ interface VeiculoDetalhe {
   osFechadas: number;
   horasManut: number;
   horasOperacional: number;
+  hTotalDM: number;
+  hTotalDO: number;
+  horasDisponiveisOperacional: number;
 }
 
 function ModalDetalhe({
@@ -133,24 +136,43 @@ function ModalDetalhe({
         <div className="overflow-y-auto flex-1 px-4 pb-4 pt-2 flex flex-col gap-3">
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col justify-between">
-              <div>
-                <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
-                <p className="text-2xl font-bold text-emerald-400" style={{ color: getColorDisp(veiculo.dispDM) }}>
-                  {veiculo.dispDM}%
-                </p>
+            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col">
+              <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
+              <p className="text-2xl font-bold" style={{ color: getColorDisp(veiculo.dispDM) }}>
+                {veiculo.dispDM}%
+              </p>
+              <div className="mt-2 pt-2 border-t border-zinc-700/30">
+                <p className="text-[9px] text-zinc-500">Horas Totais: {veiculo.hTotalDM}h</p>
+                <p className="text-[9px] text-red-400/70">Parado: {veiculo.horasManut}h</p>
+                <p className="text-[8px] text-zinc-600 mt-1 italic">{(veiculo.hTotalDM - veiculo.horasManut).toFixed(1)}h disp. / {veiculo.hTotalDM}h total</p>
               </div>
-              <p className="text-[9px] text-zinc-500 mt-1">Impacto: {veiculo.horasManut}h</p>
             </div>
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col justify-between">
-              <div>
-                <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DO (Operacional)</p>
-                <p className="text-2xl font-bold text-blue-400" style={{ color: getColorDisp(veiculo.dispDO) }}>
-                  {veiculo.dispDO}%
-                </p>
+            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col">
+              <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DO (Operacional)</p>
+              <p className="text-2xl font-bold" style={{ color: getColorDisp(veiculo.dispDO) }}>
+                {veiculo.dispDO}%
+              </p>
+              <div className="mt-2 pt-2 border-t border-zinc-700/30">
+                <p className="text-[9px] text-zinc-500">Carga Horária: {veiculo.hTotalDO}h</p>
+                <p className="text-[9px] text-red-400/70">Downtime Turno: {veiculo.horasOperacional}h</p>
+                <p className="text-[10px] text-blue-400 font-bold mt-1">Disp. Real: {veiculo.horasDisponiveisOperacional}h</p>
+                <p className="text-[8px] text-zinc-600 mt-1 italic">{veiculo.horasDisponiveisOperacional}h disp. / {veiculo.hTotalDO}h turno</p>
               </div>
-              <p className="text-[9px] text-zinc-500 mt-1">Impacto: {veiculo.horasOperacional}h</p>
             </div>
+          </div>
+
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+             <h3 className="text-[11px] font-bold text-blue-400 flex items-center gap-2 mb-2">
+               <Clock className="w-3 h-3" /> Memória de Cálculo PCM
+             </h3>
+             <ul className="space-y-2 text-[10px] text-zinc-400">
+               <li>
+                 <span className="text-zinc-300 font-bold">DM:</span> Mede o estado mecânico sobre 24h. Formula: <span className="text-zinc-300">((T - H_Manut) / T) × 100</span> onde T = 24h × {veiculo.hTotalDM / 24} dias.
+               </li>
+               <li>
+                 <span className="text-zinc-300 font-bold">DO:</span> Mede o impacto na produção. Formula: <span className="text-zinc-300">((CH - H_Indisp) / CH) × 100</span> onde CH = {veiculo.hTotalDO / (veiculo.hTotalDM / 24)}h/dia.
+               </li>
+             </ul>
           </div>
 
           {/* ── KPI Grid 2x2 */}

@@ -31,14 +31,26 @@ export async function buscarOSporPlaca(
   let fim: string
 
   if (dataInicio && dataFim) {
-    // Usa o período Suzano exato
     inicio = dataInicio
     fim = dataFim.includes('T') ? dataFim : `${dataFim}T23:59:59`
   } else if (mes && ano) {
-    // Fallback: mês civil
-    inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
-    const lastDay = new Date(ano, mes, 0).getDate()
-    fim = `${ano}-${String(mes).padStart(2, '0')}-${lastDay}T23:59:59`
+    // Busca o período Suzano exato para consistência global
+    const { data: cal } = await supabase
+      .from('calendario_suzano')
+      .select('*')
+      .eq('mes', mes)
+      .eq('ano', ano)
+      .single()
+
+    if (cal) {
+      inicio = cal.data_inicio
+      fim = `${cal.data_fim}T23:59:59`
+    } else {
+      // Fallback: mês civil
+      inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
+      const lastDay = new Date(ano, mes, 0).getDate()
+      fim = `${ano}-${String(mes).padStart(2, '0')}-${lastDay}T23:59:59`
+    }
   } else {
     // Sem filtro de data — retorna tudo
     const { data, error } = await supabase

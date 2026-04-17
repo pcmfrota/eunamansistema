@@ -11,6 +11,8 @@ export type VeiculoDisp = {
   osFechadas: number;
   horasManut: number;
   horasOperacional: number;
+  hTotalDM: number;
+  hTotalDO: number;
 };
 
 export type PreventivaStatus = {
@@ -222,7 +224,8 @@ export async function getDashboardData(filtros?: {
 
     let hIndispDM = 0;
     let hIndispDO = 0;
-    let hPlanejadasTotal = 0;
+    let hPlanejadasDO = 0;
+    const hPlanejadasDM = 24 * diasReferencia;
     let fechadas = 0;
 
     // Iterar por cada dia do período para calcular horas planejadas e interseção de OS
@@ -230,47 +233,36 @@ export async function getDashboardData(filtros?: {
       const dataCorrente = new Date(periodoInicioObj);
       dataCorrente.setDate(periodoInicioObj.getDate() + d);
 
-      // Horas planejadas no dia
+      // Horas planejadas no dia para DO (Turno)
       if (escala) {
-        hPlanejadasTotal += Number(escala.carga_horaria);
+        hPlanejadasDO += Number(escala.carga_horaria);
       } else {
-        hPlanejadasTotal += 24; // Default se não houver escala
+        hPlanejadasDO += 24; // Default
       }
+
+      const d0 = new Date(dataCorrente); d0.setHours(0,0,0,0);
+      const d24 = new Date(dataCorrente); d24.setHours(23,59,59,999);
 
       // Interseção de cada OS com o turno do dia — Lógica PCM DM vs DO
       osDoVeiculo.forEach(os => {
-        // ── DM: Início real da parada mecânica (horario_parada > data_abertura como fallback)
-        const inicioDM = os.horario_parada
-          ? new Date(os.horario_parada)
-          : new Date(os.data_abertura);
-        const fimDM = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-        const fimDMClip = fimDM > periodoFimObj ? periodoFimObj : fimDM;
+        const inicioOS = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
+        const fimOS = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
+        const fimOSClip = fimOS > periodoFimObj ? periodoFimObj : fimOS;
 
-        // ── DO: Impacto operacional termina quando o reserva chegou (se enviado)
-        //    Se não foi enviado reserva, DO = DM (perda operacional total)
-        //    Se foi enviado reserva, DO termina em horas_reserva_chegou
-        const inicioParadaDO = inicioDM; // DO começa igual ao DM
-        let fimParadaDO = fimDMClip;     // Default: igual ao DM
-        if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
-          const reservaChegou = new Date(os.horas_reserva_chegou);
-          // DO termina quando o reserva chegou (antes do fim da manutenção mecânica)
-          fimParadaDO = reservaChegou < fimDMClip ? reservaChegou : fimDMClip;
+        // ── DM: Interseção com o dia inteiro (24h)
+        const intDMini = inicioOS > d0 ? inicioOS : d0;
+        const intDMfim = fimOSClip < d24 ? fimOSClip : d24;
+        if (intDMini < intDMfim) {
+          hIndispDM += (intDMfim.getTime() - intDMini.getTime()) / 3600000;
         }
 
+        // ── DO: Interseção somente com o Turno (Carga Horária)
         if (escala) {
-          hIndispDM += calcularIntersecaoDia(dataCorrente, inicioDM, fimDMClip, escala.periodo_inicio, escala.periodo_fim);
-          hIndispDO += calcularIntersecaoDia(dataCorrente, inicioParadaDO, fimParadaDO, escala.periodo_inicio, escala.periodo_fim);
+          hIndispDO += calcularIntersecaoDia(dataCorrente, inicioOS, fimOSClip, escala.periodo_inicio, escala.periodo_fim);
         } else {
-          // Fallback 24h
-          const d0 = new Date(dataCorrente); d0.setHours(0,0,0,0);
-          const d24 = new Date(dataCorrente); d24.setHours(23,59,59,999);
-
-          const intDMini = inicioDM > d0 ? inicioDM : d0;
-          const intDMfim = fimDMClip < d24 ? fimDMClip : d24;
-          if (intDMini < intDMfim) hIndispDM += (intDMfim.getTime() - intDMini.getTime()) / 3600000;
-
-          const intDOini = inicioParadaDO > d0 ? inicioParadaDO : d0;
-          const intDOfim = fimParadaDO < d24 ? fimParadaDO : d24;
+          // Se não houver escala, DO = DM (considera 24h as horas planejadas)
+          const intDOini = inicioOS > d0 ? inicioOS : d0;
+          const intDOfim = fimOSClip < d24 ? fimOSClip : d24;
           if (intDOini < intDOfim) hIndispDO += (intDOfim.getTime() - intDOini.getTime()) / 3600000;
         }
       });
@@ -282,14 +274,17 @@ export async function getDashboardData(filtros?: {
 
     veiculos.push({
       placa,
-      disponibilidade: hPlanejadasTotal > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasTotal - hIndispDM) / hPlanejadasTotal) * 100)) * 10) / 10 : 100,
-      disponibilidade_operacional: hPlanejadasTotal > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasTotal - hIndispDO) / hPlanejadasTotal) * 100)) * 10) / 10 : 100,
+      disponibilidade: hPlanejadasDM > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasDM - hIndispDM) / hPlanejadasDM) * 100)) * 10) / 10 : 100,
+      disponibilidade_operacional: hPlanejadasDO > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasDO - hIndispDO) / hPlanejadasDO) * 100)) * 10) / 10 : 100,
       totalOS: osDoVeiculo.length,
       osFechadas: fechadas,
       horasManut: Math.round(hIndispDM * 10) / 10,
       horasOperacional: Math.round(hIndispDO * 10) / 10,
+      hTotalDM: hPlanejadasDM,
+      hTotalDO: hPlanejadasDO,
+      horasDisponiveisOperacional: Math.round((hPlanejadasDO - hIndispDO) * 10) / 10,
       falhas: osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length
-    });
+    } as any);
   }
 
   // 5. Consolidação Final (Métricas PCM)
