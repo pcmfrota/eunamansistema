@@ -136,6 +136,27 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
   const [filtroPlaca, setFiltroPlaca] = useState("Todas");
   const [filtroClasse, setFiltroClasse] = useState("Todos");
 
+  // Helper local para fundir intervalos e evitar duplicidade
+  const mergeIntervals = (intervals: Array<{ start: number, end: number }>) => {
+    if (intervals.length === 0) return 0;
+    const sorted = [...intervals].sort((a, b) => a.start - b.start);
+    let totalMs = 0;
+    let currentStart = sorted[0].start;
+    let currentEnd = sorted[0].end;
+    for (let i = 1; i < sorted.length; i++) {
+      const next = sorted[i];
+      if (next.start < currentEnd) {
+        currentEnd = Math.max(currentEnd, next.end);
+      } else {
+        totalMs += Math.max(0, currentEnd - currentStart);
+        currentStart = next.start;
+        currentEnd = next.end;
+      }
+    }
+    totalMs += Math.max(0, currentEnd - currentStart);
+    return totalMs;
+  };
+
   // Placas disponíveis
   const placas = useMemo(() =>
     ["Todas", ...Array.from(new Set(ordens.map(o => o.placa).filter(Boolean) as string[])).sort()],
@@ -177,23 +198,35 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
     LIMITE_FIM = ontem;
   }
 
-  // Calcula horas totais: Clipando ao período e incluindo OS abertas
-  const totalHoras = ordensFiltradas.reduce((s, o) => {
-    const inicioOS = new Date(o.horario_parada || o.data_abertura);
-    const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : agoraRef;
+  // Calcula horas totais: Clipando ao período, fundindo sobreposições e incluindo OS abertas
+  const totalHoras = useMemo(() => {
+    if (!LIMITE_INI || !LIMITE_FIM) return 0;
+    
+    // Agrupa intervalos por placa para fundir sobreposições
+    const intervalosPorVeiculo = new Map<string, Array<{start: number, end: number}>>();
+    
+    ordensFiltradas.forEach(o => {
+      const inicioOS = new Date(o.horario_parada || o.data_abertura);
+      const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : agoraRef;
+      
+      const interInicio = inicioOS > LIMITE_INI ? inicioOS : LIMITE_INI;
+      const interFim = fimOS < LIMITE_FIM ? fimOS : LIMITE_FIM;
 
-    // Se o período não está definido, usa o total da OS
-    if (!LIMITE_INI || !LIMITE_FIM) {
-      return s + Math.max(0, (fimOS.getTime() - inicioOS.getTime()) / 3600000);
-    }
+      if (interInicio < interFim) {
+        const p = o.placa || "S/P";
+        const arr = intervalosPorVeiculo.get(p) || [];
+        arr.push({ start: interInicio.getTime(), end: interFim.getTime() });
+        intervalosPorVeiculo.set(p, arr);
+      }
+    });
 
-    // Interseção (Clip): Início é o mais tardio entre (OS, Período), Fim é o mais cedo
-    const interInicio = inicioOS > LIMITE_INI ? inicioOS : LIMITE_INI;
-    const interFim = fimOS < LIMITE_FIM ? fimOS : LIMITE_FIM;
+    let somaTotalMs = 0;
+    intervalosPorVeiculo.forEach(intervals => {
+      somaTotalMs += mergeIntervals(intervals);
+    });
 
-    const diffMs = interFim.getTime() - interInicio.getTime();
-    return s + (diffMs > 0 ? diffMs / 3600000 : 0);
-  }, 0);
+    return somaTotalMs / 3600000;
+  }, [ordensFiltradas, LIMITE_INI, LIMITE_FIM]);
 
   // ── Gráfico por Motivo
   const porMotivo = useMemo(() => {

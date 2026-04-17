@@ -60,6 +60,33 @@ export type DashboardData = {
   manutPorTipo: any[];
 };
 
+// Helper para fundir intervalos de tempo sobrepostos (evita duplicidade de horas)
+function mergeTimeIntervals(intervals: Array<{ start: number, end: number }>) {
+  if (intervals.length === 0) return 0;
+  // Ordena por início
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  
+  let totalMs = 0;
+  let currentStart = sorted[0].start;
+  let currentEnd = sorted[0].end;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const next = sorted[i];
+    if (next.start < currentEnd) {
+      // Sobreposição: estende o fim se necessário
+      currentEnd = Math.max(currentEnd, next.end);
+    } else {
+      // Lacuna: soma o intervalo anterior e começa um novo
+      totalMs += Math.max(0, currentEnd - currentStart);
+      currentStart = next.start;
+      currentEnd = next.end;
+    }
+  }
+  // Soma o último
+  totalMs += Math.max(0, currentEnd - currentStart);
+  return totalMs / 3600000; // Retorna em horas
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export async function getDashboardData(filtros?: {
   mes?: number;
@@ -261,10 +288,12 @@ export async function getDashboardData(filtros?: {
       const d24 = new Date(dataCorrente); d24.setHours(23,59,59,999);
 
       // Interseção de cada OS com o turno do dia — Lógica PCM DM vs DO
+      const intervalosDM: Array<{start: number, end: number}> = [];
+      const intervalosDO: Array<{start: number, end: number}> = [];
+
       osDoVeiculo.forEach(os => {
         const inicioOS = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
         const fimOS = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-        // Limita o cálculo até Ontem (D-1) se a OS ainda estiver aberta ou for o mês atual
         const realFimLimit = fimOS > ontem ? ontem : fimOS;
         const fimOSClip = realFimLimit > periodoFimObj ? periodoFimObj : realFimLimit;
 
@@ -272,19 +301,34 @@ export async function getDashboardData(filtros?: {
         const intDMini = inicioOS > d0 ? inicioOS : d0;
         const intDMfim = fimOSClip < d24 ? fimOSClip : d24;
         if (intDMini < intDMfim) {
-          hIndispDM += (intDMfim.getTime() - intDMini.getTime()) / 3600000;
+          intervalosDM.push({ start: intDMini.getTime(), end: intDMfim.getTime() });
         }
 
         // ── DO: Interseção somente com o Turno (Carga Horária)
         if (escala) {
-          hIndispDO += calcularIntersecaoDia(dataCorrente, inicioOS, fimOSClip, escala.periodo_inicio, escala.periodo_fim);
+          const dStr = dataCorrente.toISOString().split('T')[0];
+          const shiftStart = new Date(`${dStr}T${escala.periodo_inicio}`);
+          const shiftEnd = new Date(`${dStr}T${escala.periodo_fim}`);
+          if (shiftEnd <= shiftStart) shiftEnd.setDate(shiftEnd.getDate() + 1);
+
+          const interInicio = inicioOS > shiftStart ? inicioOS : shiftStart;
+          const interFim = fimOSClip < shiftEnd ? fimOSClip : shiftEnd;
+          if (interInicio < interFim) {
+            intervalosDO.push({ start: interInicio.getTime(), end: interFim.getTime() });
+          }
         } else {
-          // Se não houver escala, DO = DM (considera 24h as horas planejadas)
+          // Se não houver escala, DO = DM no dia todo
           const intDOini = inicioOS > d0 ? inicioOS : d0;
           const intDOfim = fimOSClip < d24 ? fimOSClip : d24;
-          if (intDOini < intDOfim) hIndispDO += (intDOfim.getTime() - intDOini.getTime()) / 3600000;
+          if (intDOini < intDOfim) {
+            intervalosDO.push({ start: intDOini.getTime(), end: intDOfim.getTime() });
+          }
         }
       });
+
+      // Soma intervalos sem duplicidade
+      hIndispDM += mergeTimeIntervals(intervalosDM);
+      hIndispDO += mergeTimeIntervals(intervalosDO);
     }
 
     osDoVeiculo.forEach(os => {
@@ -310,21 +354,24 @@ export async function getDashboardData(filtros?: {
   const hIndispDMTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
   const hIndispDOTotal = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
   
-  // Total de horas planejadas da frota no período
-  const hTotalFrotaPlanejada = veiculos.reduce((acc, v) => {
+  // Total de horas planejadas da frota no período para DM (sempre 24h)
+  const hTotalDMPlanejadaGeral = veiculos.length * 24 * diasReferencia;
+
+  // Total de horas planejadas da frota para DO (Carga Horária / Escala)
+  const hTotalDOPlanejadaGeral = veiculos.reduce((acc, v) => {
     const escala = escalaMap.get(v.placa);
     return acc + (escala ? Number(escala.carga_horaria) * diasReferencia : 24 * diasReferencia);
   }, 0);
 
-  const dm = hTotalFrotaPlanejada > 0 ? Math.round(((hTotalFrotaPlanejada - hIndispDMTotal) / hTotalFrotaPlanejada) * 1000) / 10 : 0;
-  const doOp = hTotalFrotaPlanejada > 0 ? Math.round(((hTotalFrotaPlanejada - hIndispDOTotal) / hTotalFrotaPlanejada) * 1000) / 10 : 0;
+  const dm = hTotalDMPlanejadaGeral > 0 ? Math.round(((hTotalDMPlanejadaGeral - hIndispDMTotal) / hTotalDMPlanejadaGeral) * 1000) / 10 : 0;
+  const doOp = hTotalDOPlanejadaGeral > 0 ? Math.round(((hTotalDOPlanejadaGeral - hIndispDOTotal) / hTotalDOPlanejadaGeral) * 1000) / 10 : 0;
 
   // MTTR/MTBF baseados apenas em Corretivas (Padrão PCM)
   const osCorretivas = allOS.filter(o => o.classe === 'CORRETIVA');
   const osCorretivasFechadas = osCorretivas.filter(o => o.status === 'Fechada' || o.status === 'Concluída');
   
   const mttr = osCorretivasFechadas.length > 0 ? Math.round((hIndispDMTotal / osCorretivasFechadas.length) * 10) / 10 : 0;
-  const hOperacionaisTotal = Math.max(0, hTotalFrotaPlanejada - hIndispDMTotal);
+  const hOperacionaisTotal = Math.max(0, hTotalDOPlanejadaGeral - hIndispDMTotal);
   const mtbf = osCorretivas.length > 0 ? Math.round((hOperacionaisTotal / osCorretivas.length) * 10) / 10 : 0;
 
   // 5. Ranking de Falhas (Top 10 veículos que mais deram corretiva)
