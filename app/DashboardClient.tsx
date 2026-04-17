@@ -159,15 +159,15 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       />
 
       {/* ── Período inline (pequeno, abaixo dos filtros) ── */}
-      {data.data_inicio && (
+      {data.data_inicio && data.data_fim && (
         <div className="flex items-center gap-2 -mt-3 pb-1">
-          <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Período:</span>
+          <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Período Operacional:</span>
           <span className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 font-mono">
-            {new Date(data.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
+            {data.data_inicio.split('-').reverse().join('/')}
           </span>
-          <span className="text-zinc-600 text-xs">{'->'}</span>
+          <span className="text-zinc-600 text-xs text-bold">ATÉ</span>
           <span className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 font-mono">
-            {new Date(data.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}
+            {data.data_fim.split('-').reverse().join('/')}
           </span>
         </div>
       )}

@@ -108,16 +108,20 @@ export async function getDashboardData(filtros?: {
 
     if (calSuzano) {
       inicioFiltro = calSuzano.data_inicio;
-      
-      const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
+      const rawFim = calSuzano.data_fim;
+
+      const dFimCal = new Date(rawFim + 'T23:59:59');
       const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
       
-      // Limite = agora (não amanhã, não ontem)
-      const fimEfetivoCal = dFimCal > agora ? agora : dFimCal;
+      // Limite = agora (apenas se for o mês corrente)
+      const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
+      const fimEfetivoCal = (isMesFuturoOuAtual && dFimCal > agora) ? agora : dFimCal;
       
       const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
-      fimFiltro = fimEfetivoCal.toISOString();
+      
+      // Para a query no DB usamos o limite de tempo
+      fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
     } else {
       inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
       const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
@@ -478,6 +482,6 @@ export async function getDashboardData(filtros?: {
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`
       : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
     data_inicio: inicioFiltro,
-    data_fim: fimFiltro.split("T")[0]
+    data_fim: (filtros?.dataInicio && filtros?.dataFim) ? filtros.dataFim : (calSuzano ? (calSuzano as any).data_fim : fimFiltro.split("T")[0])
   };
 }
