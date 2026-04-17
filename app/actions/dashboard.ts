@@ -132,13 +132,17 @@ export async function getDashboardData(filtros?: {
   }
 
   // 2. Buscar OS e Equipamentos
+  // Lógica PCM: Queremos TODAS as OS que intersectam o período:
+  // (Início da Parada <= Fim do Período) AND (Fim da Parada >= Início do Período OU Fim da Parada IS NULL)
   const [osRes, eqRes] = await Promise.all([
     supabase.from("ordens_servico").select(`
       id, status, horas_manutencao, data_abertura, data_fechamento, 
       equipamento_id, placa, classe, foi_enviado_reserva,
       horario_parada, horas_reserva_chegou
     `)
-    .lte("data_abertura", fimFiltro)
+    // Captura OS que começaram até o fim do período (seja pela data de abertura ou horário de parada real)
+    .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`)
+    // E que ainda não fecharam OU fecharam depois do início do período (impactam o período)
     .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
     supabase.from("equipamentos").select("*")
   ]);

@@ -132,6 +132,8 @@ export class OSService {
           sistema: this.getVal(row, ['sistema', 'Sistema', 'SISTEMA']),
           sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema', 'SUB-SISTEMA']),
           horas_manutencao: this.parseFloatSafe(this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo', 'Horas Manut', 'H. Manut', 'HORAS', 'DURAÇÃO'])),
+          horario_parada: this.parsePossibleDate(this.getVal(row, ['horario_parada', 'Horário Parada', 'Parada', 'Hora Parada', 'Data Parada', 'HORA PARADA', 'DATA PARADA'])),
+          horas_reserva_chegou: this.parsePossibleDate(this.getVal(row, ['horas_reserva_chegou', 'Reserva Chegou', 'Data Reserva', 'Chegada Reserva'])),
           observacoes: this.getVal(row, ['observacoes', 'Observações', 'Observacoes', 'Notas', 'OBSERVAÇÕES', 'OBS', 'Obs']),
         };
 

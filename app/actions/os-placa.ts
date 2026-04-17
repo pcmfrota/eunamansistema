@@ -52,15 +52,14 @@ export async function buscarOSporPlaca(
   }
 
   // OS que tocam o período:
-  // - Abertas dentro do período, OU
-  // - Fechadas dentro do período, OU
-  // - Abertas antes do período e ainda abertas (sem fechamento)
+  // - Abertas até o fim do período (data_abertura ou horario_parada), E
+  // - Ainda não fechadas OU fechadas após o início do período
   const { data, error } = await supabase
     .from('ordens_servico')
-    .select('id, numero_os, status, classe, data_abertura, data_fechamento, descricao, sistema, sub_sistema, horas_manutencao, motivo, local, modulo')
+    .select('id, numero_os, status, classe, data_abertura, data_fechamento, descricao, sistema, sub_sistema, horas_manutencao, motivo, local, modulo, horario_parada')
     .eq('placa', placa.toUpperCase())
-    .lte('data_abertura', fim)          // Abertura antes ou dentro do fim do período
-    .or(`data_fechamento.is.null,data_fechamento.gte.${inicio}`)  // Ainda aberta OU fechada depois do início
+    .or(`data_abertura.lte.${fim},horario_parada.lte.${fim}`)
+    .or(`data_fechamento.is.null,data_fechamento.gte.${inicio}`)
     .order('data_abertura', { ascending: false })
     .limit(100)
 
