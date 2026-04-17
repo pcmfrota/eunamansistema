@@ -162,11 +162,11 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       {data.data_inicio && data.data_fim && (
         <div className="flex items-center gap-2 -mt-3 pb-1">
           <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Período Operacional:</span>
-          <span className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 font-mono">
+          <span className="px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md text-xs text-zinc-700 dark:text-zinc-300 font-mono">
             {data.data_inicio.split('-').reverse().join('/')}
           </span>
-          <span className="text-zinc-600 text-xs text-bold">ATÉ</span>
-          <span className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 font-mono">
+          <span className="text-zinc-500 dark:text-zinc-600 text-[10px] font-bold">ATÉ</span>
+          <span className="px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md text-xs text-zinc-700 dark:text-zinc-300 font-mono">
             {data.data_fim.split('-').reverse().join('/')}
           </span>
         </div>
@@ -174,14 +174,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       {/* ── KPI Mini Cards — todos em uma linha ── */}
       <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-        <MiniCard label="Frota Ativa" value={String(data.totalVeiculosAtivos || 0)} sub="veículos" color="text-blue-400" />
-        <MiniCard label="DM (Mecânica)" value={`${data.dm.toFixed(1)}%`} sub="meta ≥ 95%" color={data.dm >= 95 ? 'text-emerald-400' : data.dm >= 90 ? 'text-amber-400' : 'text-red-400'} />
-        <MiniCard label="DO (Operacional)" value={`${data.doOperacional.toFixed(1)}%`} sub="equip. aptos" color={data.doOperacional >= 95 ? 'text-blue-400' : data.doOperacional >= 90 ? 'text-indigo-400' : 'text-violet-400'} />
-        <MiniCard label="MTBF" value={mtbfLabel} sub="entre falhas" color="text-indigo-300" />
-        <MiniCard label="MTTR" value={mttrLabel} sub="médio reparo" color="text-purple-300" />
-        <MiniCard label="Backlog" value={data.backlog > 0 ? `${data.backlog}d` : '—'} sub="dias pendentes" color="text-amber-300" />
-        <MiniCard label="Total de OS" value={String(data.totalOS)} sub={`${data.emAndamento}ab | ${data.osFechadas}fech`} color="text-zinc-300" />
-        <MiniCard label="Horas Mec." value={`${data.horasManutencao}h`} sub={availabilityType === 'DM' ? 'total frota (DM)' : 'total frota (DO)'} color={availabilityType === 'DM' ? 'text-orange-300' : 'text-cyan-300'} />
+        <MiniCard label="Frota Ativa" value={String(data.totalVeiculosAtivos || 0)} sub="veículos" color="text-blue-600 dark:text-blue-400" />
+        <MiniCard label="DM (Mecânica)" value={`${data.dm.toFixed(1)}%`} sub="meta ≥ 95%" color={data.dm >= 95 ? 'text-emerald-600 dark:text-emerald-400' : data.dm >= 90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'} />
+        <MiniCard label="DO (Operacional)" value={`${data.doOperacional.toFixed(1)}%`} sub="equip. aptos" color={data.doOperacional >= 95 ? 'text-blue-600 dark:text-blue-400' : data.doOperacional >= 90 ? 'text-indigo-600 dark:text-indigo-400' : 'text-violet-600 dark:text-violet-400'} />
+        <MiniCard label="MTBF" value={mtbfLabel} sub="entre falhas" color="text-indigo-700 dark:text-indigo-300" />
+        <MiniCard label="MTTR" value={mttrLabel} sub="médio reparo" color="text-purple-700 dark:text-purple-300" />
+        <MiniCard label="Backlog" value={data.backlog > 0 ? `${data.backlog}d` : '—'} sub="dias pendentes" color="text-amber-700 dark:text-amber-300" />
+        <MiniCard label="Total de OS" value={String(data.totalOS)} sub={`${data.emAndamento}ab | ${data.osFechadas}fech`} color="text-zinc-800 dark:text-zinc-300" />
+        <MiniCard label="Horas Mec." value={`${data.horasManutencao}h`} sub={availabilityType === 'DM' ? 'total frota (DM)' : 'total frota (DO)'} color={availabilityType === 'DM' ? 'text-orange-700 dark:text-orange-300' : 'text-cyan-700 dark:text-cyan-300'} />
       </div>
 
       {/* Gráficos e tabelas */}
@@ -252,14 +252,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   );
 }
 
-function MiniCard({ label, value, sub, color = 'text-zinc-100' }: {
+function MiniCard({ label, value, sub, color = 'text-zinc-800 dark:text-zinc-100' }: {
   label: string; value: string; sub: string; color?: string
 }) {
   return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+    <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 flex flex-col gap-0.5 shadow-sm">
       <p className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider truncate">{label}</p>
       <p className={`text-lg font-black leading-tight ${color}`}>{value}</p>
-      <p className="text-[9px] text-zinc-600 truncate">{sub}</p>
+      <p className="text-[9px] text-zinc-400 dark:text-zinc-600 truncate">{sub}</p>
     </div>
   )
 }

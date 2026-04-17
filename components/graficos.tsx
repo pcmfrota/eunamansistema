@@ -12,6 +12,7 @@ import {
 import type { VeiculoDisp, PreventivaStatus } from "@/app/actions/dashboard";
 import type { OrdemServicoResumo } from "@/app/actions/os-placa";
 import OSFichaModal, { type OSFichaData } from "@/app/os/OSFicha";
+import { useTheme } from "./theme-provider";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function getColorDisp(val: number) {
@@ -102,23 +103,23 @@ function ModalDetalhe({
 
       {/* Panel */}
       <div
-        className="relative z-10 w-full max-w-md bg-[#1a1f2e] rounded-2xl shadow-2xl border border-zinc-700/50 overflow-hidden flex flex-col"
+        className="relative z-10 w-full max-w-md bg-white dark:bg-[#1a1f2e] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden flex flex-col"
         style={{ maxHeight: "90vh" }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-5 py-4 shrink-0"
-          style={{ background: `linear-gradient(135deg, ${dispColor}22, transparent)` }}
+          className="flex items-center justify-between px-5 py-4 shrink-0 transition-colors"
+          style={{ background: `linear-gradient(135deg, ${dispColor}15, transparent)` }}
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl" style={{ background: `${dispColor}25` }}>
+            <div className="p-2 rounded-xl" style={{ background: `${dispColor}15` }}>
               <Truck className="w-5 h-5" style={{ color: dispColor }} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-zinc-100">{veiculo.nome}</h2>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{veiculo.nome}</h2>
               <span
                 className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: `${dispColor}25`, color: dispColor }}
+                style={{ background: `${dispColor}15`, color: dispColor }}
               >
                 {dispLabel}
               </span>
@@ -126,9 +127,9 @@ function ModalDetalhe({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-zinc-700/50 transition-colors"
+            className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
           >
-            <X className="w-4 h-4 text-zinc-400" />
+            <X className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
           </button>
         </div>
 
@@ -136,114 +137,114 @@ function ModalDetalhe({
         <div className="overflow-y-auto flex-1 px-4 pb-4 pt-2 flex flex-col gap-3">
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col">
-              <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
+              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
               <p className="text-2xl font-bold" style={{ color: getColorDisp(veiculo.dispDM) }}>
                 {veiculo.dispDM}%
               </p>
-              <div className="mt-2 pt-2 border-t border-zinc-700/30">
+              <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
                 <p className="text-[9px] text-zinc-500">Horas Totais: {veiculo.hTotalDM}h</p>
-                <p className="text-[9px] text-red-400/70">Parado: {veiculo.horasManut}h</p>
-                <p className="text-[8px] text-zinc-600 mt-1 italic">{(veiculo.hTotalDM - veiculo.horasManut).toFixed(1)}h disp. / {veiculo.hTotalDM}h total</p>
+                <p className="text-[9px] text-red-500 dark:text-red-400/70">Parado: {veiculo.horasManut}h</p>
+                <p className="text-[8px] text-zinc-400 dark:text-zinc-600 mt-1 italic">{(veiculo.hTotalDM - veiculo.horasManut).toFixed(1)}h disp. / {veiculo.hTotalDM}h total</p>
               </div>
             </div>
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-3 flex flex-col">
-              <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1">DO (Operacional)</p>
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
+              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DO (Operacional)</p>
               <p className="text-2xl font-bold" style={{ color: getColorDisp(veiculo.dispDO) }}>
                 {veiculo.dispDO}%
               </p>
-              <div className="mt-2 pt-2 border-t border-zinc-700/30">
+              <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
                 <p className="text-[9px] text-zinc-500">Carga Horária: {veiculo.hTotalDO}h</p>
-                <p className="text-[9px] text-red-400/70">Downtime Turno: {veiculo.horasOperacional}h</p>
-                <p className="text-[10px] text-blue-400 font-bold mt-1">Disp. Real: {veiculo.horasDisponiveisOperacional}h</p>
-                <p className="text-[8px] text-zinc-600 mt-1 italic">{veiculo.horasDisponiveisOperacional}h disp. / {veiculo.hTotalDO}h turno</p>
+                <p className="text-[9px] text-red-500 dark:text-red-400/70">Downtime Turno: {veiculo.horasOperacional}h</p>
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1">Disp. Real: {veiculo.horasDisponiveisOperacional}h</p>
+                <p className="text-[8px] text-zinc-400 dark:text-zinc-600 mt-1 italic">{veiculo.horasDisponiveisOperacional}h disp. / {veiculo.hTotalDO}h turno</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
-             <h3 className="text-[11px] font-bold text-blue-400 flex items-center gap-2 mb-2">
+          <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-3">
+             <h3 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-2">
                <Clock className="w-3 h-3" /> Memória de Cálculo PCM
              </h3>
-             <ul className="space-y-2 text-[10px] text-zinc-400">
+             <ul className="space-y-2 text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
                <li>
-                 <span className="text-zinc-300 font-bold">DM:</span> Mede o estado mecânico sobre 24h. Formula: <span className="text-zinc-300">((T - H_Manut) / T) × 100</span> onde T = 24h × {veiculo.hTotalDM / 24} dias.
+                 <span className="text-zinc-700 dark:text-zinc-300 font-bold">DM:</span> Mede o estado mecânico sobre 24h. Formula: <span className="text-zinc-800 dark:text-zinc-300">((T - H_Manut) / T) × 100</span> onde T = 24h × {veiculo.hTotalDM / 24} dias.
                </li>
                <li>
-                 <span className="text-zinc-300 font-bold">DO:</span> Mede o impacto na produção. Formula: <span className="text-zinc-300">((CH - H_Indisp) / CH) × 100</span> onde CH = {veiculo.hTotalDO / (veiculo.hTotalDM / 24)}h/dia.
+                 <span className="text-zinc-700 dark:text-zinc-300 font-bold">DO:</span> Mede o impacto na produção. Formula: <span className="text-zinc-800 dark:text-zinc-300">((CH - H_Indisp) / CH) × 100</span> onde CH = {veiculo.hTotalDO / (veiculo.hTotalDM / 24)}h/dia.
                </li>
              </ul>
           </div>
 
           {/* ── KPI Grid 2x2 */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4">
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-lg bg-blue-500/15">
-                  <ClipboardList className="w-3.5 h-3.5 text-blue-400" />
+                <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-500/15">
+                  <ClipboardList className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-400">Total de OS</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Total de OS</p>
               </div>
-              <p className="text-2xl font-bold text-zinc-100">{veiculo.totalOS}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">ordens de serviço</p>
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{veiculo.totalOS}</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ordens de serviço</p>
             </div>
 
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4">
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-lg bg-emerald-500/15">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-500/15">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-400">OS Concluídas</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">OS Concluídas</p>
               </div>
-              <p className="text-2xl font-bold text-zinc-100">{veiculo.osFechadas}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">fechadas no período</p>
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{veiculo.osFechadas}</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">fechadas no período</p>
             </div>
 
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4">
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className={`p-1.5 rounded-lg ${osAbertas > 0 ? "bg-amber-500/15" : "bg-zinc-700/50"}`}>
-                  <Clock className={`w-3.5 h-3.5 ${osAbertas > 0 ? "text-amber-400" : "text-zinc-500"}`} />
+                <div className={`p-1.5 rounded-lg ${osAbertas > 0 ? "bg-amber-100 dark:bg-amber-500/15" : "bg-zinc-100 dark:bg-zinc-700/50"}`}>
+                  <Clock className={`w-3.5 h-3.5 ${osAbertas > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-400 dark:text-zinc-500"}`} />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-400">OS em Aberto</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">OS em Aberto</p>
               </div>
-              <p className={`text-2xl font-bold ${osAbertas > 0 ? "text-amber-400" : "text-zinc-100"}`}>
+              <p className={`text-2xl font-bold ${osAbertas > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-900 dark:text-zinc-100"}`}>
                 {osAbertas}
               </p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
                 {osAbertas > 0 ? "⚠ atenção necessária" : "nenhuma pendente"}
               </p>
             </div>
 
-            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4">
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-lg bg-purple-500/15">
-                  <Wrench className="w-3.5 h-3.5 text-purple-400" />
+                <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-500/15">
+                  <Wrench className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-400">Hs Manutenção</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Hs Manutenção</p>
               </div>
-              <p className="text-2xl font-bold text-zinc-100">
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
                 {veiculo.horasManut > 0 ? `${veiculo.horasManut}h` : "—"}
               </p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">no período</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">no período</p>
             </div>
           </div>
 
           {/* ── MTTR (full width) */}
-          <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/50 p-4 flex items-center justify-between">
+          <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-violet-500/15">
-                <AlertTriangle className="w-4 h-4 text-violet-400" />
+              <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-500/15">
+                <AlertTriangle className="w-4 h-4 text-violet-600 dark:text-violet-400" />
               </div>
               <div>
-                <p className="text-xs font-medium text-zinc-300">MTTR</p>
-                <p className="text-[11px] text-zinc-500">Tempo Médio de Reparo</p>
+                <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">MTTR</p>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-500">Tempo Médio de Reparo</p>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-violet-400">
+              <span className="text-2xl font-black text-violet-600 dark:text-violet-400">
                 {mttr}{mttr !== "—" ? "h" : ""}
               </span>
-              <p className="text-[10px] text-zinc-500">por OS concluída</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">por OS concluída</p>
             </div>
           </div>
 
@@ -388,6 +389,10 @@ export function GraficoVeiculos({
   tipoAvailability = "DM"
 }: GraficoVeiculosProps) {
   const [selected, setSelected] = useState<VeiculoDetalhe | null>(null);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const tickColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark ? "#1e293b" : "#e2e8f0";
 
   const chartData = (dados ?? []).map((v) => {
     const isDO = tipoAvailability === "DO";
@@ -431,9 +436,9 @@ export function GraficoVeiculos({
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
     return (
-      <div className="bg-[#1a1f2e] rounded-lg shadow-lg border border-zinc-700 p-3 text-xs pointer-events-none">
-        <p className="font-bold text-sm text-zinc-100 mb-1.5">{d.nome}</p>
-        <div className="flex flex-col gap-1 text-zinc-400">
+      <div className="bg-white dark:bg-[#1a1f2e] rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-700 p-3 text-xs pointer-events-none">
+        <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 mb-1.5">{d.nome}</p>
+        <div className="flex flex-col gap-1 text-zinc-600 dark:text-zinc-400">
           <p className="flex justify-between gap-4">
             <span>DM (Mecânica):</span>
             <span className="font-semibold text-emerald-400" style={{ color: getColorDisp(d.dispDM) }}>
@@ -448,16 +453,16 @@ export function GraficoVeiculos({
           </p>
           <div className="h-[1px] bg-zinc-700/50 my-1" />
           <p>
-            Total de OS: <span className="font-semibold text-zinc-200">{d.totalOS}</span>
+            Total de OS: <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.totalOS}</span>
           </p>
           <p>
-            Hs Manut (Impacto DM): <span className="font-semibold text-zinc-200">{d.horasManut}h</span>
+            Hs Manut (Impacto DM): <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.horasManut}h</span>
           </p>
           <p>
-            Hs Indisp (Impacto DO): <span className="font-semibold text-zinc-200">{d.horasOperacional}h</span>
+            Hs Indisp (Impacto DO): <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.horasOperacional}h</span>
           </p>
         </div>
-        <p className="mt-2 text-[10px] text-zinc-600 italic">Clique para ver detalhes e OS</p>
+        <p className="mt-2 text-[10px] text-zinc-400 dark:text-zinc-600 italic">Clique para ver detalhes e OS</p>
       </div>
     );
   };
@@ -528,14 +533,13 @@ export function GraficoVeiculos({
             <CartesianGrid
               strokeDasharray="3 3"
               vertical={false}
-              stroke="#e4e4e7"
-              className="dark:stroke-zinc-800"
+              stroke={gridColor}
             />
             <XAxis
               dataKey="nome"
-              tick={{ fontSize: 10, fill: "#f4f4f5", fontWeight: 600 }}
+              tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }}
               tickLine={false}
-              axisLine={{ stroke: "#e4e4e7" }}
+              axisLine={{ stroke: gridColor }}
               interval={0}
               angle={-45}
               textAnchor="end"
@@ -543,7 +547,7 @@ export function GraficoVeiculos({
             />
             <YAxis
               domain={[0, 100]}
-              tick={{ fontSize: 11, fill: "#f4f4f5", fontWeight: 500 }}
+              tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `${v}%`}
@@ -557,7 +561,7 @@ export function GraficoVeiculos({
               radius={[3, 3, 0, 0]}
               label={{
                 position: "top",
-                fill: "#ffffff",
+                fill: tickColor,
                 fontSize: 10,
                 fontWeight: 600,
                 formatter: (v: number) => `${v}%`,
@@ -654,24 +658,42 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
           margin={{ top: 10, right: 0, left: -20, bottom: 40 }}
           barCategoryGap="12%"
         >
-          <XAxis
-            dataKey="nome"
-            tick={{ fontSize: 9, fill: "#71717a", fontWeight: 600 }}
-            tickLine={false}
-            axisLine={{ stroke: "#e4e4e7" }}
-            interval={0}
-            angle={-45}
-            textAnchor="end"
-            dy={5}
-          />
-          <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
-          <Tooltip
-            cursor={{ fill: "transparent" }}
-            formatter={(v: any, name: any, props: any) => [
-              props.payload.text,
-              "Horas Restantes",
-            ]}
-          />
+          {(() => {
+            const { theme } = useTheme();
+            const isDark = theme === "dark";
+            const tickColor = isDark ? "#94a3b8" : "#64748b";
+            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+            return (
+              <>
+                <XAxis
+                  dataKey="nome"
+                  tick={{ fontSize: 9, fill: tickColor, fontWeight: 600 }}
+                  tickLine={false}
+                  axisLine={{ stroke: gridColor }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  dy={5}
+                />
+                <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
+                <Tooltip
+                  cursor={{ fill: "transparent" }}
+                  contentStyle={{
+                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    color: isDark ? "#f4f4f5" : "#18181b",
+                  }}
+                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+                  formatter={(v: any, name: any, props: any) => [
+                    props.payload.text,
+                    "Horas Restantes",
+                  ]}
+                />
+              </>
+            );
+          })()}
           <Bar dataKey="val" radius={[2, 2, 0, 0]} label={renderCustomBarLabel}>
             {chartData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getColorPrev(entry.status)} />
@@ -722,37 +744,59 @@ export function GraficoSemanal({ dados, periodoLabel }: GraficoSemanalProps) {
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 5 }} barSize={35}>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            vertical={false}
-            stroke="#e4e4e7"
-            className="dark:stroke-zinc-800"
-          />
-          <XAxis
-            dataKey="semana"
-            tick={{ fontSize: 11, fill: "#71717a" }}
-            tickLine={false}
-            axisLine={false}
-            dy={10}
-          />
-          <YAxis
-            domain={[0, 100]}
-            tick={{ fontSize: 11, fill: "#71717a" }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) => `${v}%`}
-          />
-          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
-          <Tooltip
-            cursor={{ fill: "transparent" }}
-            formatter={(val) => [`${val}%`, "Disponibilidade"]}
-          />
+          {(() => {
+            const { theme } = useTheme();
+            const isDark = theme === "dark";
+            const tickColor = isDark ? "#94a3b8" : "#64748b";
+            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+            return (
+              <>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke={gridColor}
+                />
+                <XAxis
+                  dataKey="semana"
+                  tick={{ fontSize: 11, fill: tickColor }}
+                  tickLine={false}
+                  axisLine={false}
+                  dy={10}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: tickColor }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
+                <Tooltip
+                  cursor={{ fill: "transparent" }}
+                  contentStyle={{
+                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    color: isDark ? "#f4f4f5" : "#18181b",
+                  }}
+                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+                  formatter={(val) => [`${val}%`, "Disponibilidade"]}
+                />
+                <Legend
+                  verticalAlign="top"
+                  align="right"
+                  wrapperStyle={{ fontSize: "10px", paddingBottom: "10px", color: tickColor }}
+                />
+              </>
+            );
+          })()}
           <Bar
             dataKey="disp"
             radius={[3, 3, 0, 0]}
             label={{
               position: "top",
-              fill: "#3f3f46",
+              fill: theme === "dark" ? "#94a3b8" : "#64748b",
               fontSize: 10,
               fontWeight: 600,
               formatter: (v: number) => `${v}%`,
@@ -824,26 +868,41 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <PieChart>
-          <Pie
-            data={dados}
-            cx="50%"
-            cy="50%"
-            innerRadius={60}
-            outerRadius={90}
-            paddingAngle={2}
-            dataKey="quantidade"
-            nameKey="categoria"
-            labelLine={false}
-          >
-            {dados.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
-            ))}
-          </Pie>
-          <Tooltip 
-            formatter={(val: number) => [`${val} OS`, "Quantidade"]}
-            contentStyle={{ backgroundColor: "#1a1f2e", border: "1px solid #3f3f46", borderRadius: "8px", fontSize: "12px", color: "#fff" }}
-          />
-          <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', color: '#a1a1aa' }} />
+          {(() => {
+            const { theme } = useTheme();
+            const isDark = theme === "dark";
+            return (
+              <>
+                <Pie
+                  data={dados}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={2}
+                  dataKey="quantidade"
+                  nameKey="categoria"
+                  labelLine={false}
+                >
+                  {dados.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(val: number) => [`${val} OS`, "Quantidade"]}
+                  contentStyle={{ 
+                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
+                    border: `1px solid ${isDark ? "#3f3f46" : "#e2e8f0"}`, 
+                    borderRadius: "8px", 
+                    fontSize: "12px", 
+                    color: isDark ? "#fff" : "#18181b" 
+                  }}
+                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+                />
+                <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', color: isDark ? '#a1a1aa' : '#64748b' }} />
+              </>
+            );
+          })()}
         </PieChart>
       </ResponsiveContainer>
     </div>
@@ -909,13 +968,30 @@ export function GraficoManuTipo({ dados }: { dados: { tipo: string; quantidade: 
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }} barCategoryGap="15%">
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" className="dark:stroke-zinc-800" />
-          <XAxis type="number" tick={{ fontSize: 10, fill: "#71717a" }} axisLine={false} tickLine={false} />
-          <YAxis dataKey="tipo" type="category" tick={{ fontSize: 10, fill: "#71717a", fontWeight: 600 }} axisLine={false} tickLine={false} />
-          <Tooltip 
-            cursor={{ fill: "rgba(148,163,184,0.08)" }}
-            formatter={(val: number) => [`${val} OS`, "Quantidade"]}
-          />
+          {(() => {
+            const { theme } = useTheme();
+            const isDark = theme === "dark";
+            const tickColor = isDark ? "#94a3b8" : "#64748b";
+            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+            return (
+              <>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} />
+                <YAxis dataKey="tipo" type="category" tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <Tooltip 
+                  cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                  contentStyle={{ 
+                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
+                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+                    borderRadius: "8px",
+                    color: isDark ? "#f4f4f5" : "#18181b"
+                  }}
+                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+                  formatter={(val: number) => [`${val} OS`, "Quantidade"]}
+                />
+              </>
+            );
+          })()}
           <Bar dataKey="quantidade" radius={[0, 4, 4, 0]} fill="#3b82f6" >
             {dados.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
@@ -937,12 +1013,32 @@ export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilid
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={dados} margin={{ top: 10, right: 0, left: -20, bottom: 5 }} barSize={35}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" className="dark:stroke-zinc-800" />
-          <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: "#71717a", fontWeight: 600 }} axisLine={false} tickLine={false} dy={5} />
-          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#71717a" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
-          <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} formatter={(val: number) => [`${val}%`, "Disponibilidade Méd."]} />
-          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: '#71717a', fontSize: 10, fontWeight: 600, formatter: (v: number) => `${v}%` }}>
+          {(() => {
+            const { theme } = useTheme();
+            const isDark = theme === "dark";
+            const tickColor = isDark ? "#94a3b8" : "#64748b";
+            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+            return (
+              <>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }} axisLine={false} tickLine={false} dy={5} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
+                <Tooltip 
+                  cursor={{ fill: "rgba(148,163,184,0.08)" }} 
+                  contentStyle={{ 
+                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
+                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+                    borderRadius: "8px",
+                    color: isDark ? "#f4f4f5" : "#18181b"
+                  }}
+                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+                  formatter={(val: number) => [`${val}%`, "Disponibilidade Méd."]} 
+                />
+              </>
+            );
+          })()}
+          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: theme === 'dark' ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: 600, formatter: (v: number) => `${v}%` }}>
             {dados.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getColorDisp(entry.disponibilidade)} />
             ))}
