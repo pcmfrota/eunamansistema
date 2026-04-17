@@ -83,6 +83,8 @@ export async function getDashboardData(filtros?: {
   let inicioFiltro: string;
   let fimFiltro: string;
   let diasReferencia: number;
+  let dataInicioExibicao: string = "";
+  let dataFimExibicao: string = "";
 
   // 1. Definir limite máximo para consultas (agora = momento atual)
   const agora = new Date();
@@ -98,6 +100,8 @@ export async function getDashboardData(filtros?: {
     const diffMs = Math.max(0, fimEfetivo.getTime() - dInicio.getTime());
     diasReferencia = Math.floor(diffMs / 86400000) + 1;
     fimFiltro = fimEfetivo.toISOString();
+    dataInicioExibicao = filtros.dataInicio;
+    dataFimExibicao = filtros.dataFim;
   } else {
     const { data: calSuzano } = await supabase
       .from("calendario_suzano")
@@ -108,6 +112,8 @@ export async function getDashboardData(filtros?: {
 
     if (calSuzano) {
       inicioFiltro = calSuzano.data_inicio;
+      dataInicioExibicao = calSuzano.data_inicio;
+      dataFimExibicao = calSuzano.data_fim;
       const rawFim = calSuzano.data_fim;
 
       const dFimCal = new Date(rawFim + 'T23:59:59');
@@ -134,6 +140,8 @@ export async function getDashboardData(filtros?: {
       const diffMs = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
       fimFiltro = fimEfetivoCivil.toISOString();
+      dataInicioExibicao = inicioFiltro;
+      dataFimExibicao = fimFiltro.split("T")[0];
     }
   }
 
@@ -481,7 +489,7 @@ export async function getDashboardData(filtros?: {
     periodoLabel: filtros?.dataInicio && filtros?.dataFim 
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`
       : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
-    data_inicio: inicioFiltro,
-    data_fim: (filtros?.dataInicio && filtros?.dataFim) ? filtros.dataFim : (calSuzano ? (calSuzano as any).data_fim : fimFiltro.split("T")[0])
+    data_inicio: dataInicioExibicao,
+    data_fim: dataFimExibicao
   };
 }
