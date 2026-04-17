@@ -36,6 +36,7 @@ type OS = {
   sub_sistema: string | null;
   componente: string | null;
   observacoes: string | null;
+  horario_parada: string | null;
   equipamento_id: string;
 };
 
@@ -74,6 +75,39 @@ function StatusBadge({ status }: { status: string | null }) {
   if (s === "Em Andamento")
     return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">Em Andamento</span>;
   return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">Aberta</span>;
+}
+
+function calcularHorasOS(o: OS) {
+  if (o.horas_manutencao != null && o.horas_manutencao > 0) return o.horas_manutencao;
+  const startStr = o.horario_parada || o.data_abertura;
+  if (!startStr) return 0;
+  
+  const dInicio = new Date(startStr);
+  const dFim = o.data_fechamento ? new Date(o.data_fechamento) : new Date();
+  
+  if (isNaN(dInicio.getTime()) || isNaN(dFim.getTime())) return 0;
+
+  const diff = Math.max(0, (dFim.getTime() - dInicio.getTime()) / 3600000);
+  return Math.round(diff * 10) / 10;
+}
+
+function calcularHorasNoPeriodo(o: OS, inicioPeriodo: Date, fimPeriodo: Date) {
+  const agora = new Date();
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  ontem.setHours(23, 59, 59, 999);
+
+  const inicioOS = new Date(o.horario_parada || o.data_abertura);
+  const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : agora;
+  
+  // Limita o fim do período ao D-1 se for o período atual
+  const fimP = fimPeriodo > ontem ? ontem : fimPeriodo;
+
+  const interInicio = inicioOS > inicioPeriodo ? inicioOS : inicioPeriodo;
+  const interFim = fimOS < fimP ? fimOS : fimP;
+  
+  const ms = interFim.getTime() - interInicio.getTime();
+  return ms > 0 ? Math.round((ms / 3600000) * 10) / 10 : 0;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -142,8 +176,12 @@ export default function ControleOSClient({
         if (p) {
           const inicio = new Date(p.data_inicio + "T00:00:00");
           const fim = new Date(p.data_fim + "T23:59:59");
-          const dtAb = new Date(o.data_abertura);
-          matchPeriodo = dtAb >= inicio && dtAb <= fim;
+          
+          // Lógica de interseção PCM: (Início OS <= Fim Período) AND (Fim OS >= Início Período OR Fim OS null)
+          const dAb = new Date(o.horario_parada || o.data_abertura);
+          const dFech = o.data_fechamento ? new Date(o.data_fechamento) : null;
+          
+          matchPeriodo = dAb <= fim && (dFech == null || dFech >= inicio);
         }
       }
 
@@ -230,14 +268,25 @@ export default function ControleOSClient({
   function exportarExcel() {
     const XLSX = (window as any).XLSX;
     if (!XLSX) { alert("Motor Excel carregando..."); return; }
-    const rows = filtradas.map(o => ({
-      "Nº OS": o.numero_os, "Placa": o.placa || "", "Módulo": o.modulo || "",
-      "Status": o.status || "", "Abertura": fmt(o.data_abertura), "Fechamento": fmt(o.data_fechamento),
-      "Horas": o.horas_manutencao ?? "", "Descrição": o.descricao || "", "Motivo": o.motivo || "",
-      "Sistema": o.sistema || "", "Sub-Sistema": o.sub_sistema || "", "Operação (Tipo)": o.operacao_tipo || "",
-      "Local": o.local || "", "Classe": o.classe || "", "Reserva": o.foi_enviado_reserva ? "SIM" : "NÃO",
-      "Horímetro": o.horimetro ?? "", "Observações": o.observacoes || ""
-    }));
+    const pFiltro = periodos.find(per => `${per.mes}-${per.ano}` === filtroPeriodo);
+    const iniP = pFiltro ? new Date(pFiltro.data_inicio + "T00:00:00") : null;
+    const fimP = pFiltro ? new Date(pFiltro.data_fim + "T23:59:59") : null;
+
+    const rows = filtradas.map(o => {
+      const hCalc = calcularHorasOS(o);
+      const hNoPeriodo = (iniP && fimP) ? calcularHorasNoPeriodo(o, iniP, fimP) : hCalc;
+      
+      return {
+        "Nº OS": o.numero_os, "Placa": o.placa || "", "Módulo": o.modulo || "",
+        "Status": o.status || "", "Abertura": fmt(o.data_abertura), "Fechamento": fmt(o.data_fechamento),
+        "Horas Totais": hCalc > 0 ? hCalc : "", 
+        "Horas no Período": hNoPeriodo > 0 ? hNoPeriodo : "",
+        "Descrição": o.descricao || "", "Motivo": o.motivo || "",
+        "Sistema": o.sistema || "", "Sub-Sistema": o.sub_sistema || "", "Operação (Tipo)": o.operacao_tipo || "",
+        "Local": o.local || "", "Classe": o.classe || "", "Reserva": o.foi_enviado_reserva ? "SIM" : "NÃO",
+        "Horímetro": o.horimetro ?? "", "Observações": o.observacoes || ""
+      };
+    });
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "OrdensServico");
@@ -405,7 +454,17 @@ export default function ControleOSClient({
                     <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={os.status} /></td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 whitespace-nowrap text-[12px]">{fmt(os.data_abertura)}</td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 whitespace-nowrap text-[12px]">{fmt(os.data_fechamento)}</td>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 font-medium whitespace-nowrap">{os.horas_manutencao != null ? `${os.horas_manutencao}h` : "-"}</td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 font-medium whitespace-nowrap">
+                      {(() => {
+                        const pF = periodos.find(per => `${per.mes}-${per.ano}` === filtroPeriodo);
+                        if (pF) {
+                          const h = calcularHorasNoPeriodo(os, new Date(pF.data_inicio + "T00:00:00"), new Date(pF.data_fim + "T23:59:59"));
+                          return h > 0 ? `${h}h` : "-";
+                        }
+                        const h = calcularHorasOS(os);
+                        return h > 0 ? `${h}h` : "-";
+                      })()}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                         {/* Botão Ver Ficha — aparece para OS fechadas, disponível para todos */}

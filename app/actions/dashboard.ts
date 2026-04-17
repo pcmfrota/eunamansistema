@@ -73,6 +73,11 @@ export async function getDashboardData(filtros?: {
 }): Promise<DashboardData> {
   const supabase = createClient();
   const agoraRef = new Date();
+  // Ontem às 23:59:59 (D-1)
+  const ontem = new Date(agoraRef);
+  ontem.setDate(ontem.getDate() - 1);
+  ontem.setHours(23, 59, 59, 999);
+  
   const diaHoje = agoraRef.getDate();
   const mesAtualRef = agoraRef.getMonth() + 1;
   const anoAtualRef = agoraRef.getFullYear();
@@ -119,9 +124,9 @@ export async function getDashboardData(filtros?: {
       const dFimCal = new Date(rawFim + 'T23:59:59');
       const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
       
-      // Limite = agora (apenas se for o mês corrente)
+      // Limite = Ontem (D-1) para o mês atual
       const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
-      const fimEfetivoCal = (isMesFuturoOuAtual && dFimCal > agora) ? agora : dFimCal;
+      const fimEfetivoCal = (isMesFuturoOuAtual && dFimCal > ontem) ? ontem : dFimCal;
       
       const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
@@ -259,7 +264,9 @@ export async function getDashboardData(filtros?: {
       osDoVeiculo.forEach(os => {
         const inicioOS = os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura);
         const fimOS = os.data_fechamento ? new Date(os.data_fechamento) : agoraRef;
-        const fimOSClip = fimOS > periodoFimObj ? periodoFimObj : fimOS;
+        // Limita o cálculo até Ontem (D-1) se a OS ainda estiver aberta ou for o mês atual
+        const realFimLimit = fimOS > ontem ? ontem : fimOS;
+        const fimOSClip = realFimLimit > periodoFimObj ? periodoFimObj : realFimLimit;
 
         // ── DM: Interseção com o dia inteiro (24h)
         const intDMini = inicioOS > d0 ? inicioOS : d0;

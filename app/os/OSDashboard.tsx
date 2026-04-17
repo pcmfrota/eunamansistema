@@ -166,8 +166,16 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
   
   // Limites do período para "clipar" as horas (Padrão PCM)
   const agoraRef = new Date();
+  const ontem = new Date(agoraRef);
+  ontem.setDate(ontem.getDate() - 1);
+  ontem.setHours(23, 59, 59, 999);
+
   const LIMITE_INI = periodoSelecionado ? new Date(periodoSelecionado.data_inicio + "T00:00:00") : null;
-  const LIMITE_FIM = periodoSelecionado ? new Date(periodoSelecionado.data_fim + "T23:59:59") : null;
+  // O fim do período nunca deve passar de ontem (D-1) para o mês atual
+  let LIMITE_FIM = periodoSelecionado ? new Date(periodoSelecionado.data_fim + "T23:59:59") : null;
+  if (LIMITE_FIM && LIMITE_FIM > ontem) {
+    LIMITE_FIM = ontem;
+  }
 
   // Calcula horas totais: Clipando ao período e incluindo OS abertas
   const totalHoras = ordensFiltradas.reduce((s, o) => {
@@ -291,7 +299,12 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       "Status": o.status || "",
       "Data Abertura": o.data_abertura,
       "Data Fechamento": o.data_fechamento || "",
-      "Horas Manut.": o.horas_manutencao ?? "",
+      "Horas Manut.": (() => {
+        if (o.horas_manutencao != null && o.horas_manutencao > 0) return o.horas_manutencao;
+        const ini = new Date(o.horario_parada || o.data_abertura).getTime();
+        const fim = o.data_fechamento ? new Date(o.data_fechamento).getTime() : Date.now();
+        return Math.round((Math.max(0, fim - ini) / 3600000) * 10) / 10;
+      })(),
       "Classe": o.classe || "",
       "Motivo": o.motivo || "",
       "Sistema": o.sistema || "",
