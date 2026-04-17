@@ -150,47 +150,145 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
   const placa = getPlaca(os);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const logoSVG = `<svg width="72" height="72" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <path d="M60 8 L66 18 L78 14 L78 26 L90 28 L86 40 L96 48 L88 56 L92 68 L80 70 L78 82 L66 80 L60 90 L54 80 L42 82 L40 70 L28 68 L32 56 L24 48 L34 40 L30 28 L42 26 L42 14 L54 18 Z"
+        fill="none" stroke="#1a5c1a" stroke-width="4" stroke-linejoin="round"/>
+      <circle cx="60" cy="49" r="26" fill="#1a5c1a"/>
+      <text x="60" y="62" text-anchor="middle" font-size="32" font-weight="900" fill="#ffffff" font-family="Arial,sans-serif">E</text>
+      <text x="60" y="102" text-anchor="middle" font-size="13" font-weight="900" fill="#1a1a1a" font-family="Arial,sans-serif" letter-spacing="1">EUNAMAN</text>
+      <text x="60" y="114" text-anchor="middle" font-size="7" font-weight="700" fill="#1a5c1a" font-family="Arial,sans-serif" letter-spacing="1">FOREST SUPPORT EXPERT</text>
+    </svg>`;
+
+    const statusColor = (os.status === "Fechada" || os.status === "Concluída")
+      ? { bg: "#d1fae5", text: "#065f46", border: "#6ee7b7" }
+      : os.status === "Em Andamento"
+      ? { bg: "#fef3c7", text: "#92400e", border: "#fcd34d" }
+      : { bg: "#dbeafe", text: "#1e40af", border: "#93c5fd" };
+
+    const rows = (label: string, value: string, bold = false, green = false) =>
+      `<div style="padding:0 8px 8px 8px;display:flex;flex-direction:column;gap:2px;flex:1;">
+        <label style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:600;">${label}</label>
+        <span style="font-size:12px;font-weight:${bold ? '900' : '600'};color:${green ? '#1a5c1a' : '#111827'};border-bottom:1px dotted #9ca3af;padding-bottom:2px;">${value}</span>
+      </div>`;
+
+    const secTitle = (t: string) =>
+      `<div style="background:#1a5c1a;color:#fff;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;padding:4px 10px;">${t}</div>`;
+
+    const win = window.open("", "_blank", "width=900,height=750");
+    if (!win) return;
+
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head>
+      <meta charset="UTF-8"/>
+      <title>O.S ${os.numero_os}</title>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{font-family:Arial,sans-serif;font-size:11px;background:#fff;color:#000;}
+        @page{size:A4 portrait;margin:10mm;}
+        @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact;}}
+      </style>
+    </head><body>
+      <div style="border:2px solid #111;max-width:800px;margin:0 auto;">
+
+        <!-- Cabeçalho -->
+        <div style="display:flex;align-items:center;border-bottom:2px solid #111;padding:10px 14px;gap:14px;">
+          <div style="width:72px;height:72px;flex-shrink:0;">${logoSVG}</div>
+          <div style="flex:1;text-align:center;">
+            <h1 style="font-size:17px;font-weight:900;letter-spacing:3px;text-transform:uppercase;">ORDEM DE MANUTENÇÃO</h1>
+            <p style="font-size:10px;color:#6b7280;margin-top:3px;">EUNAMAN — CONTROLE DE MANUTENÇÃO DE FROTAS</p>
+          </div>
+          <div style="min-width:120px;text-align:right;">
+            <p style="font-size:9px;color:#6b7280;text-transform:uppercase;font-weight:600;">Nº O.S</p>
+            <p style="font-size:14px;font-weight:900;font-family:monospace;">${os.numero_os}</p>
+            <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:800;margin-top:4px;background:${statusColor.bg};color:${statusColor.text};border:1px solid ${statusColor.border};">${os.status || "Aberta"}</span>
+          </div>
+        </div>
+
+        <!-- Identificação -->
+        <div style="border-bottom:1px solid #111;">
+          ${secTitle("Identificação do Equipamento")}
+          <div style="display:flex;padding:8px 2px 4px 2px;">
+            ${rows("Placa", placa, true)}
+            ${rows("Módulo / Operação", os.modulo ? `${os.modulo}${os.operacao_tipo ? ` — ${os.operacao_tipo}` : ''}` : os.operacao_tipo || "—")}
+            ${rows("Local", os.local || "—")}
+            ${rows("Horímetro", os.horimetro != null ? String(os.horimetro) : "—")}
+          </div>
+        </div>
+
+        <!-- Datas -->
+        <div style="border-bottom:1px solid #111;">
+          ${secTitle("Datas e Tempos")}
+          <div style="display:flex;padding:8px 2px 4px 2px;">
+            ${os.horario_parada ? rows("Horário Real da Parada", fmtDT(os.horario_parada)) : ""}
+            ${rows("Início Manutenção", fmtDT(os.data_abertura))}
+            ${rows("Fechamento da O.S", fmtDT(os.data_fechamento), false, true)}
+            ${rows("Tempo Total", horasCalc, true, true)}
+          </div>
+        </div>
+
+        <!-- Classificação -->
+        <div style="border-bottom:1px solid #111;">
+          ${secTitle("Classificação da Manutenção")}
+          <div style="display:flex;padding:8px 2px 4px 2px;">
+            ${rows("Tipo", os.classe || "CORRETIVA", true)}
+            ${rows("Sistema", os.sistema || "—")}
+            ${rows("Sub-Sistema", os.sub_sistema || "—")}
+            ${rows("Componente", os.componente || "—")}
+          </div>
+          <div style="display:flex;padding:0 2px 8px 2px;">
+            ${rows("Motivo da Parada", os.motivo || "—")}
+            ${rows("Reserva Enviada?", os.foi_enviado_reserva ? "✅ SIM" : "NÃO", true, os.foi_enviado_reserva ? true : false)}
+          </div>
+        </div>
+
+        <!-- Descrição -->
+        <div style="border-bottom:1px solid #111;">
+          ${secTitle("Descrição da Atividade")}
+          <div style="padding:8px 10px;min-height:56px;">
+            <p style="font-size:11px;font-weight:600;color:#b45309;line-height:1.6;">${os.descricao || "—"}</p>
+          </div>
+        </div>
+
+        <!-- Observações -->
+        <div style="border-bottom:1px solid #111;">
+          ${secTitle("Observações / Pendências")}
+          <div style="padding:8px 10px;min-height:40px;">
+            <p style="font-size:11px;color:#374151;line-height:1.5;">${os.observacoes || "—"}</p>
+          </div>
+        </div>
+
+        <!-- Assinaturas -->
+        <div>
+          ${secTitle("Controle e Assinaturas")}
+          <div style="display:flex;border-bottom:1px solid #333;">
+            ${[
+              { l: "Executante / Mecânico", s: "Nome e Matrícula" },
+              { l: "Encarregado / Supervisor", s: "Visto e Matrícula" },
+              { l: "PCM / Planejamento", s: "Data de Encerramento" },
+              { l: "Operador / Motorista", s: "Recebimento" },
+            ].map((a, i) => `
+              <div style="flex:1;padding:10px 8px;${i < 3 ? 'border-right:1px solid #333;' : ''}">
+                <p style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:24px;">${a.l}</p>
+                <div style="border-bottom:1px solid #111;"></div>
+                <p style="font-size:9px;text-align:center;color:#9ca3af;margin-top:4px;">${a.s}</p>
+              </div>`).join("")}
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 10px;background:#f9fafb;border-top:1px solid #d1d5db;">
+            <p style="font-size:9px;color:#9ca3af;">Gerado em: ${new Date().toLocaleString("pt-BR")}</p>
+            <p style="font-size:9px;color:#6b7280;font-weight:700;">EUNAMAN — Sistema de Controle de Manutenção</p>
+            <p style="font-size:9px;color:#9ca3af;font-family:monospace;">O.S: ${os.numero_os}</p>
+          </div>
+        </div>
+
+      </div>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => { win.print(); win.close(); }, 500);
+  };
+
 
   return (
     <>
-      {/* ── Print CSS: visibility technique — funciona em qualquer depth do DOM ── */}
-      <style>{`
-        @media print {
-          /* Esconde TUDO */
-          body * { visibility: hidden !important; }
-
-          /* Mostra só o conteúdo da ficha */
-          #ficha-os-print,
-          #ficha-os-print * { visibility: visible !important; }
-
-          /* Posiciona a ficha no topo da página */
-          #ficha-os-print {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            background: white !important;
-            z-index: 9999 !important;
-          }
-
-          /* Forca cores verdes */
-          .section-title-print {
-            background-color: #1a5c1a !important;
-            color: #ffffff !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .status-badge-print {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .desc-text-print {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
-      `}</style>
 
       <div id="ficha-print-root" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
         {/* Backdrop close */}
