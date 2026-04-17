@@ -33,8 +33,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // 1. Iniciar com os dados da sessão atual (se houver)
-  useEffect(() => {
-    // 1. Iniciar com os dados da sessão atual (se houver)
     const initSession = async () => {
       console.log('[Auth] Iniciando initSession...')
       
@@ -47,10 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('[Auth] Usuário detectado via getSession:', currentUser.email)
           setUser(currentUser)
           
-          // --- FEEDBACK INSTANTÂNEO ---
-          // Define perfil provisório baseado no token para não travar a UI
+          // --- FEEDBACK MAIS INTELIGENTE ---
+          // Define perfil provisório baseado no token
           let initialRole: any = currentUser.app_metadata?.role || 'visitante'
-          if (currentUser.email?.includes('marcos.rocha')) initialRole = 'admin'
+          
+          // Hard-overrides para usuários chave (Administradores conhecidos)
+          if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
+            initialRole = 'admin'
+          }
           
           const provisionalProfile: Profile = {
             id: currentUser.id,
@@ -61,41 +63,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           
           setProfile(provisionalProfile)
-          setLoading(false) // Libera a UI IMEDIATAMENTE se já temos o usuário
 
-          // --- ENRIQUECIMENTO EM BACKGROUND ---
-          // Busca dados reais do banco sem travar a navegação
-          supabase
+          // Se o cargo já é Administrador ou PCM no token, libera a UI logo
+          // Senão, esperamos um pouquinho pelo bando de dados pra não piscar "Visitante"
+          if (initialRole !== 'visitante') {
+            setLoading(false)
+          }
+
+          // --- BUSCA PERFIL REAL DO BANCO ---
+          const { data: profileData, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', currentUser.id)
             .single()
-            .then(({ data: profileData, error }) => {
-              if (!error && profileData) {
-                console.log('[Auth] Perfil sincronizado com o DB')
-                let finalRole = profileData.role || currentUser.app_metadata?.role || 'visitante'
-                if (currentUser.email?.includes('marcos.rocha')) finalRole = 'admin'
 
-                setProfile({
-                  id: currentUser.id,
-                  email: currentUser.email || '',
-                  full_name: profileData.full_name || currentUser.user_metadata?.full_name || 'Usuário',
-                  role: finalRole as any,
-                  avatar_url: profileData.avatar_url || currentUser.user_metadata?.avatar_url || null
-                })
-              }
+          if (!error && profileData) {
+            console.log('[Auth] Perfil sincronizado com o DB')
+            let finalRole = profileData.role || currentUser.app_metadata?.role || 'visitante'
+            
+            // Garantir overrides críticos
+            if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
+              finalRole = 'admin'
+            }
+
+            setProfile({
+              id: currentUser.id,
+              email: currentUser.email || '',
+              full_name: profileData.full_name || currentUser.user_metadata?.full_name || 'Usuário',
+              role: finalRole as any,
+              avatar_url: profileData.avatar_url || currentUser.user_metadata?.avatar_url || null
             })
-        } else {
-          // Se não tem sessão rápida, tenta verificar no servidor rapidamente
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            setUser(user)
-            // Lógica similar de provisionamento rápido...
-            setLoading(false)
-          } else {
-            setLoading(false)
           }
         }
+        
+        // Finaliza o loading em qualquer caso (se ainda estiver ativo)
+        setLoading(false)
+
       } catch (err) {
         console.error('[Auth] Erro na sessão inicial:', err)
         setLoading(false)
@@ -112,39 +115,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const currentUser = session.user
         setUser(currentUser)
         
-        // --- FEEDBACK INSTANTÂNEO ---
+        // Define papel inicial
         let initialRole: any = currentUser.app_metadata?.role || 'visitante'
-        if (currentUser.email?.includes('marcos.rocha')) initialRole = 'admin'
+        if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
+          initialRole = 'admin'
+        }
+
+        // Tenta buscar o perfil do banco IMEDIATAMENTE antes de tirar o loading se for visitante
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('role, full_name, avatar_url')
+          .eq('id', currentUser.id)
+          .single()
+
+        const finalRole = profileData?.role || initialRole
 
         setProfile({
           id: currentUser.id,
           email: currentUser.email || '',
-          full_name: currentUser.user_metadata?.full_name || 'Usuário',
-          role: initialRole,
-          avatar_url: currentUser.user_metadata?.avatar_url || null
+          full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
+          role: finalRole as any,
+          avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
         })
+        
         setLoading(false)
-
-        // --- ENRIQUECIMENTO EM BACKGROUND ---
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', currentUser.id)
-          .single()
-          .then(({ data: profileData, error }) => {
-            if (!error && profileData) {
-              let finalRole = profileData.role || currentUser.app_metadata?.role || 'visitante'
-              if (currentUser.email?.includes('marcos.rocha')) finalRole = 'admin'
-
-              setProfile({
-                id: currentUser.id,
-                email: currentUser.email || '',
-                full_name: profileData.full_name || currentUser.user_metadata?.full_name || 'Usuário',
-                role: finalRole as any,
-                avatar_url: profileData.avatar_url || currentUser.user_metadata?.avatar_url || null
-              })
-            }
-          })
       } else {
         setUser(null)
         setProfile(null)
