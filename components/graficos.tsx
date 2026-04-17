@@ -303,7 +303,7 @@ function ModalDetalhe({
                       <div className="flex items-center gap-2">
                         {isFechada ? (
                           <button
-                            onClick={() => setFichaOS(os as unknown as OSFichaData)}
+                            onClick={() => setFichaOS({ ...(os as unknown as OSFichaData), placa: os.placa || veiculo.nome })}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all"
                           >
                             <FileText className="w-3.5 h-3.5" />
