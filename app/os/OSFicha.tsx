@@ -154,28 +154,27 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
   return (
     <>
-      {/* ── Print CSS: faz o print ser IDÊNTICO à tela ── */}
+      {/* ── Print CSS: visibility technique — funciona em qualquer depth do DOM ── */}
       <style>{`
         @media print {
-          /* Esconde tudo */
-          body > * { display: none !important; }
-          /* Mostra só a ficha */
-          #ficha-print-root {
-            display: block !important;
-            position: fixed !important;
-            inset: 0 !important;
-            z-index: 9999 !important;
-            background: white !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-          #ficha-print-root .no-print { display: none !important; }
+          /* Esconde TUDO */
+          body * { visibility: hidden !important; }
+
+          /* Mostra só o conteúdo da ficha */
+          #ficha-os-print,
+          #ficha-os-print * { visibility: visible !important; }
+
+          /* Posiciona a ficha no topo da página */
           #ficha-os-print {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
             width: 100% !important;
-            max-width: 100% !important;
-            page-break-inside: avoid !important;
+            background: white !important;
+            z-index: 9999 !important;
           }
-          /* Forca cores */
+
+          /* Forca cores verdes */
           .section-title-print {
             background-color: #1a5c1a !important;
             color: #ffffff !important;
@@ -187,7 +186,6 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
             print-color-adjust: exact !important;
           }
           .desc-text-print {
-            color: #b45309 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
