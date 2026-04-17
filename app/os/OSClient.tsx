@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List } from "lucide-react";
+import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText } from "lucide-react";
 import {
   criarOrdemServico,
   atualizarStatusOS,
@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/components/auth-context";
 import OSFormModal from "./NovoModal";
 import OSDashboard from "./OSDashboard";
+import OSFichaModal, { type OSFichaData } from "./OSFicha";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type OS = {
@@ -99,6 +100,7 @@ export default function ControleOSClient({
   const [editingOS, setEditingOS] = useState<OS | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
   const [isPending, startTransition] = useTransition();
   const { profile } = useAuth();
 
@@ -371,6 +373,17 @@ export default function ControleOSClient({
                     <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 font-medium whitespace-nowrap">{os.horas_manutencao != null ? `${os.horas_manutencao}h` : "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                        {/* Botão Ver Ficha — aparece para OS fechadas, disponível para todos */}
+                        {(os.status === "Fechada" || os.status === "Concluída") && (
+                          <button
+                            title="Ver Ficha da O.S"
+                            onClick={() => setFichaOS(os as unknown as OSFichaData)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 transition-all shadow-sm"
+                          >
+                            <FileText size={13} />
+                            Ficha
+                          </button>
+                        )}
                         {!isVisitante && (
                           <>
                             {os.status === "Aberta" && (
@@ -391,7 +404,9 @@ export default function ControleOSClient({
                             </button>
                           </>
                         )}
-                        {isVisitante && <span className="text-[10px] text-zinc-400 italic">Visualização</span>}
+                        {isVisitante && !(os.status === "Fechada" || os.status === "Concluída") && (
+                          <span className="text-[10px] text-zinc-400 italic">Visualização</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -449,6 +464,14 @@ export default function ControleOSClient({
           operacoesTipo={operacoesTipo}
           motivos={motivos}
           catalogo={catalogo}
+        />
+      )}
+
+      {/* ── Ficha Impressão Modal ── */}
+      {fichaOS && (
+        <OSFichaModal
+          os={fichaOS}
+          onClose={() => setFichaOS(null)}
         />
       )}
     </div>

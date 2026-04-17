@@ -7,10 +7,11 @@ import {
 } from "recharts";
 import {
   X, Truck, ClipboardList, CheckCircle2, Clock,
-  Wrench, TrendingUp, AlertTriangle, Loader2
+  Wrench, TrendingUp, AlertTriangle, Loader2, FileText, Printer
 } from "lucide-react";
 import type { VeiculoDisp, PreventivaStatus } from "@/app/actions/dashboard";
 import type { OrdemServicoResumo } from "@/app/actions/os-placa";
+import OSFichaModal, { type OSFichaData } from "@/app/os/OSFicha";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function getColorDisp(val: number) {
@@ -62,6 +63,7 @@ function ModalDetalhe({
 }) {
   const [osList, setOsList] = useState<OrdemServicoResumo[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
 
   const osAbertas = veiculo.totalOS - veiculo.osFechadas;
   const mttr =
@@ -89,6 +91,11 @@ function ModalDetalhe({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Ficha Modal (sobreposto) */}
+      {fichaOS && (
+        <OSFichaModal os={fichaOS} onClose={() => setFichaOS(null)} />
+      )}
 
       {/* Panel */}
       <div
@@ -236,68 +243,86 @@ function ModalDetalhe({
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {osList.map((os) => (
-                  <a
-                    key={os.id}
-                    href={`/os?abrir=${os.id}`}
-                    className="group rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3.5 hover:border-blue-500/50 hover:bg-zinc-800/70 transition-all cursor-pointer block"
-                  >
-                    {/* Row 1: número + status + seta */}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[13px] font-bold text-zinc-100 group-hover:text-blue-300 transition-colors">
-                        OS: {os.numero_os}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(os.status)}`}>
-                          {os.status}
+                {osList.map((os) => {
+                  const isFechada = os.status === "Fechada" || os.status === "Concluída";
+                  return (
+                    <div
+                      key={os.id}
+                      className="group rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3.5 hover:border-blue-500/50 hover:bg-zinc-800/70 transition-all"
+                    >
+                      {/* Row 1: número + status */}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[13px] font-bold text-zinc-100">
+                          OS: {os.numero_os}
                         </span>
-                        <TrendingUp className="w-3.5 h-3.5 text-zinc-600 group-hover:text-blue-400 transition-colors" />
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(os.status)}`}>
+                            {os.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Classe / sistema */}
+                      {(os.classe || os.sistema) && (
+                        <p className="text-[11px] text-zinc-400 mb-2">
+                          {os.classe}{os.sistema ? ` · ${os.sistema}` : ""}
+                          {os.sub_sistema ? ` · ${os.sub_sistema}` : ""}
+                        </p>
+                      )}
+
+                      {/* Descrição */}
+                      {os.descricao && (
+                        <p className="text-[11px] text-zinc-500 mb-2 line-clamp-2 italic">
+                          {os.descricao}
+                        </p>
+                      )}
+
+                      {/* Hs + Data */}
+                      <div className="flex items-center gap-4 text-[11px] text-zinc-400 mb-2">
+                        {os.horas_manutencao != null && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {os.horas_manutencao}h
+                          </span>
+                        )}
+                        {(os.data_fechamento || os.data_abertura) && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            {fmtDate(os.data_fechamento ?? os.data_abertura)}
+                          </span>
+                        )}
+                        {os.motivo && (
+                          <span className="text-zinc-500 truncate max-w-[120px]">{os.motivo}</span>
+                        )}
+                      </div>
+
+                      {/* Botões de ação */}
+                      <div className="flex items-center gap-2">
+                        {isFechada ? (
+                          <button
+                            onClick={() => setFichaOS(os as unknown as OSFichaData)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            Ver Ficha &amp; Imprimir
+                          </button>
+                        ) : (
+                          <a
+                            href={`/os?abrir=${os.id}`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border border-blue-500/30 transition-all"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5" />
+                            Abrir O.S →
+                          </a>
+                        )}
                       </div>
                     </div>
-
-                    {/* Classe / sistema */}
-                    {(os.classe || os.sistema) && (
-                      <p className="text-[11px] text-zinc-400 mb-2">
-                        {os.classe}{os.sistema ? ` · ${os.sistema}` : ""}
-                        {os.sub_sistema ? ` · ${os.sub_sistema}` : ""}
-                      </p>
-                    )}
-
-                    {/* Descrição */}
-                    {os.descricao && (
-                      <p className="text-[11px] text-zinc-500 mb-2 line-clamp-2 italic">
-                        {os.descricao}
-                      </p>
-                    )}
-
-                    {/* Hs + Data */}
-                    <div className="flex items-center gap-4 text-[11px] text-zinc-400">
-                      {os.horas_manutencao != null && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {os.horas_manutencao}h
-                        </span>
-                      )}
-                      {(os.data_fechamento || os.data_abertura) && (
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          {fmtDate(os.data_fechamento ?? os.data_abertura)}
-                        </span>
-                      )}
-                      {os.motivo && (
-                        <span className="text-zinc-500 truncate max-w-[120px]">{os.motivo}</span>
-                      )}
-                    </div>
-                    <p className="text-[9px] text-blue-500/60 mt-2 group-hover:text-blue-400 transition-colors">
-                      Clique para abrir a O.S completa →
-                    </p>
-                  </a>
-                ))}
+                  );
+                })}
               </div>
-
             )}
           </div>
         </div>
