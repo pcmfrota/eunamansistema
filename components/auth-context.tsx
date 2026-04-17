@@ -32,6 +32,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
+    // 0. Tenta carregar perfil do cache para exibição instantânea
+    if (typeof window !== 'undefined') {
+      const cachedProfile = localStorage.getItem('eunaman_profile')
+      if (cachedProfile) {
+        try {
+          const parsed = JSON.parse(cachedProfile)
+          setProfile(parsed)
+          // Se temos cache, podemos até tirar o loading logo pra UI não travar
+          setLoading(false)
+        } catch (e) {}
+      }
+    }
+
     // 1. Iniciar com os dados da sessão atual (se houver)
     const initSession = async () => {
       console.log('[Auth] Iniciando initSession...')
@@ -45,30 +58,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('[Auth] Usuário detectado via getSession:', currentUser.email)
           setUser(currentUser)
           
-          // --- FEEDBACK MAIS INTELIGENTE ---
-          // Define perfil provisório baseado no token
+          // --- FEEDBACK IMEDIATO ---
+          // Prioriza o cargo do token ou mantêm o do cache se for compatível
           let initialRole: any = currentUser.app_metadata?.role || 'visitante'
-          
-          // Hard-overrides para usuários chave (Administradores conhecidos)
           if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
             initialRole = 'admin'
           }
-          
-          const provisionalProfile: Profile = {
-            id: currentUser.id,
-            email: currentUser.email || '',
-            full_name: currentUser.user_metadata?.full_name || 'Usuário',
-            role: initialRole,
-            avatar_url: currentUser.user_metadata?.avatar_url || null
-          }
-          
-          setProfile(provisionalProfile)
 
-          // Se o cargo já é Administrador ou PCM no token, libera a UI logo
-          // Senão, esperamos um pouquinho pelo bando de dados pra não piscar "Visitante"
-          if (initialRole !== 'visitante') {
-            setLoading(false)
+          // Se o perfil atual (do cache) não bate com o user logado, limpa
+          if (profile && profile.id !== currentUser.id) {
+            setProfile(null)
           }
+
+          setLoading(false) // Libera a UI rápido
 
           // --- BUSCA PERFIL REAL DO BANCO ---
           const { data: profileData, error } = await supabase
@@ -81,24 +83,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('[Auth] Perfil sincronizado com o DB')
             let finalRole = profileData.role || currentUser.app_metadata?.role || 'visitante'
             
-            // Garantir overrides críticos
             if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
               finalRole = 'admin'
             }
 
-            setProfile({
+            const updatedProfile: Profile = {
               id: currentUser.id,
               email: currentUser.email || '',
               full_name: profileData.full_name || currentUser.user_metadata?.full_name || 'Usuário',
               role: finalRole as any,
               avatar_url: profileData.avatar_url || currentUser.user_metadata?.avatar_url || null
-            })
+            }
+            
+            setProfile(updatedProfile)
+            localStorage.setItem('eunaman_profile', JSON.stringify(updatedProfile))
           }
+        } else {
+          setLoading(false)
         }
-        
-        // Finaliza o loading em qualquer caso (se ainda estiver ativo)
-        setLoading(false)
-
       } catch (err) {
         console.error('[Auth] Erro na sessão inicial:', err)
         setLoading(false)
@@ -115,33 +117,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const currentUser = session.user
         setUser(currentUser)
         
-        // Define papel inicial
         let initialRole: any = currentUser.app_metadata?.role || 'visitante'
         if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
           initialRole = 'admin'
         }
 
-        // Tenta buscar o perfil do banco IMEDIATAMENTE antes de tirar o loading se for visitante
-        const { data: profileData } = await supabase
+        // Tenta buscar o perfil do banco sem travar
+        supabase
           .from('profiles')
           .select('role, full_name, avatar_url')
           .eq('id', currentUser.id)
           .single()
-
-        const finalRole = profileData?.role || initialRole
-
-        setProfile({
-          id: currentUser.id,
-          email: currentUser.email || '',
-          full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
-          role: finalRole as any,
-          avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
-        })
-        
-        setLoading(false)
+          .then(({ data: profileData }) => {
+            const finalRole = profileData?.role || initialRole
+            const newProfile: Profile = {
+              id: currentUser.id,
+              email: currentUser.email || '',
+              full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
+              role: finalRole as any,
+              avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
+            }
+            setProfile(newProfile)
+            localStorage.setItem('eunaman_profile', JSON.stringify(newProfile))
+            setLoading(false)
+          })
       } else {
         setUser(null)
         setProfile(null)
+        localStorage.removeItem('eunaman_profile')
         setLoading(false)
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
           window.location.assign('/login')
