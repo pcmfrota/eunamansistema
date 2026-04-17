@@ -26,6 +26,7 @@ export type OSDashboardData = {
     sistema: string | null;
     sub_sistema: string | null;
     equipamento_id: string;
+    horario_parada: string | null;
   }[];
 };
 
@@ -42,7 +43,7 @@ export async function getOSDashboardData(): Promise<OSDashboardData> {
       .order("mes", { ascending: true }),
     supabase
       .from("ordens_servico")
-      .select("id, numero_os, placa, modulo, status, data_abertura, data_fechamento, horas_manutencao, classe, motivo, sistema, sub_sistema, equipamento_id")
+      .select("id, numero_os, placa, modulo, status, data_abertura, data_fechamento, horas_manutencao, classe, motivo, sistema, sub_sistema, equipamento_id, horario_parada")
       .order("data_abertura", { ascending: false }),
   ]);
 

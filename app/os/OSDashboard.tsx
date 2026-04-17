@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, LineChart, Line, Legend,
 } from "recharts";
+import { Download } from "lucide-react";
 import { getOSDashboardData, type PeriodoSuzano } from "./actions-dashboard";
 
 // ─── Cores dos anos nos gráficos de linha ────────────────────────────────────
@@ -158,10 +159,33 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
   }, [ordens, periodoSelecionado, filtroPlaca, filtroClasse]);
 
   // ── KPIs
+  // ─── Consolidação das Métricas ───────────────────────────────────────────
   const totalOS = ordensFiltradas.length;
   const emAndamento = ordensFiltradas.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length;
   const encerradas = ordensFiltradas.filter(o => o.status === "Fechada" || o.status === "Concluída").length;
-  const totalHoras = ordensFiltradas.reduce((s, o) => s + (o.horas_manutencao ?? 0), 0);
+  
+  // Limites do período para "clipar" as horas (Padrão PCM)
+  const agoraRef = new Date();
+  const LIMITE_INI = periodoSelecionado ? new Date(periodoSelecionado.data_inicio + "T00:00:00") : null;
+  const LIMITE_FIM = periodoSelecionado ? new Date(periodoSelecionado.data_fim + "T23:59:59") : null;
+
+  // Calcula horas totais: Clipando ao período e incluindo OS abertas
+  const totalHoras = ordensFiltradas.reduce((s, o) => {
+    const inicioOS = new Date(o.horario_parada || o.data_abertura);
+    const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : agoraRef;
+
+    // Se o período não está definido, usa o total da OS
+    if (!LIMITE_INI || !LIMITE_FIM) {
+      return s + Math.max(0, (fimOS.getTime() - inicioOS.getTime()) / 3600000);
+    }
+
+    // Interseção (Clip): Início é o mais tardio entre (OS, Período), Fim é o mais cedo
+    const interInicio = inicioOS > LIMITE_INI ? inicioOS : LIMITE_INI;
+    const interFim = fimOS < LIMITE_FIM ? fimOS : LIMITE_FIM;
+
+    const diffMs = interFim.getTime() - interInicio.getTime();
+    return s + (diffMs > 0 ? diffMs / 3600000 : 0);
+  }, 0);
 
   // ── Gráfico por Motivo
   const porMotivo = useMemo(() => {
@@ -256,6 +280,30 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
 
   const periodoLabel = periodoSelecionado?.label ?? "—";
 
+  function exportarExcel() {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) { alert("Motor Excel ainda carregando..."); return; }
+    
+    const rows = ordensFiltradas.map(o => ({
+      "Nº OS": o.numero_os,
+      "Placa": o.placa || "",
+      "Módulo": o.modulo || "",
+      "Status": o.status || "",
+      "Data Abertura": o.data_abertura,
+      "Data Fechamento": o.data_fechamento || "",
+      "Horas Manut.": o.horas_manutencao ?? "",
+      "Classe": o.classe || "",
+      "Motivo": o.motivo || "",
+      "Sistema": o.sistema || "",
+      "Sub-Sistema": o.sub_sistema || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Dashboard_OS");
+    XLSX.writeFile(workbook, `OS_Dashboard_${periodoLabel.replace("/", "-")}.xlsx`);
+  }
+
   return (
     <div className="flex flex-col gap-6 w-full">
 
@@ -302,14 +350,23 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
           </select>
         </div>
 
-        <div className="ml-auto text-right">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Período ativo</p>
-          <p className="text-lg font-black text-green-400">{periodoLabel}</p>
-          {periodoSelecionado && (
-            <p className="text-[10px] text-zinc-600 mt-0.5">
-              {periodoSelecionado.data_inicio} → {periodoSelecionado.data_fim}
-            </p>
-          )}
+        <div className="ml-auto flex items-center gap-4">
+          <button 
+            onClick={exportarExcel}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors shadow-lg"
+          >
+            <Download size={14} /> Exportar Excel
+          </button>
+          
+          <div className="text-right">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Período ativo</p>
+            <p className="text-lg font-black text-green-400">{periodoLabel}</p>
+            {periodoSelecionado && (
+              <p className="text-[10px] text-zinc-600 mt-0.5">
+                {periodoSelecionado.data_inicio} → {periodoSelecionado.data_fim}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

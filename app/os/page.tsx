@@ -51,6 +51,13 @@ export default async function ControleOSPage() {
     (ordens || []).map((o: any) => o.operacao_tipo).filter(Boolean)
   )).sort() as string[]
 
+  // Calendário Suzano para filtros
+  const { data: calendario } = await supabase
+    .from('calendario_suzano')
+    .select('*')
+    .order('ano', { ascending: true })
+    .order('mes', { ascending: true })
+
   return (
     <ControleOSClient
       ordens={ordens || []}
@@ -58,6 +65,7 @@ export default async function ControleOSPage() {
       operacoesTipo={operacoesTipo}
       motivos={motivos}
       catalogo={catalogo || []}
+      periodos={calendario || []}
     />
   )
 }

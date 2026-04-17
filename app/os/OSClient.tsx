@@ -83,18 +83,21 @@ export default function ControleOSClient({
   operacoesTipo = [],
   motivos = [],
   catalogo = [],
+  periodos = [],
 }: {
   ordens: OS[];
   equipamentos: Equipamento[];
   operacoesTipo?: string[];
   motivos?: string[];
   catalogo?: CatalogoItem[];
+  periodos?: any[];
 }) {
   const [ordens, setOrdens] = useState(initialOrdens);
   const [activeTab, setActiveTab] = useState<"dashboard" | "lista">("lista");
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos Status");
   const [filtroModulo, setFiltroModulo] = useState("Todos Módulos");
+  const [filtroPeriodo, setFiltroPeriodo] = useState("Todos Períodos");
   const [filtroOrdem, setFiltroOrdem] = useState("Mais Recente");
   const [showModal, setShowModal] = useState(false);
   const [editingOS, setEditingOS] = useState<OS | null>(null);
@@ -132,7 +135,19 @@ export default function ControleOSClient({
       const matchBusca = !q || o.numero_os.toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
       const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
       const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
-      return matchBusca && matchStatus && matchModulo;
+      
+      let matchPeriodo = true;
+      if (filtroPeriodo !== "Todos Períodos" && periodos.length > 0) {
+        const p = periodos.find(per => `${per.mes}-${per.ano}` === filtroPeriodo);
+        if (p) {
+          const inicio = new Date(p.data_inicio + "T00:00:00");
+          const fim = new Date(p.data_fim + "T23:59:59");
+          const dtAb = new Date(o.data_abertura);
+          matchPeriodo = dtAb >= inicio && dtAb <= fim;
+        }
+      }
+
+      return matchBusca && matchStatus && matchModulo && matchPeriodo;
     })
     .sort((a, b) => {
       if (filtroOrdem === "Mais Recente") return new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime();
@@ -316,14 +331,34 @@ export default function ControleOSClient({
                   className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all font-bold"
                 />
               </div>
-              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos") && (
+              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos" || filtroPeriodo !== "Todos Períodos") && (
                 <button
-                  onClick={() => { setBusca(""); setFiltroStatus("Todos Status"); setFiltroModulo("Todos Módulos"); }}
+                  onClick={() => { 
+                    setBusca(""); 
+                    setFiltroStatus("Todos Status"); 
+                    setFiltroModulo("Todos Módulos"); 
+                    setFiltroPeriodo("Todos Períodos");
+                  }}
                   className="px-3 py-2 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"
                 >
                   Limpar Filtros
                 </button>
               )}
+              <select 
+                value={filtroPeriodo} 
+                onChange={e => setFiltroPeriodo(e.target.value)} 
+                className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option>Todos Períodos</option>
+                {periodos.map(p => {
+                  const label = `${["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][(p.mes-1)%12]}/${p.ano}`;
+                  return (
+                    <option key={`${p.mes}-${p.ano}`} value={`${p.mes}-${p.ano}`}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
               <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
                 <option>Todos Status</option>
                 <option>Aberta</option>
