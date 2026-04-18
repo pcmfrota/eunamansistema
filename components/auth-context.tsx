@@ -113,7 +113,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
       console.log('[Auth] Mudança de estado:', _event)
       
-      if (session) {
+        if (_event === 'PASSWORD_RECOVERY') {
+          router.push('/login/reset-password')
+          return
+        }
+
         const currentUser = session.user
         setUser(currentUser)
         
