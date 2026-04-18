@@ -142,25 +142,14 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             background: 'linear-gradient(135deg, rgba(26,76,26,0.6) 0%, transparent 100%)',
           }}
         >
-          <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-            style={{
-              background: 'linear-gradient(135deg, #1a5c1a, #2d8a2d)',
-              boxShadow: '0 4px 16px rgba(45,122,45,0.4)',
-            }}
-          >
-            <img
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
-              alt="Eunaman"
-              className="w-8 h-8 object-contain"
-            />
-          </div>
-          <div>
-            <h1 className="font-black text-[15px] text-white tracking-wide">EUNAMAN</h1>
-            <p className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'rgba(163, 230, 163, 0.7)' }}>
-              Forest Support Expert
-            </p>
-          </div>
+          {/* ── Logo SVG (alta qualidade) ── */}
+          <img
+            src="/logo-eunaman.svg"
+            alt="EUNAMAN - Forest Support Expert"
+            className="h-12 w-auto object-contain"
+            style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.4)) brightness(1.15)' }}
+          />
+
           {/* Close mobile */}
           <button
             className="lg:hidden ml-auto p-1.5 rounded-lg hover:bg-white/10 transition-colors"
@@ -271,7 +260,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between px-2 mb-3">
             <p
               className="text-[9px] font-black uppercase tracking-[0.2em]"
-              style={{ color: 'rgba(115,207,115,0.45)' }}
+              style={{ color: 'rgba(255,255,255,0.5)' }}
             >
               Navegação
             </p>
@@ -302,20 +291,20 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group"
                   style={{
                     background: isActive
-                      ? 'linear-gradient(135deg, rgba(45,122,45,0.45), rgba(45,122,45,0.25))'
+                      ? 'linear-gradient(135deg, rgba(45,122,45,0.55), rgba(45,122,45,0.30))'
                       : 'transparent',
-                    color: isActive ? '#a3e6a3' : 'rgba(200,230,200,0.65)',
+                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.80)',
                     border: isActive
-                      ? '1px solid rgba(45,122,45,0.35)'
+                      ? '1px solid rgba(45,122,45,0.45)'
                       : '1px solid transparent',
-                    boxShadow: isActive ? '0 2px 12px rgba(45,122,45,0.2)' : 'none',
+                    boxShadow: isActive ? '0 2px 12px rgba(45,122,45,0.25)' : 'none',
                     animationDelay: `${index * 40}ms`,
                     animation: 'slideIn 0.3s ease-out',
                   }}
                   onMouseEnter={e => {
                     if (!isActive) {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                      e.currentTarget.style.color = 'rgba(200,240,200,0.9)';
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.10)';
+                      e.currentTarget.style.color = '#ffffff';
                     }
                   }}
                   onMouseLeave={e => {

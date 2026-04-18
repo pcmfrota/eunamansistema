@@ -583,9 +583,9 @@ export function GraficoVeiculos({
               radius={[3, 3, 0, 0]}
               label={{
                 position: "top",
-                fill: tickColor,
+                fill: "#1e293b",
                 fontSize: 10,
-                fontWeight: 600,
+                fontWeight: 700,
                 formatter: (v: number) => `${v}%`,
               }}
             >
