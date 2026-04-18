@@ -114,11 +114,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[Auth] Mudança de estado:', _event)
       
         if (_event === 'PASSWORD_RECOVERY') {
-          router.push('/login/reset-password')
+          console.log('[Auth] Recuperação detectada, redirecionando...')
+          window.location.assign('/login/reset-password')
           return
         }
 
-        if (session) {
+        if (session && session.user) {
           const currentUser = session.user
           setUser(currentUser)
         
