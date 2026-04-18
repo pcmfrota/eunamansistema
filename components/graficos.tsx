@@ -609,6 +609,11 @@ const prevMock: PreventivaStatus[] = [
 ];
 
 export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const tickColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+
   const source = dados && dados.length > 0 ? dados : prevMock;
   const chartData = source.map((p) => ({
     nome: p.placa,
@@ -658,42 +663,32 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
           margin={{ top: 10, right: 0, left: -20, bottom: 40 }}
           barCategoryGap="12%"
         >
-          {(() => {
-            const { theme } = useTheme();
-            const isDark = theme === "dark";
-            const tickColor = isDark ? "#94a3b8" : "#64748b";
-            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
-            return (
-              <>
-                <XAxis
-                  dataKey="nome"
-                  tick={{ fontSize: 9, fill: tickColor, fontWeight: 600 }}
-                  tickLine={false}
-                  axisLine={{ stroke: gridColor }}
-                  interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                  dy={5}
-                />
-                <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
-                <Tooltip
-                  cursor={{ fill: "transparent" }}
-                  contentStyle={{
-                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
-                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    color: isDark ? "#f4f4f5" : "#18181b",
-                  }}
-                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
-                  formatter={(v: any, name: any, props: any) => [
-                    props.payload.text,
-                    "Horas Restantes",
-                  ]}
-                />
-              </>
-            );
-          })()}
+          <XAxis
+            dataKey="nome"
+            tick={{ fontSize: 9, fill: tickColor, fontWeight: 600 }}
+            tickLine={false}
+            axisLine={{ stroke: gridColor }}
+            interval={0}
+            angle={-45}
+            textAnchor="end"
+            dy={5}
+          />
+          <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
+          <Tooltip
+            cursor={{ fill: "transparent" }}
+            contentStyle={{
+              backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+              borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+              borderRadius: "8px",
+              fontSize: "12px",
+              color: isDark ? "#f4f4f5" : "#18181b",
+            }}
+            itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+            formatter={(v: any, name: any, props: any) => [
+              props.payload.text,
+              "Horas Restantes",
+            ]}
+          />
           <Bar dataKey="val" radius={[2, 2, 0, 0]} label={renderCustomBarLabel}>
             {chartData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getColorPrev(entry.status)} />
@@ -718,6 +713,11 @@ interface GraficoSemanalProps {
 }
 
 export function GraficoSemanal({ dados, periodoLabel }: GraficoSemanalProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const tickColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+
   const chartData = dados && dados.length > 0 ? dados : semanalMock;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
@@ -744,59 +744,49 @@ export function GraficoSemanal({ dados, periodoLabel }: GraficoSemanalProps) {
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 5 }} barSize={35}>
-          {(() => {
-            const { theme } = useTheme();
-            const isDark = theme === "dark";
-            const tickColor = isDark ? "#94a3b8" : "#64748b";
-            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
-            return (
-              <>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke={gridColor}
-                />
-                <XAxis
-                  dataKey="semana"
-                  tick={{ fontSize: 11, fill: tickColor }}
-                  tickLine={false}
-                  axisLine={false}
-                  dy={10}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  tick={{ fontSize: 11, fill: tickColor }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
-                <Tooltip
-                  cursor={{ fill: "transparent" }}
-                  contentStyle={{
-                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
-                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    color: isDark ? "#f4f4f5" : "#18181b",
-                  }}
-                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
-                  formatter={(val) => [`${val}%`, "Disponibilidade"]}
-                />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  wrapperStyle={{ fontSize: "10px", paddingBottom: "10px", color: tickColor }}
-                />
-              </>
-            );
-          })()}
+          <CartesianGrid
+            strokeDasharray="3 3"
+            vertical={false}
+            stroke={gridColor}
+          />
+          <XAxis
+            dataKey="semana"
+            tick={{ fontSize: 11, fill: tickColor }}
+            tickLine={false}
+            axisLine={false}
+            dy={10}
+          />
+          <YAxis
+            domain={[0, 100]}
+            tick={{ fontSize: 11, fill: tickColor }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => `${v}%`}
+          />
+          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
+          <Tooltip
+            cursor={{ fill: "transparent" }}
+            contentStyle={{
+              backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+              borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+              borderRadius: "8px",
+              fontSize: "12px",
+              color: isDark ? "#f4f4f5" : "#18181b",
+            }}
+            itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+            formatter={(val) => [`${val}%`, "Disponibilidade"]}
+          />
+          <Legend
+            verticalAlign="top"
+            align="right"
+            wrapperStyle={{ fontSize: "10px", paddingBottom: "10px", color: tickColor }}
+          />
           <Bar
             dataKey="disp"
             radius={[3, 3, 0, 0]}
             label={{
               position: "top",
-              fill: theme === "dark" ? "#94a3b8" : "#64748b",
+              fill: isDark ? "#94a3b8" : "#64748b",
               fontSize: 10,
               fontWeight: 600,
               formatter: (v: number) => `${v}%`,
@@ -860,6 +850,9 @@ export function ResumoHoras({
 const COLORS_PIE = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#6366f1", "#ec4899", "#8b5cf6"];
 
 export function GraficoParadasCategoria({ dados }: { dados: { categoria: string; quantidade: number }[] }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   if (!dados || dados.length === 0) return null;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
@@ -868,41 +861,33 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <PieChart>
-          {(() => {
-            const { theme } = useTheme();
-            const isDark = theme === "dark";
-            return (
-              <>
-                <Pie
-                  data={dados}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  dataKey="quantidade"
-                  nameKey="categoria"
-                  labelLine={false}
-                >
-                  {dados.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(val: number) => [`${val} OS`, "Quantidade"]}
-                  contentStyle={{ 
-                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
-                    border: `1px solid ${isDark ? "#3f3f46" : "#e2e8f0"}`, 
-                    borderRadius: "8px", 
-                    fontSize: "12px", 
-                    color: isDark ? "#fff" : "#18181b" 
-                  }}
-                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
-                />
-                <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', color: isDark ? '#a1a1aa' : '#64748b' }} />
-              </>
-            );
-          })()}
+          <Pie
+            data={dados}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={90}
+            paddingAngle={2}
+            dataKey="quantidade"
+            nameKey="categoria"
+            labelLine={false}
+          >
+            {dados.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
+            ))}
+          </Pie>
+          <Tooltip 
+            formatter={(val: number) => [`${val} OS`, "Quantidade"]}
+            contentStyle={{ 
+              backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
+              border: `1px solid ${isDark ? "#3f3f46" : "#e2e8f0"}`, 
+              borderRadius: "8px", 
+              fontSize: "12px", 
+              color: isDark ? "#fff" : "#18181b" 
+            }}
+            itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+          />
+          <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', color: isDark ? '#a1a1aa' : '#64748b' }} />
         </PieChart>
       </ResponsiveContainer>
     </div>
@@ -960,6 +945,11 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
 
 // ─── 15. Manutenção por Tipo (Gráfico de Barras) ─────────────────────────────
 export function GraficoManuTipo({ dados }: { dados: { tipo: string; quantidade: number }[] }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const tickColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+
   if (!dados || dados.length === 0) return null;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
@@ -968,30 +958,20 @@ export function GraficoManuTipo({ dados }: { dados: { tipo: string; quantidade: 
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }} barCategoryGap="15%">
-          {(() => {
-            const { theme } = useTheme();
-            const isDark = theme === "dark";
-            const tickColor = isDark ? "#94a3b8" : "#64748b";
-            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
-            return (
-              <>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="tipo" type="category" tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }} axisLine={false} tickLine={false} />
-                <Tooltip 
-                  cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                  contentStyle={{ 
-                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
-                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
-                    borderRadius: "8px",
-                    color: isDark ? "#f4f4f5" : "#18181b"
-                  }}
-                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
-                  formatter={(val: number) => [`${val} OS`, "Quantidade"]}
-                />
-              </>
-            );
-          })()}
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+          <XAxis type="number" tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} />
+          <YAxis dataKey="tipo" type="category" tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }} axisLine={false} tickLine={false} />
+          <Tooltip 
+            cursor={{ fill: "rgba(148,163,184,0.08)" }}
+            contentStyle={{ 
+              backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
+              borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+              borderRadius: "8px",
+              color: isDark ? "#f4f4f5" : "#18181b"
+            }}
+            itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+            formatter={(val: number) => [`${val} OS`, "Quantidade"]}
+          />
           <Bar dataKey="quantidade" radius={[0, 4, 4, 0]} fill="#3b82f6" >
             {dados.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
@@ -1005,6 +985,11 @@ export function GraficoManuTipo({ dados }: { dados: { tipo: string; quantidade: 
 
 // ─── 16. Disponibilidade por Categoria (Gráfico de Barras) ─────────────────
 export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilidade: number; total: number }[] }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const tickColor = isDark ? "#94a3b8" : "#64748b";
+  const gridColor = isDark ? "#1e293b" : "#e2e8f0";
+
   if (!dados || dados.length === 0) return null;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
@@ -1013,32 +998,22 @@ export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilid
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={dados} margin={{ top: 10, right: 0, left: -20, bottom: 5 }} barSize={35}>
-          {(() => {
-            const { theme } = useTheme();
-            const isDark = theme === "dark";
-            const tickColor = isDark ? "#94a3b8" : "#64748b";
-            const gridColor = isDark ? "#1e293b" : "#e2e8f0";
-            return (
-              <>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }} axisLine={false} tickLine={false} dy={5} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
-                <Tooltip 
-                  cursor={{ fill: "rgba(148,163,184,0.08)" }} 
-                  contentStyle={{ 
-                    backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
-                    borderColor: isDark ? "#3f3f46" : "#e2e8f0",
-                    borderRadius: "8px",
-                    color: isDark ? "#f4f4f5" : "#18181b"
-                  }}
-                  itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
-                  formatter={(val: number) => [`${val}%`, "Disponibilidade Méd."]} 
-                />
-              </>
-            );
-          })()}
-          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: theme === 'dark' ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: 600, formatter: (v: number) => `${v}%` }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+          <XAxis dataKey="tipo" tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }} axisLine={false} tickLine={false} dy={5} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: tickColor }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="3 3" />
+          <Tooltip 
+            cursor={{ fill: "rgba(148,163,184,0.08)" }} 
+            contentStyle={{ 
+              backgroundColor: isDark ? "#1a1f2e" : "#ffffff", 
+              borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+              borderRadius: "8px",
+              color: isDark ? "#f4f4f5" : "#18181b" 
+            }}
+            itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+            formatter={(val: number) => [`${val}%`, "Disponibilidade Méd."]} 
+          />
+          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: 600, formatter: (v: number) => `${v}%` }}>
             {dados.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getColorDisp(entry.disponibilidade)} />
             ))}

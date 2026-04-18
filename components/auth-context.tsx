@@ -122,40 +122,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session && session.user) {
           const currentUser = session.user
           setUser(currentUser)
-        
-        let initialRole: any = currentUser.app_metadata?.role || 'visitante'
-        if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
-          initialRole = 'admin'
-        }
+          
+          let initialRole = currentUser.app_metadata?.role || 'visitante'
+          if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
+            initialRole = 'admin'
+          }
 
-        // Tenta buscar o perfil do banco sem travar
-        supabase
-          .from('profiles')
-          .select('role, full_name, avatar_url')
-          .eq('id', currentUser.id)
-          .single()
-          .then(({ data: profileData }) => {
-            const finalRole = profileData?.role || initialRole
-            const newProfile: Profile = {
-              id: currentUser.id,
-              email: currentUser.email || '',
-              full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
-              role: finalRole as any,
-              avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
+          // Busca perfil com tratamento de erro robusto
+          supabase
+            .from('profiles')
+            .select('role, full_name, avatar_url')
+            .eq('id', currentUser.id)
+            .single()
+            .then(({ data: profileData, error: profileError }) => {
+              if (profileError) {
+                console.warn('[Auth] Erro ao buscar perfil:', profileError.message)
+              }
+              
+              const finalRole = profileData?.role || initialRole
+              const newProfile: Profile = {
+                id: currentUser.id,
+                email: currentUser.email || '',
+                full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
+                role: finalRole as any,
+                avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
+              }
+              setProfile(newProfile)
+              localStorage.setItem('eunaman_profile', JSON.stringify(newProfile))
+              setLoading(false)
+            })
+            .catch(err => {
+              console.error('[Auth] Erro crítico no onAuthStateChange:', err)
+              setLoading(false)
+            })
+        } else {
+          setUser(null)
+          setProfile(null)
+          localStorage.removeItem('eunaman_profile')
+          setLoading(false)
+          
+          // Redireciona apenas se necessário e se estiver no navegador
+          if (typeof window !== 'undefined') {
+            const isAtLogin = window.location.pathname.startsWith('/login')
+            const isAtApi = window.location.pathname.startsWith('/api')
+            
+            if (!isAtLogin && !isAtApi) {
+              window.location.assign('/login')
             }
-            setProfile(newProfile)
-            localStorage.setItem('eunaman_profile', JSON.stringify(newProfile))
-            setLoading(false)
-          })
-      } else {
-        setUser(null)
-        setProfile(null)
-        localStorage.removeItem('eunaman_profile')
-        setLoading(false)
-        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-          window.location.assign('/login')
+          }
         }
-      }
     })
 
     return () => {
