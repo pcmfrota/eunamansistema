@@ -2,25 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 248 250 252;
-    --foreground: 15 23 42;
-  }
-  .dark {
-    --background: 15 17 21;
-    --foreground: 248 250 252;
-  }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ═══════════════════════════════════════════════════
+   EUNAMAN — Forest Green Professional Theme
+   ═══════════════════════════════════════════════════ */
+
+* {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 body {
-  background-color: rgb(var(--background));
-  color: rgb(var(--foreground));
-  font-family: inherit;
+  background-color: #0a1f0a;
+  color: #f0fdf0;
 }
 
-/* Scrollbar fina */
+/* ── Gradiente escuro sobre o fundo ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(4,14,4,0.75) 0%, rgba(10,30,10,0.68) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── Glassmorphism: todos os cards brancos viram glass ── */
+:not(.dark) .bg-white,
+:not(.dark) .bg-white\/90 {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+}
+
+/* Cards rounded com borda branca glass */
+:not(.dark) .rounded-3xl.bg-white,
+:not(.dark) .rounded-2xl.bg-white,
+:not(.dark) .rounded-xl.bg-white,
+:not(.dark) .rounded-3xl[style*="rgba(255,255,255"],
+:not(.dark) .rounded-2xl[style*="rgba(255,255,255"],
+:not(.dark) .rounded-xl[style*="rgba(255,255,255"] {
+  box-shadow: 0 4px 24px rgba(10, 50, 10, 0.14) !important;
+}
+
+/* ── Scrollbar verde Eunaman ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #475569; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #64748b; }
+::-webkit-scrollbar-thumb { background: rgba(45, 122, 45, 0.5); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(45, 122, 45, 0.85); }
+
+/* ── Seleção com verde ── */
+::selection { background: rgba(45, 122, 45, 0.35); color: #0a1f0a; }
+
+/* ── Animations ── */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

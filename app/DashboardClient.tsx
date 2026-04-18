@@ -117,29 +117,49 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   }
 
   return (
-    <div className="p-5 md:p-8 flex flex-col gap-6 bg-[#f8fafc] dark:bg-[#0f1115] min-h-screen relative">
+    <div className="p-5 md:p-8 flex flex-col gap-6 min-h-screen relative">
       {/* Loading overlay */}
       {(isPending || isExporting) && (
-        <div className="fixed inset-0 bg-black/10 dark:bg-black/30 z-50 flex items-center justify-center backdrop-blur-[1px]">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl px-6 py-4 flex items-center gap-3 shadow-2xl border border-zinc-200 dark:border-zinc-800">
-            <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Atualizando dados...</span>
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center backdrop-blur-sm">
+          <div
+            className="rounded-2xl px-6 py-4 flex items-center gap-3 shadow-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.92)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.6)',
+            }}
+          >
+            <Loader2 className="w-5 h-5 text-green-700 animate-spin" />
+            <span className="text-sm font-medium text-zinc-700">Atualizando dados...</span>
           </div>
         </div>
       )}
 
       {/* Cabeçalho */}
-      <div className="flex items-start justify-between mb-1 shrink-0">
+      <div
+        className="flex items-start justify-between mb-1 shrink-0 rounded-2xl px-5 py-4"
+        style={{
+          background: 'rgba(255,255,255,0.88)',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          border: '1px solid rgba(255,255,255,0.55)',
+          boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+        }}
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1e293b] dark:text-zinc-100">Dashboard Operacional</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-800">Dashboard Operacional</h1>
+          <p className="text-sm text-zinc-500 mt-1">
             Visão geral da manutenção e disponibilidade da frota
           </p>
         </div>
         <button
           onClick={exportarRelatorio}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{
+            background: 'linear-gradient(135deg, #1a5c1a, #2d8a2d)',
+            boxShadow: '0 4px 16px rgba(26,92,26,0.35)',
+          }}
         >
           {isExporting ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</>
@@ -191,13 +211,13 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             <div className="flex items-center gap-4">
                <button 
                  onClick={() => setAvailabilityType("DM")}
-                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
                >
                  Mecânica (DM)
                </button>
                <button 
                  onClick={() => setAvailabilityType("DO")}
-                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
                >
                  Operacional (DO)
                </button>
@@ -252,14 +272,23 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   );
 }
 
-function MiniCard({ label, value, sub, color = 'text-zinc-800 dark:text-zinc-100' }: {
+function MiniCard({ label, value, sub, color = 'text-zinc-800' }: {
   label: string; value: string; sub: string; color?: string
 }) {
   return (
-    <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 flex flex-col gap-0.5 shadow-sm">
+    <div
+      className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5"
+      style={{
+        background: 'rgba(255,255,255,0.88)',
+        backdropFilter: 'blur(12px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 2px 12px rgba(10,50,10,0.10)',
+      }}
+    >
       <p className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider truncate">{label}</p>
       <p className={`text-lg font-black leading-tight ${color}`}>{value}</p>
-      <p className="text-[9px] text-zinc-400 dark:text-zinc-600 truncate">{sub}</p>
+      <p className="text-[9px] text-zinc-500 truncate">{sub}</p>
     </div>
   )
 }

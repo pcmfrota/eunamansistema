@@ -26,9 +26,9 @@ function getColorPrev(status: string) {
   return "#22c55e";
 }
 function statusBadge(s: string) {
-  if (s === "Aberta") return "bg-amber-500/20 text-amber-400 border border-amber-500/30";
-  if (s === "Fechada") return "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-  return "bg-zinc-700 text-zinc-300 border border-zinc-600";
+  if (s === "Aberta") return "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30";
+  if (s === "Fechada") return "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30";
+  return "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-600";
 }
 function fmtDate(d: string | null) {
   if (!d) return null;
@@ -250,7 +250,7 @@ function ModalDetalhe({
 
           {/* ── Lista de OS */}
           <div>
-            <h3 className="text-sm font-semibold text-zinc-200 mb-3">
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">
               Ordens de Serviço ({veiculo.totalOS})
             </h3>
 
@@ -271,15 +271,19 @@ function ModalDetalhe({
                   return (
                     <div
                       key={os.id}
-                      className="group rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3.5 hover:border-blue-500/50 hover:bg-zinc-800/70 transition-all"
+                      className="group rounded-xl bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/40 p-3.5 hover:border-blue-400/60 dark:hover:border-blue-500/50 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/70 transition-all"
                     >
                       {/* Row 1: número + status */}
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[13px] font-bold text-zinc-100">
+                        <span className="text-[13px] font-bold text-zinc-800 dark:text-zinc-100">
                           OS: {os.numero_os}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge(os.status)}`}>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            os.status === 'Aberta' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30' :
+                            os.status === 'Fechada' || os.status === 'Concluída' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30' :
+                            'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-600'
+                          }`}>
                             {os.status}
                           </span>
                         </div>
@@ -287,7 +291,7 @@ function ModalDetalhe({
 
                       {/* Classe / sistema */}
                       {(os.classe || os.sistema) && (
-                        <p className="text-[11px] text-zinc-400 mb-2">
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-2">
                           {os.classe}{os.sistema ? ` · ${os.sistema}` : ""}
                           {os.sub_sistema ? ` · ${os.sub_sistema}` : ""}
                         </p>
@@ -295,13 +299,13 @@ function ModalDetalhe({
 
                       {/* Descrição */}
                       {os.descricao && (
-                        <p className="text-[11px] text-zinc-500 mb-2 line-clamp-2 italic">
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mb-2 line-clamp-2 italic">
                           {os.descricao}
                         </p>
                       )}
 
                       {/* Hs + Data */}
-                      <div className="flex items-center gap-4 text-[11px] text-zinc-400 mb-2">
+                      <div className="flex items-center gap-4 text-[11px] text-zinc-500 dark:text-zinc-400 mb-2">
                         {os.horas_manutencao != null && (
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
@@ -327,7 +331,7 @@ function ModalDetalhe({
                         {isFechada ? (
                           <button
                             onClick={() => setFichaOS({ ...(os as unknown as OSFichaData), placa: os.placa || veiculo.nome })}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 border border-emerald-300 dark:border-emerald-500/30 transition-all"
                           >
                             <FileText className="w-3.5 h-3.5" />
                             Ver Ficha &amp; Imprimir
@@ -335,7 +339,7 @@ function ModalDetalhe({
                         ) : (
                           <a
                             href={`/os?abrir=${os.id}`}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 border border-blue-500/30 transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/25 border border-blue-300 dark:border-blue-500/30 transition-all"
                           >
                             <TrendingUp className="w-3.5 h-3.5" />
                             Abrir O.S →
@@ -351,10 +355,10 @@ function ModalDetalhe({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-zinc-700/50 shrink-0">
+        <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700/50 shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+            className="w-full py-2.5 rounded-xl text-sm font-medium bg-zinc-700 dark:bg-zinc-800 hover:bg-zinc-600 dark:hover:bg-zinc-700 text-white transition-colors"
           >
             Fechar
           </button>
@@ -394,6 +398,14 @@ export function GraficoVeiculos({
   const tickColor = isDark ? "#94a3b8" : "#64748b";
   const gridColor = isDark ? "#1e293b" : "#e2e8f0";
 
+  const glassCard: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.90)',
+    backdropFilter: 'blur(16px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+    border: '1px solid rgba(255,255,255,0.55)',
+    boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+  };
+
   const chartData = (dados ?? []).map((v) => {
     const isDO = tipoAvailability === "DO";
     const valBase = isDO ? v.disponibilidade_operacional : v.disponibilidade;
@@ -411,6 +423,7 @@ export function GraficoVeiculos({
       horasOperacional: v.horasOperacional,
     };
   });
+
 
   if (chartData.length === 0) {
     return (
@@ -438,20 +451,20 @@ export function GraficoVeiculos({
     return (
       <div className="bg-white dark:bg-[#1a1f2e] rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-700 p-3 text-xs pointer-events-none">
         <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 mb-1.5">{d.nome}</p>
-        <div className="flex flex-col gap-1 text-zinc-600 dark:text-zinc-400">
+        <div className="flex flex-col gap-1 text-zinc-700 dark:text-zinc-400">
           <p className="flex justify-between gap-4">
             <span>DM (Mecânica):</span>
-            <span className="font-semibold text-emerald-400" style={{ color: getColorDisp(d.dispDM) }}>
+            <span className="font-semibold" style={{ color: getColorDisp(d.dispDM) }}>
               {d.dispDM}%
             </span>
           </p>
           <p className="flex justify-between gap-4">
             <span>DO (Operacional):</span>
-            <span className="font-semibold text-blue-400" style={{ color: getColorDisp(d.dispDO) }}>
+            <span className="font-semibold" style={{ color: getColorDisp(d.dispDO) }}>
               {d.dispDO}%
             </span>
           </p>
-          <div className="h-[1px] bg-zinc-700/50 my-1" />
+          <div className="h-[1px] bg-zinc-200 dark:bg-zinc-700/50 my-1" />
           <p>
             Total de OS: <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.totalOS}</span>
           </p>
@@ -462,7 +475,7 @@ export function GraficoVeiculos({
             Hs Indisp (Impacto DO): <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.horasOperacional}h</span>
           </p>
         </div>
-        <p className="mt-2 text-[10px] text-zinc-400 dark:text-zinc-600 italic">Clique para ver detalhes e OS</p>
+        <p className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-600 italic">Clique para ver detalhes e OS</p>
       </div>
     );
   };
@@ -480,7 +493,16 @@ export function GraficoVeiculos({
         />
       )}
 
-      <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
+      <div
+        className="rounded-3xl p-6 flex flex-col"
+        style={{
+          background: 'rgba(255,255,255,0.90)',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          border: '1px solid rgba(255,255,255,0.55)',
+          boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+        }}
+      >
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
@@ -492,7 +514,7 @@ export function GraficoVeiculos({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
+          <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-600 dark:text-zinc-500">
             {!mostrarIndisponibilidade ? (
               <>
                 <div className="flex items-center gap-1.5">
@@ -512,7 +534,7 @@ export function GraficoVeiculos({
                 </div>
               </>
             )}
-            <span className="text-zinc-400 dark:text-zinc-600 border-l border-zinc-200 dark:border-zinc-700 pl-3 ml-1">
+            <span className="text-zinc-500 dark:text-zinc-600 border-l border-zinc-300 dark:border-zinc-700 pl-3 ml-1">
               Clique na barra para detalhes
             </span>
           </div>
@@ -640,7 +662,16 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
+    <div
+      className="rounded-3xl p-6 flex flex-col"
+      style={{
+        background: 'rgba(255,255,255,0.90)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+      }}
+    >
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
           Status das Preventivas por Placa
@@ -720,7 +751,16 @@ export function GraficoSemanal({ dados, periodoLabel }: GraficoSemanalProps) {
 
   const chartData = dados && dados.length > 0 ? dados : semanalMock;
   return (
-    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
+    <div
+      className="rounded-3xl p-6 flex flex-col"
+      style={{
+        background: 'rgba(255,255,255,0.90)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+      }}
+    >
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
           Disponibilidade por Semana do Mês
@@ -818,7 +858,16 @@ export function ResumoHoras({
   const horasDisponiveis = Math.max(0, horasPeriodo - horasManutencao);
 
   return (
-    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
+    <div
+      className="rounded-3xl p-6 flex flex-col"
+      style={{
+        background: 'rgba(255,255,255,0.90)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+      }}
+    >
       <h3 className="font-semibold text-[15px] mb-6 text-zinc-800 dark:text-zinc-200">
         Resumo de Horas
       </h3>
@@ -855,7 +904,16 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
 
   if (!dados || dados.length === 0) return null;
   return (
-    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+    <div
+      className="rounded-3xl p-6 flex flex-col h-full"
+      style={{
+        background: 'rgba(255,255,255,0.90)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        border: '1px solid rgba(255,255,255,0.55)',
+        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
+      }}
+    >
       <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
         Paradas por Categoria
       </h3>

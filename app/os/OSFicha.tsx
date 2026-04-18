@@ -151,13 +151,13 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
   const placa = getPlaca(os);
 
   const handlePrint = () => {
-    const logoSVG = `<svg width="72" height="72" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-      <path d="M60 8 L66 18 L78 14 L78 26 L90 28 L86 40 L96 48 L88 56 L92 68 L80 70 L78 82 L66 80 L60 90 L54 80 L42 82 L40 70 L28 68 L32 56 L24 48 L34 40 L30 28 L42 26 L42 14 L54 18 Z"
-        fill="none" stroke="#1a5c1a" stroke-width="4" stroke-linejoin="round"/>
-      <circle cx="60" cy="49" r="26" fill="#1a5c1a"/>
-      <text x="60" y="62" text-anchor="middle" font-size="32" font-weight="900" fill="#ffffff" font-family="Arial,sans-serif">E</text>
-      <text x="60" y="102" text-anchor="middle" font-size="13" font-weight="900" fill="#1a1a1a" font-family="Arial,sans-serif" letter-spacing="1">EUNAMAN</text>
-      <text x="60" y="114" text-anchor="middle" font-size="7" font-weight="700" fill="#1a5c1a" font-family="Arial,sans-serif" letter-spacing="1">FOREST SUPPORT EXPERT</text>
+    const logoSVG = `<svg width="90" height="130" viewBox="0 0 200 290" xmlns="http://www.w3.org/2000/svg">
+      <path d="M100 10 l10 18 20-6v20l20 4-6 18 16 12-12 14 8 20-20 4-4 20-18-6-14 14-14-14-18 6-4-20-20-4 8-20-12-14 16-12-6-18 20-4V22l20 6Z" fill="#2d8a2d"/>
+      <circle cx="100" cy="102" r="52" fill="#1a5c1a"/>
+      <circle cx="100" cy="102" r="48" fill="none" stroke="#ffffff" stroke-width="2"/>
+      <text x="100" y="125" text-anchor="middle" font-size="72" font-weight="900" fill="#ffffff" font-family="Arial Black,Arial,sans-serif">E</text>
+      <text x="100" y="220" text-anchor="middle" font-size="30" font-weight="900" fill="#111111" font-family="Arial Black,Arial,sans-serif" letter-spacing="3">EUNAMAN</text>
+      <text x="100" y="248" text-anchor="middle" font-size="13" font-weight="700" fill="#2d8a2d" font-family="Arial,sans-serif" letter-spacing="2">FOREST SUPPORT EXPERT</text>
     </svg>`;
 
     const statusColor = (os.status === "Fechada" || os.status === "Concluída")
@@ -334,8 +334,8 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
                 {/* ── Cabeçalho ── */}
                 <div className="flex items-center border-b-2 border-gray-900 p-3 gap-4">
-                  <div className="shrink-0 flex items-center justify-center w-16 h-16">
-                    <EunamanLogo size={64} />
+                  <div className="shrink-0 flex items-center justify-center w-20 h-28">
+                    <EunamanLogo size={80} />
                   </div>
                   <div className="flex-1 text-center">
                     <h1 className="text-[17px] font-black tracking-widest uppercase text-gray-900">
