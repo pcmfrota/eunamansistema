@@ -64,4 +64,37 @@ export class AuthService {
     const { data: { user } } = await supabase.auth.getUser();
     return user;
   }
+
+  static async resetPassword(email: string) {
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login/reset-password`,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return { success: true };
+  }
+
+  static async updatePassword(password: string) {
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Opcional: Atualizar a senha em texto plano se o usuário logado tiver permissão ou se for para o próprio perfil
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('profiles')
+        .update({ plain_password: password })
+        .eq('id', user.id);
+    }
+
+    return { success: true };
+  }
 }
