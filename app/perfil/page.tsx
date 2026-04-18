@@ -135,7 +135,7 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -147,15 +147,22 @@ export default function PerfilPage() {
               <ArrowLeft size={20} />
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Meu Perfil</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Gerencie suas informações e foto de perfil</p>
-            </div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Meu Perfil</h1>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>Gerencie suas informações e foto de perfil</p>
+          </div>
           </div>
         </div>
 
         {/* Main Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden">
-          <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600" />
+        <div
+          className="rounded-3xl overflow-hidden shadow-2xl"
+          style={{
+            background: 'var(--bg-card)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div className="h-32 bg-gradient-to-r from-green-700 to-emerald-600" />
           
           <div className="px-8 pb-8">
             <div className="relative -mt-16 mb-8 flex justify-center sm:justify-start">
@@ -193,12 +200,17 @@ export default function PerfilPage() {
                   <div className="relative">
                     <User className="absolute left-3.5 top-3 h-5 w-5 text-slate-400" />
                     <input
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Seu nome"
-                      className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
-                    />
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Seu nome"
+                    className="w-full pl-11 pr-4 py-3 rounded-2xl border focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all outline-none font-medium"
+                    style={{
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-primary)',
+                      borderColor: 'var(--border-input)',
+                    }}
+                  />
                   </div>
                 </div>
 
@@ -218,13 +230,22 @@ export default function PerfilPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <Shield size={20} />
+              <div
+                className="p-4 rounded-2xl flex items-center gap-4"
+                style={{
+                  background: 'rgba(21, 128, 61, 0.08)',
+                  border: '1px solid rgba(21, 128, 61, 0.2)',
+                }}
+              >
+                <div
+                  className="h-10 w-10 rounded-xl flex items-center justify-center"
+                  style={{ background: 'rgba(21, 128, 61, 0.15)' }}
+                >
+                  <Shield size={20} className="text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wide">Seu Cargo / Nível de Acesso</p>
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300 capitalize">{profile?.role || 'Visitante'}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Seu Cargo / Nível de Acesso</p>
+                  <p className="text-sm font-semibold capitalize" style={{ color: 'var(--text-primary)' }}>{profile?.role || 'Visitante'}</p>
                 </div>
               </div>
 
@@ -255,10 +276,18 @@ export default function PerfilPage() {
         </div>
 
         {/* Change Password Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl p-8 space-y-6">
+        <div
+          className="rounded-3xl p-8 space-y-6"
+          style={{
+            background: 'var(--bg-card)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+          }}
+        >
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Segurança</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Altere sua senha de acesso ao sistema</p>
+            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Segurança</h3>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Altere sua senha de acesso ao sistema</p>
           </div>
 
           <form onSubmit={handleUpdatePassword} className="space-y-4">
@@ -272,7 +301,8 @@ export default function PerfilPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 outline-none"
+                  className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-green-500/25 outline-none font-medium transition-all"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-input)' }}
                 />
               </div>
               <div className="space-y-2">
@@ -284,7 +314,8 @@ export default function PerfilPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repita a nova senha"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 outline-none"
+                  className="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-green-500/25 outline-none font-medium transition-all"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-input)' }}
                 />
               </div>
             </div>

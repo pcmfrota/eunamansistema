@@ -279,18 +279,18 @@ function MiniCard({ label, value, sub, color = 'text-zinc-800' }: {
     <div
       className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5"
       style={{
-        background: 'rgba(255,255,255,0.88)',
-        backdropFilter: 'blur(12px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 2px 12px rgba(10,50,10,0.10)',
+        background: 'var(--bg-card)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
       }}
     >
-      <p className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider truncate">{label}</p>
+      <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-muted)' }}>{label}</p>
       <p className={`text-lg font-black leading-tight ${color}`}>{value}</p>
-      <p className="text-[9px] text-zinc-500 truncate">{sub}</p>
+      <p className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{sub}</p>
     </div>
   )
 }
+
 
 

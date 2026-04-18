@@ -24,18 +24,34 @@ interface FiltrosProps {
 
 export function Filtros({ opcoes, valores, onChange, onReset, periodoLabel }: FiltrosProps) {
   return (
-    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col gap-5 shadow-sm w-full">
+    <div
+      className="rounded-3xl p-5 flex flex-col gap-5 w-full"
+      style={{
+        background: 'var(--bg-card)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+      }}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
-          <h2 className="text-[15px] font-semibold text-[#1e293b] dark:text-zinc-200">Filtros</h2>
-          <span className="ml-2 text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 font-medium">
+          <div className="w-1 h-5 bg-green-500 rounded-full"></div>
+          <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>Filtros</h2>
+          <span
+            className="ml-2 text-xs px-2.5 py-1 rounded-full font-semibold"
+            style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--eu-green-600, #16a34a)', border: '1px solid rgba(34,197,94,0.25)' }}
+          >
             {periodoLabel}
           </span>
         </div>
         <button
           onClick={onReset}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+          style={{
+            background: 'rgba(239,68,68,0.08)',
+            color: '#dc2626',
+            border: '1px solid rgba(239,68,68,0.2)',
+          }}
         >
           <RotateCcw size={12} />
           Limpar
@@ -136,7 +152,13 @@ function SelectFilter({
       <select
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none pr-9 pl-3.5 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 bg-white dark:bg-[#0f1115] border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 min-w-[150px] cursor-pointer shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+        className="appearance-none pr-9 pl-3.5 py-2 text-[13px] rounded-xl min-w-[150px] cursor-pointer transition-colors outline-none"
+        style={{
+          background: 'var(--bg-input)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--border-input)',
+          fontWeight: 500,
+        }}
       >
         <option value="">{placeholder}</option>
         {options.map((opt) => (
@@ -145,7 +167,7 @@ function SelectFilter({
           </option>
         ))}
       </select>
-      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={14} />
+      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" size={14} style={{ color: 'var(--text-muted)' }} />
     </div>
   );
 }

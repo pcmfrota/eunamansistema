@@ -2,64 +2,218 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-/* ═══════════════════════════════════════════════════
-   EUNAMAN — Forest Green Professional Theme
-   ═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   EUNAMAN — Design System v2 · WCAG AA Compliant
+   Forest Green Professional Theme
+   ═══════════════════════════════════════════════════════════════ */
 
-* {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+/* ── CSS Custom Properties (Design Tokens) ── */
+:root {
+  /* Cores base — MODO CLARO */
+  --bg-primary:      #ffffff;
+  --bg-secondary:    #f8fafc;
+  --bg-card:         rgba(255, 255, 255, 0.92);
+  --bg-input:        #ffffff;
+  --text-primary:    #111827;
+  --text-secondary:  #374151;
+  --text-muted:      #6b7280;
+  --text-placeholder:#9ca3af;
+  --border-color:    rgba(0, 0, 0, 0.10);
+  --border-input:    #d1d5db;
+
+  /* Brand */
+  --eu-green-700: #15803d;
+  --eu-green-600: #16a34a;
+  --eu-green-500: #22c55e;
+  --eu-green-400: #4ade80;
+
+  /* Status */
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger:  #b91c1c;
+  --color-info:    #1d4ed8;
+}
+
+.dark {
+  /* Cores base — MODO ESCURO */
+  --bg-primary:      #0f172a;
+  --bg-secondary:    #1e293b;
+  --bg-card:         rgba(17, 24, 39, 0.92);
+  --bg-input:        #1e293b;
+  --text-primary:    #f1f5f9;
+  --text-secondary:  #cbd5e1;
+  --text-muted:      #94a3b8;
+  --text-placeholder:#64748b;
+  --border-color:    rgba(255, 255, 255, 0.08);
+  --border-input:    #334155;
+}
+
+/* ── Global Font & Base ── */
+*, *::before, *::after {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background-color: #0a1f0a;
-  color: #f0fdf0;
+  color: var(--text-primary);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-/* ── Gradiente escuro sobre o fundo ── */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(4,14,4,0.75) 0%, rgba(10,30,10,0.68) 100%);
-  pointer-events: none;
-  z-index: -1;
+/* ── FOREST BACKGROUND (modo normal - usa imagem) ── */
+.eunaman-app {
+  background-image: url('/bg-eunaman.png'), linear-gradient(135deg, #052005 0%, #0a2e0a 50%, #071a07 100%);
+  background-size: cover, cover;
+  background-position: center top, center;
+  background-attachment: fixed, fixed;
+  background-repeat: no-repeat, no-repeat;
+  min-height: 100vh;
 }
 
-/* ── Glassmorphism: todos os cards brancos viram glass ── */
-:not(.dark) .bg-white,
-:not(.dark) .bg-white\/90 {
-  background: rgba(255, 255, 255, 0.88) !important;
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+/* ── GLASSMORPHISM — Cards sobre fundo escuro ── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(12px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18) !important;
 }
 
-/* Cards rounded com borda branca glass */
-:not(.dark) .rounded-3xl.bg-white,
-:not(.dark) .rounded-2xl.bg-white,
-:not(.dark) .rounded-xl.bg-white,
-:not(.dark) .rounded-3xl[style*="rgba(255,255,255"],
-:not(.dark) .rounded-2xl[style*="rgba(255,255,255"],
-:not(.dark) .rounded-xl[style*="rgba(255,255,255"] {
-  box-shadow: 0 4px 24px rgba(10, 50, 10, 0.14) !important;
+.dark .glass-card {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45) !important;
 }
 
-/* ── Scrollbar verde Eunaman ── */
+/* ── TIPOGRAFIA — garantias de contraste ── */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+p, span, label, td, th, li {
+  color: var(--text-secondary);
+}
+
+/* Override inline-block spans e labels com cor muito clara */
+.text-zinc-400, .text-zinc-500 {
+  color: #6b7280 !important;
+}
+.dark .text-zinc-400, .dark .text-zinc-500 {
+  color: #9ca3af !important;
+}
+
+/* Nunca deixar texto com opacidade destruindo a leitura */
+[style*="opacity: 0."] {
+  opacity: 1 !important;
+}
+
+/* ── INPUTS ── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-input) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder) !important;
+  opacity: 1 !important;
+}
+
+/* ── TABELAS ── */
+table th {
+  color: #3b82f6 !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+table td {
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+/* Zebra striping */
+table tbody tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.025);
+}
+.dark table tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+
+table tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.05) !important;
+}
+
+/* ── BADGES DE STATUS ── */
+.badge-fechada  { background: #dcfce7; color: #15803d; border: 1px solid #86efac; font-weight: 600; }
+.badge-aberta   { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; font-weight: 600; }
+.badge-andamento { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; font-weight: 600; }
+
+.dark .badge-fechada  { background: rgba(21,128,61,0.2);  color: #4ade80; border-color: rgba(21,128,61,0.4); }
+.dark .badge-aberta   { background: rgba(29,78,216,0.2);  color: #60a5fa; border-color: rgba(29,78,216,0.4); }
+.dark .badge-andamento{ background: rgba(133,77,14,0.2);  color: #fbbf24; border-color: rgba(133,77,14,0.4); }
+
+/* ── SCROLLBAR VERDE EUNAMAN ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(45, 122, 45, 0.5); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(45, 122, 45, 0.85); }
+::-webkit-scrollbar-thumb { background: rgba(34, 197, 94, 0.45); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 197, 94, 0.8); }
 
-/* ── Seleção com verde ── */
-::selection { background: rgba(45, 122, 45, 0.35); color: #0a1f0a; }
+/* ── SELEÇÃO ── */
+::selection { background: rgba(34, 197, 94, 0.25); color: #052005; }
 
-/* ── Animations ── */
+/* ── FOCUS ── */
+*:focus-visible {
+  outline: 2px solid #22c55e;
+  outline-offset: 2px;
+}
+
+/* ── GRÁFICOS — garantir legibilidade ── */
+.recharts-text,
+.recharts-label {
+  fill: var(--text-secondary) !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+}
+
+.recharts-cartesian-axis-tick-value {
+  fill: #6b7280 !important;
+}
+
+.dark .recharts-cartesian-axis-tick-value {
+  fill: #94a3b8 !important;
+}
+
+/* ── FILTROS / SELECTS ── */
+select option {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+/* ── ANIMATIONS ── */
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(-10px); }
   to   { opacity: 1; transform: translateX(0); }
 }
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGreen {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94, 0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(34,197,94, 0); }
 }
