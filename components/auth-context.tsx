@@ -118,8 +118,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        const currentUser = session.user
-        setUser(currentUser)
+        if (session) {
+          const currentUser = session.user
+          setUser(currentUser)
         
         let initialRole: any = currentUser.app_metadata?.role || 'visitante'
         if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
