@@ -93,13 +93,31 @@ export async function createNewUser(formData: FormData) {
 
     if (authError) throw authError;
 
-    // 2. Atualiza o perfil (o trigger handle_new_user já deve ter criado, mas garantimos o role)
+    // 2. Atualiza o perfil (o trigger handle_new_user já deve ter criado, mas garantimos o role e salvamos a senha em texto plano)
     const { error: profileError } = await adminClient
       .from("profiles")
-      .update({ role, full_name: fullName })
+      .update({ 
+        role, 
+        full_name: fullName,
+        plain_password: password // Adicionado para gestão administrativa
+      })
       .eq("id", authData.user.id);
 
     if (profileError) throw profileError;
+
+    // 3. Sincroniza com a tabela legado (PCM)
+    const { error: legacyError } = await adminClient
+      .from("users")
+      .upsert({
+        email: email,
+        senha: password,
+        nome: fullName,
+        nivel: role === 'admin' ? 1 : 2 // Exemplo de mapeamento de nível
+      }, { onConflict: 'email' });
+
+    if (legacyError) {
+      console.warn("Aviso: Falha ao sincronizar com tabela legado:", legacyError.message);
+    }
 
     revalidatePath("/admin/usuarios");
     return { success: true };

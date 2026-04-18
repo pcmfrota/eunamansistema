@@ -89,10 +89,19 @@ export class AuthService {
     // Opcional: Atualizar a senha em texto plano se o usuário logado tiver permissão ou se for para o próprio perfil
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      // Atualiza na tabela de perfis (Next.js)
       await supabase
         .from('profiles')
         .update({ plain_password: password })
         .eq('id', user.id);
+        
+      // Atualiza na tabela legado (PCM) se houver o e-mail
+      if (user.email) {
+        await supabase
+          .from('users')
+          .update({ senha: password })
+          .eq('email', user.email);
+      }
     }
 
     return { success: true };
