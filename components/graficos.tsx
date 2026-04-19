@@ -398,14 +398,6 @@ export function GraficoVeiculos({
   const tickColor = isDark ? "#94a3b8" : "#64748b";
   const gridColor = isDark ? "#1e293b" : "#e2e8f0";
 
-  const glassCard: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.90)',
-    backdropFilter: 'blur(16px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-    border: '1px solid rgba(255,255,255,0.55)',
-    boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
-  };
-
   const chartData = (dados ?? []).map((v) => {
     const isDO = tipoAvailability === "DO";
     const valBase = isDO ? v.disponibilidade_operacional : v.disponibilidade;
@@ -493,16 +485,7 @@ export function GraficoVeiculos({
         />
       )}
 
-      <div
-        className="rounded-3xl p-6 flex flex-col"
-        style={{
-          background: 'rgba(255,255,255,0.90)',
-          backdropFilter: 'blur(16px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-          border: '1px solid rgba(255,255,255,0.55)',
-          boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
-        }}
-      >
+      <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
@@ -583,9 +566,9 @@ export function GraficoVeiculos({
               radius={[3, 3, 0, 0]}
               label={{
                 position: "top",
-                fill: "#1e293b",
+                fill: "#0f172a", // Escurecido para Zinc-900 para máxima legibilidade
                 fontSize: 10,
-                fontWeight: 700,
+                fontWeight: 800,
                 formatter: (v: number) => `${v}%`,
               }}
             >
@@ -651,10 +634,10 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
       <text
         x={x + width / 2}
         y={y + height / 2 + 4}
-        fill="#fff"
+        fill="#0f172a" // Escurecido de #fff para #0f172a
         fontSize={10}
         textAnchor="middle"
-        fontWeight={600}
+        fontWeight={800}
       >
         {text}
       </text>
@@ -662,16 +645,7 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
   };
 
   return (
-    <div
-      className="rounded-3xl p-6 flex flex-col"
-      style={{
-        background: 'rgba(255,255,255,0.90)',
-        backdropFilter: 'blur(16px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
-      }}
-    >
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
           Status das Preventivas por Placa
@@ -751,16 +725,7 @@ export function GraficoSemanal({ dados, periodoLabel }: GraficoSemanalProps) {
 
   const chartData = dados && dados.length > 0 ? dados : semanalMock;
   return (
-    <div
-      className="rounded-3xl p-6 flex flex-col"
-      style={{
-        background: 'rgba(255,255,255,0.90)',
-        backdropFilter: 'blur(16px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
-      }}
-    >
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
           Disponibilidade por Semana do Mês
@@ -858,16 +823,7 @@ export function ResumoHoras({
   const horasDisponiveis = Math.max(0, horasPeriodo - horasManutencao);
 
   return (
-    <div
-      className="rounded-3xl p-6 flex flex-col"
-      style={{
-        background: 'rgba(255,255,255,0.90)',
-        backdropFilter: 'blur(16px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
-      }}
-    >
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <h3 className="font-semibold text-[15px] mb-6 text-zinc-800 dark:text-zinc-200">
         Resumo de Horas
       </h3>
@@ -904,16 +860,7 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
 
   if (!dados || dados.length === 0) return null;
   return (
-    <div
-      className="rounded-3xl p-6 flex flex-col h-full"
-      style={{
-        background: 'rgba(255,255,255,0.90)',
-        backdropFilter: 'blur(16px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-        border: '1px solid rgba(255,255,255,0.55)',
-        boxShadow: '0 4px 24px rgba(10,50,10,0.12)',
-      }}
-    >
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
         Paradas por Categoria
       </h3>
@@ -1071,7 +1018,7 @@ export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilid
             itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
             formatter={(val: number) => [`${val}%`, "Disponibilidade Méd."]} 
           />
-          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: 600, formatter: (v: number) => `${v}%` }}>
+          <Bar dataKey="disponibilidade" radius={[3, 3, 0, 0]} label={{ position: 'top', fill: '#0f172a', fontSize: 10, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
             {dados.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getColorDisp(entry.disponibilidade)} />
             ))}
@@ -1173,6 +1120,153 @@ export function PainelFormulas() {
           <span className="text-[10px] text-zinc-400">Referência: Regra PCM Suzano</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── 19. Disponibilidade por Tipo de Frota (DM + DO, Dupla Barra) ────────
+const categoriaMock = [
+  { categoria: 'PIPA',    dm: 89.5, doOp: 88.2, total: 0, qtdOS: 0 },
+  { categoria: 'COMBOIO', dm: 93.1, doOp: 91.8, total: 0, qtdOS: 0 },
+  { categoria: 'MUNCK',   dm: 96.4, doOp: 95.9, total: 0, qtdOS: 0 },
+  { categoria: 'MULTI',   dm: 87.3, doOp: 85.1, total: 0, qtdOS: 0 },
+];
+
+export function GraficoDispCategoria({
+  dados,
+  periodoLabel,
+}: {
+  dados?: { categoria: string; dm: number; doOp: number; total: number; qtdOS: number }[];
+  periodoLabel?: string;
+}) {
+  const [selecionado, setSelecionado] = useState<any>(null);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const tickColor = isDark ? '#94a3b8' : '#64748b';
+  const gridColor = isDark ? '#1e293b'  : '#e2e8f0';
+  const isMock    = !dados || dados.length === 0;
+  const source    = isMock ? categoriaMock : dados!;
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const dm   = payload.find((p: any) => p.dataKey === 'dm')?.value   ?? 0;
+    const doOp = payload.find((p: any) => p.dataKey === 'doOp')?.value ?? 0;
+    const qos  = payload[0]?.payload?.qtdOS ?? 0;
+    return (
+      <div className="bg-white dark:bg-[#1a1f2e] rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 p-3 text-xs pointer-events-none min-w-[160px]">
+        <p className="font-bold text-[13px] text-zinc-800 dark:text-zinc-100 mb-2 border-b border-zinc-100 dark:border-zinc-700 pb-1">{label}</p>
+        <div className="flex flex-col gap-1.5 text-zinc-600 dark:text-zinc-400">
+          <p className="flex justify-between gap-4">
+            <span>DM (Mecânica):</span>
+            <span className="font-bold" style={{ color: getColorDisp(dm) }}>{dm}%</span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span>DO (Operacional):</span>
+            <span className="font-bold" style={{ color: doOp >= 95 ? '#3b82f6' : doOp >= 90 ? '#6366f1' : '#a855f7' }}>{doOp}%</span>
+          </p>
+          <p className="flex justify-between gap-4 border-t border-zinc-100 dark:border-zinc-700 pt-1 mt-1">
+            <span className="text-zinc-400">Ordens de Serviço:</span>
+            <span className="font-semibold text-zinc-700 dark:text-zinc-300">{qos}</span>
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+      <div className="flex justify-between items-start mb-5">
+        <div>
+          <h3 className="font-bold text-[15px] text-zinc-800 dark:text-zinc-100">Disponibilidade por Tipo de Frota</h3>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+            {periodoLabel ? periodoLabel + ' · ' : ''}DM e DO por tipo (PIPA · COMBOIO · MUNCK · MULTI)
+            {isMock && <span className="ml-1 text-amber-500 italic">(prévia — sem dados)</span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-4 text-[10px] font-semibold">
+          <div className="flex items-center gap-1.5"><div className="w-3 h-2.5 rounded-sm bg-[#22c55e]" /><span className="text-zinc-500 dark:text-zinc-400">DM</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-2.5 rounded-sm bg-[#3b82f6]" /><span className="text-zinc-500 dark:text-zinc-400">DO</span></div>
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={230}>
+        <BarChart 
+          data={source} 
+          margin={{ top: 22, right: 10, left: -20, bottom: 5 }} 
+          barCategoryGap="28%" 
+          barGap={4}
+          onClick={(data) => {
+            if (data && data.activePayload && data.activePayload.length > 0) {
+              setSelecionado(data.activePayload[0].payload);
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+          <XAxis dataKey="categoria" tick={{ fontSize: 12, fill: tickColor, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: gridColor }} />
+          <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="4 3" strokeWidth={1.5}
+            label={{ value: 'Meta 95%', position: 'insideTopRight', fontSize: 8, fill: '#22c55e' }} />
+          <ReferenceLine y={90} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1}
+            label={{ value: '90%', position: 'insideTopRight', fontSize: 8, fill: '#f59e0b' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
+          <Bar dataKey="dm" name="DM (Mecânica)" radius={[4, 4, 0, 0]}
+            label={{ position: 'top', fill: '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
+            {source.map((entry, i) => <Cell key={`dm-${i}`} fill={getColorDisp(entry.dm)} opacity={0.88} />)}
+          </Bar>
+          <Bar dataKey="doOp" name="DO (Operacional)" radius={[4, 4, 0, 0]}
+            label={{ position: 'top', fill: '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
+            {source.map((entry, i) => (
+              <Cell key={`do-${i}`} fill={entry.doOp >= 95 ? '#3b82f6' : entry.doOp >= 90 ? '#6366f1' : '#a855f7'} opacity={0.80} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      <div className="flex gap-2 mt-3 flex-wrap">
+        {source.map((item) => (
+          <div key={item.categoria} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+            <div className="w-2 h-2 rounded-full" style={{ background: getColorDisp(item.dm) }} />
+            <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{item.categoria}</span>
+            {item.total > 0 && <span className="text-[9px] text-zinc-400 dark:text-zinc-400">({item.total})</span>}
+          </div>
+        ))}
+      </div>
+
+      {selecionado && (
+        <div className="mt-6 p-4 rounded-2xl bg-zinc-100/50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/50 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-inner" style={{ background: getColorDisp(selecionado.dm) }}>
+              {selecionado.dm}%
+            </div>
+            <div>
+              <h4 className="font-bold text-zinc-800 dark:text-zinc-100 uppercase tracking-wide flex items-center gap-2">
+                {selecionado.categoria}
+                <span className="text-[10px] font-medium bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-500">TIPO</span>
+              </h4>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{selecionado.total}</span> equipamentos · <span className="font-semibold text-zinc-700 dark:text-zinc-300">{selecionado.qtdOS}</span> OS no período
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase font-bold mb-1">Taxa Disponibilidade</span>
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600">DM: {selecionado.dm}%</div>
+                <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-600">DO: {selecionado.doOp}%</div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setSelecionado(null)}
+              className="p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-300 transition-all"
+              title="Fechar detalhes"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

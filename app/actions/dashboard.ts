@@ -58,6 +58,7 @@ export type DashboardData = {
   dispPorTipo: any[];
   statusFrota: any[];
   manutPorTipo: any[];
+  dispPorCategoria: { categoria: string; dm: number; doOp: number; total: number; qtdOS: number }[];
 };
 
 // Helper para fundir intervalos de tempo sobrepostos (evita duplicidade de horas)
@@ -371,7 +372,54 @@ export async function getDashboardData(filtros?: {
     };
   });
 
-  // E. Disponibilidade Semanal (Otimização: Reduzir chamadas a new Date)
+  // ── Disponibilidade DM + DO agrupada por Tipo de Frota (PIPA, COMBOIO, MUNCK, MULTI) ──
+  // Nota: no banco o campo `tipo` usa 'MULTIFUNCIONAL'; exibimos como 'MULTI'
+  const TIPO_PARA_LABEL: Record<string, string> = {
+    'PIPA': 'PIPA',
+    'COMBOIO': 'COMBOIO',
+    'MUNCK': 'MUNCK',
+    'MULTIFUNCIONAL': 'MULTI',
+    'MULTI': 'MULTI', // aceita ambos
+  };
+  const LABELS_ORDEM = ['PIPA', 'COMBOIO', 'MUNCK', 'MULTI'];
+  const catDispPoolMap = new Map<string, {
+    hManutDM: number; hTotalDM: number;
+    hManutDO: number; hTotalDO: number;
+    count: number;
+    qtdOS: number;
+  }>();
+  // Inicializa os 4 labels para garantir que apareçam mesmo sem dados
+  LABELS_ORDEM.forEach(l => catDispPoolMap.set(l, { hManutDM: 0, hTotalDM: 0, hManutDO: 0, hTotalDO: 0, count: 0, qtdOS: 0 }));
+  veiculos.forEach(v => {
+    const eq = frotaAtiva.find(e => e.placa?.toUpperCase().trim() === v.placa.toUpperCase().trim());
+    const tipoRaw = (eq?.tipo || '').toUpperCase().trim();
+    const label = TIPO_PARA_LABEL[tipoRaw];
+    if (!label) return; // ignora tipos fora da lista
+    
+    const osDaPlaca = osPorPlaca.get(v.placa) || [];
+    const curr = catDispPoolMap.get(label)!;
+    catDispPoolMap.set(label, {
+      hManutDM: curr.hManutDM + v.horasManut,
+      hTotalDM: curr.hTotalDM + v.hTotalDM,
+      hManutDO: curr.hManutDO + v.horasOperacional,
+      hTotalDO: curr.hTotalDO + v.hTotalDO,
+      count: curr.count + 1,
+      qtdOS: curr.qtdOS + osDaPlaca.length,
+    });
+  });
+  // Retorna na ordem definida em LABELS_ORDEM
+  const dispPorCategoria = LABELS_ORDEM.map(label => {
+    const d = catDispPoolMap.get(label)!;
+    return {
+      categoria: label,
+      dm:   d.hTotalDM > 0 ? Math.round(((d.hTotalDM - d.hManutDM) / d.hTotalDM) * 1000) / 10 : 100,
+      doOp: d.hTotalDO > 0 ? Math.round(((d.hTotalDO - d.hManutDO) / d.hTotalDO) * 1000) / 10 : 100,
+      total: d.count,
+      qtdOS: d.qtdOS,
+    };
+  });
+
+  // E. Disponibilidade Semanal
   const dispSemanal = [];
   const pInicioTime = periodoInicioObj.getTime();
   const pFimTime = periodoFimObj.getTime();
@@ -421,6 +469,7 @@ export async function getDashboardData(filtros?: {
     paradasPorCategoria: Array.from(categoriasMap.entries()).map(([categoria, quantidade]) => ({ categoria, quantidade })),
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([tipo, quantidade]) => ({ tipo, quantidade })),
     dispPorTipo: Array.from(modelosMap.entries()).map(([tipo, data]) => ({ tipo, disponibilidade: Math.round((data.soma / data.count) * 10) / 10, total: data.count })),
+    dispPorCategoria,
     statusFrota: statusFrota.sort((a, b) => a.disponibilidade - b.disponibilidade),
     dispSemanal,
     preventivas: (prevData ?? []).map((p: any) => {

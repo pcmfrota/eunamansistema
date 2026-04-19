@@ -19,6 +19,7 @@ const RankingFalhas = dynamic(() => import("@/components/graficos").then((mod) =
 const GraficoManuTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoManuTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDispTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
 const TabelaStatusFrota = dynamic(() => import("@/components/graficos").then((mod) => mod.TabelaStatusFrota), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoDispCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
 
 function CarregandoGrafico() {
   return (
@@ -249,8 +250,9 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GraficoParadasCategoria dados={data.paradasPorCategoria} />
+        <GraficoDispCategoria dados={data.dispPorCategoria} periodoLabel={data.periodoLabel} />
+
+        <div className="grid grid-cols-1 gap-6">
           <RankingFalhas dados={data.rankingFalhas} />
         </div>
 

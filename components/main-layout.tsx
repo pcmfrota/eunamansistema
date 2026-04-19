@@ -126,43 +126,52 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       )}
         style={{
           background: isDark
-            ? 'rgba(4, 12, 4, 0.92)'
-            : 'rgba(8, 28, 8, 0.88)',
-          backdropFilter: 'blur(24px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-          borderRight: '1px solid rgba(45, 122, 45, 0.22)',
-          boxShadow: '4px 0 32px rgba(0,0,0,0.4)',
+            ? 'rgba(15, 23, 42, 0.96)'
+            : 'rgba(255, 255, 255, 0.96)',
+          backdropFilter: 'blur(12px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(12px) saturate(160%)',
+          borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.10)'}`,
+          boxShadow: '4px 0 24px rgba(0, 0, 0, 0.18)',
         }}
       >
         {/* ── Logo / Header ── */}
         <div
-          className="flex items-center gap-3 p-5 shrink-0"
+          className="relative shrink-0 px-3 py-2"
           style={{
-            borderBottom: '1px solid rgba(45,122,45,0.18)',
-            background: 'linear-gradient(135deg, rgba(26,76,26,0.6) 0%, transparent 100%)',
+            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          {/* ── Logo SVG (alta qualidade) ── */}
-          <img
-            src="/logo-eunaman.svg"
-            alt="EUNAMAN - Forest Support Expert"
-            className="h-12 w-auto object-contain"
-            style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.4)) brightness(1.15)' }}
-          />
+          {/* ── Logo EUNAMAN (nova imagem) ── */}
+          <div
+            className="w-full"
+            style={isDark ? {
+              background: 'rgba(255,255,255,0.92)',
+              borderRadius: '8px',
+              padding: '6px 10px',
+            } : {}}
+          >
+            <img
+              src="/logo-eunaman-full.png"
+              alt="EUNAMAN - Forest Support Expert"
+              className="w-full h-auto object-contain"
+              style={{ maxHeight: '60px' }}
+            />
+          </div>
 
-          {/* Close mobile */}
+          {/* Close mobile — posição absoluta para não competir com o logo */}
           <button
-            className="lg:hidden ml-auto p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            className="lg:hidden absolute top-2 right-2 p-1 rounded-lg transition-colors"
+            style={{ background: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.07)' }}
             onClick={() => setSidebarOpen(false)}
           >
-            <X className="w-4 h-4 text-white/60" />
+            <X className={isDark ? "w-3.5 h-3.5 text-white/70" : "w-3.5 h-3.5 text-gray-500"} />
           </button>
         </div>
 
         {/* ── Perfil do Usuário ── */}
         <div
           className="px-4 py-4 shrink-0"
-          style={{ borderBottom: '1px solid rgba(45,122,45,0.15)' }}
+          style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}
         >
           <div className="flex items-center gap-3 mb-3">
             <div className="relative shrink-0">
@@ -177,11 +186,13 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(45,122,45,0.4), rgba(45,122,45,0.2))',
-                    border: '1px solid rgba(45,122,45,0.4)',
+                    background: isDark
+                      ? 'linear-gradient(135deg, rgba(45,122,45,0.4), rgba(45,122,45,0.2))'
+                      : 'linear-gradient(135deg, rgba(21,128,61,0.12), rgba(21,128,61,0.06))',
+                    border: `1px solid ${isDark ? 'rgba(45,122,45,0.4)' : 'rgba(21,128,61,0.25)'}`,
                   }}
                 >
-                  <User size={18} className="text-green-300" />
+                  <User size={18} className={isDark ? "text-green-300" : "text-green-700"} />
                 </div>
               )}
               {profile?.role === 'admin' && (
@@ -195,12 +206,15 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white truncate">
+              <p
+                className="text-sm font-bold truncate"
+                style={{ color: isDark ? '#f1f5f9' : '#111827' }}
+              >
                 {profile?.full_name || 'Usuário'}
               </p>
               <p
                 className="text-[10px] font-black uppercase tracking-[0.12em]"
-                style={{ color: 'rgba(115, 207, 115, 0.9)' }}
+                style={{ color: isDark ? 'rgba(115, 207, 115, 0.9)' : '#15803d' }}
               >
                 {authLoading ? 'Carregando...' : (
                   profile?.role === 'admin' ? 'Administrador' :
@@ -216,12 +230,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               href="/perfil"
               className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all"
               style={{
-                background: 'rgba(255,255,255,0.08)',
-                color: 'rgba(200,240,200,0.85)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                color: isDark ? 'rgba(200,240,200,0.85)' : '#374151',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.10)'}`,
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.14)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+              onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)')}
+              onMouseLeave={e => (e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)')}
             >
               <User size={12} />
               Perfil
@@ -232,7 +246,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
               style={{
                 background: 'rgba(239,68,68,0.12)',
-                color: 'rgba(252,165,165,0.9)',
+                color: isDark ? 'rgba(252,165,165,0.9)' : '#b91c1c',
                 border: '1px solid rgba(239,68,68,0.2)',
               }}
             >
@@ -245,9 +259,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             onClick={() => setIsPasswordModalOpen(true)}
             className="mt-2 flex items-center justify-center gap-2 w-full py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
             style={{
-              background: 'rgba(45,122,45,0.1)',
-              color: 'rgba(115,207,115,0.85)',
-              border: '1px solid rgba(45,122,45,0.2)',
+              background: isDark ? 'rgba(45,122,45,0.1)' : 'rgba(21,128,61,0.08)',
+              color: isDark ? 'rgba(115,207,115,0.85)' : '#15803d',
+              border: `1px solid ${isDark ? 'rgba(45,122,45,0.2)' : 'rgba(21,128,61,0.20)'}`,
             }}
           >
             <Shield size={11} />
@@ -260,7 +274,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between px-2 mb-3">
             <p
               className="text-[9px] font-black uppercase tracking-[0.2em]"
-              style={{ color: 'rgba(255,255,255,0.5)' }}
+              style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#9ca3af' }}
             >
               Navegação
             </p>
@@ -268,14 +282,14 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setTheme(isDark ? 'light' : 'dark')}
               className="p-1.5 rounded-lg transition-colors"
               style={{
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.10)'}`,
               }}
               title={isDark ? "Modo Claro" : "Modo Escuro"}
             >
               {isDark
                 ? <Sun className="w-3.5 h-3.5 text-yellow-300" />
-                : <Moon className="w-3.5 h-3.5 text-green-300" />
+                : <Moon className="w-3.5 h-3.5 text-green-600" />
               }
             </button>
           </div>
@@ -291,38 +305,42 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group"
                   style={{
                     background: isActive
-                      ? 'linear-gradient(135deg, rgba(45,122,45,0.55), rgba(45,122,45,0.30))'
+                      ? (isDark
+                          ? 'linear-gradient(135deg, rgba(45,122,45,0.55), rgba(45,122,45,0.30))'
+                          : 'linear-gradient(135deg, rgba(21,128,61,0.12), rgba(21,128,61,0.06))')
                       : 'transparent',
-                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.80)',
+                    color: isActive
+                      ? (isDark ? '#ffffff' : '#15803d')
+                      : (isDark ? 'rgba(255,255,255,0.80)' : '#374151'),
                     border: isActive
-                      ? '1px solid rgba(45,122,45,0.45)'
+                      ? `1px solid ${isDark ? 'rgba(45,122,45,0.45)' : 'rgba(21,128,61,0.25)'}`
                       : '1px solid transparent',
-                    boxShadow: isActive ? '0 2px 12px rgba(45,122,45,0.25)' : 'none',
+                    boxShadow: isActive ? '0 2px 12px rgba(21,128,61,0.10)' : 'none',
                     animationDelay: `${index * 40}ms`,
                     animation: 'slideIn 0.3s ease-out',
                   }}
                   onMouseEnter={e => {
                     if (!isActive) {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.10)';
-                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.04)';
+                      e.currentTarget.style.color = isDark ? '#ffffff' : '#111827';
                     }
                   }}
                   onMouseLeave={e => {
                     if (!isActive) {
                       e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = 'rgba(200,230,200,0.65)';
+                      e.currentTarget.style.color = isDark ? 'rgba(255,255,255,0.80)' : '#374151';
                     }
                   }}
                 >
                   <item.icon
                     className="w-4 h-4 shrink-0 transition-colors"
-                    style={{ color: isActive ? '#72cf72' : 'rgba(115,207,115,0.55)' }}
+                    style={{ color: isActive ? (isDark ? '#72cf72' : '#15803d') : (isDark ? 'rgba(115,207,115,0.55)' : '#6b7280') }}
                   />
                   <span className="truncate text-[13px]">{item.name}</span>
                   {isActive && (
                     <div
                       className="ml-auto w-1.5 h-1.5 rounded-full"
-                      style={{ background: '#72cf72', boxShadow: '0 0 6px #72cf72' }}
+                      style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e' }}
                     />
                   )}
                 </Link>
@@ -335,7 +353,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <div className="mt-5 mb-2 px-2">
                 <p
                   className="text-[9px] font-black uppercase tracking-[0.2em]"
-                  style={{ color: 'rgba(115,207,115,0.35)' }}
+                  style={{ color: isDark ? 'rgba(115,207,115,0.35)' : '#9ca3af' }}
                 >
                   Administração
                 </p>
@@ -353,7 +371,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                         background: isActive
                           ? 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(99,102,241,0.15))'
                           : 'transparent',
-                        color: isActive ? '#a5b4fc' : 'rgba(200,230,200,0.65)',
+                        color: isActive ? '#a5b4fc' : (isDark ? 'rgba(200,230,200,0.65)' : '#374151'),
                         border: isActive ? '1px solid rgba(99,102,241,0.25)' : '1px solid transparent',
                         animationDelay: `${(navigation.length + index) * 40}ms`,
                         animation: 'slideIn 0.3s ease-out',
@@ -361,7 +379,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                     >
                       <item.icon
                         className="w-4 h-4 shrink-0"
-                        style={{ color: isActive ? '#a5b4fc' : 'rgba(115,207,115,0.55)' }}
+                        style={{ color: isActive ? '#a5b4fc' : (isDark ? 'rgba(115,207,115,0.55)' : '#6b7280') }}
                       />
                       <span className="truncate">{item.name}</span>
                     </Link>
@@ -375,11 +393,11 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         {/* ── Footer da sidebar ── */}
         <div
           className="px-4 py-3 shrink-0"
-          style={{ borderTop: '1px solid rgba(45,122,45,0.12)' }}
+          style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}
         >
           <p
             className="text-[9px] text-center font-medium"
-            style={{ color: 'rgba(115,207,115,0.3)' }}
+            style={{ color: isDark ? 'rgba(115,207,115,0.3)' : '#9ca3af' }}
           >
             EUNAMAN © {new Date().getFullYear()} · v1.0
           </p>
@@ -392,10 +410,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         <header
           className="lg:hidden sticky top-0 z-30 px-4 py-3"
           style={{
-            background: 'rgba(8,28,8,0.88)',
+            background: isDark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.96)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
-            borderBottom: '1px solid rgba(45,122,45,0.2)',
+            borderBottom: `1px solid ${isDark ? 'rgba(45,122,45,0.2)' : 'rgba(0,0,0,0.10)'}`,
           }}
         >
           <div className="flex items-center justify-between">
@@ -403,9 +421,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="p-2 rounded-lg transition-colors"
-                style={{ background: 'rgba(255,255,255,0.08)' }}
+                style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }}
               >
-                <Menu className="w-5 h-5 text-green-300" />
+                <Menu className={isDark ? "w-5 h-5 text-green-300" : "w-5 h-5 text-green-700"} />
               </button>
               <div className="flex items-center gap-2">
                 <img
@@ -413,7 +431,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   alt="Eunaman Logo"
                   className="w-7 h-7 object-contain"
                 />
-                <span className="font-black text-white tracking-wider text-sm">EUNAMAN</span>
+                <span
+                  className="font-black tracking-wider text-sm"
+                  style={{ color: isDark ? '#ffffff' : '#111827' }}
+                >EUNAMAN</span>
               </div>
             </div>
 
