@@ -189,7 +189,7 @@ export default function PneusModal({
 
           <form id="pneus-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-6">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 md:flex-1 md:min-w-[180px]">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Equipamento *</label>
                 <div className="relative">
                   <select 
@@ -205,7 +205,7 @@ export default function PneusModal({
                   <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 md:w-auto shrink-0">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Data *</label>
                 <input 
                   name="data_inspecao" 
