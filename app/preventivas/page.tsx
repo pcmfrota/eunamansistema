@@ -27,6 +27,7 @@ export default async function ControleHorimetrosPage() {
     return {
       id: eq.id,
       placa: eq.placa,
+      modelo: eq.modelo || "",
       tipo: eq.tipo,
       modulo: eq.modulo,
       categoria: eq.categoria,

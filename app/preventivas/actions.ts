@@ -72,3 +72,35 @@ export async function importarPreventivas(data: any[]) {
     return { error: error.message };
   }
 }
+
+export async function registrarHorimetro(formData: FormData) {
+  try {
+    const { HorimetroService } = await import('@/src/services/HorimetroService');
+    const data = {
+      equipamento_id: formData.get('equipamento_id') as string,
+      data_referencia: (formData.get('data_referencia') || formData.get('data')) as string,
+      horimetro_inicial: parseFloat(formData.get('horimetro_inicial') as string),
+      horimetro_final: parseFloat(formData.get('horimetro_final') as string),
+      observacoes: formData.get('observacoes') as string
+    };
+
+    await HorimetroService.create(data);
+    
+    // Sincronizar com a tabela de preventivas (atualizar horímetro atual e data)
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+    await supabase
+      .from('preventivas')
+      .update({ 
+        horimetro_atual: data.horimetro_final,
+        data_atualizacao: data.data_referencia 
+      })
+      .eq('equipamento_id', data.equipamento_id);
+
+    revalidatePath('/preventivas');
+    revalidatePath('/');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}

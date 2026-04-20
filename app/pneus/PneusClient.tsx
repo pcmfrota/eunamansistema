@@ -187,22 +187,22 @@ export default function PneusClient({
     XLSXLib.writeFile(wb, "Relatorio_Pneus.xlsx");
   };
 
-  const downloadBoletimPDF = (ins: Inspecao) => {
+   const downloadBoletimPDF = (ins: Inspecao) => {
     if (!(window as any).html2pdf) {
       alert("Aguarde o carregamento do gerador de PDF."); return;
     }
     const html = `
-      <div style="padding: 10px; font-family: Helvetica, Arial, sans-serif; color: #166534; font-size: 10px; width: 100%; box-sizing: border-box; background: #fff;">
+      <div style="padding: 10px; font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 10px; width: 100%; box-sizing: border-box; background: #fff;">
          <!-- Header -->
          <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534;">
             <tr>
                <td style="width: 25%; border-right: 2px solid #166534; text-align: center; padding: 5px;">
-                  <div style="font-size: 18px; font-weight: 900; letter-spacing: -1px;">EUNAMAN</div>
+                  <div style="font-size: 18px; font-weight: 900; letter-spacing: -1px; color: #000;">EUNAMAN</div>
                </td>
-               <td style="width: 50%; border-right: 2px solid #166534; text-align: center; vertical-align: middle;">
+               <td style="width: 50%; border-right: 2px solid #166534; text-align: center; vertical-align: middle; color: #000;">
                   <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 1px;">BOLETIM DE PNEUS</h1>
                </td>
-               <td style="width: 25%; padding: 5px; font-size: 9px; line-height: 1.2;">
+               <td style="width: 25%; padding: 5px; font-size: 9px; line-height: 1.2; color: #000;">
                   <div>Doc. Nº.:</div>
                   <div>Página: 1</div>
                   <div>Versão: 1.0</div>
@@ -212,7 +212,7 @@ export default function PneusClient({
          </table>
 
          <!-- Info Sec -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534;">
+         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534; color: #000;">
             <tr>
                <td style="border: 1px solid #166534; padding: 4px; width: 15%; vertical-align: top;">
                   <div style="font-size: 8px;">Ordem de Serviço:</div>
@@ -227,11 +227,11 @@ export default function PneusClient({
                      <tr>
                         <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 45%;"><div style="font-size: 8px;">FUNCIONÁRIO:</div></td>
                         <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 15%;"><div style="font-size: 8px;">ID:</div></td>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 20%;"><div style="font-size: 8px;">Data Entrada:</div><div style="font-weight:bold">${fmtDate(ins.data_inspecao)}</div></td>
+                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 20%; color: #000;"><div style="font-size: 8px;">Data Entrada:</div><div style="font-weight:bold">${fmtDate(ins.data_inspecao)}</div></td>
                         <td style="border-bottom: 1px solid #166534; padding: 4px; width: 20%;"><div style="font-size: 8px;">Hora:</div></td>
                      </tr>
                      <tr>
-                        <td colspan="2" style="border-right: 1px solid #166534; padding: 4px;"><div style="font-size: 8px;">EQUIPAMENTO:</div><div style="font-weight:bold; font-size: 14px;">${ins.equipamentos?.placa || ''}</div></td>
+                        <td colspan="2" style="border-right: 1px solid #166534; padding: 4px; color: #000;"><div style="font-size: 8px;">EQUIPAMENTO:</div><div style="font-weight:bold; font-size: 14px;">${ins.equipamentos?.placa || ''}</div></td>
                         <td style="border-right: 1px solid #166534; padding: 4px;"><div style="font-size: 8px;">Data Saída:</div></td>
                         <td style="padding: 4px;"><div style="font-size: 8px;">Hora:</div></td>
                      </tr>
@@ -241,10 +241,10 @@ export default function PneusClient({
          </table>
 
          <!-- Desmontados Header -->
-         <div style="background-color: #f0fdf4; border: 2px solid #166534; text-align: center; font-weight: bold; padding: 4px; margin-bottom: 5px;">P N E U S &nbsp; &nbsp; D E S M O N T A D O S</div>
+         <div style="background-color: #f0fdf4; border: 2px solid #166534; text-align: center; font-weight: bold; padding: 4px; margin-bottom: 5px; color: #000;">P N E U S &nbsp; &nbsp; D E S M O N T A D O S</div>
          
          <!-- Tabela Desmontados -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center;">
+         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center; color: #000;">
             <tr style="background-color: #f0fdf4;">
                <th style="border: 1px solid #166534; padding: 4px; width: 8%;">POSIÇÃO</th>
                <th style="border: 1px solid #166534; padding: 4px; width: 12%;">TIPO DE<br>INTERVENÇÃO</th>
@@ -265,7 +265,7 @@ export default function PneusClient({
                { lbl: '98 STEP', val: ins.estepe }
             ].map((r, i) => r.val != null || i < 2 ? `
                <tr>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc;">${r.lbl}</td>
+                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc; color: #000;">${r.lbl}</td>
                   <td style="border: 1px solid #166534; padding: 4px;"></td>
                   <td style="border: 1px solid #166534; padding: 4px;"></td>
                   <td style="border: 1px solid #166534; padding: 4px;"></td>
@@ -279,8 +279,8 @@ export default function PneusClient({
          </table>
 
          <!-- Montados Header -->
-         <div style="background-color: #f0fdf4; border: 2px solid #166534; border-bottom: none; text-align: center; font-weight: bold; padding: 4px;">P N E U S &nbsp; &nbsp; M O N T A D O S</div>
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center;">
+         <div style="background-color: #f0fdf4; border: 2px solid #166534; border-bottom: none; text-align: center; font-weight: bold; padding: 4px; color: #000;">P N E U S &nbsp; &nbsp; M O N T A D O S</div>
+         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center; color: #000;">
             <tr style="background-color: #f0fdf4;">
                <th style="border: 1px solid #166534; padding: 4px; width: 8%;">POSIÇÃO</th>
                <th style="border: 1px solid #166534; padding: 4px; width: 12%;">TIPO DE<br>INTERVENÇÃO</th>
@@ -298,7 +298,7 @@ export default function PneusClient({
                { lbl: '98 STEP' }
             ].map(r => `
                <tr>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc;">${r.lbl}</td>
+                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc; color: #000;">${r.lbl}</td>
                   <td style="border: 1px solid #166534; padding: 4px;"></td>
                   <td style="border: 1px solid #166534; padding: 4px;"></td>
                   <td style="border: 1px solid #166534; padding: 4px;"></td>
@@ -312,7 +312,7 @@ export default function PneusClient({
          </table>
 
          <!-- Legends / Dictionary -->
-         <table style="width: 100%; border-collapse: collapse; border: 2px solid #166534; font-size: 7px; margin-bottom: 10px;">
+         <table style="width: 100%; border-collapse: collapse; border: 2px solid #166534; font-size: 7px; margin-bottom: 10px; color: #000;">
             <tr style="background-color: #f0fdf4;">
                <th style="border: 1px solid #166534; padding: 4px; width: 25%;">EVENTO</th>
                <th style="border: 1px solid #166534; padding: 4px; width: 50%;">MOTIVO DA RETIRADA / MANUTENÇÃO</th>
@@ -352,7 +352,7 @@ export default function PneusClient({
             </tr>
          </table>
 
-         <div style="display: flex; gap: 10px; font-size: 8px;">
+         <div style="display: flex; gap: 10px; font-size: 8px; color: #000;">
             <div style="border: 2px solid #166534; padding: 6px; flex: 1;">
                <b>STATUS DIAGNOSTICADO:</b> <span style="background-color: ${ins.condicao === 'CRITICO' || ins.condicao === 'TROCAR' ? '#fee2e2' : '#dcfce7'}; padding: 2px 4px; border: 1px solid #166534;">${ins.condicao}</span>
             </div>

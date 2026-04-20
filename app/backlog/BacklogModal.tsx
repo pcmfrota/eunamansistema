@@ -274,6 +274,7 @@ export default function BacklogModal({
                      <Field label="Status Programação">
                          <select className={inputCls} value={form.status_programacao || 'Não Programado'} onChange={e => setForm({...form, status_programacao: e.target.value})}>
                             <option>Não Programado</option>
+                            <option>Em aberto</option>
                             <option>Programado</option>
                             <option>Executado</option>
                          </select>

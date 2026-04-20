@@ -31,7 +31,6 @@ const routes = [
   { name: "Controle de OS",           path: "/os",                      icon: FileText },
   { name: "Controle de Horímetros",   path: "/preventivas",             icon: Calendar },
   { name: "Boletim de Pneus",         path: "/pneus",                   icon: Disc },
-  { name: "Horímetro",                path: "/horimetro",               icon: Clipboard },
   { name: "Backlog",                  path: "/backlog",                 icon: Wrench },
   { name: "Prog. Preventiva",         path: "/programacao-preventiva",  icon: Settings2 },
   { name: "Base de Frotas",           path: "/base-frotas",             icon: LayoutDashboard },
