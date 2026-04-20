@@ -35,7 +35,6 @@ const navigation = [
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
   { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
   { name: 'Boletim de Pneus',         path: '/pneus',                  icon: CircleDot },
-  { name: 'Horímetro',                path: '/horimetro',              icon: Gauge },
   { name: 'Backlog',                  path: '/backlog',                icon: FileText },
   { name: 'Prog. Preventiva',         path: '/programacao-preventiva', icon: Settings2 },
   { name: 'Base de Frotas',           path: '/base-frotas',            icon: Truck },
