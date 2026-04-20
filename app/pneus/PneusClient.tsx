@@ -165,6 +165,13 @@ export default function PneusClient({
   const total = latestByEq.length || 1;
   const criticos = latestByEq.filter(i => i.condicao === "CRITICO" || i.condicao === "TROCAR");
   const pieData = Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
+  
+  const globalLatestDate = latestByEq.length > 0 
+    ? latestByEq.reduce((latest, current) => {
+        const d = current.data_inspecao;
+        return !latest || d > latest ? d : latest;
+      }, "") 
+    : null;
 
   const posMedia = POSICOES.map(pos => {
     const vals = latestByEq.map(i => i[pos]).filter(v => v != null) as number[];
@@ -496,6 +503,68 @@ export default function PneusClient({
 
         {tab === "dashboard" && (
           <div className="space-y-6">
+            {/* Matrix Table - NOW PRINCIPAL AT THE TOP */}
+            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
+               <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                    <button 
+                      onClick={() => setIsAIReportOpen(true)}
+                      className="flex items-center gap-3 px-6 py-4 bg-zinc-900 dark:bg-orange-500/10 text-white dark:text-orange-400 border border-zinc-800 dark:border-orange-500/30 rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                      <Sparkles size={20} className="text-orange-500 animate-pulse" />
+                      RELATÓRIO IA
+                    </button>
+                    <div>
+                      <h3 className="font-black text-zinc-800 dark:text-zinc-200 tracking-tight text-lg">Painel de Monitoramento Detalhado</h3>
+                      <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-2">
+                        <CalendarCheck size={14} className="text-emerald-500" />
+                        Última Atualização: <span className="text-zinc-900 dark:text-zinc-50">{fmtDate(globalLatestDate)}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 text-[10px] font-black uppercase tracking-tighter text-zinc-400">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-400" /> Crítico</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Trocar</span>
+                  </div>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full text-[10px]">
+                   <thead>
+                     <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
+                       <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
+                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
+                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
+                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
+                       <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
+                     </tr>
+                     <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
+                       <th className="px-6 py-2" />
+                       {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
+                         <th key={l} className="px-1 py-2 text-center text-orange-500/70 font-black">{l}</th>
+                       ))}
+                     </tr>
+                   </thead>
+                    <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+                      {latestByEq.map((ins: any) => (
+                       <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
+                         <td className="px-6 py-4">
+                            <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">{ins.equipamentos?.placa}</span>
+                            <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual} KM</span>
+                         </td>
+                         {POSICOES.map(pos => (
+                           <td key={pos} className="px-1 py-4 text-center">
+                              {ins[pos] != null ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span> : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>}
+                           </td>
+                         ))}
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               {Object.entries(counts).map(([label, val]) => (
                 <div key={label} className="bg-white dark:bg-zinc-950 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow group">
@@ -541,61 +610,7 @@ export default function PneusClient({
                </div>
             </div>
 
-            {/* Matrix Table */}
-            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
-               <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setIsAIReportOpen(true)}
-                      className="flex items-center gap-3 px-6 py-4 bg-zinc-900 dark:bg-orange-500/10 text-white dark:text-orange-400 border border-zinc-800 dark:border-orange-500/30 rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                      <Sparkles size={20} className="text-orange-500 animate-pulse" />
-                      RELATÓRIO IA
-                    </button>
-                    <h3 className="font-black text-zinc-800 dark:text-zinc-200 tracking-tight">Painel de Monitoramento Detalhado</h3>
-                  </div>
-                  <div className="flex gap-4 text-[10px] font-black uppercase tracking-tighter text-zinc-400">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-400" /> Crítico</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Trocar</span>
-                  </div>
-               </div>
-               <div className="overflow-x-auto">
-                 <table className="w-full text-[10px]">
-                   <thead>
-                     <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
-                       <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
-                       <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
-                     </tr>
-                     <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
-                       <th className="px-6 py-2" />
-                       {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
-                         <th key={l} className="px-1 py-2 text-center text-orange-500/70 font-black">{l}</th>
-                       ))}
-                     </tr>
-                   </thead>
-                    <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                      {latestByEq.map((ins: any) => (
-                       <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
-                         <td className="px-6 py-4">
-                            <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">{ins.equipamentos?.placa}</span>
-                            <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual} KM</span>
-                         </td>
-                         {POSICOES.map(pos => (
-                           <td key={pos} className="px-1 py-4 text-center">
-                              {ins[pos] != null ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span> : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>}
-                           </td>
-                         ))}
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-               </div>
-            </div>
+
           </div>
         )}
 
