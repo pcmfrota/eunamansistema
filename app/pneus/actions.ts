@@ -54,7 +54,7 @@ export async function registrarInspecaoCompleta(formData: FormData) {
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
-      data_inspecao: formData.get('data_inspecao') as string,
+      data_inspecao: formData.get('data_inspecao')?.toString().split('T')[0] + 'T12:00:00',
       km_atual: formData.get('km_atual') ? parseFloat(formData.get('km_atual') as string) : null,
       horimetro_registro: formData.get('horimetro_registro') ? parseFloat(formData.get('horimetro_registro') as string) : null,
       observacoes: formData.get('observacoes') as string,
@@ -85,7 +85,7 @@ export async function atualizarInspecao(id: string, formData: FormData) {
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
-      data_inspecao: formData.get('data_inspecao') as string,
+      data_inspecao: formData.get('data_inspecao')?.toString().split('T')[0] + 'T12:00:00',
       km_atual: formData.get('km_atual') ? parseFloat(formData.get('km_atual') as string) : null,
       horimetro_registro: formData.get('horimetro_registro') ? parseFloat(formData.get('horimetro_registro') as string) : null,
       observacoes: formData.get('observacoes') as string,

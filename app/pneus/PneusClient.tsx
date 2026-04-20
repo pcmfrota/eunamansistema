@@ -557,7 +557,7 @@ export default function PneusClient({
                          </td>
                          <td className="px-4 py-4 text-center">
                             <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
-                              {new Date(ins.data_inspecao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                              {ins.data_inspecao.split('T')[0].split('-').slice(1, 3).reverse().join('/')}
                             </span>
                          </td>
                          {POSICOES.map(pos => (
