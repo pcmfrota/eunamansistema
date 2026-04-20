@@ -534,6 +534,7 @@ export default function PneusClient({
                    <thead>
                      <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
                        <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
+                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center">Data</th>
                        <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
                        <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
                        <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
@@ -541,6 +542,7 @@ export default function PneusClient({
                      </tr>
                      <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
                        <th className="px-6 py-2" />
+                       <th className="px-4 py-2" />
                        {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
                          <th key={l} className="px-1 py-2 text-center text-orange-500/70 font-black">{l}</th>
                        ))}
@@ -551,7 +553,12 @@ export default function PneusClient({
                        <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
                          <td className="px-6 py-4">
                             <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">{ins.equipamentos?.placa}</span>
-                            <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual} KM</span>
+                            <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || ins.horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
+                         </td>
+                         <td className="px-4 py-4 text-center">
+                            <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
+                              {new Date(ins.data_inspecao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </span>
                          </td>
                          {POSICOES.map(pos => (
                            <td key={pos} className="px-1 py-4 text-center">

@@ -32,6 +32,7 @@ const INITIAL_FORM = {
   equipamento_id: '',
   data_inspecao: getCurrentLocalDatetime(),
   km_atual: '',
+  horimetro_registro: '',
   condicao: 'BOM',
   observacoes: '',
   de: '', dd: '', tei: '', tee: '', tdi: '', tde: '',
@@ -63,6 +64,7 @@ export default function PneusModal({
         equipamento_id: editData.equipamento_id || '',
         data_inspecao: editData.data_inspecao?.slice(0, 16) || INITIAL_FORM.data_inspecao,
         km_atual: editData.km_atual?.toString() || '',
+        horimetro_registro: editData.horimetro_registro?.toString() || '',
         condicao: editData.condicao || 'BOM',
         observacoes: editData.observacoes || '',
         de: editData.de?.toString() || '',
@@ -214,12 +216,23 @@ export default function PneusModal({
                   className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none font-medium text-zinc-900 dark:text-zinc-100" 
                 />
               </div>
-              <div className="flex flex-col gap-1.5 md:w-1/3">
+              <div className="flex flex-col gap-1.5 md:w-1/4">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Km Atual</label>
                 <input 
                   name="km_atual" 
                   type="number" 
                   value={form.km_atual}
+                  onChange={handleInputChange}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none font-medium text-zinc-900 dark:text-zinc-100" 
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 md:w-1/4">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Horímetro</label>
+                <input 
+                  name="horimetro_registro" 
+                  type="number" 
+                  value={form.horimetro_registro}
                   onChange={handleInputChange}
                   placeholder="0"
                   className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none font-medium text-zinc-900 dark:text-zinc-100" 
