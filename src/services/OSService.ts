@@ -10,7 +10,7 @@ function generateOSNumber(): string {
 const OSSchema = z.object({
   id: z.string().uuid().optional(),
   numero_os: z.string().min(1, 'Número da OS é obrigatório').or(z.literal('').transform(() => generateOSNumber())),
-  equipamento_id: z.string().optional().nullable(),
+  equipamento_id: z.string().min(1, 'Equipamento ID é obrigatório'),
   placa: z.string().min(1, 'Placa é obrigatória').transform((val: string) => val.toUpperCase().trim()),
   modulo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
   status: z.enum(['Aberta', 'Fechada', 'Cancelada', 'Concluída', 'Em Andamento']).default('Aberta'),
@@ -111,7 +111,10 @@ export class OSService {
 
       const placaUpper = String(placaRaw).toUpperCase().trim();
       const eq = eqMap[placaUpper];
-      if (!eq) missingPlates.add(placaUpper);
+      if (!eq) {
+        missingPlates.add(placaUpper);
+        continue; // Pula esta linha pois equipamento_id é obrigatório no banco
+      }
 
       try {
         const raw = {
@@ -130,7 +133,7 @@ export class OSService {
           descricao: this.getVal(row, ['descricao', 'Descrição', 'Descricao', 'Serviço', 'Atividade', 'DESCRIÇÃO', 'Defeito', 'Problema', 'SERVIÇO']) || 'Importação via Planilha',
           motivo: this.getVal(row, ['motivo', 'Motivo', 'Causa', 'MOTIVO']),
           sistema: this.getVal(row, ['sistema', 'Sistema', 'SISTEMA']),
-          sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema', 'SUB-SISTEMA']),
+          sub_sistema: this.getVal(row, ['sub_sistema', 'Sub-Sistema', 'Subsistema', 'SUB-SISTEMA', 'Sub-Sistem', 'SUB-SISTEM']),
           horas_manutencao: this.parseFloatSafe(this.getVal(row, ['horas_manutencao', 'Horas', 'Tempo', 'Horas Manut', 'H. Manut', 'HORAS', 'DURAÇÃO'])),
           horario_parada: this.parsePossibleDate(this.getVal(row, ['horario_parada', 'Horário Parada', 'Parada', 'Hora Parada', 'Data Parada', 'HORA PARADA', 'DATA PARADA'])),
           horas_reserva_chegou: this.parsePossibleDate(this.getVal(row, ['horas_reserva_chegou', 'Reserva Chegou', 'Data Reserva', 'Chegada Reserva'])),
