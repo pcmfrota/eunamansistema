@@ -13,6 +13,16 @@ export type VeiculoDisp = {
   horasOperacional: number;
   hTotalDM: number;
   hTotalDO: number;
+  historicoDiario?: { 
+    data: string; 
+    hTotalDM: number; 
+    hIndispDM: number; 
+    hTotalDO: number; 
+    hIndispDO: number;
+    disponibilidadeDM: number;
+    disponibilidadeDO: number;
+  }[];
+  osImpactantes?: string[];
 };
 
 export type PreventivaStatus = {
@@ -241,9 +251,13 @@ export async function getDashboardData(filtros?: {
   const periodoInicioObj = new Date(inicioFiltro);
   const periodoFimObj = new Date(fimFiltro);
 
-  for (const placa of placasFiltradas) {
-    const escala = escalaMap.get(placa);
-    const osDoVeiculo = osPorPlaca.get(placa) || [];
+    // Pre-processamento de OS para evitar transformações dentro do loop de dias
+    const osProcessed = osDoVeiculo.map(os => {
+      const start = (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime();
+      const endRaw = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
+      const end = Math.min(endRaw, ontem.getTime(), periodoFimObj.getTime());
+      return { id: os.id, numero: os.numero_os, start, end };
+    });
 
     let hIndispDM = 0;
     let hIndispDO = 0;
@@ -251,52 +265,63 @@ export async function getDashboardData(filtros?: {
     const hPlanejadasDM = 24 * diasReferencia;
     let fechadas = 0;
 
-    // Agrupamento de intervalos por dia fora do loop de dias se possível, ou otimizado
-    for (let d = 0; d < diasReferencia; d++) {
-      const dataCorrente = new Date(periodoInicioObj);
-      dataCorrente.setDate(periodoInicioObj.getDate() + d);
-      
-      hPlanejadasDO += escala ? Number(escala.carga_horaria) : 24;
+    const historicoDiario: any[] = [];
+    const osImpactantesSet = new Set<string>();
 
-      const d0 = dataCorrente.getTime();
-      const d24 = d0 + 86399999;
+    for (let d = 0; d < diasReferencia; d++) {
+      const dataCorrente = new Date(periodoInicioObj.getTime());
+      dataCorrente.setDate(periodoInicioObj.getDate() + d);
+      const dStr = dataCorrente.toISOString().split('T')[0];
+      const d0 = new Date(`${dStr}T00:00:00`).getTime();
+      const d24 = d0 + 86400000;
+
+      const cargaHorariaDia = escala ? Number(escala.carga_horaria) : 24;
+      hPlanejadasDO += cargaHorariaDia;
 
       const intervalosDM: Array<{start: number, end: number}> = [];
       const intervalosDO: Array<{start: number, end: number}> = [];
 
-      osDoVeiculo.forEach(os => {
-        const inicioOS = (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime();
-        const fimOSRaw = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
-        const realFimLimit = Math.min(fimOSRaw, ontem.getTime(), periodoFimObj.getTime());
+      let shiftStart = d0;
+      let shiftEnd = d24;
 
-        // DM
-        const intDMini = Math.max(inicioOS, d0);
-        const intDMfim = Math.min(realFimLimit, d24);
+      if (escala) {
+        shiftStart = new Date(`${dStr}T${escala.periodo_inicio}`).getTime();
+        shiftEnd = new Date(`${dStr}T${escala.periodo_fim}`).getTime();
+        if (shiftEnd <= shiftStart) shiftEnd += 86400000;
+      }
+
+      osProcessed.forEach(os => {
+        // Impacto DM (Mecânico)
+        const intDMini = Math.max(os.start, d0);
+        const intDMfim = Math.min(os.end, d24);
         if (intDMini < intDMfim) {
           intervalosDM.push({ start: intDMini, end: intDMfim });
         }
 
-        // DO
-        if (escala) {
-          const dStr = dataCorrente.toISOString().split('T')[0];
-          const shiftStart = new Date(`${dStr}T${escala.periodo_inicio}`).getTime();
-          let shiftEnd = new Date(`${dStr}T${escala.periodo_fim}`).getTime();
-          if (shiftEnd <= shiftStart) shiftEnd += 86400000;
-
-          const interInicio = Math.max(inicioOS, shiftStart);
-          const interFim = Math.min(realFimLimit, shiftEnd);
-          if (interInicio < interFim) {
-            intervalosDO.push({ start: interInicio, end: interFim });
-          }
-        } else {
-          if (intDMini < intDMfim) {
-            intervalosDO.push({ start: intDMini, end: intDMfim });
-          }
+        // Impacto DO (Operacional)
+        const interInicio = Math.max(os.start, shiftStart);
+        const interFim = Math.min(os.end, shiftEnd);
+        if (interInicio < interFim) {
+          intervalosDO.push({ start: interInicio, end: interFim });
+          if (os.numero) osImpactantesSet.add(os.numero);
         }
       });
 
-      if (intervalosDM.length > 0) hIndispDM += mergeTimeIntervals(intervalosDM);
-      if (intervalosDO.length > 0) hIndispDO += mergeTimeIntervals(intervalosDO);
+      const indispDMdia = intervalosDM.length > 0 ? mergeTimeIntervals(intervalosDM) : 0;
+      const indispDOdia = intervalosDO.length > 0 ? mergeTimeIntervals(intervalosDO) : 0;
+
+      hIndispDM += indispDMdia;
+      hIndispDO += indispDOdia;
+
+      historicoDiario.push({
+        data: dStr,
+        hTotalDM: 24,
+        hIndispDM: Math.round(indispDMdia * 10) / 10,
+        hTotalDO: cargaHorariaDia,
+        hIndispDO: Math.round(indispDOdia * 10) / 10,
+        disponibilidadeDM: Math.round(Math.max(0, (24 - indispDMdia) / 24) * 1000) / 10,
+        disponibilidadeDO: cargaHorariaDia > 0 ? Math.round(Math.max(0, (cargaHorariaDia - indispDOdia) / cargaHorariaDia) * 1000) / 10 : 100
+      });
     }
 
     osDoVeiculo.forEach(os => {
@@ -314,7 +339,9 @@ export async function getDashboardData(filtros?: {
       hTotalDM: hPlanejadasDM,
       hTotalDO: hPlanejadasDO,
       horasDisponiveisOperacional: Math.round((hPlanejadasDO - hIndispDO) * 10) / 10,
-      falhas: osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length
+      falhas: osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length,
+      historicoDiario,
+      osImpactantes: Array.from(osImpactantesSet)
     } as any);
   }
 

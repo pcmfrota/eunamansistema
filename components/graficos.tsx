@@ -48,6 +48,16 @@ interface VeiculoDetalhe {
   hTotalDM: number;
   hTotalDO: number;
   horasDisponiveisOperacional: number;
+  historicoDiario?: { 
+    data: string; 
+    hTotalDM: number; 
+    hIndispDM: number; 
+    hTotalDO: number; 
+    hIndispDO: number;
+    disponibilidadeDM: number;
+    disponibilidadeDO: number;
+  }[];
+  osImpactantes?: string[];
 }
 
 function ModalDetalhe({
@@ -166,15 +176,53 @@ function ModalDetalhe({
              <h3 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-2">
                <Clock className="w-3 h-3" /> Memória de Cálculo PCM
              </h3>
-             <ul className="space-y-2 text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-               <li>
-                 <span className="text-zinc-700 dark:text-zinc-300 font-bold">DM:</span> Mede o estado mecânico sobre 24h. Formula: <span className="text-zinc-800 dark:text-zinc-300">((T - H_Manut) / T) × 100</span> onde T = 24h × {veiculo.hTotalDM / 24} dias.
-               </li>
-               <li>
-                 <span className="text-zinc-700 dark:text-zinc-300 font-bold">DO:</span> Mede o impacto na produção. Formula: <span className="text-zinc-800 dark:text-zinc-300">((CH - H_Indisp) / CH) × 100</span> onde CH = {veiculo.hTotalDO / (veiculo.hTotalDM / 24)}h/dia.
-               </li>
-             </ul>
+             <div className="space-y-3 text-[10px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+               <div>
+                 <p className="text-zinc-800 dark:text-zinc-200 font-bold mb-1">Exemplo Prático (Turno 08:00h às 16:00h):</p>
+                 <p>Se o caminhão quebrar às 13:00h, ele ficará indisponível por 3h na <span className="font-bold text-blue-600">DO</span> (das 13h às 16h). Das 08h às 13h ele contou como disponível (5h).</p>
+                 <p className="mt-1 opacity-80 italic italic">Nota: Se a quebra ocorrer fora do turno (ex: 20:00h), não há impacto na Disponibilidade Operacional (DO), apenas na Mecânica (DM).</p>
+               </div>
+               <div className="pt-2 border-t border-blue-200/30">
+                 <p><span className="text-zinc-800 dark:text-zinc-200 font-bold">DM:</span> ((T - H_Manut) / T) × 100 | T = 24h × dias</p>
+                 <p><span className="text-zinc-800 dark:text-zinc-200 font-bold">DO:</span> ((CH - H_Indisp) / CH) × 100 | CH = Soma da Carga Horária</p>
+               </div>
+             </div>
           </div>
+
+          {/* ── Histórico Diário (Novo) */}
+          {veiculo.historicoDiario && veiculo.historicoDiario.length > 0 && (
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden">
+               <div className="bg-zinc-50 dark:bg-zinc-800/80 px-3 py-2 border-b border-zinc-200 dark:border-zinc-700/50">
+                  <h3 className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">Histórico de Performance Diária</h3>
+               </div>
+               <div className="max-h-[180px] overflow-y-auto">
+                 <table className="w-full text-[10px] text-left border-collapse">
+                   <thead className="sticky top-0 bg-white dark:bg-[#1a1f2e] shadow-sm">
+                     <tr className="text-zinc-500 uppercase tracking-tighter font-bold">
+                       <th className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">Data</th>
+                       <th className="px-2 py-2 border-b border-zinc-100 dark:border-zinc-800 text-center">Programado</th>
+                       <th className="px-2 py-2 border-b border-zinc-100 dark:border-zinc-800 text-center">Indisp.</th>
+                       <th className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 text-right">DO (%)</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                     {veiculo.historicoDiario.map((dia, idx) => (
+                       <tr key={idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                         <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400 font-medium">{fmtDate(dia.data)}</td>
+                         <td className="px-2 py-2 text-center text-zinc-500">{dia.hTotalDO}h</td>
+                         <td className={`px-2 py-2 text-center font-bold ${dia.hIndispDO > 0 ? "text-red-500" : "text-emerald-500"}`}>
+                           {dia.hIndispDO > 0 ? `${dia.hIndispDO}h` : "—"}
+                         </td>
+                         <td className="px-3 py-2 text-right font-bold" style={{ color: getColorDisp(dia.disponibilidadeDO) }}>
+                           {dia.disponibilidadeDO}%
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          )}
 
           {/* ── KPI Grid 2x2 */}
           <div className="grid grid-cols-2 gap-3">
@@ -275,9 +323,16 @@ function ModalDetalhe({
                     >
                       {/* Row 1: número + status */}
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[13px] font-bold text-zinc-800 dark:text-zinc-100">
-                          OS: {os.numero_os}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-bold text-zinc-800 dark:text-zinc-100">
+                            OS: {os.numero_os}
+                          </span>
+                          {veiculo.osImpactantes?.includes(os.numero_os || "") && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 animate-pulse">
+                              IMPACTO OPERACIONAL
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                             os.status === 'Aberta' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30' :

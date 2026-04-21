@@ -451,6 +451,26 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   </div>
                 </div>
 
+                {/* ── Bloco Novo — Memória de Cálculo PCM ── */}
+                <div className="no-print border-b border-gray-900 bg-blue-50/50">
+                  <div className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 flex items-center gap-2">
+                    <Clock size={12} /> Memória de Cálculo PCM (Informativo)
+                  </div>
+                  <div className="px-3 py-3 grid grid-cols-2 gap-4 text-[10px] leading-relaxed">
+                    <div>
+                      <p className="font-bold text-blue-800 mb-1">Impacto na Disponibilidade:</p>
+                      <ul className="list-disc pl-3 space-y-1 text-zinc-600">
+                        <li><span className="font-bold">DM (Mecânica):</span> Conta 24h por dia enquanto a OS estiver aberta.</li>
+                        <li><span className="font-bold">DO (Operacional):</span> Só desconta horas se a quebra coincidir com o turno do veículo.</li>
+                      </ul>
+                    </div>
+                    <div className="bg-white/50 p-2 rounded border border-blue-100">
+                      <p className="font-bold text-zinc-800 mb-1 text-[9px]">EXEMPLO DE TURNO (08h às 16h):</p>
+                      <p className="text-zinc-500 italic">"Se quebrar às 13:00h, o sistema registra 3h de indisponibilidade operacional (até as 16h). Se quebrar fora desse horário, a DO não é afetada."</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* ── Bloco 6 — Assinaturas ── */}
                 <div>
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
