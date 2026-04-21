@@ -153,9 +153,9 @@ function ModalDetalhe({
                 {veiculo.dispDM}%
               </p>
               <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
-                <p className="text-[9px] text-zinc-500">Horas Totais: {veiculo.hTotalDM}h</p>
-                <p className="text-[9px] text-red-500 dark:text-red-400/70">Parado: {veiculo.horasManut}h</p>
-                <p className="text-[8px] text-zinc-400 dark:text-zinc-600 mt-1 italic">{(veiculo.hTotalDM - veiculo.horasManut).toFixed(1)}h disp. / {veiculo.hTotalDM}h total</p>
+                <p className="text-[9px] text-zinc-500">Horas Totais: {Number(veiculo.hTotalDM || 0)}h</p>
+                <p className="text-[9px] text-red-500 dark:text-red-400/70">Parado: {Number(veiculo.horasManut || 0)}h</p>
+                <p className="text-[8px] text-zinc-400 dark:text-zinc-600 mt-1 italic">{(Number(veiculo.hTotalDM || 0) - Number(veiculo.horasManut || 0)).toFixed(1)}h disp. / {Number(veiculo.hTotalDM || 0)}h total</p>
               </div>
             </div>
             <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
@@ -165,11 +165,11 @@ function ModalDetalhe({
               </div>
               <div className="text-3xl font-black text-orange-500 mb-4">{veiculo.disponibilidade_operacional}%</div>
               <div className="space-y-2">
-                <p className="text-[9px] text-zinc-500">Carga Horária: {veiculo.hTotalDO ?? 0}h</p>
-                <p className="text-[9px] text-red-500/80">Indisp. no Turno: {veiculo.horasOperacional ?? 0}h</p>
-                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1">Disponibilidade Real: {veiculo.horasDisponiveisOperacional ?? 0}h</p>
+                <p className="text-[9px] text-zinc-500">Carga Horária: {Number(veiculo.hTotalDO || 0)}h</p>
+                <p className="text-[9px] text-red-500/80">Indisp. no Turno: {Number(veiculo.horasOperacional || 0)}h</p>
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1">Disponibilidade Real: {Number(veiculo.horasDisponiveisOperacional || 0)}h</p>
                 <p className="text-[10px] text-zinc-400 italic">
-                  {(veiculo.horasDisponiveisOperacional ?? 0)}h disp. / {(veiculo.hTotalDO ?? 0)}h turno
+                  {Number(veiculo.horasDisponiveisOperacional || 0)}h disp. / {Number(veiculo.hTotalDO || 0)}h turno
                 </p>
               </div>
             </div>
@@ -183,10 +183,10 @@ function ModalDetalhe({
             </div>
             <div className="text-[11px] space-y-2">
               <p className="text-zinc-600 dark:text-zinc-400 mt-1">
-                <b>DM:</b> Mede o estado mecânico sobre 24h. Formula: ((T - H_Manut) / T) × 100 onde T = 24h × {Math.round((veiculo.hTotalDM ?? 0) / 24) || 1} dias.
+                <b>DM:</b> Mede o estado mecânico sobre 24h. Formula: ((T - H_Manut) / T) × 100 onde T = 24h × {Math.max(1, Math.round(Number(veiculo.hTotalDM || 0) / 24))} dias.
               </p>
               <p className="text-zinc-600 dark:text-zinc-400">
-                <b>DO:</b> Mede o impacto na produção. Formula: ((CH - H_Indisp) / CH) × 100 onde CH = {Math.round((veiculo.hTotalDO ?? 0) / (Math.round((veiculo.hTotalDM ?? 1) / 24) || 1)) || 0}h/dia (Baseado na escala).
+                <b>DO:</b> Mede o impacto na produção. Formula: ((CH - H_Indisp) / CH) × 100 onde CH = {Number(veiculo.hTotalDO || 0) > 0 ? (Number(veiculo.hTotalDO || 0) / Math.max(1, Math.round(Number(veiculo.hTotalDM || 0) / 24))).toFixed(1) : "0"}h/dia.
               </p>
               <div className="bg-white/50 dark:bg-zinc-900/50 p-3 rounded border border-blue-100 dark:border-blue-900/30 mt-2">
                 <p className="text-blue-800 dark:text-blue-300 font-bold mb-1">EXEMPLO DE TURNO (08:00h às 16:00h):</p>
@@ -591,8 +591,14 @@ export function GraficoVeiculos({
             margin={{ top: 20, right: 0, left: -20, bottom: 40 }}
             barCategoryGap="18%"
             onClick={(data) => {
-              if (data?.activePayload?.[0]?.payload) {
-                setSelected(data.activePayload[0].payload as VeiculoDetalhe);
+              if (data?.activePayload?.[0]?.payload?.nome) {
+                const p = data.activePayload[0].payload.nome;
+                const found = (dados ?? []).find(d => d.placa === p);
+                if (found) {
+                  setSelected(found as any);
+                } else {
+                  setSelected(data.activePayload[0].payload as any);
+                }
               }
             }}
             style={{ cursor: "pointer" }}
