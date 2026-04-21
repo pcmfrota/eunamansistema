@@ -158,35 +158,41 @@ function ModalDetalhe({
                 <p className="text-[8px] text-zinc-400 dark:text-zinc-600 mt-1 italic">{(veiculo.hTotalDM - veiculo.horasManut).toFixed(1)}h disp. / {veiculo.hTotalDM}h total</p>
               </div>
             </div>
-            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
-              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DO (Operacional)</p>
-              <p className="text-2xl font-bold" style={{ color: getColorDisp(veiculo.dispDO) }}>
-                {veiculo.dispDO}%
-              </p>
-              <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
-                <p className="text-[9px] text-zinc-500">Carga Horária: {veiculo.hTotalDO}h</p>
-                <p className="text-[9px] text-red-500 dark:text-red-400/70">Downtime Turno: {veiculo.horasOperacional}h</p>
-                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1">Disp. Real: {veiculo.horasDisponiveisOperacional}h</p>
-                <p className="text-[8px] text-zinc-400 dark:text-zinc-600 mt-1 italic">{veiculo.horasDisponiveisOperacional}h disp. / {veiculo.hTotalDO}h turno</p>
+            <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
+              <div className="flex justify-between items-start mb-4">
+                <h4 className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider">DO (OPERACIONAL)</h4>
+                <span className="text-orange-500 font-mono text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded">PCM</span>
+              </div>
+              <div className="text-3xl font-black text-orange-500 mb-4">{veiculo.disponibilidade_operacional}%</div>
+              <div className="space-y-2">
+                <p className="text-[9px] text-zinc-500">Carga Horária: {veiculo.hTotalDO ?? 0}h</p>
+                <p className="text-[9px] text-red-500/80">Indisp. no Turno: {veiculo.horasOperacional ?? 0}h</p>
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1">Disponibilidade Real: {veiculo.horasDisponiveisOperacional ?? 0}h</p>
+                <p className="text-[10px] text-zinc-400 italic">
+                  {(veiculo.horasDisponiveisOperacional ?? 0)}h disp. / {(veiculo.hTotalDO ?? 0)}h turno
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-3">
-             <h3 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-2">
-               <Clock className="w-3 h-3" /> Memória de Cálculo PCM
-             </h3>
-             <div className="space-y-3 text-[10px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-               <div>
-                 <p className="text-zinc-800 dark:text-zinc-200 font-bold mb-1">Exemplo Prático (Turno 08:00h às 16:00h):</p>
-                 <p>Se o caminhão quebrar às 13:00h, ele ficará indisponível por 3h na <span className="font-bold text-blue-600">DO</span> (das 13h às 16h). Das 08h às 13h ele contou como disponível (5h).</p>
-                 <p className="mt-1 opacity-80 italic italic">Nota: Se a quebra ocorrer fora do turno (ex: 20:00h), não há impacto na Disponibilidade Operacional (DO), apenas na Mecânica (DM).</p>
-               </div>
-               <div className="pt-2 border-t border-blue-200/30">
-                 <p><span className="text-zinc-800 dark:text-zinc-200 font-bold">DM:</span> ((T - H_Manut) / T) × 100 | T = 24h × dias</p>
-                 <p><span className="text-zinc-800 dark:text-zinc-200 font-bold">DO:</span> ((CH - H_Indisp) / CH) × 100 | CH = Soma da Carga Horária</p>
-               </div>
-             </div>
+          {/* ── Bloco — Memória de Cálculo ── */}
+          <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-3">
+              <Clock size={16} />
+              <h4 className="font-black text-xs uppercase tracking-widest">Memória de Cálculo PCM</h4>
+            </div>
+            <div className="text-[11px] space-y-2">
+              <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+                <b>DM:</b> Mede o estado mecânico sobre 24h. Formula: ((T - H_Manut) / T) × 100 onde T = 24h × {Math.round((veiculo.hTotalDM ?? 0) / 24) || 1} dias.
+              </p>
+              <p className="text-zinc-600 dark:text-zinc-400">
+                <b>DO:</b> Mede o impacto na produção. Formula: ((CH - H_Indisp) / CH) × 100 onde CH = {Math.round((veiculo.hTotalDO ?? 0) / (Math.round((veiculo.hTotalDM ?? 1) / 24) || 1)) || 0}h/dia (Baseado na escala).
+              </p>
+              <div className="bg-white/50 dark:bg-zinc-900/50 p-3 rounded border border-blue-100 dark:border-blue-900/30 mt-2">
+                <p className="text-blue-800 dark:text-blue-300 font-bold mb-1">EXEMPLO DE TURNO (08:00h às 16:00h):</p>
+                <p className="text-zinc-500 dark:text-zinc-500 italic">"Se o caminhão quebrar às 13:00h, ele ficará indisponível por 3 horas durante a carga horária operacional. Se quebrar após as 16:00h, não há impacto na DO."</p>
+              </div>
+            </div>
           </div>
 
           {/* ── Histórico Diário (Novo) */}

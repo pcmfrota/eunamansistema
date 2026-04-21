@@ -28,6 +28,7 @@ export type OSFichaData = {
   componente: string | null;
   observacoes: string | null;
   equipamento_id: string;
+  horas_impacto_do?: number; // Novo campo
   // fallback fields from OrdemServicoResumo
   veiculo_placa?: string | null;
   equipamento?: { placa?: string | null } | null;
@@ -454,19 +455,24 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                 {/* ── Bloco Novo — Memória de Cálculo PCM ── */}
                 <div className="no-print border-b border-gray-900 bg-blue-50/50">
                   <div className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 flex items-center gap-2">
-                    <Clock size={12} /> Memória de Cálculo PCM (Informativo)
+                    <Clock size={12} /> Cálculo de Disponibilidade PCM
                   </div>
                   <div className="px-3 py-3 grid grid-cols-2 gap-4 text-[10px] leading-relaxed">
                     <div>
-                      <p className="font-bold text-blue-800 mb-1">Impacto na Disponibilidade:</p>
-                      <ul className="list-disc pl-3 space-y-1 text-zinc-600">
-                        <li><span className="font-bold">DM (Mecânica):</span> Conta 24h por dia enquanto a OS estiver aberta.</li>
-                        <li><span className="font-bold">DO (Operacional):</span> Só desconta horas se a quebra coincidir com o turno do veículo.</li>
+                      <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
+                      <ul className="space-y-1 text-zinc-700">
+                        <li><span className="font-bold">Horas de Indisp. Mecânica (DM):</span> {horasCalc}</li>
+                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {os.horas_impacto_do != null ? `${os.horas_impacto_do}h` : "Calculando..."}</li>
                       </ul>
+                      <p className="mt-2 text-zinc-500 text-[9px]">
+                        *A DO considera apenas o tempo entre abertura e fechamento que coincidiu com o turno operacional do veículo.
+                      </p>
                     </div>
-                    <div className="bg-white/50 p-2 rounded border border-blue-100">
-                      <p className="font-bold text-zinc-800 mb-1 text-[9px]">EXEMPLO DE TURNO (08h às 16h):</p>
-                      <p className="text-zinc-500 italic">"Se quebrar às 13:00h, o sistema registra 3h de indisponibilidade operacional (até as 16h). Se quebrar fora desse horário, a DO não é afetada."</p>
+                    <div className="bg-white/70 p-3 rounded border border-blue-200">
+                      <p className="font-bold text-zinc-800 mb-1 text-[9px] uppercase tracking-tighter">Regras PCM (Exemplo Turno 08h-16h):</p>
+                      <p className="text-zinc-500 leading-tight">
+                        Se quebrar às 13:00h, conta 3h de DO (até o fim do turno). Se quebrar após as 16:00h, o impacto na DO é zero.
+                      </p>
                     </div>
                   </div>
                 </div>

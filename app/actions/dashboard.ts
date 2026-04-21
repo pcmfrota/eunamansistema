@@ -251,12 +251,37 @@ export async function getDashboardData(filtros?: {
   const periodoInicioObj = new Date(inicioFiltro);
   const periodoFimObj = new Date(fimFiltro);
 
-    // Pre-processamento de OS para evitar transformações dentro do loop de dias
     const osProcessed = osDoVeiculo.map(os => {
       const start = (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime();
       const endRaw = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
-      const end = Math.min(endRaw, ontem.getTime(), periodoFimObj.getTime());
-      return { id: os.id, numero: os.numero_os, start, end };
+      const end = Math.min(endRaw, periodoFimObj.getTime());
+      
+      // Cálculo de Horas DO para esta OS específica
+      let hImpactoDO = 0;
+      if (escala) {
+        for (let i = 0; i < diasReferencia; i++) {
+          const dC = new Date(periodoInicioObj.getTime());
+          dC.setDate(periodoInicioObj.getDate() + i);
+          const dS = dC.toISOString().split('T')[0];
+          
+          let sS = new Date(`${dS}T${escala.periodo_inicio}`).getTime();
+          let sE = new Date(`${dS}T${escala.periodo_fim}`).getTime();
+          if (sE <= sS) sE += 86400000;
+
+          const interS = Math.max(start, sS);
+          const interE = Math.min(end, sE);
+          if (interS < interE) {
+            hImpactoDO += (interE - interS) / 3600000;
+          }
+        }
+      }
+      
+      return { 
+        ...os, 
+        start, 
+        end, 
+        horas_impacto_do: Math.round(hImpactoDO * 10) / 10 
+      };
     });
 
     let hIndispDM = 0;
@@ -303,7 +328,7 @@ export async function getDashboardData(filtros?: {
         const interFim = Math.min(os.end, shiftEnd);
         if (interInicio < interFim) {
           intervalosDO.push({ start: interInicio, end: interFim });
-          if (os.numero) osImpactantesSet.add(os.numero);
+          if (os.numero_os) osImpactantesSet.add(os.numero_os);
         }
       });
 
@@ -330,18 +355,18 @@ export async function getDashboardData(filtros?: {
 
     veiculos.push({
       placa,
-      disponibilidade: hPlanejadasDM > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasDM - hIndispDM) / hPlanejadasDM) * 100)) * 10) / 10 : 100,
-      disponibilidade_operacional: hPlanejadasDO > 0 ? Math.round(Math.max(0, Math.min(100, ((hPlanejadasDO - hIndispDO) / hPlanejadasDO) * 100)) * 10) / 10 : 100,
-      totalOS: osDoVeiculo.length,
-      osFechadas: fechadas,
-      horasManut: Math.round(hIndispDM * 10) / 10,
-      horasOperacional: Math.round(hIndispDO * 10) / 10,
-      hTotalDM: hPlanejadasDM,
-      hTotalDO: hPlanejadasDO,
-      horasDisponiveisOperacional: Math.round((hPlanejadasDO - hIndispDO) * 10) / 10,
-      falhas: osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length,
-      historicoDiario,
-      osImpactantes: Array.from(osImpactantesSet)
+      disponibilidade: hPlanejadasDM > 0 ? (Math.round(Math.max(0, Math.min(100, ((hPlanejadasDM - hIndispDM) / hPlanejadasDM) * 100)) * 10) / 10) || 0 : 100,
+      disponibilidade_operacional: hPlanejadasDO > 0 ? (Math.round(Math.max(0, Math.min(100, ((hPlanejadasDO - hIndispDO) / hPlanejadasDO) * 100)) * 10) / 10) || 0 : 100,
+      totalOS: osDoVeiculo.length || 0,
+      osFechadas: fechadas || 0,
+      horasManut: (Math.round(hIndispDM * 10) / 10) || 0,
+      horasOperacional: (Math.round(hIndispDO * 10) / 10) || 0,
+      hTotalDM: hPlanejadasDM || 0,
+      hTotalDO: hPlanejadasDO || 0,
+      horasDisponiveisOperacional: (Math.round((hPlanejadasDO - hIndispDO) * 10) / 10) || 0,
+      falhas: (osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length) || 0,
+      historicoDiario: historicoDiario || [],
+      osImpactantes: Array.from(osImpactantesSet) || []
     } as any);
   }
 
@@ -518,6 +543,7 @@ export async function getDashboardData(filtros?: {
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`
       : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
     data_inicio: dataInicioExibicao,
-    data_fim: dataFimExibicao
+    data_fim: dataFimExibicao,
+    os: osProcessed // Garante que as OS processadas com hImpactoDO sejam retornadas
   };
 }
