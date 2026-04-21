@@ -460,6 +460,7 @@ export function GraficoVeiculos({
     let dispExibida = mostrarIndisponibilidade ? Number((100 - valBase).toFixed(1)) : valBase;
     
     return {
+      ...v,
       nome: v.placa,
       disp: dispExibida,
       dispDM: v.disponibilidade,
