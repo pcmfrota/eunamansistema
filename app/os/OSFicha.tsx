@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { X, Printer } from "lucide-react";
+import { X, Printer, Clock } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type OSFichaData = {

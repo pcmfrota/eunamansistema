@@ -123,25 +123,21 @@ export async function getDashboardData(filtros?: {
   const mesFiltro = filtros?.mes && filtros.mes > 0 ? filtros.mes : mesAtualRef;
   const anoFiltro = filtros?.ano && filtros.ano > 0 ? filtros.ano : anoAtualRef;
 
-  let inicioFiltro: string;
-  let fimFiltro: string;
-  let diasReferencia: number;
-  let dataInicioExibicao: string = "";
-  let dataFimExibicao: string = "";
-
-  // 1. Definir limite máximo para consultas (agora = momento atual)
-  const agora = new Date();
+  let inicioFiltro = "";
+  let fimFiltro = "";
+  let diasReferencia = 0;
+  let totalDiasCalendario = 0;
+  let dataInicioExibicao = "";
+  let dataFimExibicao = "";
 
   if (filtros?.dataInicio && filtros?.dataFim) {
     inicioFiltro = filtros.dataInicio;
-    fimFiltro = `${filtros.dataFim}T23:59:59`;
-    
     const dInicio = new Date(inicioFiltro);
-    const dFim = new Date(fimFiltro);
-    // Não deixa passar do momento atual
-    const fimEfetivo = dFim > agora ? agora : dFim;
+    const dFim = new Date(filtros.dataFim);
+    const fimEfetivo = dFim > agoraRef ? agoraRef : dFim;
     const diffMs = Math.max(0, fimEfetivo.getTime() - dInicio.getTime());
     diasReferencia = Math.floor(diffMs / 86400000) + 1;
+    totalDiasCalendario = diasReferencia;
     fimFiltro = fimEfetivo.toISOString();
     dataInicioExibicao = filtros.dataInicio;
     dataFimExibicao = filtros.dataFim;
@@ -157,48 +153,61 @@ export async function getDashboardData(filtros?: {
       inicioFiltro = calSuzano.data_inicio;
       dataInicioExibicao = calSuzano.data_inicio;
       dataFimExibicao = calSuzano.data_fim;
-      const rawFim = calSuzano.data_fim;
-
-      const dFimCal = new Date(rawFim + 'T23:59:59');
+      const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
       const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
       
-      // Limite = Ontem (D-1) para o mês atual
       const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
       const fimEfetivoCal = (isMesFuturoOuAtual && dFimCal > ontem) ? ontem : dFimCal;
       
       const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
+
+      const diffTotalMs = Math.max(0, dFimCal.getTime() - dInicioCal.getTime());
+      totalDiasCalendario = Math.floor(diffTotalMs / 86400000) + 1;
       
-      // Para a query no DB usamos o limite de tempo
       fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
     } else {
       inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
       const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
       const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMes, 23, 59, 59);
       
-      // Limite = agora
-      const fimEfetivoCivil = dFimCivil > agora ? agora : dFimCivil;
+      const fimEfetivoCivil = dFimCivil > agoraRef ? agoraRef : dFimCivil;
       const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
       
       const diffMs = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
+      totalDiasCalendario = diasNoMes;
       fimFiltro = fimEfetivoCivil.toISOString();
       dataInicioExibicao = inicioFiltro;
       dataFimExibicao = fimFiltro.split("T")[0];
     }
   }
 
-  // 1. Consultas Iniciais Paralelizadas
+  // 1. Consultas Iniciais Paralelizadas e Granulares (Otimização SQL Pushdown)
+  let queryOS = supabase.from("ordens_servico").select(`
+    id, status, horas_manutencao, data_abertura, data_fechamento, 
+    equipamento_id, placa, classe, foi_enviado_reserva,
+    horario_parada, horas_reserva_chegou, descricao, numero_os
+  `)
+  .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`)
+  .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`);
+
+  let queryEq = supabase.from("equipamentos").select("id, placa, categoria, modulo, modelo, status");
+
+  if (filtros?.placa) {
+    const pUpper = filtros.placa.toUpperCase();
+    queryOS = queryOS.eq('placa', pUpper);
+    queryEq = queryEq.eq('placa', pUpper);
+  }
+
+  if (filtros?.categoria && filtros.categoria !== "Todas") {
+    queryEq = queryEq.eq('categoria', filtros.categoria.toUpperCase());
+  }
+
   const [osRes, eqRes, escalasRes, calSuzanoRes] = await Promise.all([
-    supabase.from("ordens_servico").select(`
-      id, status, horas_manutencao, data_abertura, data_fechamento, 
-      equipamento_id, placa, classe, foi_enviado_reserva,
-      horario_parada, horas_reserva_chegou
-    `)
-    .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`)
-    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
-    supabase.from("equipamentos").select("*"),
-    supabase.from("escala_frota").select("*"),
+    queryOS,
+    queryEq,
+    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
     (!filtros?.dataInicio || !filtros?.dataFim) ? 
       supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single() : 
       Promise.resolve({ data: null })
@@ -209,22 +218,27 @@ export async function getDashboardData(filtros?: {
   const escalas = escalasRes.data ?? [];
   
   const frotaAtiva = todasAsEquips.filter(eq => String(eq.status || 'Ativo').toUpperCase().trim() !== "INATIVO");
-  const eqMap = new Map();
+  
+  // Mapas de busca rápida O(1)
+  const eqMapById = new Map();
+  const eqMapByPlaca = new Map();
   const categoriasSet = new Set<string>();
   const modulosSet = new Set<string>();
   
   frotaAtiva.forEach(eq => {
-    eqMap.set(eq.id, eq);
+    const p = eq.placa?.toUpperCase().trim();
+    eqMapById.set(eq.id, eq);
+    if (p) eqMapByPlaca.set(p, eq);
     if (eq.categoria) categoriasSet.add(eq.categoria);
     if (eq.modulo) modulosSet.add(eq.modulo);
   });
 
-  // ─── OTIMIZAÇÃO: Mapear OS por Placa uma única vez ───
+  // ─── OTIMIZAÇÃO: Mapear OS e Escalas por Placa ───
   const osPorPlaca = new Map<string, any[]>();
   allOS.forEach(os => {
     let p = os.placa?.toUpperCase().trim();
     if (!p && os.equipamento_id) {
-      p = eqMap.get(os.equipamento_id)?.placa?.toUpperCase().trim();
+      p = eqMapById.get(os.equipamento_id)?.placa?.toUpperCase().trim();
     }
     if (p) {
       if (!osPorPlaca.has(p)) osPorPlaca.set(p, []);
@@ -232,122 +246,150 @@ export async function getDashboardData(filtros?: {
     }
   });
 
-  const escalaMap = new Map();
-  escalas.forEach(e => escalaMap.set(e.placa.toUpperCase().trim(), e));
+  // Auxiliar para parsing de tempo em ms desde meia-noite
+  const timeToMs = (tStr: string) => {
+    if (!tStr) return 0;
+    const [h, m] = tStr.split(':').map(Number);
+    return (h * 3600 + m * 60) * 1000;
+  };
+
+  const escalaMap = new Map<string, { carga_horaria: number, startOffset: number, endOffset: number, isOvernight: boolean }>();
+  escalas.forEach(e => {
+    const s = timeToMs(e.periodo_inicio);
+    const end = timeToMs(e.periodo_fim);
+    escalaMap.set(e.placa.toUpperCase().trim(), {
+      carga_horaria: Number(e.carga_horaria),
+      startOffset: s,
+      endOffset: end,
+      isOvernight: end <= s
+    });
+  });
 
   let placasFiltradas = frotaAtiva.map(eq => eq.placa?.toUpperCase().trim()).filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
 
-  if (filtros?.placa) placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
-  if (filtros?.categoria && filtros.categoria !== "Todas") {
-    const catUpper = filtros.categoria.toUpperCase();
-    placasFiltradas = placasFiltradas.filter(p => {
-      const eq = frotaAtiva.find(e => e.placa?.toUpperCase().trim() === p);
-      return eq?.categoria?.toUpperCase() === catUpper;
-    });
+  // Filtros em memória (como fallback de segurança para placas específicas ocultas)
+  if (filtros?.placa) {
+    placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
   }
 
   // 4. Cálculos Otimizados
   const veiculos: VeiculoDisp[] = [];
   const periodoInicioObj = new Date(inicioFiltro);
   const periodoFimObj = new Date(fimFiltro);
+  const allOSProcessed: any[] = [];
 
+  // --- OTIMIZAÇÃO: Pré-calculo dos carimbos de data dos dias do mês ---
+  const diasMesInfo = Array.from({ length: diasReferencia }).map((_, d) => {
+    const dC = new Date(periodoInicioObj.getTime());
+    dC.setDate(periodoInicioObj.getDate() + d);
+    const dStr = dC.toISOString().split('T')[0];
+    const d0 = new Date(`${dStr}T00:00:00`).getTime();
+    const d24 = d0 + 86400000;
+    return { dStr, d0, d24 };
+  });
+
+    // --- OTIMIZAÇÃO: Fast Path para veículos sem OS no período ---
+    if (osDoVeiculo.length === 0) {
+      veiculos.push({
+        placa,
+        disponibilidade: 100,
+        disponibilidade_operacional: 100,
+        totalOS: 0,
+        osFechadas: 0,
+        horasManut: 0,
+        horasOperacional: 0,
+        hTotalDM: hPlanejadasDM,
+        hTotalDO: hPlanejadasDO_TotalMensal,
+        horasDisponiveisOperacional: hPlanejadasDO_TotalMensal,
+        falhas: 0,
+        historicoDiario: diasMesInfo.map(d => ({
+          data: d.dStr, hTotalDM: 24, hIndispDM: 0, hTotalDO: escala ? Number(escala.carga_horaria) : 24, 
+          hIndispDO: 0, disponibilidadeDM: 100, disponibilidadeDO: 100 
+        })),
+        osImpactantes: []
+      } as any);
+      return;
+    }
+
+    // Pré-processa as OS do veículo para carimbos numéricos de DM e DO (Regra Reserva PCM)
     const osProcessed = osDoVeiculo.map(os => {
       const start = (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime();
-      const endRaw = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
-      const end = Math.min(endRaw, periodoFimObj.getTime());
-      
-      // Cálculo de Horas DO para esta OS específica
-      let hImpactoDO = 0;
-      if (escala) {
-        for (let i = 0; i < diasReferencia; i++) {
-          const dC = new Date(periodoInicioObj.getTime());
-          dC.setDate(periodoInicioObj.getDate() + i);
-          const dS = dC.toISOString().split('T')[0];
-          
-          let sS = new Date(`${dS}T${escala.periodo_inicio}`).getTime();
-          let sE = new Date(`${dS}T${escala.periodo_fim}`).getTime();
-          if (sE <= sS) sE += 86400000;
+      const endDMRaw = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
+      const endDM = Math.min(endDMRaw, periodoFimObj.getTime());
 
-          const interS = Math.max(start, sS);
-          const interE = Math.min(end, sE);
-          if (interS < interE) {
-            hImpactoDO += (interE - interS) / 3600000;
-          }
+      // Lógica de Término Operacional (Fim da IO ao chegar o reserva ou fechar a OS)
+      let endDO = endDM;
+      if (os.horas_reserva_chegou) {
+        const reservaTime = new Date(os.horas_reserva_chegou).getTime();
+        // O reserva só "para" o cronômetro operacional se chegar ANTES do conserto acabar
+        if (reservaTime > start && reservaTime < endDM) {
+          endDO = reservaTime;
         }
       }
-      
-      return { 
-        ...os, 
-        start, 
-        end, 
-        horas_impacto_do: Math.round(hImpactoDO * 10) / 10 
-      };
+
+      return { ...os, start, endDM, endDO, horas_impacto_do: 0 };
     });
 
     let hIndispDM = 0;
     let hIndispDO = 0;
-    let hPlanejadasDO = 0;
-    const hPlanejadasDM = 24 * diasReferencia;
+    let hPlanejadasDO_Acumulada = 0;
     let fechadas = 0;
-
     const historicoDiario: any[] = [];
     const osImpactantesSet = new Set<string>();
 
-    for (let d = 0; d < diasReferencia; d++) {
-      const dataCorrente = new Date(periodoInicioObj.getTime());
-      dataCorrente.setDate(periodoInicioObj.getDate() + d);
-      const dStr = dataCorrente.toISOString().split('T')[0];
-      const d0 = new Date(`${dStr}T00:00:00`).getTime();
-      const d24 = d0 + 86400000;
-
+    // ÚNICO LOOP DE DIAS: Calcula histórico e impacto acumulado por OS
+    diasMesInfo.forEach(dia => {
+      const { d0, d24, dStr } = dia;
       const cargaHorariaDia = escala ? Number(escala.carga_horaria) : 24;
-      hPlanejadasDO += cargaHorariaDia;
+      hPlanejadasDO_Acumulada += cargaHorariaDia;
 
       const intervalosDM: Array<{start: number, end: number}> = [];
       const intervalosDO: Array<{start: number, end: number}> = [];
 
-      let shiftStart = d0;
-      let shiftEnd = d24;
-
-      if (escala) {
-        shiftStart = new Date(`${dStr}T${escala.periodo_inicio}`).getTime();
-        shiftEnd = new Date(`${dStr}T${escala.periodo_fim}`).getTime();
-        if (shiftEnd <= shiftStart) shiftEnd += 86400000;
-      }
+      let shiftStart = d0 + (escala?.startOffset || 0);
+      let shiftEnd = d0 + (escala?.endOffset || 0);
+      if (escala?.isOvernight) shiftEnd += 86400000;
+      if (!escala) shiftEnd = d24;
 
       osProcessed.forEach(os => {
-        // Impacto DM (Mecânico)
+        // 1. Impacto DM (Mecânico): Do início da falha até o conserto
         const intDMini = Math.max(os.start, d0);
-        const intDMfim = Math.min(os.end, d24);
+        const intDMfim = Math.min(os.endDM, d24);
         if (intDMini < intDMfim) {
           intervalosDM.push({ start: intDMini, end: intDMfim });
         }
 
-        // Impacto DO (Operacional)
-        const interInicio = Math.max(os.start, shiftStart);
-        const interFim = Math.min(os.end, shiftEnd);
-        if (interInicio < interFim) {
-          intervalosDO.push({ start: interInicio, end: interFim });
-          if (os.numero_os) osImpactantesSet.add(os.numero_os);
+        // 2. Impacto DO (Operacional): Do início da falha até CHEGADA RESERVA ou CONSERTO
+        // Limitado ao TURNO OPERACIONAL do veículo
+        const intDOini = Math.max(os.start, shiftStart);
+        const intDOfim = Math.min(os.endDO, shiftEnd);
+        if (intDOini < intDOfim) {
+          intervalosDO.push({ start: intDOini, end: intDOfim });
+          
+          // Rastreia impacto por OS para o modal (usando o valor operacional)
+          os.horas_impacto_do += (intDOfim - intDOini) / 3600000;
+          osImpactantesSet.add(os.numero_os || os.id);
         }
       });
 
-      const indispDMdia = intervalosDM.length > 0 ? mergeTimeIntervals(intervalosDM) : 0;
-      const indispDOdia = intervalosDO.length > 0 ? mergeTimeIntervals(intervalosDO) : 0;
+      const indispDMdia = intervalosDM.length > 0 ? (intervalosDM.length === 1 ? (intervalosDM[0].end - intervalosDM[0].start) / 3600000 : mergeTimeIntervals(intervalosDM)) : 0;
+      const indispDOdia = intervalosDO.length > 0 ? (intervalosDO.length === 1 ? (intervalosDO[0].end - intervalosDO[0].start) / 3600000 : mergeTimeIntervals(intervalosDO)) : 0;
 
       hIndispDM += indispDMdia;
       hIndispDO += indispDOdia;
 
       historicoDiario.push({
         data: dStr,
-        hTotalDM: 24,
-        hIndispDM: Math.round(indispDMdia * 10) / 10,
-        hTotalDO: cargaHorariaDia,
-        hIndispDO: Math.round(indispDOdia * 10) / 10,
         disponibilidadeDM: Math.round(Math.max(0, (24 - indispDMdia) / 24) * 1000) / 10,
         disponibilidadeDO: cargaHorariaDia > 0 ? Math.round(Math.max(0, (cargaHorariaDia - indispDOdia) / cargaHorariaDia) * 1000) / 10 : 100
       });
-    }
+    });
+
+    // Pós-atribuição de round para horas_impacto_do
+    osProcessed.forEach(os => {
+      os.horas_impacto_do = Math.round(os.horas_impacto_do * 10) / 10;
+    });
+    allOSProcessed.push(...osProcessed);
 
     osDoVeiculo.forEach(os => {
       if (os.status === "Fechada" || os.status === "Concluída") fechadas++;
@@ -356,24 +398,24 @@ export async function getDashboardData(filtros?: {
     veiculos.push({
       placa,
       disponibilidade: hPlanejadasDM > 0 ? (Math.round(Math.max(0, Math.min(100, ((hPlanejadasDM - hIndispDM) / hPlanejadasDM) * 100)) * 10) / 10) || 0 : 100,
-      disponibilidade_operacional: hPlanejadasDO > 0 ? (Math.round(Math.max(0, Math.min(100, ((hPlanejadasDO - hIndispDO) / hPlanejadasDO) * 100)) * 10) / 10) || 0 : 100,
+      disponibilidade_operacional: hPlanejadasDO_TotalMensal > 0 ? (Math.round(Math.max(0, Math.min(100, ((hPlanejadasDO_TotalMensal - hIndispDO) / hPlanejadasDO_TotalMensal) * 100)) * 10) / 10) || 0 : 100,
       totalOS: osDoVeiculo.length || 0,
       osFechadas: fechadas || 0,
-      horasManut: (Math.round(hIndispDM * 10) / 10) || 0,
-      horasOperacional: (Math.round(hIndispDO * 10) / 10) || 0,
-      hTotalDM: hPlanejadasDM || 0,
-      hTotalDO: hPlanejadasDO || 0,
-      horasDisponiveisOperacional: (Math.round((hPlanejadasDO - hIndispDO) * 10) / 10) || 0,
-      falhas: (osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length) || 0,
-      historicoDiario: historicoDiario || [],
-      osImpactantes: Array.from(osImpactantesSet) || []
+      horasManut: Math.round(hIndispDM * 10) / 10,
+      horasOperacional: Math.round(hIndispDO * 10) / 10,
+      hTotalDM: hPlanejadasDM,
+      hTotalDO: hPlanejadasDO_TotalMensal,
+      horasDisponiveisOperacional: Math.round((hPlanejadasDO_TotalMensal - hIndispDO) * 10) / 10,
+      falhas: osDoVeiculo.filter(o => o.classe === 'CORRETIVA').length,
+      historicoDiario,
+      osImpactantes: Array.from(osImpactantesSet)
     } as any);
-  }
+  });
 
   // 5. Consolidação Final
   const hIndispDMTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
   const hIndispDOTotal = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
-  const hTotalDMPlanejadaGeral = veiculos.length * 24 * diasReferencia;
+  const hTotalDMPlanejadaGeral = veiculos.length * 24 * totalDiasCalendario;
   const hTotalDOPlanejadaGeral = veiculos.reduce((acc, v) => acc + v.hTotalDO, 0);
 
   const dm = hTotalDMPlanejadaGeral > 0 ? Math.round(((hTotalDMPlanejadaGeral - hIndispDMTotal) / hTotalDMPlanejadaGeral) * 1000) / 10 : 0;
@@ -400,14 +442,14 @@ export async function getDashboardData(filtros?: {
   });
 
   veiculos.forEach(v => {
-    const eq = frotaAtiva.find(e => e.placa === v.placa);
+    const eq = eqMapByPlaca.get(v.placa.toUpperCase().trim());
     const mod = eq?.modelo || "Outros";
     const curr = modelosMap.get(mod) || { soma: 0, count: 0 };
     modelosMap.set(mod, { soma: curr.soma + v.disponibilidade_operacional, count: curr.count + 1 });
   });
 
   const statusFrota = veiculos.map(v => {
-    const eq = frotaAtiva.find(e => e.placa?.toUpperCase().trim() === v.placa.toUpperCase().trim());
+    const eq = eqMapByPlaca.get(v.placa.toUpperCase().trim());
     const osAbertaAtiva = (osPorPlaca.get(v.placa) || []).find(o => o.status === 'Aberta' || o.status === 'Em Andamento');
 
     let statusLabel = "Disponível";
@@ -544,6 +586,6 @@ export async function getDashboardData(filtros?: {
       : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
     data_inicio: dataInicioExibicao,
     data_fim: dataFimExibicao,
-    os: osProcessed // Garante que as OS processadas com hImpactoDO sejam retornadas
+    // os: allOSProcessed (REMOVIDO: Buscado sob demanda no modal para economizar payload)
   };
 }

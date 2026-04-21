@@ -37,6 +37,7 @@ function fmtDate(d: string | null) {
 
 // ─── Modal ───────────────────────────────────────────────────────────────────
 interface VeiculoDetalhe {
+  placa: string;
   nome: string;
   disp: number; // For plotting
   dispDM: number;
@@ -75,7 +76,7 @@ function ModalDetalhe({
   dataFim?: string;
   onClose: () => void;
 }) {
-  const [osList, setOsList] = useState<OrdemServicoResumo[] | null>(null);
+  const [osList, setOsList] = useState<OrdemServicoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
 
@@ -92,7 +93,7 @@ function ModalDetalhe({
     let cancelled = false;
     setLoading(true);
     import("@/app/actions/os-placa").then(({ buscarOSporPlaca }) =>
-      buscarOSporPlaca(veiculo.nome, mes, ano, dataInicio, dataFim)
+      buscarOSporPlaca(veiculo.placa, mes, ano, dataInicio, dataFim)
     ).then((data) => {
       if (!cancelled) { setOsList(data); setLoading(false); }
     }).catch(() => {
@@ -113,8 +114,8 @@ function ModalDetalhe({
 
       {/* Panel */}
       <div
-        className="relative z-10 w-full max-w-md bg-white dark:bg-[#1a1f2e] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden flex flex-col"
-        style={{ maxHeight: "90vh" }}
+        className="relative z-10 w-full max-w-2xl bg-white dark:bg-[#1a1f2e] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden flex flex-col"
+        style={{ maxHeight: "95vh" }}
       >
         {/* Header */}
         <div
@@ -149,8 +150,8 @@ function ModalDetalhe({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
               <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
-              <p className="text-2xl font-bold" style={{ color: getColorDisp(veiculo.dispDM) }}>
-                {veiculo.dispDM}%
+              <p className="text-6xl font-black" style={{ color: getColorDisp(Number(veiculo.disponibilidade || 0)) }}>
+                {Number(veiculo.disponibilidade || 0).toFixed(1)}%
               </p>
               <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
                 <p className="text-[9px] text-zinc-500">Horas Totais: {Number(veiculo.hTotalDM || 0)}h</p>
@@ -163,7 +164,7 @@ function ModalDetalhe({
                 <h4 className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider">DO (OPERACIONAL)</h4>
                 <span className="text-orange-500 font-mono text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded">PCM</span>
               </div>
-              <div className="text-3xl font-black text-orange-500 mb-4">{veiculo.disponibilidade_operacional}%</div>
+              <div className="text-8xl font-black text-orange-500 mb-4">{Number(veiculo.disponibilidade_operacional || 0).toFixed(1)}%</div>
               <div className="space-y-2">
                 <p className="text-[9px] text-zinc-500">Carga Horária: {Number(veiculo.hTotalDO || 0)}h</p>
                 <p className="text-[9px] text-red-500/80">Indisp. no Turno: {Number(veiculo.horasOperacional || 0)}h</p>
@@ -302,117 +303,78 @@ function ModalDetalhe({
             </div>
           </div>
 
-          {/* ── Lista de OS */}
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">
-              Ordens de Serviço ({veiculo.totalOS})
-            </h3>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-8 gap-2 text-zinc-500">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-xs">Carregando...</span>
-              </div>
-            ) : !osList || osList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-zinc-600">
-                <ClipboardList className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-xs">Nenhuma OS encontrada para este período.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {osList.map((os) => {
-                  const isFechada = os.status === "Fechada" || os.status === "Concluída";
-                  return (
-                    <div
-                      key={os.id}
-                      className="group rounded-xl bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/40 p-3.5 hover:border-blue-400/60 dark:hover:border-blue-500/50 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/70 transition-all"
-                    >
-                      {/* Row 1: número + status */}
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-bold text-zinc-800 dark:text-zinc-100">
-                            OS: {os.numero_os}
-                          </span>
-                          {veiculo.osImpactantes?.includes(os.numero_os || "") && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 animate-pulse">
-                              IMPACTO OPERACIONAL
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            os.status === 'Aberta' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30' :
-                            os.status === 'Fechada' || os.status === 'Concluída' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30' :
-                            'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-600'
-                          }`}>
-                            {os.status}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Classe / sistema */}
-                      {(os.classe || os.sistema) && (
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-2">
-                          {os.classe}{os.sistema ? ` · ${os.sistema}` : ""}
-                          {os.sub_sistema ? ` · ${os.sub_sistema}` : ""}
-                        </p>
-                      )}
-
-                      {/* Descrição */}
-                      {os.descricao && (
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mb-2 line-clamp-2 italic">
-                          {os.descricao}
-                        </p>
-                      )}
-
-                      {/* Hs + Data */}
-                      <div className="flex items-center gap-4 text-[11px] text-zinc-500 dark:text-zinc-400 mb-2">
-                        {os.horas_manutencao != null && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {os.horas_manutencao}h
-                          </span>
-                        )}
-                        {(os.data_fechamento || os.data_abertura) && (
-                          <span className="flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            {fmtDate(os.data_fechamento ?? os.data_abertura)}
-                          </span>
-                        )}
-                        {os.motivo && (
-                          <span className="text-zinc-500 truncate max-w-[120px]">{os.motivo}</span>
-                        )}
-                      </div>
-
-                      {/* Botões de ação */}
-                      <div className="flex items-center gap-2">
-                        {isFechada ? (
-                          <button
-                            onClick={() => setFichaOS({ ...(os as unknown as OSFichaData), placa: os.placa || veiculo.nome })}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 border border-emerald-300 dark:border-emerald-500/30 transition-all"
+            <div className="mt-6">
+              <h3 className="font-black text-sm uppercase tracking-widest text-zinc-800 dark:text-zinc-200 mb-4 flex items-center gap-2">
+                <ClipboardList size={18} className="text-blue-500" />
+                Ordens de Serviço ({osList.length})
+              </h3>
+              
+              {loading ? (
+                <div className="flex items-center justify-center py-10 gap-2 text-zinc-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Carregando dados...</span>
+                </div>
+              ) : osList.length > 0 ? (
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse bg-white dark:bg-[#1a1f2e]">
+                    <thead>
+                      <tr className="bg-zinc-50 dark:bg-zinc-800/80 text-[10px] font-bold uppercase text-zinc-500 tracking-wider">
+                        <th className="px-4 py-3">Descrição da Atividade</th>
+                        <th className="px-3 py-3 text-center">Status</th>
+                        <th className="px-3 py-3 text-center">Mecânica</th>
+                        <th className="px-3 py-3 text-center">Operacional</th>
+                        <th className="px-4 py-3 text-right">Ficha</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[11px] divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {osList.map((os: any) => {
+                        const hMec = Number(os.horas_manutencao || 0);
+                        const hOp = Number(os.horas_impacto_do || 0);
+                        const isFechada = os.status === "Fechada" || os.status === "Concluída";
+                        return (
+                          <tr 
+                            key={os.id} 
+                            className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors cursor-pointer group"
+                            onClick={() => setFichaOS(os as any)}
                           >
-                            <FileText className="w-3.5 h-3.5" />
-                            Ver Ficha &amp; Imprimir
-                          </button>
-                        ) : (
-                          <a
-                            href={`/os?abrir=${os.id}`}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/25 border border-blue-300 dark:border-blue-500/30 transition-all"
-                          >
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            Abrir O.S →
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                            <td className="px-4 py-3">
+                              <div className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                                <span className="opacity-50 text-[10px]">#{os.numero_os || os.id.slice(0,6)}</span>
+                                {hOp > 0 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Afeta Disponibilidade Operacional" />}
+                              </div>
+                              <div className="text-zinc-500 text-[10px] line-clamp-1 mt-0.5">{os.descricao || 'Atividade de manutenção'}</div>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                isFechada ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-orange-100 text-orange-700 border border-orange-200'
+                              }`}>
+                                {os.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-center font-mono font-bold text-zinc-700 dark:text-zinc-300">
+                              {hMec > 0 ? `${hMec.toFixed(1)}h` : '—'}
+                            </td>
+                            <td className={`px-3 py-3 text-center font-mono font-bold ${hOp > 0 ? 'text-red-500' : 'text-emerald-500 opacity-30'}`}>
+                              {hOp > 0 ? `${hOp.toFixed(1)}h` : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-blue-500 hover:text-white transition-all">
+                                <FileText className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-zinc-50 dark:bg-zinc-800/40 rounded-xl p-10 flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 dark:border-zinc-700/50">
+                  <ClipboardList className="w-8 h-8 text-zinc-200 mb-3" />
+                  <p className="text-zinc-500 dark:text-zinc-400 font-medium italic text-sm text-center">Nenhuma OS encontrada para este período.</p>
+                </div>
+              )}
+            </div>
         </div>
 
         {/* Footer */}
