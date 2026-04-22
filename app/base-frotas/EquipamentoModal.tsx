@@ -132,7 +132,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
   const labelCls = 'block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col border border-slate-200 dark:border-slate-800">
 

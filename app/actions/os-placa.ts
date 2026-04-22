@@ -16,7 +16,11 @@ export interface OrdemServicoResumo {
   motivo: string | null
   local: string | null
   modulo: string | null
-  horas_impacto_do?: number // Novo campo calculado
+  horas_impacto_do?: number 
+  foi_enviado_reserva?: boolean | null
+  horario_parada?: string | null
+  qual_reserva?: string | null
+  horas_reserva_chegou?: string | null
 }
 
 function parseLocal(dateStr: string | null): number {
@@ -92,7 +96,7 @@ export async function buscarOSporPlaca(
     // Sem filtro de data — retorna tudo
     const { data, error } = await supabase
       .from('ordens_servico')
-      .select('id, numero_os, status, classe, data_abertura, data_fechamento, descricao, sistema, sub_sistema, horas_manutencao, motivo, local, modulo, horas_reserva_chegou')
+      .select('id, numero_os, status, classe, data_abertura, data_fechamento, descricao, sistema, sub_sistema, horas_manutencao, motivo, local, modulo, horario_parada, foi_enviado_reserva, qual_reserva, horas_reserva_chegou')
       .eq('placa', placa.toUpperCase())
       .order('data_abertura', { ascending: false })
       .limit(50)
@@ -116,20 +120,15 @@ export async function buscarOSporPlaca(
   if (error) return []
 
   // --- Coleta de Dados do Veículo e Escala ---
-  const { data: equipInfo } = await supabase
-    .from('equipamentos')
+  const { data: escala } = await supabase
+    .from('escala_frota')
     .select(`
-      id_escala,
-      escalas_trabalho:id_escala (
-        periodo_inicio,
-        periodo_fim,
-        carga_horaria
-      )
+      periodo_inicio,
+      periodo_fim,
+      carga_horaria
     `)
     .eq('placa', placa.toUpperCase())
     .single();
-
-  const escala = equipInfo?.escalas_trabalho as any;
 
   const osCalculadas = (data || []).map((os: any) => {
     let hImpactoDO = 0
@@ -139,10 +138,14 @@ export async function buscarOSporPlaca(
 
     // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
     let osEndDO = endMec
-    if (os.horas_reserva_chegou) {
-      const reservaTime = parseLocal(os.horas_reserva_chegou)
-      if (reservaTime > osStart && reservaTime < endMec) {
-        osEndDO = reservaTime
+    if (os.foi_enviado_reserva) {
+      if (os.horas_reserva_chegou) {
+        const reservaTime = parseLocal(os.horas_reserva_chegou)
+        if (reservaTime > osStart && reservaTime < endMec) {
+          osEndDO = reservaTime
+        }
+      } else {
+        osEndDO = osStart
       }
     }
 
@@ -174,6 +177,8 @@ export async function buscarOSporPlaca(
     }
     return {
       ...os,
+      placa: os.equipamento?.placa || placa.toUpperCase(),
+      horimetro: os.horimetro,
       horas_manutencao: Math.round(hMecCalculada * 10) / 10,
       horas_impacto_do: Math.round(hImpactoDO * 10) / 10
     }

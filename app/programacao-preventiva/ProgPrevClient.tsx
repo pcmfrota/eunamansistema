@@ -977,7 +977,7 @@ function ProgSemanalForm({
     : ""
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
       <div className="bg-[#0a0f1e] border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl my-4">
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-zinc-800">

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Printer, Clock } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
@@ -195,30 +196,31 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
         if (placaRaw === "—") return;
 
         const supabase = createClient();
-        // Fallback: Busca na tabela de equipamentos para pegar a escala correta (id_escala)
-        const { data: equipInfo } = await supabase
-          .from("equipamentos")
+        // Busca na tabela de escala_frota para pegar a escala correta
+        const { data: escala } = await supabase
+          .from("escala_frota")
           .select(`
-            id_escala,
-            escalas_trabalho:id_escala (
-              periodo_inicio,
-              periodo_fim,
-              carga_horaria
-            )
+            periodo_inicio,
+            periodo_fim,
+            carga_horaria
           `)
           .eq("placa", placaRaw.toUpperCase())
           .single();
-
-        const escala = equipInfo?.escalas_trabalho as any;
 
         const start = parseLocal(os.horario_parada || os.data_abertura);
         const endRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : new Date().getTime();
         
         let endDO = endRaw;
-        if (os.horas_reserva_chegou) {
-          const resChegou = parseLocal(os.horas_reserva_chegou);
-          if (resChegou > start && resChegou < endRaw) {
-            endDO = resChegou;
+        if (os.foi_enviado_reserva) {
+          if (os.horas_reserva_chegou) {
+            const resChegou = parseLocal(os.horas_reserva_chegou);
+            if (resChegou > start && resChegou < endRaw) {
+              endDO = resChegou;
+            }
+          } else {
+            // Se foi enviado reserva mas não tem hora, assume impacto zero na operação
+            // conforme regra: "não houve prejuizo na operação"
+            endDO = start;
           }
         }
 
@@ -300,16 +302,15 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
       <meta charset="UTF-8"/>
       <title>O.S ${os.numero_os}</title>
       <style>
-        *{box-sizing:border-box;margin:0;padding:0;}
-        body{font-family:Arial,sans-serif;font-size:11px;background:#fff;color:#000;}
-        @page{size:A4 portrait;margin:10mm;}
-        @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact;}}
+        @page { size: A4 portrait; margin: 8mm; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Arial, sans-serif; font-size: 10px; background: #fff; color: #000; margin: 0; padding: 0; width: 100%; height: 100%; }
       </style>
     </head><body>
-      <div style="border:2px solid #111;max-width:800px;margin:0 auto;">
+      <div id="print-container" style="border:1.5px solid #111; max-width: 100%; margin: 0 auto; height: auto; position: relative;">
 
         <!-- Cabeçalho -->
-        <div style="display:flex;align-items:center;border-bottom:2px solid #111;padding:10px 14px;gap:14px;">
+        <div style="display:flex;align-items:center;border-bottom:2px solid #111;padding:8px 12px;gap:12px;">
           <div style="width:72px;height:72px;flex-shrink:0;">${logoSVG}</div>
           <div style="flex:1;text-align:center;">
             <h1 style="font-size:17px;font-weight:900;letter-spacing:3px;text-transform:uppercase;">ORDEM DE MANUTENÇÃO</h1>
@@ -370,8 +371,32 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
         <!-- Observações -->
         <div style="border-bottom:1px solid #111;">
           ${secTitle("Observações / Pendências")}
-          <div style="padding:8px 10px;min-height:40px;">
-            <p style="font-size:11px;color:#374151;line-height:1.5;">${os.observacoes || "—"}</p>
+          <div style="padding:6px 10px;min-height:30px;">
+            <p style="font-size:10px;color:#374151;line-height:1.4;">${os.observacoes || "—"}</p>
+          </div>
+        </div>
+
+        <!-- Cálculo de Disponibilidade PCM -->
+        <div style="border-bottom:1px solid #111;background:#f8fafc;">
+          ${secTitle("Cálculo de Disponibilidade PCM")}
+          <div style="display:flex;padding:8px 10px;gap:15px;">
+            <div style="flex:1;">
+               <p style="font-size:9px;font-weight:900;color:#1e40af;margin-bottom:4px;text-transform:uppercase;">Impacto desta O.S:</p>
+               <div style="display:flex;flex-direction:column;gap:4px;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:9px;font-weight:900;">Indisp. Mecânica (DM):</span>
+                    <span style="font-family:monospace;background:#111827;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">${horasCalc}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:9px;font-weight:900;">Indisp. Operacional (DO):</span>
+                    <span style="font-family:monospace;background:${minutosDO && minutosDO > 0 ? '#b91c1c' : '#047857'};color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">${minutosDO != null ? formatMinutesToHms(minutosDO) : '—'}</span>
+                  </div>
+               </div>
+            </div>
+            <div style="flex:1.5;background:#fff;border:1px solid #e2e8f0;padding:6px;border-radius:3px;">
+               <p style="font-size:8px;font-weight:900;color:#1e3a8a;margin-bottom:2px;text-transform:uppercase;">Regras PCM (Shift Context):</p>
+               <p style="font-size:8px;color:#64748b;line-height:1.2;">A DO considera apenas o tempo entre abertura e fechamento coincidente com o turno operacional. Reservas enviadas sem prejuízo zeram o impacto.</p>
+            </div>
           </div>
         </div>
 
@@ -385,10 +410,10 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
               { l: "PCM / Planejamento", s: "Data de Encerramento" },
               { l: "Operador / Motorista", s: "Recebimento" },
             ].map((a, i) => `
-              <div style="flex:1;padding:10px 8px;${i < 3 ? 'border-right:1px solid #333;' : ''}">
-                <p style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:24px;">${a.l}</p>
+              <div style="flex:1;padding:8px 6px;${i < 3 ? 'border-right:1px solid #333;' : ''}">
+                <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:18px;">${a.l}</p>
                 <div style="border-bottom:1px solid #111;"></div>
-                <p style="font-size:9px;text-align:center;color:#9ca3af;margin-top:4px;">${a.s}</p>
+                <p style="font-size:8px;text-align:center;color:#9ca3af;margin-top:3px;">${a.s}</p>
               </div>`).join("")}
           </div>
           <div style="display:flex;justify-content:space-between;padding:5px 10px;background:#f9fafb;border-top:1px solid #d1d5db;">
@@ -405,10 +430,14 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
   };
 
 
-  return (
-    <>
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-      <div id="ficha-print-root" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+  if (!mounted) return null;
+
+  return createPortal(
+    <>
+      <div id="ficha-print-root" className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md">
         {/* Backdrop close */}
         <div className="absolute inset-0 no-print" onClick={onClose} />
 
@@ -570,16 +599,31 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                 </div>
 
                 {/* ── Bloco Novo — Memória de Cálculo PCM ── */}
-                <div className="no-print border-b border-gray-900 bg-blue-50/50">
-                  <div className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 flex items-center gap-2">
+                <div className="border-b border-gray-900 bg-blue-50/50">
+                  <div className="bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 flex items-center gap-2">
                     <Clock size={12} /> Cálculo de Disponibilidade PCM
                   </div>
                   <div className="px-3 py-3 grid grid-cols-2 gap-4 text-[10px] leading-relaxed">
                     <div>
                       <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
                       <ul className="space-y-1 text-zinc-700">
-                        <li><span className="font-bold">Horas de Indisp. Mecânica (DM):</span> {horasCalc}</li>
-                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {minutosDO != null ? formatMinutesToHms(minutosDO) : "Calculando..."}</li>
+                        <li>
+                          <span className="font-black text-zinc-950">Indisponibilidade Mecânica (DM):</span> 
+                          <span className="ml-1 px-1.5 py-0.5 rounded bg-zinc-900 text-white font-mono font-bold">
+                            {horasCalc}
+                          </span>
+                        </li>
+                        <li>
+                          <span className="font-black text-zinc-950">Indisponibilidade Operacional (DO):</span> 
+                          <span className={`ml-1 px-1.5 py-0.5 rounded font-mono font-bold ${minutosDO && minutosDO > 0 ? "bg-red-600 text-white" : "bg-emerald-600 text-white"}`}>
+                            {minutosDO != null ? formatMinutesToHms(minutosDO) : "Calculando..."}
+                          </span>
+                          {os.foi_enviado_reserva && (
+                            <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium italic">
+                              (Impacto reduzido por Veículo Reserva: {os.qual_reserva || "Sim"})
+                            </span>
+                          )}
+                        </li>
                       </ul>
                       <p className="mt-2 text-zinc-500 text-[9px]">
                         *A DO considera apenas o tempo entre abertura e fechamento que coincidiu com o turno operacional do veículo.
@@ -633,7 +677,8 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

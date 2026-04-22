@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Legend,
   XAxis, YAxis, CartesianGrid, Tooltip, Cell, ReferenceLine
@@ -89,6 +90,9 @@ function ModalDetalhe({
   const dispColor = getColorDisp(displayDisp);
   const dispLabel = displayDisp >= 95 ? "Operacional" : displayDisp >= 90 ? "Atenção" : "Crítico";
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -102,10 +106,12 @@ function ModalDetalhe({
     return () => { cancelled = true; };
   }, [veiculo.nome, mes, ano, dataInicio, dataFim]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-md" onClick={onClose} />
 
       {/* Ficha Modal (sobreposto) */}
       {fichaOS && (
@@ -150,7 +156,7 @@ function ModalDetalhe({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
               <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
-              <p className="text-6xl font-black" style={{ color: getColorDisp(Number(veiculo.disponibilidade || 0)) }}>
+              <p className="text-3xl font-black" style={{ color: getColorDisp(Number(veiculo.disponibilidade || 0)) }}>
                 {Number(veiculo.disponibilidade || 0).toFixed(1)}%
               </p>
               <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
@@ -164,7 +170,7 @@ function ModalDetalhe({
                 <h4 className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider">DO (OPERACIONAL)</h4>
                 <span className="text-orange-500 font-mono text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded">PCM</span>
               </div>
-              <div className="text-8xl font-black text-orange-500 mb-4">{Number(veiculo.disponibilidade_operacional || 0).toFixed(1)}%</div>
+              <div className="text-4xl font-black text-orange-500 mb-4">{Number(veiculo.disponibilidade_operacional || 0).toFixed(1)}%</div>
               <div className="space-y-2">
                 <p className="text-[9px] text-zinc-500">Carga Horária: {Number(veiculo.hTotalDO || 0)}h</p>
                 <p className="text-[9px] text-red-500/80">Indisp. no Turno: {Number(veiculo.horasOperacional || 0)}h</p>
@@ -358,7 +364,10 @@ function ModalDetalhe({
                               {hOp > 0 ? `${hOp.toFixed(1)}h` : '—'}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <button className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-blue-500 hover:text-white transition-all">
+                              <button 
+                                onClick={() => setFichaOS(os)}
+                                className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-blue-500 hover:text-white transition-all"
+                              >
                                 <FileText className="w-4 h-4" />
                               </button>
                             </td>
@@ -387,7 +396,8 @@ function ModalDetalhe({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

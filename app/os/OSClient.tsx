@@ -549,7 +549,7 @@ export default function ControleOSClient({
 
       {/* ── Delete confirmation modal ── */}
       {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-sm shadow-2xl">
             <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-2">Excluir OS?</h3>
             <p className="text-sm text-zinc-500 mb-5">Esta ação não pode ser desfeita.</p>
