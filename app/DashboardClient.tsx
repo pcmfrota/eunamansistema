@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCcw } from "lucide-react";
 import { Filtros, type FiltrosValues } from "@/components/filtros";
 import { gerarSlideHTML } from "@/lib/gerar-slide";
 import { getDashboardData, type DashboardData } from "@/app/actions/dashboard";
@@ -30,18 +30,19 @@ function CarregandoGrafico() {
 }
 
 interface DashboardClientProps {
-  initialData: DashboardData;
+  initialData?: DashboardData;
 }
 
 export default function DashboardClient({ initialData }: DashboardClientProps) {
-  const [data, setData] = useState<DashboardData>(initialData);
+  const [data, setData] = useState<DashboardData | null>(initialData || null);
   const [isPending, startTransition] = useTransition();
+  const [isLoadingInitial, setIsLoadingInitial] = useState(!initialData);
 
-  // Default filters to current month/year (from the initial data)
+  // Default filters
   const now = new Date(Date.now() - 3 * 3600 * 1000);
   const defaultFiltros: FiltrosValues = {
-    mes: initialData.mesSelecionado,
-    ano: initialData.anoSelecionado,
+    mes: data?.mesSelecionado || (now.getMonth() + 1),
+    ano: data?.anoSelecionado || now.getFullYear(),
     categoria: "PESADA",
     placa: "",
     modulo: "",
@@ -53,6 +54,24 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const [filtros, setFiltros] = useState<FiltrosValues>(defaultFiltros);
   const [mostrarIndisp, setMostrarIndisp] = useState(false);
   const [availabilityType, setAvailabilityType] = useState<"DM" | "DO">("DM");
+
+  // Busca inicial caso não tenha dados vindos do servidor
+  useEffect(() => {
+    if (!initialData) {
+      const fetchInitial = async () => {
+        try {
+          setIsLoadingInitial(true);
+          const result = await getDashboardData({ categoria: "PESADA" });
+          setData(result);
+        } catch (error) {
+          console.error("Erro ao carregar dados iniciais:", error);
+        } finally {
+          setIsLoadingInitial(false);
+        }
+      };
+      fetchInitial();
+    }
+  }, [initialData]);
 
   function handleFilterChange(key: keyof FiltrosValues, value: string | number) {
     const newFiltros = { ...filtros, [key]: value };
@@ -87,12 +106,13 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     });
   }
 
-  const mttrLabel = data.mttr > 0 ? `${data.mttr}h` : "—";
-  const mtbfLabel = data.mtbf > 0 ? `${data.mtbf}h` : "—";
+  const mttrLabel = data?.mttr && data.mttr > 0 ? `${data.mttr}h` : "—";
+  const mtbfLabel = data?.mtbf && data.mtbf > 0 ? `${data.mtbf}h` : "—";
 
   const [isExporting, setIsExporting] = useState(false);
 
   async function exportarRelatorio() {
+    if (!data) return;
     setIsExporting(true);
     try {
       // Sempre busca dados de frota PESADA para o relatório
@@ -115,6 +135,23 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     } finally {
       setIsExporting(false);
     }
+  }
+
+  if (isLoadingInitial || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full border-4 border-zinc-100 dark:border-zinc-800 border-t-green-600 animate-spin" />
+          <RefreshCcw className="absolute inset-0 m-auto w-6 h-6 text-green-600/30 animate-pulse" />
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs animate-pulse">
+            Processando Dashboard
+          </p>
+          <p className="text-[10px] text-zinc-400">Isso pode levar alguns segundos devido ao volume de dados</p>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,12 +1,7 @@
-import { getDashboardData } from "@/app/actions/dashboard";
 import DashboardClient from "./DashboardClient";
 
-export default async function Page() {
-  // Carrega já com PESADA como categoria padrão,
-  // igual ao defaultFiltros do DashboardClient (sem mismatch)
-  const now = new Date(Date.now() - 3 * 3600 * 1000); // fuso -3h Brasil
-  const data = await getDashboardData({
-    categoria: "PESADA",
-  });
-  return <DashboardClient initialData={data} />;
+export default function Page() {
+  // Removido o await do servidor para evitar bloqueio do carregamento inicial (splash screen)
+  // O DashboardClient agora gerencia o próprio estado de carregamento inicial
+  return <DashboardClient />;
 }

@@ -95,37 +95,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     // 1. Inicialização rápida
     const initAuth = async () => {
-      // Tenta recuperar sessão existente imediatamente
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!mounted) return;
+      try {
+        // Tenta recuperar sessão existente imediatamente
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
 
-      if (session?.user) {
-        setUser(session.user);
-        
-        // Tenta carregar do cache para tirar o loading rápido
-        const cached = localStorage.getItem('eunaman_profile');
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (parsed.id === session.user.id) {
-              setProfile(parsed);
-              setLoading(false); // Já temos algo para mostrar
-            }
-          } catch (e) {}
+        if (session?.user) {
+          setUser(session.user);
+          
+          let hasCached = false;
+          // Tenta carregar do cache para tirar o loading rápido
+          const cached = localStorage.getItem('eunaman_profile');
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (parsed.id === session.user.id) {
+                setProfile(parsed);
+                setLoading(false); // Já temos algo para mostrar
+                hasCached = true;
+              }
+            } catch (e) {}
+          }
+          
+          // Busca dados frescos. Se já tem cache, faz em background.
+          await fetchProfile(session.user, hasCached);
+        } else {
+          setLoading(false);
         }
-        
-        // Busca dados frescos em background (ou foreground se não tinha cache)
-        await fetchProfile(session.user, !!profile);
-      } else {
+      } catch (err) {
+        console.error('[Auth] Erro na inicialização:', err);
         setLoading(false);
       }
     };
 
     initAuth();
+
+    // Fail-safe: Se em 3 segundos ainda estiver carregando, força a saída do loading
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        setLoading(current => {
+          if (current) console.warn('[Auth] Timeout de carregamento atingido (3s). Forçando entrada.');
+          return false;
+        });
+      }
+    }, 3000);
 
     // 2. Ouvir mudanças de estado
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -146,8 +164,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (session?.user) {
         setUser(session.user);
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          await fetchProfile(session.user, event === 'TOKEN_REFRESHED');
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+          // Se já temos um perfil carregado, não ativa o loading visual
+          const hasProfile = !!localStorage.getItem('eunaman_profile');
+          await fetchProfile(session.user, hasProfile);
         }
       } else {
         setUser(null);
@@ -158,9 +178,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, [supabase, router, fetchProfile]); // Removi profile da dependência para evitar loop
+  }, [supabase, router, fetchProfile]);
 
   const signOut = async () => {
     try {
