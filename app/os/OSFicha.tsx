@@ -56,20 +56,47 @@ function calcHoras(abertura: string, fechamento: string | null): string {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
-function formatDecimalToHms(decimalH: number): string {
-  const totalMin = Math.round(decimalH * 60);
+function formatMinutesToHms(totalMin: number): string {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function parseLocal(dateStr: string | null): number {
+  if (!dateStr) return 0;
+  // Tenta formato ISO: YYYY-MM-DDTHH:mm:ss
+  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (match) {
+    return new Date(
+      parseInt(match[1]),
+      parseInt(match[2]) - 1,
+      parseInt(match[3]),
+      parseInt(match[4]),
+      parseInt(match[5])
+    ).getTime();
+  }
+  // Tenta formato PT-BR: DD/MM/YYYY HH:mm
+  const matchBR = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+  if (matchBR) {
+    return new Date(
+      parseInt(matchBR[3]),
+      parseInt(matchBR[2]) - 1,
+      parseInt(matchBR[1]),
+      parseInt(matchBR[4]),
+      parseInt(matchBR[5])
+    ).getTime();
+  }
+  return new Date(dateStr).getTime();
+}
+
 function getPlaca(os: OSFichaData): string {
-  return (
+  const p = (
     os.placa ||
     os.veiculo_placa ||
     os.equipamento?.placa ||
-    "—"
-  );
+    ""
+  ).trim().toUpperCase();
+  return p || "—";
 }
 
 // ─── Logo Eunaman SVG ─────────────────────────────────────────────────────────
@@ -144,7 +171,7 @@ interface OSFichaModalProps {
 }
 
 export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
-  const [horasDO, setHorasDO] = useState<number | null>(os.horas_impacto_do ?? null);
+  const [minutosDO, setMinutosDO] = useState<number | null>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -156,62 +183,64 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
   // Cálculo dinâmico de DO caso não venha pronto
   useEffect(() => {
-    if (os.horas_impacto_do != null) return;
-
     async function fetchAndCalc() {
       try {
+        const placaRaw = getPlaca(os);
+        if (placaRaw === "—") return;
+
         const supabase = createClient();
         const { data: escala } = await supabase
-          .from("escalas_trabalho")
+          .from("escala_frota")
           .select("*")
-          .eq("placa", getPlaca(os))
+          .eq("placa", placaRaw)
           .single();
 
-        const start = new Date(os.horario_parada || os.data_abertura).getTime();
-        const endRaw = (os.data_fechamento ? new Date(os.data_fechamento) : new Date()).getTime();
+        const start = parseLocal(os.horario_parada || os.data_abertura);
+        const endRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : new Date().getTime();
         
         let endDO = endRaw;
         if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
-          const resChegou = new Date(os.horas_reserva_chegou).getTime();
+          const resChegou = parseLocal(os.horas_reserva_chegou);
           if (resChegou > start) {
             endDO = Math.min(endRaw, resChegou);
           }
         }
 
-        if (!escala) {
-          // Sem escala, DO = tempo total (24h)
-          setHorasDO(Math.round(((endDO - start) / 3600000) * 10) / 10);
+        if (!escala || (!escala.periodo_inicio && !escala.periodo_fim)) {
+          setMinutosDO(Math.floor((endDO - start) / 60000));
           return;
         }
 
-        // Se tem escala, calcula interseção
-        let totalH = 0;
+        // Se tem escala com horários, calcula interseção
+        let totalMin = 0;
         const dInicio = new Date(start);
         const dFim = new Date(endDO);
         
-        // Vamos iterar pelos dias entre início e fim
         let cursor = new Date(dInicio);
         cursor.setHours(0,0,0,0);
 
         while (cursor <= dFim) {
           const y = cursor.getFullYear();
-          const m = String(cursor.getMonth() + 1).padStart(2, "0");
-          const d = String(cursor.getDate()).padStart(2, "0");
-          const dStr = `${y}-${m}-${d}`;
+          const m = cursor.getMonth(); // 0-indexed
+          const d = cursor.getDate();
 
-          let sS = new Date(`${dStr}T${escala.periodo_inicio}`).getTime();
-          let sE = new Date(`${dStr}T${escala.periodo_fim}`).getTime();
+          const [hS, minS] = (escala.periodo_inicio || "00:00").split(":").map(Number);
+          const [hE, minE] = (escala.periodo_fim || "23:59").split(":").map(Number);
+
+          let sS = new Date(y, m, d, hS, minS || 0).getTime();
+          let sE = new Date(y, m, d, hE, minE || 0).getTime();
+          
           if (sE <= sS) sE += 86400000;
 
           const interS = Math.max(start, sS);
           const interE = Math.min(endDO, sE);
 
           if (interS < interE) {
-            totalH += (interE - interS) / 3600000;
+            totalMin += Math.floor((interE - interS) / 60000);
           }
           cursor.setDate(cursor.getDate() + 1);
         }
-        setHorasDO(Math.round(totalH * 10) / 10);
+        setMinutosDO(totalMin);
       } catch (err) {
         console.error("Erro ao calcular DO na ficha:", err);
       }
@@ -222,7 +251,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
   const horasCalc =
     os.horas_manutencao != null
-      ? formatDecimalToHms(os.horas_manutencao)
+      ? formatMinutesToHms(Math.round(os.horas_manutencao * 60))
       : calcHoras(os.data_abertura, os.data_fechamento);
 
   const placa = getPlaca(os);
@@ -538,7 +567,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                       <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
                       <ul className="space-y-1 text-zinc-700">
                         <li><span className="font-bold">Horas de Indisp. Mecânica (DM):</span> {horasCalc}</li>
-                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {horasDO != null ? formatDecimalToHms(horasDO) : "Calculando..."}</li>
+                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {minutosDO != null ? formatMinutesToHms(minutosDO) : "Calculando..."}</li>
                       </ul>
                       <p className="mt-2 text-zinc-500 text-[9px]">
                         *A DO considera apenas o tempo entre abertura e fechamento que coincidiu com o turno operacional do veículo.
