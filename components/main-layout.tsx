@@ -26,13 +26,9 @@ import {
   Users,
   Loader2,
   X,
-  Bell,
-  BellOff,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import AlterarSenhaModal from './AlterarSenhaModal';
-import { useNotifications } from '@/hooks/use-notifications';
-import { salvarSubscricaoPush } from '@/app/actions/push-notifications';
 
 const navigation = [
   { name: 'Dashboard',                path: '/',                       icon: LayoutDashboard },
@@ -47,6 +43,15 @@ const navigation = [
   { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
 ];
 
+function getFilteredNavigation(role: string | null | undefined) {
+  if (role === 'visitante') {
+    return navigation.filter(item => 
+      ['Dashboard', 'Backlog', 'PCM', 'Calendário Suzano'].includes(item.name)
+    );
+  }
+  return navigation;
+}
+
 const adminNavigation = [
   { name: 'Gestão de Usuários', path: '/admin/usuarios', icon: Users },
 ];
@@ -55,21 +60,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { profile, signOut, loading: authLoading } = useAuth();
-  const { isSupported, permission, subscribe, unsubscribe, loading: pushLoading } = useNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
-  const toggleNotifications = async () => {
-    if (permission === 'granted') {
-      await unsubscribe();
-    } else {
-      const sub = await subscribe();
-      if (sub) {
-        await salvarSubscricaoPush(sub.toJSON());
-      }
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -290,26 +284,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               Navegação
             </p>
             <div className="flex items-center gap-1.5">
-              {isSupported && (
-                <button
-                  onClick={toggleNotifications}
-                  disabled={pushLoading}
-                  className="p-1.5 rounded-lg transition-colors"
-                  style={{
-                    background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.10)'}`,
-                  }}
-                  title={permission === 'granted' ? "Desativar Notificações" : "Ativar Notificações"}
-                >
-                  {pushLoading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-                  ) : permission === 'granted' ? (
-                    <Bell className="w-3.5 h-3.5 text-emerald-500" />
-                  ) : (
-                    <BellOff className="w-3.5 h-3.5 text-zinc-400" />
-                  )}
-                </button>
-              )}
               <button
                 onClick={() => setTheme(isDark ? 'light' : 'dark')}
                 className="p-1.5 rounded-lg transition-colors"
@@ -328,7 +302,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="space-y-0.5">
-            {navigation.map((item, index) => {
+            {getFilteredNavigation(profile?.role).map((item, index) => {
               const isActive = pathname === item.path;
               return (
                 <Link

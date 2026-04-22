@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Edit2, Save, X, Calendar as CalendarIcon } from "lucide-react";
+import { Edit2, Save, X, Calendar as CalendarIcon, ShieldAlert } from "lucide-react";
 import { saveCalendario, importarCronograma2026 } from "./actions";
+import { useAuth } from "@/components/auth-context";
 
 const MESES_NOME = [
   "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -10,6 +11,9 @@ const MESES_NOME = [
 ];
 
 export default function CalendarioClient({ initialData }: { initialData: any[] }) {
+  const { profile } = useAuth();
+  const isVisitante = profile?.role === "visitante";
+
   const [data, setData] = useState(initialData);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
@@ -42,13 +46,20 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button
-          onClick={handleImport}
-          disabled={isImporting}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
-        >
-          {isImporting ? "Importando..." : "Importar Cronograma 2026"}
-        </button>
+        {isVisitante ? (
+          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
+            <ShieldAlert size={16} />
+            <span>Somente Leitura</span>
+          </div>
+        ) : (
+          <button
+            onClick={handleImport}
+            disabled={isImporting}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+          >
+            {isImporting ? "Importando..." : "Importar Cronograma 2026"}
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
@@ -59,7 +70,7 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Data Inicial</th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Data Final</th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Qtd. Dias</th>
-              <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-zinc-500 text-right">Ações</th>
+              {!isVisitante && <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-zinc-500 text-right">Ações</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -118,28 +129,30 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
                     </span>
                   )}
                 </td>
-                <td className="px-6 py-4 text-right">
-                  {editingId === item.id ? (
-                    <div className="flex justify-end gap-2">
-                      <button onClick={handleSave} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg">
-                        <Save size={18} />
+                {!isVisitante && (
+                  <td className="px-6 py-4 text-right">
+                    {editingId === item.id ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={handleSave} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg">
+                          <Save size={18} />
+                        </button>
+                        <button onClick={() => setEditingId(null)} className="p-2 text-zinc-500 hover:bg-zinc-500/10 rounded-lg">
+                          <X size={18} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingId(item.id);
+                          setEditForm({ ...item });
+                        }}
+                        className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                      >
+                        <Edit2 size={18} />
                       </button>
-                      <button onClick={() => setEditingId(null)} className="p-2 text-zinc-500 hover:bg-zinc-500/10 rounded-lg">
-                        <X size={18} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditingId(item.id);
-                        setEditForm({ ...item });
-                      }}
-                      className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                  )}
-                </td>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {data.length === 0 && (

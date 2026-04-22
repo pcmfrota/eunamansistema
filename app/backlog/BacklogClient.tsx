@@ -281,7 +281,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       ) : (
         <>
           {/* Multi-Select Floating Bar */}
-          {selectedIds.size > 0 && (
+          {selectedIds.size > 0 && !isVisitante && (
             <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 duration-500">
                <div className="flex items-center gap-6 px-10 py-5 bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-xl">
                   <div className="flex items-center gap-3 pr-6 border-r border-white/10">

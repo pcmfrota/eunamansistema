@@ -15,6 +15,7 @@ import {
   Tag
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/components/auth-context'
 
 interface BacklogTableProps {
   items: any[]
@@ -60,6 +61,8 @@ export default function BacklogTable({
   onDelete,
   view
 }: BacklogTableProps) {
+  const { profile } = useAuth();
+  const isVisitante = profile?.role === 'visitante';
   
   if (items.length === 0) {
     return (
@@ -102,7 +105,9 @@ export default function BacklogTable({
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Prog. Prevista</th>
                 </>
               )}
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 text-right">Ações</th>
+              {!isVisitante && (
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 text-right">Ações</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
@@ -188,24 +193,26 @@ export default function BacklogTable({
                   </>
                 )}
 
-                <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => onEdit(item)}
-                      className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-zinc-400 hover:text-indigo-600 rounded-xl transition-all"
-                      title="Editar"
-                    >
-                      <Edit3 size={16} />
-                    </button>
-                    <button 
-                      onClick={() => onDelete(item.id)}
-                      className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 rounded-xl transition-all"
-                      title="Excluir"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
+                {!isVisitante && (
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => onEdit(item)}
+                        className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-zinc-400 hover:text-indigo-600 rounded-xl transition-all"
+                        title="Editar"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => onDelete(item.id)}
+                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 rounded-xl transition-all"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
