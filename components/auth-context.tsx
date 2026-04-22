@@ -32,156 +32,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
-    // 0. Tenta carregar perfil do cache para exibição instantânea
+    // 1. Carrega perfil do cache para exibir algo rápido se disponível
     if (typeof window !== 'undefined') {
-      const cachedProfile = localStorage.getItem('eunaman_profile')
-      if (cachedProfile) {
+      const cached = localStorage.getItem('eunaman_profile');
+      if (cached) {
         try {
-          const parsed = JSON.parse(cachedProfile)
-          setProfile(parsed)
-          // Se temos cache, podemos até tirar o loading logo pra UI não travar
-          setLoading(false)
+          setProfile(JSON.parse(cached));
+          // Não tiramos o loading ainda, pois o cache pode estar obsoleto
         } catch (e) {}
       }
     }
 
-    // 1. Iniciar com os dados da sessão atual (se houver)
-    const initSession = async () => {
-      console.log('[Auth] Iniciando initSession...')
-      
+    const fetchProfile = async (u: User) => {
+      console.log('[Auth] Buscando perfil para:', u.email);
       try {
-        // Tenta pegar a sessão rápida (local storage) primeiro
-        const { data: { session } } = await supabase.auth.getSession()
-        let currentUser = session?.user || null
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', u.id)
+          .single();
 
-        if (currentUser) {
-          console.log('[Auth] Usuário detectado via getSession:', currentUser.email)
-          setUser(currentUser)
-          
-          // --- FEEDBACK IMEDIATO ---
-          // Prioriza o cargo do token ou mantêm o do cache se for compatível
-          let initialRole: any = currentUser.app_metadata?.role || 'visitante'
-          if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
-            initialRole = 'admin'
-          }
-
-          // Se o perfil atual (do cache) não bate com o user logado, limpa
-          if (profile && profile.id !== currentUser.id) {
-            setProfile(null)
-          }
-
-          setLoading(false) // Libera a UI rápido
-
-          // --- BUSCA PERFIL REAL DO BANCO ---
-          const { data: profileData, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .single()
-
-          if (!error && profileData) {
-            console.log('[Auth] Perfil sincronizado com o DB')
-            let finalRole = profileData.role || currentUser.app_metadata?.role || 'visitante'
-            
-            if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
-              finalRole = 'admin'
-            }
-
-            const updatedProfile: Profile = {
-              id: currentUser.id,
-              email: currentUser.email || '',
-              full_name: profileData.full_name || currentUser.user_metadata?.full_name || 'Usuário',
-              role: finalRole as any,
-              avatar_url: profileData.avatar_url || currentUser.user_metadata?.avatar_url || null
-            }
-            
-            setProfile(updatedProfile)
-            localStorage.setItem('eunaman_profile', JSON.stringify(updatedProfile))
-          }
-        } else {
-          setLoading(false)
+        let role = (profileData?.role || u.app_metadata?.role || 'visitante').toLowerCase();
+        
+        // Regra especial para administradores conhecidos
+        if (u.email?.includes('marcos.rocha') || u.email?.includes('douglas.torres')) {
+          role = 'admin';
         }
+
+        const finalProfile: Profile = {
+          id: u.id,
+          email: u.email || '',
+          full_name: profileData?.full_name || u.user_metadata?.full_name || 'Usuário',
+          role: role as any,
+          avatar_url: profileData?.avatar_url || u.user_metadata?.avatar_url || null
+        };
+
+        setProfile(finalProfile);
+        localStorage.setItem('eunaman_profile', JSON.stringify(finalProfile));
       } catch (err) {
-        console.error('[Auth] Erro na sessão inicial:', err)
-        setLoading(false)
+        console.error('[Auth] Erro ao carregar perfil:', err);
+      } finally {
+        setLoading(false);
       }
-    }
+    };
 
-    initSession()
+    // 2. Ouvir mudanças de estado (Login, Logout, Session Restore)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] Evento:', event);
 
-    // 2. Ouvir mudanças (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
-      console.log('[Auth] Mudança de estado:', _event)
-      
-        if (_event === 'PASSWORD_RECOVERY') {
-          console.log('[Auth] Recuperação detectada, redirecionando...')
-          window.location.assign('/login/reset-password')
-          return
-        }
+      if (event === 'PASSWORD_RECOVERY') {
+        window.location.assign('/login/reset-password');
+        return;
+      }
 
-        if (session && session.user) {
-          const currentUser = session.user
-          setUser(currentUser)
-          
-          let initialRole = currentUser.app_metadata?.role || 'visitante'
-          if (currentUser.email?.includes('marcos.rocha') || currentUser.email?.includes('douglas.torres')) {
-            initialRole = 'admin'
-          }
+      if (session?.user) {
+        setUser(session.user);
+        await fetchProfile(session.user);
+      } else {
+        setUser(null);
+        setProfile(null);
+        localStorage.removeItem('eunaman_profile');
+        setLoading(false);
 
-          // Busca perfil com tratamento de erro robusto
-          supabase
-            .from('profiles')
-            .select('role, full_name, avatar_url')
-            .eq('id', currentUser.id)
-            .single()
-            .then(({ data: profileData, error: profileError }) => {
-              if (profileError) {
-                console.warn('[Auth] Erro ao buscar perfil:', profileError.message)
-              }
-              
-              const finalRole = profileData?.role || initialRole
-              const newProfile: Profile = {
-                id: currentUser.id,
-                email: currentUser.email || '',
-                full_name: profileData?.full_name || currentUser.user_metadata?.full_name || 'Usuário',
-                role: finalRole as any,
-                avatar_url: profileData?.avatar_url || currentUser.user_metadata?.avatar_url || null
-              }
-              setProfile(newProfile)
-              localStorage.setItem('eunaman_profile', JSON.stringify(newProfile))
-              setLoading(false)
-            })
-            .catch(err => {
-              console.error('[Auth] Erro crítico no onAuthStateChange:', err)
-              setLoading(false)
-            })
-        } else {
-          setUser(null)
-          setProfile(null)
-          localStorage.removeItem('eunaman_profile')
-          setLoading(false)
-          
-          // Redireciona apenas se necessário e se estiver no navegador
-          if (typeof window !== 'undefined') {
-            const isAtLogin = window.location.pathname.startsWith('/login')
-            const isAtApi = window.location.pathname.startsWith('/api')
-            
-            if (session && session.user && isAtLogin) {
-              window.location.assign('/')
-              return
-            }
-
-            if (!session && !isAtLogin && !isAtApi) {
-              window.location.assign('/login')
-            }
+        // Redirecionamento se não estiver em rotas públicas
+        if (typeof window !== 'undefined') {
+          const isAtLogin = window.location.pathname.startsWith('/login');
+          const isAtApi = window.location.pathname.startsWith('/api');
+          if (!isAtLogin && !isAtApi) {
+            window.location.assign('/login');
           }
         }
-    })
+      }
+    });
 
     return () => {
-      subscription.unsubscribe()
-    }
-  }, [supabase, router])
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   const signOut = async () => {
     try {

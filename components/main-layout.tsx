@@ -87,6 +87,29 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   const isDark = theme === 'dark';
 
+  if (authLoading) {
+    return (
+      <div className={cn("min-h-screen flex items-center justify-center", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
+        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-1000">
+          <div className="relative">
+             <div className="w-24 h-24 rounded-full border-4 border-zinc-200 dark:border-zinc-800 border-t-green-600 animate-spin" />
+             <div className="absolute inset-0 flex items-center justify-center">
+                <img src="/logo-eunaman.png" alt="Logo" className="w-12 h-12 object-contain grayscale opacity-20" />
+             </div>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+             <p className={cn("text-lg font-black uppercase tracking-[0.2em]", isDark ? "text-green-500/50" : "text-green-800/50")}>
+               Carregando Sistema
+             </p>
+             <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest animate-pulse">
+               PCM • Gestão de Frota
+             </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen transition-colors" style={{ backgroundColor: isDark ? "#040e04" : "#f9fafb" }}>
       <div
