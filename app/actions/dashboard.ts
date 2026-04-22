@@ -142,8 +142,18 @@ export async function getDashboardData(filtros?: {
   dataInicio?: string;
   dataFim?: string;
 }): Promise<DashboardData> {
-  // Chave do cache baseada nos filtros
-  const cacheKey = JSON.stringify(filtros || {});
+  // Chave do cache normalizada baseada nos filtros
+  const normalizedFiltros = {
+    mes: filtros?.mes || 0,
+    ano: filtros?.ano || 0,
+    categoria: (filtros?.categoria || "").toUpperCase(),
+    placa: (filtros?.placa || "").toUpperCase(),
+    modulo: (filtros?.modulo || "").toUpperCase(),
+    status: (filtros?.status || "").toUpperCase(),
+    dataInicio: filtros?.dataInicio || "",
+    dataFim: filtros?.dataFim || ""
+  };
+  const cacheKey = JSON.stringify(normalizedFiltros);
   const cached = dashboardCache.get(cacheKey);
   const agoraTimestamp = Date.now();
 
@@ -163,18 +173,22 @@ export async function getDashboardData(filtros?: {
   const mesAtualRef = agoraRef.getMonth() + 1;
   const anoAtualRef = agoraRef.getFullYear();
 
-  // Smart Detection & Infrastructure Fetching - PARALLEL
+  // 1. Smart Detection & Parallel Metadata Fetching
   let mesFiltro = filtros?.mes || 0;
   let anoFiltro = filtros?.ano || 0;
   let calSuzano: any = null;
-
-  // Se não temos filtros, buscamos o calendário de HOJE e todos os equipamentos em paralelo
   const todayStr = agoraRef.toISOString().split('T')[0];
-  
-  const [infraRes] = await Promise.all([
+
+  // Buscamos calendários, equipamentos e outros metadados em PARALELO para evitar waterfalls
+  const [infraRes, eqRes, escalasRes, prevRes] = await Promise.all([
     mesFiltro === 0 
       ? supabase.from("calendario_suzano").select("*").lte("data_inicio", todayStr).gte("data_fim", todayStr).single()
-      : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single()
+      : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single(),
+    supabase.from("equipamentos")
+      .select("id, placa, tipo, categoria, modulo, modelo, status")
+      .or("status.is.null,status.neq.Inativo,status.neq.INATIVO"),
+    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
+    supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa, categoria)")
   ]);
 
   if (infraRes.data) {
@@ -186,6 +200,7 @@ export async function getDashboardData(filtros?: {
     anoFiltro = anoFiltro || anoAtualRef;
   }
 
+  // 2. Cálculo de Datas (depende apenas dos metadados e filtros)
   let inicioFiltro = "";
   let fimFiltro = "";
   let diasReferencia = 0;
@@ -204,44 +219,40 @@ export async function getDashboardData(filtros?: {
     fimFiltro = fimEfetivo.toISOString();
     dataInicioExibicao = filtros.dataInicio;
     dataFimExibicao = filtros.dataFim;
-  } else {
-    // Calendário já foi buscado no passo acima ou será buscado se necessário
-
-    if (calSuzano) {
-      inicioFiltro = calSuzano.data_inicio;
-      dataInicioExibicao = calSuzano.data_inicio;
-      dataFimExibicao = calSuzano.data_fim;
-      const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
-      const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
-      
-      const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
-      
-      let fimEfetivoCal = dFimCal;
-      if (isMesFuturoOuAtual && dFimCal > ontem) {
-        fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
-      }
-      
-      const diffMsSuzano = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
-      diasReferencia = Math.floor(diffMsSuzano / 86400000) + 1;
-      const diffTotalMsSuzano = Math.max(0, dFimCal.getTime() - dInicioCal.getTime());
-      totalDiasCalendario = Math.floor(diffTotalMsSuzano / 86400000) + 1;
-      fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
-    } else {
-      inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
-      const diasNoMesCivil = new Date(anoFiltro, mesFiltro, 0).getDate();
-      const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMesCivil, 23, 59, 59);
-      const fimEfetivoCivil = dFimCivil > agoraRef ? agoraRef : dFimCivil;
-      const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
-      const diffMsCivil = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
-      diasReferencia = Math.floor(diffMsCivil / 86400000) + 1;
-      totalDiasCalendario = diasNoMesCivil;
-      fimFiltro = fimEfetivoCivil.toISOString();
-      dataInicioExibicao = inicioFiltro;
-      dataFimExibicao = fimFiltro.split("T")[0];
+  } else if (calSuzano) {
+    inicioFiltro = calSuzano.data_inicio;
+    dataInicioExibicao = calSuzano.data_inicio;
+    dataFimExibicao = calSuzano.data_fim;
+    const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
+    const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
+    
+    const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
+    
+    let fimEfetivoCal = dFimCal;
+    if (isMesFuturoOuAtual && dFimCal > ontem) {
+      fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
     }
+    
+    const diffMsSuzano = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
+    diasReferencia = Math.floor(diffMsSuzano / 86400000) + 1;
+    const diffTotalMsSuzano = Math.max(0, dFimCal.getTime() - dInicioCal.getTime());
+    totalDiasCalendario = Math.floor(diffTotalMsSuzano / 86400000) + 1;
+    fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
+  } else {
+    inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
+    const diasNoMesCivil = new Date(anoFiltro, mesFiltro, 0).getDate();
+    const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMesCivil, 23, 59, 59);
+    const fimEfetivoCivil = dFimCivil > agoraRef ? agoraRef : dFimCivil;
+    const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
+    const diffMsCivil = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
+    diasReferencia = Math.floor(diffMsCivil / 86400000) + 1;
+    totalDiasCalendario = diasNoMesCivil;
+    fimFiltro = fimEfetivoCivil.toISOString();
+    dataInicioExibicao = inicioFiltro;
+    dataFimExibicao = fimFiltro.split("T")[0];
   }
 
-  // 1. Consultas Paralelizadas (Otimização SQL Pushdown e Paralelismo Total)
+  // 3. Busca de Ordens de Serviço (agora com as datas precisas)
   let queryOS = supabase.from("ordens_servico").select(`
     id, status, horas_manutencao, data_abertura, data_fechamento, 
     equipamento_id, placa, classe, foi_enviado_reserva,
@@ -250,42 +261,11 @@ export async function getDashboardData(filtros?: {
   .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`)
   .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`);
 
-  let queryEq = supabase.from("equipamentos")
-    .select("id, placa, tipo, categoria, modulo, modelo, status")
-    .or("status.is.null,status.neq.Inativo,status.neq.INATIVO");
-
   if (filtros?.placa) {
-    const pUpper = filtros.placa.toUpperCase();
-    queryOS = queryOS.eq('placa', pUpper);
-    queryEq = queryEq.eq('placa', pUpper);
+    queryOS = queryOS.eq('placa', filtros.placa.toUpperCase());
   }
 
-  if (filtros?.categoria && filtros.categoria !== "Todas") {
-    queryEq = queryEq.eq('categoria', filtros.categoria.toUpperCase());
-  }
-
-  const [osRes, eqRes, escalasRes, prevRes, calSuzanoExtraRes] = await Promise.all([
-    queryOS,
-    queryEq,
-    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
-    supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa, categoria)"),
-    (!calSuzano && mesFiltro !== 0) ? supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single() : Promise.resolve({ data: calSuzano } as any)
-  ]);
-
-  if (!calSuzano && calSuzanoExtraRes.data) {
-    calSuzano = calSuzanoExtraRes.data;
-    inicioFiltro = calSuzano.data_inicio;
-    dataInicioExibicao = calSuzano.data_inicio;
-    dataFimExibicao = calSuzano.data_fim;
-    const dFimCalExtra = new Date(calSuzano.data_fim + 'T23:59:59');
-    const dInicioCalExtra = new Date(calSuzano.data_inicio + 'T00:00:00');
-    let fimEfetivoCalExtra = dFimCalExtra;
-    if (dFimCalExtra > ontem) fimEfetivoCalExtra = ontem < dInicioCalExtra ? dInicioCalExtra : ontem;
-    const diffMsExtra = Math.max(0, fimEfetivoCalExtra.getTime() - dInicioCalExtra.getTime());
-    diasReferencia = Math.floor(diffMsExtra / 86400000) + 1;
-    totalDiasCalendario = Math.floor(Math.max(0, dFimCalExtra.getTime() - dInicioCalExtra.getTime()) / 86400000) + 1;
-    fimFiltro = dFimCalExtra.toISOString().split('T')[0] + 'T23:59:59';
-  }
+  const [osRes] = await Promise.all([queryOS]);
 
   const allOS = osRes.data ?? [];
   const todasAsEquips = eqRes.data ?? [];

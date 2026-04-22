@@ -43,7 +43,7 @@ export default function LoginPage({
             Bem-vindo de volta
           </h2>
           
-          <form className="space-y-5">
+          <form action={login} className="space-y-5" id="login-form">
             <div className="space-y-2">
               <label 
                 htmlFor="email" 
@@ -117,7 +117,6 @@ function LoginButton() {
   return (
     <button
       type="submit"
-      formAction={login}
       disabled={pending}
       className="group relative w-full overflow-hidden rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 dark:focus:ring-offset-zinc-900"
     >
