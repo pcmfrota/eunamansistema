@@ -139,17 +139,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
   if (isLoadingInitial || !data) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full border-4 border-zinc-100 dark:border-zinc-800 border-t-green-600 animate-spin" />
-          <RefreshCcw className="absolute inset-0 m-auto w-6 h-6 text-green-600/30 animate-pulse" />
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs animate-pulse">
-            Processando Dashboard
-          </p>
-          <p className="text-[10px] text-zinc-400">Isso pode levar alguns segundos devido ao volume de dados</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+        <PremiumLoader type="squares-sequential" text="Carregando Frota" subtext="Sincronizando dados em tempo real..." />
       </div>
     );
   }
@@ -244,7 +235,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       {/* Gráficos e tabelas */}
       <div className="flex flex-col gap-6 w-full">
-        <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
+        <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
                <button 

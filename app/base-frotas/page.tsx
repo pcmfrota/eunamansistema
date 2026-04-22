@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
 import EquipamentoModal from './EquipamentoModal';
+import { PremiumLoader } from '@/components/premium-loader';
 import { 
   buscarEquipamentosComEscala, 
   excluirEquipamento, 
@@ -41,6 +42,7 @@ export default function BaseFrotasPage() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isPending, startTransition] = React.useTransition();
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -144,11 +146,14 @@ export default function BaseFrotasPage() {
     XLSX.writeFile(workbook, "base_frotas.xlsx");
   };
 
-  const filteredVehicles = vehicles.filter(v => 
-    v.placa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.tipo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.modulo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVehicles = React.useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return vehicles.filter(v => 
+      v.placa?.toLowerCase().includes(q) ||
+      v.tipo?.toLowerCase().includes(q) ||
+      v.modulo?.toLowerCase().includes(q)
+    );
+  }, [vehicles, searchTerm]);
 
   const getTipoColor = (tipo: string) => {
     if (!tipo) return 'slate';
@@ -163,7 +168,7 @@ export default function BaseFrotasPage() {
   };
 
   return (
-    <div className="p-5 md:p-8 flex flex-col gap-6 bg-[#f8fafc] dark:bg-[#0f1115] min-h-screen">
+    <div className="p-5 md:p-8 flex flex-col gap-6 bg-zinc-50 dark:bg-zinc-950 min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-xl">
@@ -227,8 +232,9 @@ export default function BaseFrotasPage() {
             <input 
               type="text"
               placeholder="Buscar por placa, tipo ou módulo..."
+              value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400 font-bold"
             />
           </div>
         </div>
@@ -251,11 +257,22 @@ export default function BaseFrotasPage() {
                 <th className="py-4 px-6 font-semibold text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
               {loading ? (
-                <tr><td colSpan={9} className="py-12 text-center text-slate-400">Carregando frota...</td></tr>
+                <tr>
+                  <td colSpan={10} className="py-20 text-center">
+                    <PremiumLoader type="squares-sequential" text="Carregando Frota" subtext="Acessando base central..." />
+                  </td>
+                </tr>
               ) : filteredVehicles.length === 0 ? (
-                <tr><td colSpan={9} className="py-12 text-center text-slate-400">Nenhum veículo encontrado.</td></tr>
+                <tr>
+                  <td colSpan={10} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-2 text-zinc-400">
+                      <Search size={32} className="opacity-20" />
+                      <p className="text-sm font-medium">Nenhum veículo encontrado para "{searchTerm}"</p>
+                    </div>
+                  </td>
+                </tr>
               ) : filteredVehicles.map((vehicle) => (
                 <tr key={vehicle.id} className={cn("transition-colors", selectedVehicles.includes(vehicle.id) ? "bg-blue-50/50 dark:bg-blue-500/5" : "hover:bg-slate-50/50 dark:hover:bg-slate-800/50")}>
                   <td className="py-3.5 px-6">

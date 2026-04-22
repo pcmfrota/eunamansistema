@@ -44,15 +44,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(cached);
           console.log('[Auth] Carregando Perfil do Cache Local:', parsed);
           setProfile(parsed);
-          setLoading(false); // Já temos algo para mostrar
-          skipLoading = true; // Não mostramos o loader global no refresh de fundo
+          setLoading(false); // Já temos algo para mostrar, interrompe o loader global
+          skipLoading = true; 
         } catch (e) {
           console.error('[Auth] Erro ao ler cache de perfil:', e);
         }
       }
     }
 
-    if (!skipLoading) setLoading(true);
+    // Se já temos um perfil (do cache ou estado), não forçamos o loading global de tela inteira
+    if (!skipLoading && !profile) {
+      setLoading(true);
+    }
     
     console.group(`[Auth] Carregando Perfil do Banco: ${userEmailBase}`);
     
@@ -110,8 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setProfile(finalProfile);
 
-      if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/')) {
-        router.push('/');
+      // 5. Redirecionamento inteligente apenas se estiver na tela de login
+      if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/auth/callback')) {
+        console.log('[Auth] Redirecionando para Dashboard após login bem-sucedido');
+        router.replace('/');
       }
 
     } catch (err) {

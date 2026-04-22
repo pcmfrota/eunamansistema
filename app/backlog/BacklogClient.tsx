@@ -23,6 +23,7 @@ import BacklogModal from './BacklogModal';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
 import BacklogDashboard from './BacklogDashboard';
+import { PremiumLoader } from '@/components/premium-loader';
 
 type Placa = { id: string; placa: string; modulo: string | null };
 
@@ -90,20 +91,23 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
     setFilterStatus("");
   };
 
-  // Dynamic options from data
-  const placaOptions = Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort();
-  const moduloOptions = Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort();
-  const statusOptions = Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort();
+  // Dynamic options from data - MEMOIZED
+  const placaOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort(), [items]);
+  const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
+  const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
 
-  const filteredItems = items.filter(i => {
-    const matchSearch = !search || 
-      i.frota?.toLowerCase().includes(search.toLowerCase()) ||
-      i.descricao?.toLowerCase().includes(search.toLowerCase());
-    const matchPlaca = !filterPlaca || i.frota === filterPlaca;
-    const matchModulo = !filterModulo || i.modulo === filterModulo;
-    const matchStatus = !filterStatus || i.status === filterStatus;
-    return matchSearch && matchPlaca && matchModulo && matchStatus;
-  });
+  const filteredItems = React.useMemo(() => {
+    return items.filter(i => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || 
+        i.frota?.toLowerCase().includes(q) ||
+        i.descricao?.toLowerCase().includes(q);
+      const matchPlaca = !filterPlaca || i.frota === filterPlaca;
+      const matchModulo = !filterModulo || i.modulo === filterModulo;
+      const matchStatus = !filterStatus || i.status === filterStatus;
+      return matchSearch && matchPlaca && matchModulo && matchStatus;
+    });
+  }, [items, search, filterPlaca, filterModulo, filterStatus]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -306,23 +310,29 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
           )}
 
           {/* Main Table Content */}
-          <div className="flex-1 min-h-0">
-            <BacklogTable 
-              items={filteredItems}
-              selectedIds={selectedIds}
-              onToggleSelect={(id) => {
-                const next = new Set(selectedIds);
-                if (next.has(id)) next.delete(id); else next.add(id);
-                setSelectedIds(next);
-              }}
-              onToggleSelectAll={() => {
-                if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
-                else setSelectedIds(new Set(filteredItems.map(i => i.id)));
-              }}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              view={view as 'Geral' | 'Detalhamento'}
-            />
+          <div className="flex-1 min-h-[400px]">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-full py-20 bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800">
+                <PremiumLoader type="squares-sequential" text="Carregando Backlog" subtext="Calculando aging e prioridades..." />
+              </div>
+            ) : (
+              <BacklogTable 
+                items={filteredItems}
+                selectedIds={selectedIds}
+                onToggleSelect={(id) => {
+                  const next = new Set(selectedIds);
+                  if (next.has(id)) next.delete(id); else next.add(id);
+                  setSelectedIds(next);
+                }}
+                onToggleSelectAll={() => {
+                  if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
+                  else setSelectedIds(new Set(filteredItems.map(i => i.id)));
+                }}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                view={view as 'Geral' | 'Detalhamento'}
+              />
+            )}
           </div>
         </>
       )}

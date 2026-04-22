@@ -81,11 +81,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const isLoginPage = pathname?.startsWith("/login");
+  const isLoginPage = pathname?.startsWith("/login") || pathname === "/auth/callback";
 
+  // Se for página de login, renderiza apenas o conteúdo sem sidebar
   if (isLoginPage) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-between overflow-x-hidden">
+      <main className="flex min-h-screen flex-col items-center justify-center overflow-hidden bg-zinc-950">
         {children}
       </main>
     );
@@ -93,10 +94,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   const isDark = theme === 'dark';
 
-  if (authLoading) {
+  // Se estiver carregando auth E não tiver perfil, mostra o loader premium
+  // Se já tiver perfil (do cache), renderiza o layout e deixa o refresh acontecer em background
+  if (authLoading && !profile) {
     return (
-      <div className={cn("min-h-screen flex items-center justify-center", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
-        <PremiumLoader type="circle-fill" />
+      <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-500", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
+        <PremiumLoader type="squares-sequential" text="Iniciando Sessão" subtext="PCM • EUNAMAN SISTEMA" />
       </div>
     );
   }
@@ -160,12 +163,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          <div className="w-full py-4 px-2 flex items-center justify-center bg-white">
+          <div className="w-full py-4 px-2 flex items-center justify-center rounded-2xl mb-2 bg-white/90 dark:bg-white shadow-sm border border-white/20">
             <img
               src="/logo-eunaman-full.png"
-              alt="EUNAMAN - Forest Support Expert"
-              className="w-full h-auto object-contain mix-blend-multiply"
-              style={{ maxHeight: '80px' }}
+              alt="EUNAMAN"
+              className="w-full h-auto object-contain brightness-110 contrast-110"
+              style={{ maxHeight: '60px' }}
             />
           </div>
 

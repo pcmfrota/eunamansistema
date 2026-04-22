@@ -29,11 +29,11 @@ export default function LoginPage({
 
       <div className="z-10 w-full max-w-md">
         <div className="mb-10 flex flex-col items-center justify-center text-center">
-          <div className="flex items-center justify-center bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+          <div className="flex items-center justify-center p-4 bg-white/95 rounded-3xl shadow-2xl border border-white/20 mb-4">
             <img 
               src="/logo-eunaman-full.png" 
               alt="EUNAMAN" 
-              className="h-24 w-auto mix-blend-multiply contrast-125"
+              className="h-24 w-auto brightness-110 contrast-110"
             />
           </div>
         </div>

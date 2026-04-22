@@ -509,7 +509,7 @@ export function GraficoVeiculos({
         />
       )}
 
-      <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+    <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
@@ -596,7 +596,7 @@ export function GraficoVeiculos({
               radius={[3, 3, 0, 0]}
               label={{
                 position: "top",
-                fill: "#0f172a", // Escurecido para Zinc-900 para máxima legibilidade
+                fill: isDark ? "#f8fafc" : "#0f172a", 
                 fontSize: 10,
                 fontWeight: 800,
                 formatter: (v: number) => `${v}%`,
@@ -664,7 +664,7 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
       <text
         x={x + width / 2}
         y={y + height / 2 + 4}
-        fill="#0f172a" // Escurecido de #fff para #0f172a
+        fill={isDark ? "#f8fafc" : "#0f172a"} 
         fontSize={10}
         textAnchor="middle"
         fontWeight={800}

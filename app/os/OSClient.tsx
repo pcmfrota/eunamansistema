@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import OSFormModal from "./NovoModal";
 import OSDashboard from "./OSDashboard";
 import OSFichaModal, { type OSFichaData } from "./OSFicha";
+import { PremiumLoader } from "@/components/premium-loader";
+import React from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type OS = {
@@ -161,38 +163,42 @@ export default function ControleOSClient({
   useEffect(() => { setOrdens(initialOrdens); }, [initialOrdens]);
 
   // Derived lists for filter dropdowns
-  const modulos = ["Todos Módulos", ...Array.from(new Set(ordens.map(o => o.modulo).filter(Boolean)))];
+  const modulos = React.useMemo(() => 
+    ["Todos Módulos", ...Array.from(new Set(ordens.map(o => o.modulo).filter(Boolean)))],
+    [ordens]
+  );
 
-  // Filter + sort
-  const filtradas = ordens
-    .filter(o => {
-      const q = busca.toLowerCase();
-      const matchBusca = !q || o.numero_os.toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
-      const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
-      const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
-      
-      let matchPeriodo = true;
-      if (filtroPeriodo !== "Todos Períodos" && periodos.length > 0) {
-        const p = periodos.find(per => `${per.mes}-${per.ano}` === filtroPeriodo);
-        if (p) {
-          const inicio = new Date(p.data_inicio + "T00:00:00");
-          const fim = new Date(p.data_fim + "T23:59:59");
-          
-          // Lógica de interseção PCM: (Início OS <= Fim Período) AND (Fim OS >= Início Período OR Fim OS null)
-          const dAb = new Date(o.horario_parada || o.data_abertura);
-          const dFech = o.data_fechamento ? new Date(o.data_fechamento) : null;
-          
-          matchPeriodo = dAb <= fim && (dFech == null || dFech >= inicio);
+  // Filter + sort - MEMOIZED for performance
+  const filtradas = React.useMemo(() => {
+    return ordens
+      .filter(o => {
+        const q = busca.toLowerCase();
+        const matchBusca = !q || o.numero_os.toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
+        const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
+        const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
+        
+        let matchPeriodo = true;
+        if (filtroPeriodo !== "Todos Períodos" && periodos.length > 0) {
+          const p = periodos.find(per => `${per.mes}-${per.ano}` === filtroPeriodo);
+          if (p) {
+            const inicio = new Date(p.data_inicio + "T00:00:00");
+            const fim = new Date(p.data_fim + "T23:59:59");
+            
+            const dAb = new Date(o.horario_parada || o.data_abertura);
+            const dFech = o.data_fechamento ? new Date(o.data_fechamento) : null;
+            
+            matchPeriodo = dAb <= fim && (dFech == null || dFech >= inicio);
+          }
         }
-      }
 
-      return matchBusca && matchStatus && matchModulo && matchPeriodo;
-    })
-    .sort((a, b) => {
-      if (filtroOrdem === "Mais Recente") return new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime();
-      if (filtroOrdem === "Mais Antiga") return new Date(a.data_abertura).getTime() - new Date(b.data_abertura).getTime();
-      return 0;
-    });
+        return matchBusca && matchStatus && matchModulo && matchPeriodo;
+      })
+      .sort((a, b) => {
+        if (filtroOrdem === "Mais Recente") return new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime();
+        if (filtroOrdem === "Mais Antiga") return new Date(a.data_abertura).getTime() - new Date(b.data_abertura).getTime();
+        return 0;
+      });
+  }, [ordens, busca, filtroStatus, filtroModulo, filtroPeriodo, filtroOrdem, periodos]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filtradas.length) {
@@ -295,7 +301,7 @@ export default function ControleOSClient({
   }
 
   return (
-    <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[96rem] mx-auto w-full">
+    <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[96rem] mx-auto w-full bg-zinc-50 dark:bg-zinc-950 min-h-screen">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -458,7 +464,13 @@ export default function ControleOSClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
-                {filtradas.map(os => (
+                {isPending ? (
+                  <tr>
+                    <td colSpan={10} className="py-20 text-center">
+                      <PremiumLoader type="squares-sequential" text="Processando Dados" subtext="Sincronizando com servidor..." />
+                    </td>
+                  </tr>
+                ) : filtradas.map(os => (
                   <tr key={os.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors group">
                     <td className="px-4 py-3">
                       <input type="checkbox" checked={selectedIds.has(os.id)} onChange={() => toggleSelect(os.id)} className="rounded border-zinc-300" />
@@ -520,7 +532,7 @@ export default function ControleOSClient({
                     </td>
                   </tr>
                 ))}
-                {filtradas.length === 0 && (
+                {!isPending && filtradas.length === 0 && (
                   <tr>
                     <td colSpan={9} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhuma OS encontrada</td>
                   </tr>
