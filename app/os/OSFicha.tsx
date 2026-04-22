@@ -260,10 +260,11 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
     fetchAndCalc();
   }, [os]);
 
+  const inicioParaCalc = os.horario_parada || os.data_abertura;
   const horasCalc =
     os.horas_manutencao != null
       ? formatMinutesToHms(Math.round(os.horas_manutencao * 60))
-      : calcHoras(os.data_abertura, os.data_fechamento);
+      : calcHoras(inicioParaCalc, os.data_fechamento);
 
   const placa = getPlaca(os);
 

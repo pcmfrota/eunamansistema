@@ -43,7 +43,12 @@ export async function getOSDashboardData(): Promise<OSDashboardData> {
       .order("mes", { ascending: true }),
     supabase
       .from("ordens_servico")
-      .select("id, numero_os, placa, modulo, status, data_abertura, data_fechamento, horas_manutencao, classe, motivo, sistema, sub_sistema, equipamento_id, horario_parada")
+      .select(`
+        id, numero_os, placa, modulo, status, data_abertura, data_fechamento, 
+        horas_manutencao, classe, motivo, sistema, sub_sistema, equipamento_id, 
+        horario_parada, foi_enviado_reserva, qual_reserva, horas_reserva_chegou,
+        equipamento:equipamento_id (placa, modulo)
+      `)
       .order("data_abertura", { ascending: false }),
   ]);
 

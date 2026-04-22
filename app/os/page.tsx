@@ -34,7 +34,13 @@ export default async function ControleOSPage() {
   // Limite de 1000 para evitar travamento da página. Filtros mais profundos devem ser feitos no Dashboard.
   const { data: ordens } = await supabase
     .from('ordens_servico')
-    .select('id, numero_os, placa, modulo, status, data_abertura, data_fechamento, horas_manutencao, descricao, horimetro, operacao_tipo, local, classe, foi_enviado_reserva, motivo, sistema, sub_sistema, componente, observacoes, horario_parada, equipamento_id')
+    .select(`
+      id, numero_os, placa, modulo, status, data_abertura, data_fechamento, 
+      horas_manutencao, descricao, horimetro, operacao_tipo, local, classe, 
+      foi_enviado_reserva, motivo, sistema, sub_sistema, componente, 
+      observacoes, horario_parada, equipamento_id, qual_reserva, horas_reserva_chegou,
+      equipamento:equipamento_id (placa, modulo)
+    `)
     .not('equipamento_id', 'is', null)
     .order('data_abertura', { ascending: false })
     .limit(1000);
