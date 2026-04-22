@@ -55,10 +55,12 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   // 1. Redireciona não-autenticados para login
   if (!user) {
+    if (pathname === '/login') return response
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

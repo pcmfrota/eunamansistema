@@ -163,28 +163,27 @@ export async function getDashboardData(filtros?: {
   const mesAtualRef = agoraRef.getMonth() + 1;
   const anoAtualRef = agoraRef.getFullYear();
 
-  // Smart Detection: Se não houver filtros, tenta achar o mês operacional que contém HOJE
+  // Smart Detection & Infrastructure Fetching - PARALLEL
   let mesFiltro = filtros?.mes || 0;
   let anoFiltro = filtros?.ano || 0;
-  let calSuzano = null;
+  let calSuzano: any = null;
 
-  if (mesFiltro === 0) {
-    const todayStr = agoraRef.toISOString().split('T')[0];
-    const { data: currentCal } = await supabase
-      .from("calendario_suzano")
-      .select("*")
-      .lte("data_inicio", todayStr)
-      .gte("data_fim", todayStr)
-      .single();
-    
-    if (currentCal) {
-      calSuzano = currentCal;
-      mesFiltro = currentCal.mes;
-      anoFiltro = currentCal.ano;
-    } else {
-      mesFiltro = mesAtualRef;
-      anoFiltro = anoAtualRef;
-    }
+  // Se não temos filtros, buscamos o calendário de HOJE e todos os equipamentos em paralelo
+  const todayStr = agoraRef.toISOString().split('T')[0];
+  
+  const [infraRes] = await Promise.all([
+    mesFiltro === 0 
+      ? supabase.from("calendario_suzano").select("*").lte("data_inicio", todayStr).gte("data_fim", todayStr).single()
+      : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single()
+  ]);
+
+  if (infraRes.data) {
+    calSuzano = infraRes.data;
+    mesFiltro = calSuzano.mes;
+    anoFiltro = calSuzano.ano;
+  } else {
+    mesFiltro = mesFiltro || mesAtualRef;
+    anoFiltro = anoFiltro || anoAtualRef;
   }
 
   let inicioFiltro = "";
@@ -206,15 +205,7 @@ export async function getDashboardData(filtros?: {
     dataInicioExibicao = filtros.dataInicio;
     dataFimExibicao = filtros.dataFim;
   } else {
-    if (!calSuzano) {
-      const { data: fetchedCal } = await supabase
-        .from("calendario_suzano")
-        .select("*")
-        .eq("mes", mesFiltro)
-        .eq("ano", anoFiltro)
-        .single();
-      calSuzano = fetchedCal;
-    }
+    // Calendário já foi buscado no passo acima ou será buscado se necessário
 
     if (calSuzano) {
       inicioFiltro = calSuzano.data_inicio;
