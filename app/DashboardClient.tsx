@@ -40,8 +40,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   // Default filters to current month/year (from the initial data)
   const now = new Date(Date.now() - 3 * 3600 * 1000);
   const defaultFiltros: FiltrosValues = {
-    mes: now.getMonth() + 1,
-    ano: now.getFullYear(),
+    mes: initialData.mesSelecionado,
+    ano: initialData.anoSelecionado,
     categoria: "PESADA",
     placa: "",
     modulo: "",

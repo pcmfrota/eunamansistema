@@ -59,6 +59,8 @@ export type DashboardData = {
   docsAVencer: number;
   docsVencidos: number;
   filtroOpcoes: FiltroOpcoes;
+  mesSelecionado: number;
+  anoSelecionado: number;
   periodoLabel: string;
   data_inicio?: string;
   data_fim?: string;
@@ -147,8 +149,29 @@ export async function getDashboardData(filtros?: {
   const mesAtualRef = agoraRef.getMonth() + 1;
   const anoAtualRef = agoraRef.getFullYear();
 
-  const mesFiltro = filtros?.mes && filtros.mes > 0 ? filtros.mes : mesAtualRef;
-  const anoFiltro = filtros?.ano && filtros.ano > 0 ? filtros.ano : anoAtualRef;
+  // Smart Detection: Se não houver filtros, tenta achar o mês operacional que contém HOJE
+  let mesFiltro = filtros?.mes || 0;
+  let anoFiltro = filtros?.ano || 0;
+  let calSuzano = null;
+
+  if (mesFiltro === 0) {
+    const todayStr = agoraRef.toISOString().split('T')[0];
+    const { data: currentCal } = await supabase
+      .from("calendario_suzano")
+      .select("*")
+      .lte("data_inicio", todayStr)
+      .gte("data_fim", todayStr)
+      .single();
+    
+    if (currentCal) {
+      calSuzano = currentCal;
+      mesFiltro = currentCal.mes;
+      anoFiltro = currentCal.ano;
+    } else {
+      mesFiltro = mesAtualRef;
+      anoFiltro = anoAtualRef;
+    }
+  }
 
   let inicioFiltro = "";
   let fimFiltro = "";
@@ -169,12 +192,15 @@ export async function getDashboardData(filtros?: {
     dataInicioExibicao = filtros.dataInicio;
     dataFimExibicao = filtros.dataFim;
   } else {
-    const { data: calSuzano } = await supabase
-      .from("calendario_suzano")
-      .select("*")
-      .eq("mes", mesFiltro)
-      .eq("ano", anoFiltro)
-      .single();
+    if (!calSuzano) {
+      const { data: fetchedCal } = await supabase
+        .from("calendario_suzano")
+        .select("*")
+        .eq("mes", mesFiltro)
+        .eq("ano", anoFiltro)
+        .single();
+      calSuzano = fetchedCal;
+    }
 
     if (calSuzano) {
       inicioFiltro = calSuzano.data_inicio;
@@ -184,7 +210,13 @@ export async function getDashboardData(filtros?: {
       const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
       
       const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
-      const fimEfetivoCal = (isMesFuturoOuAtual && dFimCal > ontem) ? ontem : dFimCal;
+      
+      // Ajuste crítico: Se o mês operacional ainda não começou a ter dias passados (ontem < inicio),
+      // usamos o próprio início como fim temporário para evitar range negativo.
+      let fimEfetivoCal = dFimCal;
+      if (isMesFuturoOuAtual && dFimCal > ontem) {
+        fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
+      }
       
       const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
@@ -219,7 +251,9 @@ export async function getDashboardData(filtros?: {
   .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`)
   .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`);
 
-  let queryEq = supabase.from("equipamentos").select("id, placa, categoria, modulo, modelo, status");
+  let queryEq = supabase.from("equipamentos")
+    .select("id, placa, tipo, categoria, modulo, modelo, status")
+    .or("status.is.null,status.neq.Inativo,status.neq.INATIVO");
 
   if (filtros?.placa) {
     const pUpper = filtros.placa.toUpperCase();
@@ -231,14 +265,13 @@ export async function getDashboardData(filtros?: {
     queryEq = queryEq.eq('categoria', filtros.categoria.toUpperCase());
   }
 
-  const [osRes, eqRes, escalasRes, calSuzanoRes] = await Promise.all([
+  const [osRes, eqRes, escalasRes] = await Promise.all([
     queryOS,
     queryEq,
-    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
-    (!filtros?.dataInicio || !filtros?.dataFim) ? 
-      supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single() : 
-      Promise.resolve({ data: null })
+    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim")
   ]);
+
+  const calSuzanoRes = { data: calSuzano }; // Usa o que já foi buscado no início
 
   const allOS = osRes.data ?? [];
   const todasAsEquips = eqRes.data ?? [];
@@ -520,7 +553,7 @@ export async function getDashboardData(filtros?: {
   // Inicializa os 4 labels para garantir que apareçam mesmo sem dados
   LABELS_ORDEM.forEach(l => catDispPoolMap.set(l, { hManutDM: 0, hTotalDM: 0, hManutDO: 0, hTotalDO: 0, count: 0, qtdOS: 0 }));
   veiculos.forEach(v => {
-    const eq = frotaAtiva.find(e => e.placa?.toUpperCase().trim() === v.placa.toUpperCase().trim());
+    const eq = eqMapByPlaca.get(v.placa.toUpperCase().trim());
     const tipoRaw = (eq?.tipo || '').toUpperCase().trim();
     const label = TIPO_PARA_LABEL[tipoRaw];
     if (!label) return; // ignora tipos fora da lista
@@ -548,22 +581,26 @@ export async function getDashboardData(filtros?: {
     };
   });
 
-  // E. Disponibilidade Semanal
+  // E. Disponibilidade Semanal (Otimizada)
   const dispSemanal = [];
   const pInicioTime = periodoInicioObj.getTime();
   const pFimTime = periodoFimObj.getTime();
   const semanas = Math.ceil((pFimTime - pInicioTime) / (7 * 86400000));
+
+  // Pré-calcula os tempos das OS uma única vez
+  const osTimes = allOS.map(os => ({
+    start: (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime(),
+    end: (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime()
+  }));
 
   for (let s = 1; s <= semanas; s++) {
     const sInicio = pInicioTime + (s-1) * 7 * 86400000;
     const sFim = Math.min(pFimTime, sInicio + 7 * 86400000 - 1);
     
     let hIndispSemanaTotal = 0;
-    allOS.forEach(os => {
-      const oInicio = (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime();
-      const oFim = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
-      const eInicio = Math.max(oInicio, sInicio);
-      const eFim = Math.min(oFim, sFim);
+    osTimes.forEach(ot => {
+      const eInicio = Math.max(ot.start, sInicio);
+      const eFim = Math.min(ot.end, sFim);
       if (eInicio < eFim) hIndispSemanaTotal += (eFim - eInicio) / 3600000;
     });
 
@@ -619,8 +656,10 @@ export async function getDashboardData(filtros?: {
     periodoLabel: filtros?.dataInicio && filtros?.dataFim 
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`
       : `${MESES_NOME[mesFiltro]} ${anoFiltro}`,
-    data_inicio: dataInicioExibicao,
-    data_fim: dataFimExibicao,
+     data_inicio: dataInicioExibicao,
+     data_fim: dataFimExibicao,
+     mesSelecionado: mesFiltro,
+     anoSelecionado: anoFiltro,
     // os: allOSProcessed (REMOVIDO: Buscado sob demanda no modal para economizar payload)
   };
 }
