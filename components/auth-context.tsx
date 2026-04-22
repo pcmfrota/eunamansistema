@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
-  const fetchProfile = useCallback(async (u: User, skipLoading = false) => {
+  const fetchProfile = useCallback(async (u: User, skipLoading = false, ignoreCache = false) => {
     const userEmailBase = u.email?.toLowerCase().trim() || '';
     
     // 1. Determinação OTIMISTA de Role e Nome (Sem DB)
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     // 2. Tenta carregar do cache local primeiro para resposta instantânea
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !ignoreCache) {
       const cached = localStorage.getItem(`eunaman_profile_${u.id}`);
       if (cached) {
         try {
@@ -135,7 +135,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     if (user) {
-      await fetchProfile(user, true);
+      // Ao atualizar perfil, limpamos o cache local antes
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`eunaman_profile_${user.id}`);
+      }
+      await fetchProfile(user, true, true);
     }
   }, [user, fetchProfile]);
 
@@ -187,8 +191,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (session?.user) {
+        const previousUserId = user?.id;
         setUser(session.user);
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        
+        if (event === 'SIGNED_IN') {
+          // Se o usuário mudou, forçamos um reload total para limpar qualquer estado residual
+          if (previousUserId && previousUserId !== session.user.id) {
+            window.location.href = '/';
+            return;
+          }
+          await fetchProfile(session.user, false, true);
+        } else if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
           await fetchProfile(session.user, false);
         }
       } else {
@@ -202,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, router]); // Removido fetchProfile e pathname para evitar loops e re-inicializações
+  }, [supabase, router, user]); // Adicionado user para detectar mudanças de sessão corretamente
 
   const signOut = async () => {
     console.log('[Auth] Iniciando Logout...');

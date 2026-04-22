@@ -56,6 +56,11 @@ export default function PerfilPage() {
 
       if (error) throw error
       
+      // Sincroniza também com o metadata do Auth para evitar inconsistências
+      await supabase.auth.updateUser({
+        data: { full_name: fullName }
+      })
+      
       // Atualiza o contexto global
       await refreshProfile()
       
