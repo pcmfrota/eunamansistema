@@ -37,14 +37,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userEmailBase = u.email?.toLowerCase().trim() || '';
     
     // Tenta carregar do cache local primeiro para resposta instantânea
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !profile) {
       const cached = localStorage.getItem(`eunaman_profile_${u.id}`);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
           console.log('[Auth] Carregando Perfil do Cache Local:', parsed);
           setProfile(parsed);
-          setLoading(false); // Já temos algo para mostrar, interrompe o loader global
+          setLoading(false); // Já libera a UI
           skipLoading = true; 
         } catch (e) {
           console.error('[Auth] Erro ao ler cache de perfil:', e);
@@ -52,8 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Se já temos um perfil (do cache ou estado), não forçamos o loading global de tela inteira
-    if (!skipLoading && !profile) {
+    // Se já temos o perfil no estado (ex: de uma navegação anterior), liberamos o loading
+    if (profile) {
+      setLoading(false);
+      skipLoading = true;
+    }
+
+    // Só ativamos o loading global se realmente não tivermos NADA para mostrar
+    if (!profile && !skipLoading) {
       setLoading(true);
     }
     
