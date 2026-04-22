@@ -127,6 +127,10 @@ function parseLocal(dateStr: string | null): number {
   return new Date(dateStr).getTime();
 }
 
+// ─── Cache Global (Persiste no servidor enquanto o processo estiver rodando) ──────
+const dashboardCache = new Map<string, { data: DashboardData, timestamp: number }>();
+const CACHE_TTL = 60 * 1000; // 1 minuto de cache
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export async function getDashboardData(filtros?: {
   mes?: number;
@@ -138,6 +142,16 @@ export async function getDashboardData(filtros?: {
   dataInicio?: string;
   dataFim?: string;
 }): Promise<DashboardData> {
+  // Chave do cache baseada nos filtros
+  const cacheKey = JSON.stringify(filtros || {});
+  const cached = dashboardCache.get(cacheKey);
+  const agoraTimestamp = Date.now();
+
+  if (cached && (agoraTimestamp - cached.timestamp) < CACHE_TTL) {
+    console.log('[Dashboard] Retornando dados do cache para:', cacheKey);
+    return cached.data;
+  }
+
   const supabase = createClient();
   const agoraRef = new Date();
   // Ontem às 23:59:59 (D-1)
@@ -617,7 +631,7 @@ export async function getDashboardData(filtros?: {
 
   const MESES_NOME = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-  return {
+  const result: DashboardData = {
     totalOS: allOS.length,
     emAndamento: allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length,
     osFechadas: allOS.filter(o => o.status === "Fechada" || o.status === "Concluída").length,
@@ -660,6 +674,9 @@ export async function getDashboardData(filtros?: {
      data_fim: dataFimExibicao,
      mesSelecionado: mesFiltro,
      anoSelecionado: anoFiltro,
-    // os: allOSProcessed (REMOVIDO: Buscado sob demanda no modal para economizar payload)
   };
+
+  // Salva no cache antes de retornar
+  dashboardCache.set(cacheKey, { data: result, timestamp: agoraTimestamp });
+  return result;
 }

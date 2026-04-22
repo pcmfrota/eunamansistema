@@ -35,10 +35,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = useCallback(async (u: User, skipLoading = false) => {
     if (!skipLoading) setLoading(true);
-    console.log('[Auth] Buscando perfil para:', u.email);
+    const userEmail = u.email?.toLowerCase() || '';
+    console.log('[Auth] Iniciando busca de perfil para:', userEmail);
     
     try {
-      // Tenta buscar da tabela profiles
+      // 1. Regra de Ouro: Administradores Mestre sempre ganham (bypass DB se necessário)
+      const isMasterAdmin = userEmail.includes('marcos.rocha') || 
+                            userEmail.includes('douglas.torres') ||
+                            userEmail.includes('jessica') ||
+                            u.app_metadata?.role === 'admin';
+
+      // 2. Busca da tabela profiles
       const { data: profileData, error } = await supabase
         .from('profiles')
         .select('*')
@@ -46,36 +53,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        console.warn('[Auth] Erro ao buscar perfil:', error.message);
+        console.warn('[Auth] Aviso ao buscar perfil:', error.message);
       }
 
-      let role = (profileData?.role || u.app_metadata?.role || 'visitante').toLowerCase();
-      
-      // Regra especial para administradores conhecidos (fallback de emergência)
-      if (u.email?.includes('marcos.rocha') || u.email?.includes('douglas.torres')) {
+      // 3. Determinação da Role com Prioridade:
+      // Perfil do Banco > Master Admin > App Metadata > Default Visitante
+      let role = 'visitante';
+      if (profileData?.role) {
+        role = profileData.role;
+      } else if (isMasterAdmin) {
         role = 'admin';
+      } else if (u.app_metadata?.role) {
+        role = u.app_metadata.role;
       }
+      
+      role = role.toLowerCase();
 
-      // Fallback robusto para o nome: 
-      // 1. Tabela profiles (full_name ou name)
-      // 2. User Metadata (full_name ou name ou display_name)
-      // 3. Email (primeira parte)
+      // 4. Determinação do Nome com Fallback Robusto
       const fullName = profileData?.full_name || 
                        (profileData as any)?.name || 
                        u.user_metadata?.full_name || 
                        u.user_metadata?.name || 
                        u.user_metadata?.display_name || 
-                       u.email?.split('@')[0] || 
+                       userEmail.split('@')[0] || 
                        'Usuário';
 
       const finalProfile: Profile = {
         id: u.id,
-        email: u.email || '',
+        email: userEmail,
         full_name: fullName,
         role: role as any,
         avatar_url: profileData?.avatar_url || u.user_metadata?.avatar_url || null
       };
 
+      console.log('[Auth] Perfil final determinado:', finalProfile.role);
+      
       setProfile(finalProfile);
       if (typeof window !== 'undefined') {
         localStorage.setItem('eunaman_profile', JSON.stringify(finalProfile));
