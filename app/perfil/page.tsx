@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 export default function PerfilPage() {
-  const { profile, user, loading: authLoading, updatePassword } = useAuth()
+  const { profile, user, loading: authLoading, updatePassword, refreshProfile } = useAuth()
   const [loading, setLoading] = useState(false)
   const [pwLoading, setPwLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -55,6 +55,10 @@ export default function PerfilPage() {
         .eq('id', user.id)
 
       if (error) throw error
+      
+      // Atualiza o contexto global
+      await refreshProfile()
+      
       setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' })
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Erro ao atualizar perfil' })
@@ -117,6 +121,8 @@ export default function PerfilPage() {
         .from('profiles')
         .update({ avatar_url: publicUrl })
         .eq('id', user?.id || '')
+
+      await refreshProfile()
 
       setMessage({ type: 'success', text: 'Foto atualizada!' })
     } catch (error: any) {

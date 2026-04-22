@@ -453,12 +453,14 @@ export default function PneusClient({
                <Download size={16} /> Exportar
             </button>
 
-            <button 
-                onClick={() => alert("Histórico da quinzena arquivado com sucesso. Iniciando novo ciclo...")}
-                className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-orange-600 border border-orange-200 dark:border-orange-900/50 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all"
-            >
-               <Archive size={16} /> Fechar Ciclo
-            </button>
+            {!isVisitante && (
+              <button 
+                  onClick={() => alert("Histórico da quinzena arquivado com sucesso. Iniciando novo ciclo...")}
+                  className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-orange-600 border border-orange-200 dark:border-orange-900/50 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all"
+              >
+                 <Archive size={16} /> Fechar Ciclo
+              </button>
+            )}
             
             {!isVisitante ? (
               <>
@@ -625,7 +627,7 @@ export default function PneusClient({
            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
              <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-between items-center">
                <div className="flex items-center gap-4">
-                  {selectedIds.size > 0 && (
+                  {selectedIds.size > 0 && !isVisitante && (
                     <button onClick={handleBatchDelete} className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all">Excluir {selectedIds.size}</button>
                   )}
                </div>

@@ -7,8 +7,9 @@ import {
 } from 'recharts'
 import {
   Activity, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
-  Filter, X, ChevronDown, Download, Info, Gauge, Cpu, Loader2
+  Filter, X, ChevronDown, Download, Info, Gauge, Cpu, Loader2, ShieldOff
 } from 'lucide-react'
+import { useAuth } from '@/components/auth-context'
 import { IndicadoresData, getIndicadoresData } from './actions'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -218,6 +219,8 @@ function GraficoDisp({ dados, titulo, subtitulo, mediaGeral, tipo, horasTotais }
 interface Props { initialData: IndicadoresData }
 
 export default function IndicadoresClient({ initialData }: Props) {
+  const { profile } = useAuth()
+  const isVisitante = profile?.role === 'visitante'
   const [data, setData] = useState(initialData)
   const [isPending, startTransition] = useTransition()
 
@@ -477,11 +480,17 @@ export default function IndicadoresClient({ initialData }: Props) {
               Período: {data.periodoLabel} · {data.diasTranscorridos} dias ({data.horasTotaisPeriodo}h/ativo)
             </p>
           </div>
-          <button
-            onClick={() => exportCSV(veiculosFinal, data.periodoLabel)}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all">
-            <Download size={13} /> Exportar CSV
-          </button>
+            {!isVisitante ? (
+              <button
+                onClick={() => exportCSV(veiculosFinal, data.periodoLabel)}
+                className="flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all">
+                <Download size={13} /> Exportar CSV
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px] font-bold">
+                <ShieldOff size={12} /> Somente Leitura
+              </div>
+            )}
         </div>
 
         <table className="w-full text-left border-collapse">

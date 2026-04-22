@@ -10,7 +10,8 @@ import {
   Pencil,
   Trash2,
   Truck,
-  ShieldAlert
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
@@ -42,6 +43,7 @@ export default function BaseFrotasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
@@ -105,6 +107,7 @@ export default function BaseFrotasPage() {
       return;
     }
 
+    setIsImporting(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -124,6 +127,8 @@ export default function BaseFrotasPage() {
       } catch (err) {
         console.error(err);
         alert("Erro ao processar arquivo Excel.");
+      } finally {
+        setIsImporting(false);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -176,8 +181,16 @@ export default function BaseFrotasPage() {
           {!isVisitante ? (
             <>
               <input type="file" accept=".xlsx,.xls,.csv" ref={fileInputRef} onChange={handleImportExcel} className="hidden" />
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm">
-                <Upload size={16} /> Importar Excel
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                disabled={isImporting}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm",
+                  isImporting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                )}
+              >
+                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload size={16} />}
+                {isImporting ? "Importando..." : "Importar Excel"}
               </button>
               <button 
                 onClick={() => { setEditingVehicle(null); setIsModalOpen(true); }}

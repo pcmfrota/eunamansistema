@@ -1,5 +1,8 @@
+"use client";
+
 import { login } from './actions'
-import { KeyRound, Mail, AlertCircle, TrendingUp } from 'lucide-react'
+import { KeyRound, Mail, AlertCircle, TrendingUp, Loader2 } from 'lucide-react'
+import { useFormStatus } from 'react-dom'
 
 // Renderizamos aqui a UI Premium para Login
 export default function LoginPage({
@@ -89,15 +92,7 @@ export default function LoginPage({
               </div>
             )}
 
-            <button
-              formAction={login}
-              className="group relative w-full overflow-hidden rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 dark:focus:ring-offset-zinc-900"
-            >
-              <div className="absolute inset-0 flex h-full w-full justify-center [transform:skew(-12deg)_translateX(-100%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(100%)]">
-                <div className="relative h-full w-8 bg-white/20" />
-              </div>
-              <span className="relative z-10">Entrar no Sistema</span>
-            </button>
+            <LoginButton />
           </form>
         </div>
         
@@ -107,4 +102,31 @@ export default function LoginPage({
       </div>
     </div>
   )
+}
+
+function LoginButton() {
+  const { pending } = useFormStatus();
+  
+  return (
+    <button
+      type="submit"
+      formAction={login}
+      disabled={pending}
+      className="group relative w-full overflow-hidden rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 dark:focus:ring-offset-zinc-900"
+    >
+      <div className="absolute inset-0 flex h-full w-full justify-center [transform:skew(-12deg)_translateX(-100%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(100%)]">
+        <div className="relative h-full w-8 bg-white/20" />
+      </div>
+      <span className="relative z-10 flex items-center justify-center gap-2">
+        {pending ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Entrando...
+          </>
+        ) : (
+          "Entrar no Sistema"
+        )}
+      </span>
+    </button>
+  );
 }

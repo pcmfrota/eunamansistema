@@ -44,11 +44,7 @@ const navigation = [
 ];
 
 function getFilteredNavigation(role: string | null | undefined) {
-  if (role === 'visitante') {
-    return navigation.filter(item => 
-      ['Dashboard', 'Backlog', 'PCM', 'Calendário Suzano'].includes(item.name)
-    );
-  }
+  // Visitantes agora veem tudo do sistema operacional
   return navigation;
 }
 
@@ -120,15 +116,15 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           backgroundPosition: 'center top, center',
           backgroundAttachment: 'fixed, fixed',
           backgroundRepeat: 'no-repeat, no-repeat',
-          opacity: 0.4
+          opacity: isDark ? 0.4 : 0.85
         }}
       />
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
           background: isDark
-            ? 'linear-gradient(135deg, rgba(4,14,4,0.88) 0%, rgba(8,24,8,0.82) 50%, rgba(12,30,12,0.88) 100%)'
-            : 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(245,250,245,0.88) 50%, rgba(240,245,240,0.92) 100%)'
+            ? 'linear-gradient(135deg, rgba(4,14,4,0.92) 0%, rgba(8,24,8,0.88) 50%, rgba(12,30,12,0.92) 100%)'
+            : 'linear-gradient(135deg, rgba(255,255,255,0.90) 0%, rgba(245,250,245,0.85) 50%, rgba(240,245,240,0.90) 100%)'
         }}
       />
 

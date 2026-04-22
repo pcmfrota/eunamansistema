@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Clipboard, Search, FileSpreadsheet } from 'lucide-react'
+import { Plus, Clipboard, Search, FileSpreadsheet, ShieldAlert } from 'lucide-react'
 import HorimetroTable from './HorimetroTable'
 import HorimetroModal from './HorimetroModal'
+import { useAuth } from '@/components/auth-context'
 
 interface HorimetroClientProps {
   equipamentos: any[]
@@ -11,6 +12,8 @@ interface HorimetroClientProps {
 }
 
 export default function HorimetroClient({ equipamentos, historico }: HorimetroClientProps) {
+  const { profile } = useAuth()
+  const isVisitante = profile?.role === 'visitante'
   const [search, setSearch] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editData, setEditData] = useState<any>(null)
@@ -72,13 +75,20 @@ export default function HorimetroClient({ equipamentos, historico }: HorimetroCl
                 Limpar Filtros
               </button>
             )}
-            <button 
-              onClick={handleOpenNew}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 group"
-            >
-              <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-              Novo Apontamento
-            </button>
+             {isVisitante ? (
+               <div className="flex items-center gap-2 px-6 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-2xl text-sm font-bold border border-zinc-200 dark:border-zinc-700 shadow-sm shadow-zinc-200/50 dark:shadow-none">
+                 <ShieldAlert size={20} className="text-zinc-400" />
+                 Somente Leitura
+               </div>
+             ) : (
+               <button 
+                 onClick={handleOpenNew}
+                 className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 group"
+               >
+                 <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                 Novo Apontamento
+               </button>
+             )}
          </div>
       </div>
 
@@ -87,6 +97,7 @@ export default function HorimetroClient({ equipamentos, historico }: HorimetroCl
         <HorimetroTable 
           data={filteredHistory} 
           onEdit={handleEdit} 
+          isVisitante={isVisitante}
         />
       </div>
 

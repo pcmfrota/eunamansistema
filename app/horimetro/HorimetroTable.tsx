@@ -18,9 +18,10 @@ import * as XLSX from 'xlsx'
 interface HorimetroTableProps {
   data: any[]
   onEdit: (item: any) => void
+  isVisitante: boolean
 }
 
-export default function HorimetroTable({ data, onEdit }: HorimetroTableProps) {
+export default function HorimetroTable({ data, onEdit, isVisitante }: HorimetroTableProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
@@ -129,22 +130,24 @@ export default function HorimetroTable({ data, onEdit }: HorimetroTableProps) {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => onEdit(reg)}
-                      className="p-2 text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-                      title="Editar"
-                    >
-                      <Edit3 size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(reg.id, reg.equipamentos?.placa)}
-                      className="p-2 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+                  {!isVisitante && (
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => onEdit(reg)}
+                        className="p-2 text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                        title="Editar"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(reg.id, reg.equipamentos?.placa)}
+                        className="p-2 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

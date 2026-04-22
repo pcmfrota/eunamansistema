@@ -317,12 +317,15 @@ export async function getDashboardData(filtros?: {
   escalas.forEach(e => {
     const s = timeToMs(e.periodo_inicio);
     const end = timeToMs(e.periodo_fim);
-    escalaMap.set(e.placa.toUpperCase().trim(), {
-      carga_horaria: Number(e.carga_horaria),
-      startOffset: s,
-      endOffset: end,
-      isOvernight: end <= s
-    });
+    const pKey = e.placa?.toUpperCase().trim();
+    if (pKey) {
+      escalaMap.set(pKey, {
+        carga_horaria: Number(e.carga_horaria),
+        startOffset: s,
+        endOffset: end,
+        isOvernight: end <= s
+      });
+    }
   });
 
   let placasFiltradas = frotaAtiva.map(eq => eq.placa?.toUpperCase().trim()).filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
@@ -420,36 +423,33 @@ export async function getDashboardData(filtros?: {
       if (!escala) shiftEnd = d24;
 
       osProcessed.forEach(os => {
-        // 1. Impacto DM (Mecânico): Do início da falha até o conserto
-        const intDMini = Math.max(os.start, d0);
-        const intDMfim = Math.min(os.endDM, d24);
+        // 1. Impacto DM (Mecânico)
+        const intDMini = os.start > d0 ? os.start : d0;
+        const intDMfim = os.endDM < d24 ? os.endDM : d24;
         if (intDMini < intDMfim) {
           intervalosDM.push({ start: intDMini, end: intDMfim });
         }
 
-        // 2. Impacto DO (Operacional): Do início da falha até CHEGADA RESERVA ou CONSERTO
-        // Limitado ao TURNO OPERACIONAL do veículo
-        const intDOini = Math.max(os.start, shiftStart);
-        const intDOfim = Math.min(os.endDO, shiftEnd);
+        // 2. Impacto DO (Operacional)
+        const intDOini = os.start > shiftStart ? os.start : shiftStart;
+        const intDOfim = os.endDO < shiftEnd ? os.endDO : shiftEnd;
         if (intDOini < intDOfim) {
           intervalosDO.push({ start: intDOini, end: intDOfim });
-          
-          // Rastreia impacto por OS para o modal (usando o valor operacional)
           os.horas_impacto_do += (intDOfim - intDOini) / 3600000;
           osImpactantesSet.add(os.numero_os || os.id);
         }
       });
 
-      const indispDMdia = intervalosDM.length > 0 ? (intervalosDM.length === 1 ? (intervalosDM[0].end - intervalosDM[0].start) / 3600000 : mergeTimeIntervals(intervalosDM)) : 0;
-      const indispDOdia = intervalosDO.length > 0 ? (intervalosDO.length === 1 ? (intervalosDO[0].end - intervalosDO[0].start) / 3600000 : mergeTimeIntervals(intervalosDO)) : 0;
+      const indispDMdia = intervalosDM.length === 0 ? 0 : (intervalosDM.length === 1 ? (intervalosDM[0].end - intervalosDM[0].start) / 3600000 : mergeTimeIntervals(intervalosDM));
+      const indispDOdia = intervalosDO.length === 0 ? 0 : (intervalosDO.length === 1 ? (intervalosDO[0].end - intervalosDO[0].start) / 3600000 : mergeTimeIntervals(intervalosDO));
 
       hIndispDM += indispDMdia;
       hIndispDO += indispDOdia;
 
       historicoDiario.push({
         data: dStr,
-        disponibilidadeDM: Math.round(Math.max(0, (24 - indispDMdia) / 24) * 1000) / 10,
-        disponibilidadeDO: cargaHorariaDia > 0 ? Math.round(Math.max(0, (cargaHorariaDia - indispDOdia) / cargaHorariaDia) * 1000) / 10 : 100
+        disponibilidadeDM: Math.round(Math.max(0, (24 - indispDMdia) / 2.4)) / 10,
+        disponibilidadeDO: cargaHorariaDia > 0 ? Math.round(Math.max(0, (cargaHorariaDia - indispDOdia) / (cargaHorariaDia / 100)) * 10) / 100 : 100
       });
     });
 

@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { updateUserRole, createNewUser, deleteUser } from "./actions";
+import { useAuth } from "@/components/auth-context";
 
 type Profile = {
   id: string;
@@ -31,6 +32,7 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { isVisitante } = useAuth();
 
   const filteredProfiles = profiles.filter(p =>
     p.full_name?.toLowerCase().includes(busca.toLowerCase()) ||
@@ -38,6 +40,7 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
   );
 
   const handleRoleChange = async (userId: string, newRole: string) => {
+    if (isVisitante) return;
     startTransition(async () => {
       const result = await updateUserRole(userId, newRole);
       if ('error' in result) {
@@ -49,6 +52,7 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
   };
 
   const handleDelete = async (userId: string) => {
+    if (isVisitante) return;
     if (!confirm("Tem certeza que deseja excluir permanentemente este usuário?")) return;
 
     startTransition(async () => {
@@ -88,12 +92,22 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Controle de acesso e cargos da equipe Eunaman</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm active:scale-95"
-        >
-          <UserPlus size={18} /> Novo Usuário
-        </button>
+        
+        <div className="flex items-center gap-3">
+          {isVisitante && (
+            <div className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-lg text-xs font-bold border border-zinc-200 dark:border-zinc-700">
+              SOMENTE LEITURA
+            </div>
+          )}
+          {!isVisitante && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+            >
+              <UserPlus size={18} /> Novo Usuário
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
@@ -146,8 +160,11 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
                       <select
                         value={p.role}
                         onChange={(e) => handleRoleChange(p.id, e.target.value)}
-                        disabled={isPending}
-                        className="bg-transparent border-none p-0 pr-6 text-sm font-medium focus:ring-0 cursor-pointer text-zinc-700 dark:text-zinc-300"
+                        disabled={isPending || isVisitante}
+                        className={cn(
+                          "bg-transparent border-none p-0 pr-6 text-sm font-medium focus:ring-0 text-zinc-700 dark:text-zinc-300",
+                          isVisitante ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                        )}
                       >
                         <option value="admin">Administrador</option>
                         <option value="pcm">PCM</option>
@@ -157,14 +174,16 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      disabled={isPending}
-                      className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                      title="Excluir usuário"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {!isVisitante && (
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        disabled={isPending}
+                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                        title="Excluir usuário"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

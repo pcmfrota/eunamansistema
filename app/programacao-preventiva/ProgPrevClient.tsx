@@ -5,7 +5,8 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
   CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart,
 } from "recharts"
-import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff } from "lucide-react"
+import { useAuth } from "@/components/auth-context"
 import type { ProgSemanal } from "./actions"
 import {
   criarProgSemanal, atualizarProgSemanal, excluirProgSemanal,
@@ -140,6 +141,8 @@ export default function ProgPrevClient({
   equipamentos: { id: string; placa: string; categoria?: string }[]
   anoAtivo: number
 }) {
+  const { profile } = useAuth()
+  const isVisitante = profile?.role === 'visitante'
   const [tab, setTab] = useState<Tab>("prog-semanal")
 
   // Mes operacional ativo (auto detecta pelo dia atual)
@@ -270,6 +273,7 @@ export default function ProgPrevClient({
             equipamentos={equipamentos}
             calendario={calendario}
             progSemanais={progSemanais}
+            isVisitante={isVisitante}
           />
         )}
         {tab === "planejamento" && (
@@ -297,6 +301,7 @@ export default function ProgPrevClient({
 function TabProgSemanal({
   itensDaSemana, pctSemana, semanasDoMes, semanaIsoAtiva, setSemanaIsoAtiva,
   weekInfo, mesAtivo, anoAtivo, equipamentos, calendario, progSemanais,
+  isVisitante,
 }: {
   itensDaSemana: ProgSemanal[]; pctSemana: number
   semanasDoMes: WeekInfo[]; semanaIsoAtiva: number
@@ -306,6 +311,7 @@ function TabProgSemanal({
   equipamentos: { id: string; placa: string; categoria?: string }[]
   calendario: { mes: number; ano: number; data_inicio: string; data_fim: string }[]
   progSemanais: ProgSemanal[]
+  isVisitante: boolean
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<ProgSemanal | null>(null)
@@ -342,25 +348,31 @@ function TabProgSemanal({
         <div className="px-3 py-2.5 font-black text-amber-400">{item.placa ?? "—"}</div>
         <div className="px-3 py-2.5 text-zinc-400 truncate" title={item.mpbt ?? ""}>{item.mpbt ?? "—"}</div>
         <div className="px-3 py-2.5">
-          <button onClick={() => startT(async () => {
-            const ns = item.status === "CONCLUÍDO" ? "PROGRAMADO" : "CONCLUÍDO"
-            const today = new Date().toISOString().slice(0, 10)
-            await atualizarStatusProgSemanal(item.id, ns, ns === "CONCLUÍDO"
-              ? { percentual: 100, data_fim_exec: today }
-              : { percentual: 0 })
-          })} className="hover:opacity-80 transition-opacity">
+          {!isVisitante ? (
+            <button onClick={() => startT(async () => {
+              const ns = item.status === "CONCLUÍDO" ? "PROGRAMADO" : "CONCLUÍDO"
+              const today = new Date().toISOString().slice(0, 10)
+              await atualizarStatusProgSemanal(item.id, ns, ns === "CONCLUÍDO"
+                ? { percentual: 100, data_fim_exec: today }
+                : { percentual: 0 })
+            })} className="hover:opacity-80 transition-opacity">
+              <StatusBadge status={item.status} />
+            </button>
+          ) : (
             <StatusBadge status={item.status} />
-          </button>
+          )}
         </div>
         <div className="px-3 py-2.5 text-zinc-500 font-mono">{fmtBR(item.data_inicio_exec)}</div>
         <div className="px-3 py-2.5 text-zinc-500 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
         <div className="px-3 py-2.5 text-zinc-500">{item.dias ?? "—"}</div>
-        <div className="px-3 py-2.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => { setEditItem(item); setShowForm(true) }}
-            className="p-1 text-zinc-600 hover:text-zinc-200 transition-colors"><Pencil size={11} /></button>
-          <button onClick={() => { if (confirm("Excluir este item?")) startT(async () => excluirProgSemanal(item.id)) }}
-            className="p-1 text-zinc-600 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
-        </div>
+        {!isVisitante && (
+          <div className="px-3 py-2.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => { setEditItem(item); setShowForm(true) }}
+              className="p-1 text-zinc-600 hover:text-zinc-200 transition-colors"><Pencil size={11} /></button>
+            <button onClick={() => { if (confirm("Excluir este item?")) startT(async () => excluirProgSemanal(item.id)) }}
+              className="p-1 text-zinc-600 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+          </div>
+        )}
       </div>
     )
   }
@@ -404,10 +416,16 @@ function TabProgSemanal({
             )
           })}
         </div>
-        <button onClick={() => { setEditItem(null); setShowForm(true) }}
-          className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-colors shadow">
-          <Plus size={15} /> Adicionar
-        </button>
+        {!isVisitante ? (
+          <button onClick={() => { setEditItem(null); setShowForm(true) }}
+            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-colors shadow">
+            <Plus size={15} /> Adicionar
+          </button>
+        ) : (
+          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 text-[11px] font-bold">
+            <ShieldOff size={14} /> Somente Leitura
+          </div>
+        )}
       </div>
 
       {/* Week card — matches Excel layout */}

@@ -11,6 +11,7 @@ import {
   importarOrdensServico
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
+import { cn } from "@/lib/utils";
 import OSFormModal from "./NovoModal";
 import OSDashboard from "./OSDashboard";
 import OSFichaModal, { type OSFichaData } from "./OSFicha";
@@ -336,9 +337,23 @@ export default function ControleOSClient({
                 </button>
               )}
               {!isVisitante && (
-                <label className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm cursor-pointer">
-                  <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleImportExcel} />
-                  <Download size={15} className="rotate-180" /> Importar
+                <label className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm",
+                  isPending ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                )}>
+                  <input 
+                    type="file" 
+                    accept=".xlsx,.csv" 
+                    className="hidden" 
+                    onChange={handleImportExcel} 
+                    disabled={isPending}
+                  />
+                  {isPending ? (
+                    <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download size={15} className="rotate-180" />
+                  )}
+                  {isPending ? "Importando..." : "Importar"}
                 </label>
               )}
               <button onClick={exportarExcel} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm">
