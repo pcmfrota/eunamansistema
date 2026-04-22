@@ -4,16 +4,20 @@ import ControleOSClient from './OSClient'
 export default async function ControleOSPage() {
   const supabase = createClient()
 
-  // Equipamentos com último horímetro
+  // Equipamentos com último horímetro - Otimizado para buscar apenas campos necessários
   const { data: equipamentos } = await supabase
     .from('equipamentos')
-    .select('*, horimetros(horimetro_final)')
+    .select('id, placa, modulo, horimetros(horimetro_final)')
     .order('placa')
 
   const eqTransformados = equipamentos?.map(eq => {
     let lastH = 0;
     if (eq.horimetros && eq.horimetros.length > 0) {
-      lastH = Math.max(...eq.horimetros.map((h: any) => h.horimetro_final));
+      // Otimização: evita spread operator em arrays muito grandes
+      for (let i = 0; i < eq.horimetros.length; i++) {
+        const val = (eq.horimetros[i] as any).horimetro_final;
+        if (val > lastH) lastH = val;
+      }
     }
     return {
       id: eq.id,
@@ -24,48 +28,49 @@ export default async function ControleOSPage() {
   }) || [];
 
   // Ordens de serviço — lista mostra apenas OS com placa cadastrada.
-  // OS importadas sem cadastro ficam ocultas aqui mas visíveis no dashboard.
+  // Limite de 1000 para evitar travamento da página. Filtros mais profundos devem ser feitos no Dashboard.
   const { data: ordens } = await supabase
     .from('ordens_servico')
-    .select('*')
+    .select('id, numero_os, placa, modulo, status, data_abertura, data_fechamento, horas_manutencao, descricao, horimetro, operacao_tipo, local, classe, foi_enviado_reserva, motivo, sistema, sub_sistema, componente, observacoes, horario_parada, equipamento_id')
     .not('equipamento_id', 'is', null)
     .order('data_abertura', { ascending: false })
+    .limit(1000);
 
-  // Catálogo Sistema → Sub-Sistema → Componente
-  const { data: catalogo } = await supabase
-    .from('catalogo_manutencao')
-    .select('*')
-    .order('sistema_codigo')
+  // Catálogo e Configurações - Paralelizados com os demais
+  const [catalogoRes, auxRes, calendarioRes] = await Promise.all([
+    supabase.from('catalogo_manutencao').select('*').order('sistema_codigo'),
+    supabase.from('aux_config').select('*'),
+    supabase.from('calendario_suzano').select('*').order('ano', { ascending: true }).order('mes', { ascending: true })
+  ]);
 
-  // Motivos auxiliares
-  const { data: auxConfigs } = await supabase
-    .from('aux_config')
-    .select('*')
+  const ordensData = ordens || [];
+  const auxConfigs = auxRes.data || [];
 
-  const motivos = Array.from(new Set([
-    ...(ordens || []).map((o: any) => o.motivo).filter(Boolean),
-    ...(auxConfigs || []).filter((a: any) => a.tipo === 'Motivo').map((a: any) => a.valor),
-  ])).sort() as string[]
+  // Motivos e Operações extraídos em um único loop
+  const motivosSet = new Set<string>();
+  const operacoesSet = new Set<string>();
 
-  const operacoesTipo = Array.from(new Set(
-    (ordens || []).map((o: any) => o.operacao_tipo).filter(Boolean)
-  )).sort() as string[]
+  ordensData.forEach((o: any) => {
+    if (o.motivo) motivosSet.add(o.motivo);
+    if (o.operacao_tipo) operacoesSet.add(o.operacao_tipo);
+  });
 
-  // Calendário Suzano para filtros
-  const { data: calendario } = await supabase
-    .from('calendario_suzano')
-    .select('*')
-    .order('ano', { ascending: true })
-    .order('mes', { ascending: true })
+  auxConfigs.forEach((a: any) => {
+    if (a.tipo === 'Motivo' && a.valor) motivosSet.add(a.valor);
+  });
+
+  const motivos = Array.from(motivosSet).sort();
+  const operacoesTipo = Array.from(operacoesSet).sort();
+  const calendario = calendarioRes.data || [];
 
   return (
     <ControleOSClient
-      ordens={ordens || []}
+      ordens={ordensData}
       equipamentos={eqTransformados}
       operacoesTipo={operacoesTipo}
       motivos={motivos}
-      catalogo={catalogo || []}
-      periodos={calendario || []}
+      catalogo={catalogoRes.data || []}
+      periodos={calendario}
     />
   )
 }

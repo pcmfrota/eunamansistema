@@ -44,6 +44,9 @@ function parseLocal(dateStr: string | null): number {
   return new Date(dateStr).getTime();
 }
 
+const osPlacaCache = new Map<string, { data: OrdemServicoResumo[], timestamp: number }>();
+const CACHE_TTL = 30 * 1000; // 30 segundos de cache para detalhes de veículo
+
 export async function buscarOSporPlaca(
   placa: string,
   mes?: number,
@@ -51,6 +54,13 @@ export async function buscarOSporPlaca(
   dataInicio?: string,
   dataFim?: string
 ): Promise<OrdemServicoResumo[]> {
+  const cacheKey = `${placa}-${mes}-${ano}-${dataInicio}-${dataFim}`;
+  const now = Date.now();
+  const cached = osPlacaCache.get(cacheKey);
+  
+  if (cached && (now - cached.timestamp < CACHE_TTL)) {
+    return cached.data;
+  }
   const supabase = createClient()
   const agoraRef = new Date()
 
@@ -86,8 +96,9 @@ export async function buscarOSporPlaca(
       .eq('placa', placa.toUpperCase())
       .order('data_abertura', { ascending: false })
       .limit(50)
-    if (error) return []
-    return (data || []) as OrdemServicoResumo[]
+    const result = (data || []) as OrdemServicoResumo[];
+    osPlacaCache.set(cacheKey, { data: result, timestamp: now });
+    return result;
   }
 
   // OS que tocam o período:
@@ -168,5 +179,7 @@ export async function buscarOSporPlaca(
     }
   })
 
-  return osCalculadas as OrdemServicoResumo[]
+  const result = osCalculadas as OrdemServicoResumo[];
+  osPlacaCache.set(cacheKey, { data: result, timestamp: now });
+  return result;
 }

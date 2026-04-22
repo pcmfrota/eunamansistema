@@ -129,7 +129,7 @@ function parseLocal(dateStr: string | null): number {
 
 // ─── Cache Global (Persiste no servidor enquanto o processo estiver rodando) ──────
 const dashboardCache = new Map<string, { data: DashboardData, timestamp: number }>();
-const CACHE_TTL = 60 * 1000; // 1 minuto de cache
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos de cache (melhora performance e reduz custos)
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export async function getDashboardData(filtros?: {
