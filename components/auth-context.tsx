@@ -39,11 +39,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('[Auth] Iniciando busca de perfil para:', userEmail);
     
     try {
+      console.log('[Auth] Verificando privilégios para:', userEmail);
+      
       // 1. Regra de Ouro: Administradores Mestre sempre ganham (bypass DB se necessário)
       const isMasterAdmin = userEmail.includes('marcos.rocha') || 
                             userEmail.includes('marcos.aurelio') ||
                             userEmail.includes('douglas.torres') ||
                             userEmail.includes('jessica') ||
+                            userEmail.includes('pcmfrota') ||
                             (userEmail.startsWith('marcos.') && userEmail.endsWith('@eunaman.com.br')) ||
                             u.app_metadata?.role === 'admin';
 
@@ -55,28 +58,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        console.warn('[Auth] Aviso ao buscar perfil:', error.message);
+        console.warn('[Auth] Erro ao buscar profile:', error);
       }
 
-      // 3. Determinação da Role com Prioridade:
-      // Perfil do Banco > Master Admin > App Metadata > Default Visitante
-      let role = 'visitante';
-      if (profileData?.role) {
-        role = profileData.role;
-      } else if (isMasterAdmin) {
-        role = 'admin';
-      } else if (u.app_metadata?.role) {
-        role = u.app_metadata.role;
-      }
-      
-      role = role.toLowerCase();
-
-      // 4. Determinação do Nome com Fallback Robusto
+      // 3. Determinação da Role e Nome com fallbacks
+      const role = isMasterAdmin ? 'admin' : (profileData?.role || 'visitante');
       const fullName = profileData?.full_name || 
-                       (profileData as any)?.name || 
                        u.user_metadata?.full_name || 
                        u.user_metadata?.name || 
-                       u.user_metadata?.display_name || 
                        userEmail.split('@')[0] || 
                        'Usuário';
 
@@ -162,20 +151,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('eunaman_profile');
-        }
         setLoading(false);
-        router.push('/login');
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
         return;
       }
 
       if (session?.user) {
         setUser(session.user);
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-          // Se já temos um perfil carregado, não ativa o loading visual
-          const hasProfile = !!localStorage.getItem('eunaman_profile');
-          await fetchProfile(session.user, hasProfile);
+          await fetchProfile(session.user, false);
         }
       } else {
         setUser(null);
@@ -193,13 +179,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      setLoading(true);
       await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('eunaman_profile');
+        window.location.href = '/login';
       }
-      router.push('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
+    } catch (err) {
+      console.error('[Auth] Erro ao sair:', err);
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
   };
 
