@@ -120,12 +120,11 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
-          backgroundImage: "url('/bg-eunaman.png'), linear-gradient(135deg, #0a1f0a 0%, #1a3a1a 50%, #0d2b0d 100%)",
-          backgroundSize: 'cover, cover',
-          backgroundPosition: 'center top, center',
-          backgroundAttachment: 'fixed, fixed',
-          backgroundRepeat: 'no-repeat, no-repeat',
-          opacity: isDark ? 0.4 : 0.85
+          backgroundImage: "url('https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?q=80&w=2074&auto=format&fit=crop')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: isDark ? 0.35 : 0.65
         }}
       />
       <div

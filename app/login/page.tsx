@@ -12,10 +12,15 @@ export default function LoginPage({
 }) {
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-zinc-50 dark:bg-black p-4 items-center justify-center overflow-hidden">
-      {/* Decorações do Fundo com degradês interativos - "Vibrant premium feeling" */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-50 dark:bg-black">
-        <div className="absolute top-[-10%] h-[50rem] w-[50rem] rounded-full bg-blue-500/10 blur-[120px] dark:bg-blue-600/10" />
-        <div className="absolute right-[-10%] top-[20%] h-[35rem] w-[35rem] rounded-full bg-indigo-500/10 blur-[100px] dark:bg-purple-600/10" />
+      {/* Background Image - Floresta de Eucalipto Suzano */}
+      <div className="absolute inset-0 z-0">
+        <img 
+          src="https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?q=80&w=2076&auto=format&fit=crop" 
+          alt="Floresta" 
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
       </div>
 
       <div className="z-10 w-full max-w-md">
