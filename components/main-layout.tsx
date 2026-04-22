@@ -12,6 +12,19 @@ import {
   Gauge,
   Truck, 
   Database,
+  Menu,
+  CircleDot,
+  Moon,
+  Sun,
+  FileText,
+  User,
+  LogOut,
+  Settings,
+  Settings2,
+  ShieldCheck,
+  Shield,
+  Users,
+  Loader2,
   X,
   Bell,
   BellOff,
@@ -81,24 +94,24 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const isDark = theme === 'dark';
 
   return (
-    /* ── Root com background de floresta — imagem gerada da floresta de eucalipto ── */
-    <div
-      className="min-h-screen transition-colors"
-      style={{
-        backgroundImage: "url('/bg-eunaman.png'), linear-gradient(135deg, #0a1f0a 0%, #1a3a1a 50%, #0d2b0d 100%)",
-        backgroundSize: 'cover, cover',
-        backgroundPosition: 'center top, center',
-        backgroundAttachment: 'fixed, fixed',
-        backgroundRepeat: 'no-repeat, no-repeat',
-      }}
-    >
-      {/* ── Overlay escuro sobre fundo ── */}
+    <div className="min-h-screen transition-colors" style={{ backgroundColor: isDark ? "#040e04" : "#f9fafb" }}>
+      <div
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{
+          backgroundImage: "url('/bg-eunaman.png'), linear-gradient(135deg, #0a1f0a 0%, #1a3a1a 50%, #0d2b0d 100%)",
+          backgroundSize: 'cover, cover',
+          backgroundPosition: 'center top, center',
+          backgroundAttachment: 'fixed, fixed',
+          backgroundRepeat: 'no-repeat, no-repeat',
+          opacity: 0.4
+        }}
+      />
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
           background: isDark
             ? 'linear-gradient(135deg, rgba(4,14,4,0.88) 0%, rgba(8,24,8,0.82) 50%, rgba(12,30,12,0.88) 100%)'
-            : 'linear-gradient(135deg, rgba(8,30,8,0.68) 0%, rgba(13,43,13,0.58) 40%, rgba(20,55,20,0.65) 100%)',
+            : 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(245,250,245,0.88) 50%, rgba(240,245,240,0.92) 100%)'
         }}
       />
 
@@ -113,7 +126,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         }
       `}</style>
 
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
@@ -121,7 +133,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* ──────────── SIDEBAR ──────────── */}
       <aside className={cn(
         "fixed top-0 left-0 z-50 h-[100dvh] w-64 overflow-y-auto flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -136,14 +147,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           boxShadow: '4px 0 24px rgba(0, 0, 0, 0.18)',
         }}
       >
-        {/* ── Logo / Header ── */}
         <div
           className="relative shrink-0 px-3 py-2"
           style={{
             borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          {/* ── Logo EUNAMAN (nova imagem) ── */}
           <div
             className="w-full"
             style={isDark ? {
@@ -273,6 +282,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
         {/* ── Navegação ── */}
         <nav className="flex-1 p-3.5 overflow-y-auto">
+          <div className="flex items-center justify-between mb-4">
             <p
               className="text-[9px] font-black uppercase tracking-[0.2em]"
               style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#9ca3af' }}

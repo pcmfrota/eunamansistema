@@ -183,26 +183,42 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
   // Cálculo dinâmico de DO caso não venha pronto
   useEffect(() => {
+    // Se já temos o valor calculado (vindo da action/dashboard), usamos ele
+    if (os.horas_impacto_do !== undefined && os.horas_impacto_do !== null) {
+      setMinutosDO(Math.round(os.horas_impacto_do * 60));
+      return;
+    }
+
     async function fetchAndCalc() {
       try {
         const placaRaw = getPlaca(os);
         if (placaRaw === "—") return;
 
         const supabase = createClient();
-        const { data: escala } = await supabase
-          .from("escala_frota")
-          .select("*")
-          .eq("placa", placaRaw)
+        // Fallback: Busca na tabela de equipamentos para pegar a escala correta (id_escala)
+        const { data: equipInfo } = await supabase
+          .from("equipamentos")
+          .select(`
+            id_escala,
+            escalas_trabalho:id_escala (
+              periodo_inicio,
+              periodo_fim,
+              carga_horaria
+            )
+          `)
+          .eq("placa", placaRaw.toUpperCase())
           .single();
+
+        const escala = equipInfo?.escalas_trabalho as any;
 
         const start = parseLocal(os.horario_parada || os.data_abertura);
         const endRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : new Date().getTime();
         
         let endDO = endRaw;
-        if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+        if (os.horas_reserva_chegou) {
           const resChegou = parseLocal(os.horas_reserva_chegou);
-          if (resChegou > start) {
-            endDO = Math.min(endRaw, resChegou);
+          if (resChegou > start && resChegou < endRaw) {
+            endDO = resChegou;
           }
         }
 
@@ -216,20 +232,16 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
         const dInicio = new Date(start);
         const dFim = new Date(endDO);
         
-        let cursor = new Date(dInicio);
-        cursor.setHours(0,0,0,0);
+        const [hS, minS] = (escala.periodo_inicio || "00:00").split(":").map(Number);
+        const [hE, minE] = (escala.periodo_fim || "23:59").split(":").map(Number);
 
-        while (cursor <= dFim) {
-          const y = cursor.getFullYear();
-          const m = cursor.getMonth(); // 0-indexed
-          const d = cursor.getDate();
-
-          const [hS, minS] = (escala.periodo_inicio || "00:00").split(":").map(Number);
-          const [hE, minE] = (escala.periodo_fim || "23:59").split(":").map(Number);
+        for (let day = new Date(dInicio.getFullYear(), dInicio.getMonth(), dInicio.getDate()); day <= dFim; day.setDate(day.getDate() + 1)) {
+          const y = day.getFullYear();
+          const m = day.getMonth();
+          const d = day.getDate();
 
           let sS = new Date(y, m, d, hS, minS || 0).getTime();
           let sE = new Date(y, m, d, hE, minE || 0).getTime();
-          
           if (sE <= sS) sE += 86400000;
 
           const interS = Math.max(start, sS);
@@ -238,7 +250,6 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
           if (interS < interE) {
             totalMin += Math.floor((interE - interS) / 60000);
           }
-          cursor.setDate(cursor.getDate() + 1);
         }
         setMinutosDO(totalMin);
       } catch (err) {

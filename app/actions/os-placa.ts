@@ -19,6 +19,31 @@ export interface OrdemServicoResumo {
   horas_impacto_do?: number // Novo campo calculado
 }
 
+function parseLocal(dateStr: string | null): number {
+  if (!dateStr) return 0;
+  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (match) {
+    return new Date(
+      parseInt(match[1]),
+      parseInt(match[2]) - 1,
+      parseInt(match[3]),
+      parseInt(match[4]),
+      parseInt(match[5])
+    ).getTime();
+  }
+  const matchBR = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+  if (matchBR) {
+    return new Date(
+      parseInt(matchBR[3]),
+      parseInt(matchBR[2]) - 1,
+      parseInt(matchBR[1]),
+      parseInt(matchBR[4]),
+      parseInt(matchBR[5])
+    ).getTime();
+  }
+  return new Date(dateStr).getTime();
+}
+
 export async function buscarOSporPlaca(
   placa: string,
   mes?: number,
@@ -27,6 +52,7 @@ export async function buscarOSporPlaca(
   dataFim?: string
 ): Promise<OrdemServicoResumo[]> {
   const supabase = createClient()
+  const agoraRef = new Date()
 
   let inicio: string
   let fim: string
@@ -79,7 +105,6 @@ export async function buscarOSporPlaca(
   if (error) return []
 
   // --- Coleta de Dados do Veículo e Escala ---
-  // Otimizado: Busca escala e equipamento em uma única chamada
   const { data: equipInfo } = await supabase
     .from('equipamentos')
     .select(`
@@ -97,33 +122,40 @@ export async function buscarOSporPlaca(
 
   const osCalculadas = (data || []).map((os: any) => {
     let hImpactoDO = 0
-      const osStart = new Date(os.horario_parada || os.data_abertura).getTime()
-      const endMec = os.data_fechamento ? new Date(os.data_fechamento).getTime() : new Date().getTime()
-      
-      // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
-      let osEndDO = endMec
-      if (os.horas_reserva_chegou) {
-        const reservaTime = new Date(os.horas_reserva_chegou).getTime()
-        if (reservaTime > osStart && reservaTime < endMec) {
-          osEndDO = reservaTime
-        }
+    const osStart = parseLocal(os.horario_parada || os.data_abertura)
+    const endMecRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : agoraRef.getTime()
+    const endMec = endMecRaw
+
+    // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
+    let osEndDO = endMec
+    if (os.horas_reserva_chegou) {
+      const reservaTime = parseLocal(os.horas_reserva_chegou)
+      if (reservaTime > osStart && reservaTime < endMec) {
+        osEndDO = reservaTime
       }
+    }
 
-      // Fallback para horas de manutenção se estiver zerado/nulo
-      let hMecCalculada = os.horas_manutencao || (endMec - osStart) / 3600000
+    // Fallback para horas de manutenção se estiver zerado/nulo
+    let hMecCalculada = os.horas_manutencao || (endMec - osStart) / 3600000
 
-      if (escala && (os.data_abertura || os.horario_parada)) {
-        const dIni = new Date(osStart)
-        const dFim = new Date(osEndDO)
+    if (escala && (os.data_abertura || os.horario_parada)) {
+      const dIni = new Date(osStart)
+      const dFim = new Date(osEndDO)
       
-      for (let day = new Date(dIni.getFullYear(), dIni.getMonth(), dIni.getDate()); day <= dFim; day.setDate(day.getDate() + 1)) {
-        const dStr = day.toISOString().split('T')[0]
-        let shiftStart = new Date(`${dStr}T${escala.periodo_inicio}`).getTime()
-        let shiftEnd = new Date(`${dStr}T${escala.periodo_fim}`).getTime()
-        if (shiftEnd <= shiftStart) shiftEnd += 86400000
+      const [hS, minS] = (escala.periodo_inicio || "00:00").split(":").map(Number);
+      const [hE, minE] = (escala.periodo_fim || "23:59").split(":").map(Number);
 
-        const interInicio = Math.max(osStart, shiftStart)
-        const interFim = Math.min(osEndDO, shiftEnd)
+      for (let day = new Date(dIni.getFullYear(), dIni.getMonth(), dIni.getDate()); day <= dFim; day.setDate(day.getDate() + 1)) {
+        const y = day.getFullYear();
+        const m = day.getMonth();
+        const d = day.getDate();
+
+        let sS = new Date(y, m, d, hS, minS || 0).getTime();
+        let sE = new Date(y, m, d, hE, minE || 0).getTime();
+        if (sE <= sS) sE += 86400000;
+
+        const interInicio = Math.max(osStart, sS)
+        const interFim = Math.min(osEndDO, sE)
         if (interInicio < interFim) {
           hImpactoDO += (interFim - interInicio) / 3600000
         }

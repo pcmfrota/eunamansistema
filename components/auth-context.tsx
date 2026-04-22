@@ -166,7 +166,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const isAtLogin = window.location.pathname.startsWith('/login')
             const isAtApi = window.location.pathname.startsWith('/api')
             
-            if (!isAtLogin && !isAtApi) {
+            if (session && session.user && isAtLogin) {
+              window.location.assign('/')
+              return
+            }
+
+            if (!session && !isAtLogin && !isAtApi) {
               window.location.assign('/login')
             }
           }

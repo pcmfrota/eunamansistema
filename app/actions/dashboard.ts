@@ -98,6 +98,33 @@ function mergeTimeIntervals(intervals: Array<{ start: number, end: number }>) {
   return totalMs / 3600000; // Retorna em horas
 }
 
+function parseLocal(dateStr: string | null): number {
+  if (!dateStr) return 0;
+  // Tenta formato ISO: YYYY-MM-DDTHH:mm:ss
+  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (match) {
+    return new Date(
+      parseInt(match[1]),
+      parseInt(match[2]) - 1,
+      parseInt(match[3]),
+      parseInt(match[4]),
+      parseInt(match[5])
+    ).getTime();
+  }
+  // Tenta formato PT-BR: DD/MM/YYYY HH:mm
+  const matchBR = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+  if (matchBR) {
+    return new Date(
+      parseInt(matchBR[3]),
+      parseInt(matchBR[2]) - 1,
+      parseInt(matchBR[1]),
+      parseInt(matchBR[4]),
+      parseInt(matchBR[5])
+    ).getTime();
+  }
+  return new Date(dateStr).getTime();
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export async function getDashboardData(filtros?: {
   mes?: number;
@@ -288,6 +315,14 @@ export async function getDashboardData(filtros?: {
     return { dStr, d0, d24 };
   });
 
+  placasFiltradas.forEach(placa => {
+    const osDoVeiculo = osPorPlaca.get(placa) || [];
+    const escala = escalaMap.get(placa);
+    
+    // Cálculo das horas planejadas para este veículo no mês/período
+    const hPlanejadasDM = 24 * totalDiasCalendario;
+    const hPlanejadasDO_TotalMensal = escala ? Number(escala.carga_horaria) * totalDiasCalendario : 24 * totalDiasCalendario;
+
     // --- OTIMIZAÇÃO: Fast Path para veículos sem OS no período ---
     if (osDoVeiculo.length === 0) {
       veiculos.push({
@@ -313,14 +348,14 @@ export async function getDashboardData(filtros?: {
 
     // Pré-processa as OS do veículo para carimbos numéricos de DM e DO (Regra Reserva PCM)
     const osProcessed = osDoVeiculo.map(os => {
-      const start = (os.horario_parada ? new Date(os.horario_parada) : new Date(os.data_abertura)).getTime();
-      const endDMRaw = (os.data_fechamento ? new Date(os.data_fechamento) : agoraRef).getTime();
+      const start = parseLocal(os.horario_parada || os.data_abertura);
+      const endDMRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : agoraRef.getTime();
       const endDM = Math.min(endDMRaw, periodoFimObj.getTime());
 
       // Lógica de Término Operacional (Fim da IO ao chegar o reserva ou fechar a OS)
       let endDO = endDM;
       if (os.horas_reserva_chegou) {
-        const reservaTime = new Date(os.horas_reserva_chegou).getTime();
+        const reservaTime = parseLocal(os.horas_reserva_chegou);
         // O reserva só "para" o cronômetro operacional se chegar ANTES do conserto acabar
         if (reservaTime > start && reservaTime < endDM) {
           endDO = reservaTime;
@@ -433,7 +468,7 @@ export async function getDashboardData(filtros?: {
   const modelosMap = new Map<string, { soma: number, count: number }>();
 
   allOS.forEach(os => {
-    const eq = os.equipamento_id ? eqMap.get(os.equipamento_id) : null;
+    const eq = os.equipamento_id ? eqMapById.get(os.equipamento_id) : null;
     const cat = eq?.categoria || "Outros";
     categoriasMap.set(cat, (categoriasMap.get(cat) || 0) + 1);
     
