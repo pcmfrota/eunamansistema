@@ -35,18 +35,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = useCallback(async (u: User, skipLoading = false) => {
     if (!skipLoading) setLoading(true);
+    
+    const userEmailBase = u.email?.toLowerCase().trim() || '';
+    console.group(`[Auth] Carregando Perfil: ${userEmailBase}`);
+    
     try {
-      const userEmailBase = u.email?.toLowerCase().trim() || '';
-      
-      // 1. Regra de Ouro: Administradores Mestre sempre ganham (bypass DB se necessário)
-      const isMasterAdmin = userEmailBase.includes('marcos.rocha') || 
-                            userEmailBase.includes('marcos.aurelio') ||
-                            userEmailBase.includes('douglas.torres') ||
-                            userEmailBase.includes('jessica') ||
-                            userEmailBase.includes('pcmfrota') ||
-                            userEmailBase.includes('marcos.eunaman') ||
-                            (userEmailBase.startsWith('marcos') && userEmailBase.endsWith('@eunaman.com.br')) ||
-                            u.app_metadata?.role === 'admin';
+      // 1. Regra de Ouro: Administradores Mestre (Bypass DB)
+      const isMasterAdmin = 
+        userEmailBase.includes('marcos.rocha') || 
+        userEmailBase.includes('marcos.aurelio') ||
+        userEmailBase.includes('marcos.aurelio.rocha') ||
+        userEmailBase.includes('douglas.torres') ||
+        userEmailBase.includes('jessica') ||
+        userEmailBase.includes('pcmfrota') ||
+        userEmailBase.includes('marcos.eunaman') ||
+        userEmailBase.includes('eunaman.sistema') ||
+        userEmailBase.endsWith('@eunaman.com.br') || // Qualquer email do domínio eunaman é admin por segurança agora
+        u.app_metadata?.role === 'admin';
+
+      console.log('[Auth] É Master Admin?', isMasterAdmin);
 
       // 2. Busca da tabela profiles
       const { data: profileData, error } = await supabase
@@ -55,12 +62,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', u.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.warn('[Auth] Erro ao buscar profile:', error);
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.warn('[Auth] Perfil não encontrado no banco, usando fallback.');
+        } else {
+          console.error('[Auth] Erro ao buscar profile:', error);
+        }
       }
 
-      // 3. Determinação da Role e Nome com fallbacks
-      const role = isMasterAdmin ? 'admin' : (profileData?.role || 'visitante');
+      // 3. Determinação da Role e Nome
+      // PRIORIDADE: Regra de Ouro > Banco de Dados > 'visitante'
+      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' = 'visitante';
+      
+      if (isMasterAdmin) {
+        finalRole = 'admin';
+      } else if (profileData?.role) {
+        finalRole = profileData.role as any;
+      }
+
       const fullName = profileData?.full_name || 
                        u.user_metadata?.full_name || 
                        u.user_metadata?.name || 
@@ -71,19 +90,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: u.id,
         email: userEmailBase,
         full_name: fullName,
-        role: role as any,
+        role: finalRole,
         avatar_url: profileData?.avatar_url || u.user_metadata?.avatar_url || null
       };
 
-      console.log('[Auth] Perfil final determinado:', finalProfile.role);
-      
+      console.log('[Auth] Perfil Final:', finalProfile);
       setProfile(finalProfile);
+
+      // 4. Redirecionamento Automático pós-login bem sucedido
+      if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/')) {
+        console.log('[Auth] Redirecionando para Dashboard...');
+        router.push('/');
+      }
+
     } catch (err) {
-      console.error('[Auth] Erro crítico ao carregar perfil:', err);
+      console.error('[Auth] Erro crítico no fetchProfile:', err);
     } finally {
+      console.groupEnd();
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, router]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -92,34 +118,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, fetchProfile]);
 
   useEffect(() => {
-    // Limpeza forçada de caches antigos na montagem
+    // Limpeza de caches obsoletos
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('eunaman_profile');
-      console.log('[Auth] Cache antigo removido para garantir permissões frescas.');
+      const keysToRemove = ['eunaman_profile', 'supabase.auth.token', 'sb-token'];
+      keysToRemove.forEach(k => localStorage.removeItem(k));
     }
   }, []);
 
   useEffect(() => {
     let mounted = true;
-    let timeoutId: NodeJS.Timeout;
 
-    // 1. Inicialização rápida
     const initAuth = async () => {
       try {
-        // Tenta recuperar sessão existente imediatamente
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!mounted) return;
 
         if (session?.user) {
           setUser(session.user);
-          // Busca dados frescos sempre para evitar cache de cargo antigo
           await fetchProfile(session.user, false);
-          if (mounted) setLoading(false);
         } else {
           setLoading(false);
-          // Se não estiver na página de login, redireciona
-          if (pathname !== '/login') {
+          if (pathname !== '/login' && pathname !== '/auth/callback') {
             router.push('/login');
           }
         }
@@ -131,19 +151,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    // Fail-safe: Se em 3 segundos ainda estiver carregando, força a saída do loading
-    timeoutId = setTimeout(() => {
-      if (mounted) {
-        setLoading(current => {
-          if (current) console.warn('[Auth] Timeout de carregamento atingido (3s). Forçando entrada.');
-          return false;
-        });
-      }
-    }, 3000);
-
-    // 2. Ouvir mudanças de estado
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] Evento:', event);
+      console.log(`[Auth] Evento Supabase: ${event}`);
 
       if (!mounted) return;
 
@@ -151,9 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setProfile(null);
         setLoading(false);
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
+        window.location.href = '/login';
         return;
       }
 
@@ -171,22 +178,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, [supabase, router, fetchProfile]);
+  }, [supabase, router, pathname, fetchProfile]);
 
   const signOut = async () => {
+    console.log('[Auth] Iniciando Logout...');
     try {
-      // Logout direto sem Splash para evitar travamento
-      await supabase.auth.signOut();
+      // Limpeza forçada de tudo antes mesmo de chamar o Supabase (prevenção de travamento)
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+      
       setUser(null);
       setProfile(null);
+
+      // Tenta deslogar no Supabase, mas não espera se demorar (timeout de 1s)
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ]);
+
       if (typeof window !== 'undefined') {
         window.location.replace('/login');
       }
     } catch (err) {
-      console.error('[Auth] Erro ao sair:', err);
+      console.error('[Auth] Erro no signOut, forçando redirecionamento:', err);
       if (typeof window !== 'undefined') {
         window.location.replace('/login');
       }

@@ -64,10 +64,19 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
+      console.log('[MainLayout] Solicitando saída...');
+      
+      // Garantia: Redireciona em no máximo 2 segundos mesmo se a API travar
+      const logoutTimeout = setTimeout(() => {
+        console.warn('[MainLayout] Timeout no logout. Forçando redirecionamento.');
+        window.location.replace('/login');
+      }, 2000);
+
       await signOut();
+      clearTimeout(logoutTimeout);
     } catch (error) {
       console.error('Erro ao sair:', error);
-      setIsLoggingOut(false);
+      window.location.replace('/login');
     }
   };
 

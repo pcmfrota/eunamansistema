@@ -42,17 +42,20 @@ export class AuthService {
   private static async syncProfile(id: string, fullName: string, role: string) {
     const supabase = createClient();
     
-    // Standardize role if missing
-    const standardRole = role || 'visitante';
+    // NÃO sobrescrever se o cargo já estiver definido ou for nulo na metadata
+    if (!role) {
+      console.log('[AuthService] Pulando sincronização de cargo pois role está ausente na metadata.');
+      return;
+    }
 
     const { error } = await supabase
       .from('profiles')
       .upsert({
         id,
         full_name: fullName || 'Usuário',
-        role: standardRole,
+        role: role,
         updated_at: getCurrentLocalDatetime(),
-      });
+      }, { onConflict: 'id' });
 
     if (error) {
       console.error('Falha ao sincronizar perfil do usuário:', error.message);
