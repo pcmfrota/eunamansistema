@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { X, Printer, Clock } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type OSFichaData = {
@@ -136,6 +137,8 @@ interface OSFichaModalProps {
 }
 
 export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
+  const [horasDO, setHorasDO] = useState<number | null>(os.horas_impacto_do ?? null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -143,6 +146,68 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  // Cálculo dinâmico de DO caso não venha pronto
+  useEffect(() => {
+    if (os.horas_impacto_do != null) return;
+
+    async function fetchAndCalc() {
+      try {
+        const supabase = createClient();
+        const { data: escala } = await supabase
+          .from("escalas_trabalho")
+          .select("*")
+          .eq("placa", getPlaca(os))
+          .single();
+
+        const start = new Date(os.horario_parada || os.data_abertura).getTime();
+        const endRaw = (os.data_fechamento ? new Date(os.data_fechamento) : new Date()).getTime();
+        
+        let endDO = endRaw;
+        if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+          const resChegou = new Date(os.horas_reserva_chegou).getTime();
+          if (resChegou > start) {
+            endDO = Math.min(endRaw, resChegou);
+          }
+        }
+
+        if (!escala) {
+          // Sem escala, DO = tempo total (24h)
+          setHorasDO(Math.round(((endDO - start) / 3600000) * 10) / 10);
+          return;
+        }
+
+        // Se tem escala, calcula interseção
+        let totalH = 0;
+        const dInicio = new Date(start);
+        const dFim = new Date(endDO);
+        
+        // Vamos iterar pelos dias entre início e fim
+        let cursor = new Date(dInicio);
+        cursor.setHours(0,0,0,0);
+
+        while (cursor <= dFim) {
+          const dStr = cursor.toISOString().split('T')[0];
+          let sS = new Date(`${dStr}T${escala.periodo_inicio}`).getTime();
+          let sE = new Date(`${dStr}T${escala.periodo_fim}`).getTime();
+          if (sE <= sS) sE += 86400000;
+
+          const interS = Math.max(start, sS);
+          const interE = Math.min(endDO, sE);
+
+          if (interS < interE) {
+            totalH += (interE - interS) / 3600000;
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+        setHorasDO(Math.round(totalH * 10) / 10);
+      } catch (err) {
+        console.error("Erro ao calcular DO na ficha:", err);
+      }
+    }
+
+    fetchAndCalc();
+  }, [os]);
 
   const horasCalc =
     os.horas_manutencao != null
@@ -462,7 +527,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                       <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
                       <ul className="space-y-1 text-zinc-700">
                         <li><span className="font-bold">Horas de Indisp. Mecânica (DM):</span> {horasCalc}</li>
-                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {os.horas_impacto_do != null ? `${os.horas_impacto_do}h` : "Calculando..."}</li>
+                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {horasDO != null ? `${horasDO}h` : "Calculando..."}</li>
                       </ul>
                       <p className="mt-2 text-zinc-500 text-[9px]">
                         *A DO considera apenas o tempo entre abertura e fechamento que coincidiu com o turno operacional do veículo.
