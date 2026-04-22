@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { updateUserRole, createNewUser, deleteUser } from "./actions";
 import { useAuth } from "@/components/auth-context";
+import { cn } from "@/lib/utils";
 
 type Profile = {
   id: string;
