@@ -56,6 +56,13 @@ function calcHoras(abertura: string, fechamento: string | null): string {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
+function formatDecimalToHms(decimalH: number): string {
+  const totalMin = Math.round(decimalH * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function getPlaca(os: OSFichaData): string {
   return (
     os.placa ||
@@ -187,7 +194,11 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
         cursor.setHours(0,0,0,0);
 
         while (cursor <= dFim) {
-          const dStr = cursor.toISOString().split('T')[0];
+          const y = cursor.getFullYear();
+          const m = String(cursor.getMonth() + 1).padStart(2, "0");
+          const d = String(cursor.getDate()).padStart(2, "0");
+          const dStr = `${y}-${m}-${d}`;
+
           let sS = new Date(`${dStr}T${escala.periodo_inicio}`).getTime();
           let sE = new Date(`${dStr}T${escala.periodo_fim}`).getTime();
           if (sE <= sS) sE += 86400000;
@@ -211,7 +222,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
 
   const horasCalc =
     os.horas_manutencao != null
-      ? `${os.horas_manutencao}h`
+      ? formatDecimalToHms(os.horas_manutencao)
       : calcHoras(os.data_abertura, os.data_fechamento);
 
   const placa = getPlaca(os);
@@ -527,7 +538,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                       <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
                       <ul className="space-y-1 text-zinc-700">
                         <li><span className="font-bold">Horas de Indisp. Mecânica (DM):</span> {horasCalc}</li>
-                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {horasDO != null ? `${horasDO}h` : "Calculando..."}</li>
+                        <li><span className="font-bold">Horas de Indisp. Operacional (DO):</span> {horasDO != null ? formatDecimalToHms(horasDO) : "Calculando..."}</li>
                       </ul>
                       <p className="mt-2 text-zinc-500 text-[9px]">
                         *A DO considera apenas o tempo entre abertura e fechamento que coincidiu com o turno operacional do veículo.
