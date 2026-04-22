@@ -94,10 +94,14 @@ export async function buscarOSporPlaca(
     }
   } else {
     // Sem filtro de data — retorna tudo
+    const { data: eqData } = await supabase.from('equipamentos').select('id').ilike('placa', placa.trim()).maybeSingle();
+    const eqId = eqData?.id;
+    if (!eqId) return [];
+
     const { data, error } = await supabase
       .from('ordens_servico')
-      .select('id, numero_os, status, classe, data_abertura, data_fechamento, descricao, sistema, sub_sistema, horas_manutencao, motivo, local, modulo, horario_parada, foi_enviado_reserva, qual_reserva, horas_reserva_chegou')
-      .eq('placa', placa.toUpperCase())
+      .select('*')
+      .eq('equipamento_id', eqId)
       .order('data_abertura', { ascending: false })
       .limit(50)
     const result = (data || []) as OrdemServicoResumo[];
@@ -108,33 +112,39 @@ export async function buscarOSporPlaca(
   // OS que tocam o período:
   // - Abertas até o fim do período (data_abertura ou horario_parada), E
   // - Ainda não fechadas OU fechadas após o início do período
+  // 1. Busca o ID do equipamento de forma robusta
+  const { data: eqData } = await supabase
+    .from('equipamentos')
+    .select('id, placa')
+    .ilike('placa', placa.trim())
+    .maybeSingle();
+
+  const eqId = eqData?.id;
+  if (!eqId) return [];
+
+  // OS que tocam o período:
   const { data, error } = await supabase
     .from('ordens_servico')
-    .select('id, numero_os, status, classe, data_abertura, data_fechamento, descricao, sistema, sub_sistema, horas_manutencao, motivo, local, modulo, horario_parada, horas_reserva_chegou')
-    .eq('placa', placa.toUpperCase())
+    .select('*, equipamento:equipamento_id(placa)')
+    .eq('equipamento_id', eqId)
     .or(`data_abertura.lte.${fim},horario_parada.lte.${fim}`)
     .or(`data_fechamento.is.null,data_fechamento.gte.${inicio}`)
     .order('data_abertura', { ascending: false })
-    .limit(100)
+    .limit(100);
 
-  if (error) return []
+  if (error || !data) return [];
 
-  // --- Coleta de Dados do Veículo e Escala ---
+  // --- Coleta de Dados da Escala ---
   const { data: escala } = await supabase
     .from('escala_frota')
-    .select(`
-      periodo_inicio,
-      periodo_fim,
-      carga_horaria
-    `)
-    .eq('placa', placa.toUpperCase())
-    .single();
+    .select('periodo_inicio, periodo_fim, carga_horaria')
+    .ilike('placa', placa.trim())
+    .maybeSingle();
 
   const osCalculadas = (data || []).map((os: any) => {
     let hImpactoDO = 0
     const osStart = parseLocal(os.horario_parada || os.data_abertura)
-    const endMecRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : agoraRef.getTime()
-    const endMec = endMecRaw
+    const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : agoraRef.getTime()
 
     // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
     let osEndDO = endMec
