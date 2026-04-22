@@ -323,7 +323,35 @@ export async function getDashboardData(filtros?: {
     }
   });
 
-  let placasFiltradas = frotaAtiva.map(eq => eq.placa?.toUpperCase().trim()).filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
+  let placasFiltradas = frotaAtiva
+    .filter(eq => {
+      // Filtro de Categoria
+      const cat = (filtros?.categoria || "").toUpperCase().trim();
+      if (cat && eq.categoria?.toUpperCase().trim() !== cat) return false;
+      
+      // Se não houver filtro, incluímos apenas PESADA e LEVE por padrão (conforme solicitado)
+      if (!cat) {
+        const eqCat = (eq.categoria || "").toUpperCase().trim();
+        if (eqCat !== "PESADA" && eqCat !== "LEVE") return false;
+      }
+
+      // Filtro de Módulo
+      if (filtros?.modulo && eq.modulo?.toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
+
+      // Filtro de Status
+      if (filtros?.status) {
+        // Mapeamento de status para o que o dashboard entende
+        const osAbertaAtiva = (osPorPlaca.get(eq.placa?.toUpperCase().trim() || "") || []).find(o => o.status === 'Aberta' || o.status === 'Em Andamento');
+        let statusLabel = "Disponível";
+        if (osAbertaAtiva) statusLabel = "Manutenção";
+        // Nota: DM não calculada aqui ainda, mas o filtro de status é secundário
+        if (statusLabel !== filtros.status) return false;
+      }
+
+      return true;
+    })
+    .map(eq => eq.placa?.toUpperCase().trim())
+    .filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
 
   // Filtros em memória (como fallback de segurança para placas específicas ocultas)
   if (filtros?.placa) {
@@ -631,7 +659,10 @@ export async function getDashboardData(filtros?: {
     statusFrota: statusFrota.sort((a, b) => a.disponibilidade - b.disponibilidade),
     dispSemanal,
     preventivas: (prevData ?? [])
-      .filter((p: any) => p.equipamentos?.categoria?.toUpperCase() === "PESADA")
+      .filter((p: any) => {
+        const catFiltro = (filtros?.categoria || "PESADA").toUpperCase();
+        return p.equipamentos?.categoria?.toUpperCase() === catFiltro;
+      })
       .map((p: any) => {
         const restantes = Number(p.ultimo_horimetro) + Number(p.intervalo_horas) - Number(p.horimetro_atual);
         return { placa: p.equipamentos?.placa || "—", horas_restantes: Math.round(restantes), status: restantes < 0 ? "atrasado" : restantes <= 50 ? "atencao" : "no_prazo" };

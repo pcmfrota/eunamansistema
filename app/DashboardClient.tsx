@@ -39,10 +39,9 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const [isLoadingInitial, setIsLoadingInitial] = useState(!initialData);
 
   // Default filters
-  const now = new Date(Date.now() - 3 * 3600 * 1000);
   const defaultFiltros: FiltrosValues = {
-    mes: data?.mesSelecionado || (now.getMonth() + 1),
-    ano: data?.anoSelecionado || now.getFullYear(),
+    mes: data?.mesSelecionado || 0, // 0 triggers operational month detection on server
+    ano: data?.anoSelecionado || 0,
     categoria: "PESADA",
     placa: "",
     modulo: "",
