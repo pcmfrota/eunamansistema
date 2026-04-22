@@ -34,10 +34,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   const fetchProfile = useCallback(async (u: User, skipLoading = false) => {
+    const userEmailBase = u.email?.toLowerCase().trim() || '';
+    
+    // Tenta carregar do cache local primeiro para resposta instantânea
+    if (typeof window !== 'undefined' && !profile) {
+      const cached = localStorage.getItem(`eunaman_profile_${u.id}`);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          console.log('[Auth] Carregando Perfil do Cache Local:', parsed);
+          setProfile(parsed);
+          setLoading(false); // Já temos algo para mostrar
+          skipLoading = true; // Não mostramos o loader global no refresh de fundo
+        } catch (e) {
+          console.error('[Auth] Erro ao ler cache de perfil:', e);
+        }
+      }
+    }
+
     if (!skipLoading) setLoading(true);
     
-    const userEmailBase = u.email?.toLowerCase().trim() || '';
-    console.group(`[Auth] Carregando Perfil: ${userEmailBase}`);
+    console.group(`[Auth] Carregando Perfil do Banco: ${userEmailBase}`);
     
     try {
       // 1. Regra de Ouro: Administradores Mestre (Bypass DB)
@@ -50,30 +67,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userEmailBase.includes('pcmfrota') ||
         userEmailBase.includes('marcos.eunaman') ||
         userEmailBase.includes('eunaman.sistema') ||
-        userEmailBase.endsWith('@eunaman.com.br') || // Qualquer email do domínio eunaman é admin por segurança agora
+        userEmailBase.endsWith('@eunaman.com.br') || 
         u.app_metadata?.role === 'admin';
 
-      console.log('[Auth] É Master Admin?', isMasterAdmin);
-
-      // 2. Busca da tabela profiles
+      // 2. Busca da tabela profiles - Otimizada: seleciona apenas o necessário
       const { data: profileData, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, role, avatar_url')
         .eq('id', u.id)
         .single();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          console.warn('[Auth] Perfil não encontrado no banco, usando fallback.');
-        } else {
-          console.error('[Auth] Erro ao buscar profile:', error);
-        }
+      if (error && error.code !== 'PGRST116') {
+        console.error('[Auth] Erro ao buscar profile:', error);
       }
 
       // 3. Determinação da Role e Nome
-      // PRIORIDADE: Regra de Ouro > Banco de Dados > 'visitante'
       let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' = 'visitante';
-      
       if (isMasterAdmin) {
         finalRole = 'admin';
       } else if (profileData?.role) {
@@ -94,12 +103,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar_url: profileData?.avatar_url || u.user_metadata?.avatar_url || null
       };
 
-      console.log('[Auth] Perfil Final:', finalProfile);
+      // 4. Salva no Cache Local para o próximo acesso
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`eunaman_profile_${u.id}`, JSON.stringify(finalProfile));
+      }
+
       setProfile(finalProfile);
 
-      // 4. Redirecionamento Automático pós-login bem sucedido
       if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/')) {
-        console.log('[Auth] Redirecionando para Dashboard...');
         router.push('/');
       }
 
@@ -109,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.groupEnd();
       setLoading(false);
     }
-  }, [supabase, router]);
+  }, [supabase, router, profile]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {

@@ -1,25 +1,24 @@
-import { Loader2 } from "lucide-react";
+"use client";
+
+import { PremiumLoader } from "@/components/premium-loader";
 
 export default function Loading() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 p-6">
-      <div className="relative">
-        <div className="w-12 h-12 rounded-full border-4 border-zinc-200 dark:border-zinc-800 animate-pulse" />
-        <Loader2 className="w-12 h-12 text-emerald-600 animate-spin absolute inset-0" />
-      </div>
-      <div className="flex flex-col items-center gap-2">
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Carregando Controle de OS</h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Processando ordens e equipamentos...</p>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-[70vh] gap-8 p-6">
+      <PremiumLoader 
+        type="squares-sequential" 
+        text="Controle de OS" 
+        subtext="Sincronizando frotas e manutenções..." 
+      />
       
-      {/* Skeleton placeholders */}
-      <div className="w-full max-w-4xl space-y-4 mt-8 opacity-20">
-        <div className="h-12 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
-        <div className="h-64 bg-zinc-200 dark:bg-zinc-800 rounded-3xl" />
-        <div className="grid grid-cols-3 gap-4">
-          <div className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-2xl" />
-          <div className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-2xl" />
-          <div className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-2xl" />
+      {/* Premium Skeleton placeholders */}
+      <div className="w-full max-w-5xl space-y-6 mt-4 opacity-10 blur-[1px]">
+        <div className="h-16 bg-green-900/20 rounded-2xl animate-pulse" />
+        <div className="h-80 bg-green-900/10 rounded-[2rem] animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="h-40 bg-green-900/10 rounded-3xl animate-pulse" />
+          <div className="h-40 bg-green-900/10 rounded-3xl animate-pulse" />
+          <div className="h-40 bg-green-900/10 rounded-3xl animate-pulse" />
         </div>
       </div>
     </div>

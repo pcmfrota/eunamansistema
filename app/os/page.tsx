@@ -9,6 +9,9 @@ export default async function ControleOSPage() {
     .from('equipamentos')
     .select('id, placa, modulo, horimetros(horimetro_final)')
     .order('placa')
+    // Nota: O Supabase não permite .limit(1) dentro de sub-queries de forma trivial sem view, 
+    // mas vamos filtrar o status para reduzir o volume inicial.
+    .or("status.is.null,status.neq.Inativo,status.neq.INATIVO")
 
   const eqTransformados = equipamentos?.map(eq => {
     let lastH = 0;

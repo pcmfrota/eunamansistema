@@ -239,14 +239,9 @@ export async function getDashboardData(filtros?: {
       totalDiasCalendario = Math.floor(diffTotalMs / 86400000) + 1;
       
       fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
-    } else {
-      inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
-      const diasNoMes = new Date(anoFiltro, mesFiltro, 0).getDate();
       const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMes, 23, 59, 59);
-      
       const fimEfetivoCivil = dFimCivil > agoraRef ? agoraRef : dFimCivil;
       const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
-      
       const diffMs = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
       diasReferencia = Math.floor(diffMs / 86400000) + 1;
       totalDiasCalendario = diasNoMes;
@@ -256,7 +251,7 @@ export async function getDashboardData(filtros?: {
     }
   }
 
-  // 1. Consultas Iniciais Paralelizadas e Granulares (Otimização SQL Pushdown)
+  // 1. Consultas Paralelizadas (Otimização SQL Pushdown e Paralelismo Total)
   let queryOS = supabase.from("ordens_servico").select(`
     id, status, horas_manutencao, data_abertura, data_fechamento, 
     equipamento_id, placa, classe, foi_enviado_reserva,
@@ -279,17 +274,34 @@ export async function getDashboardData(filtros?: {
     queryEq = queryEq.eq('categoria', filtros.categoria.toUpperCase());
   }
 
-  const [osRes, eqRes, escalasRes] = await Promise.all([
+  const [osRes, eqRes, escalasRes, prevRes, calSuzanoExtraRes] = await Promise.all([
     queryOS,
     queryEq,
-    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim")
+    supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
+    supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa, categoria)"),
+    (!calSuzano && mesFiltro !== 0) ? supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single() : Promise.resolve({ data: calSuzano } as any)
   ]);
 
-  const calSuzanoRes = { data: calSuzano }; // Usa o que já foi buscado no início
+  if (!calSuzano && calSuzanoExtraRes.data) {
+    calSuzano = calSuzanoExtraRes.data;
+    // Re-calcula datas baseadas no calendário recém-chegado
+    inicioFiltro = calSuzano.data_inicio;
+    dataInicioExibicao = calSuzano.data_inicio;
+    dataFimExibicao = calSuzano.data_fim;
+    const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
+    const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
+    let fimEfetivoCal = dFimCal;
+    if (dFimCal > ontem) fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
+    const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
+    diasReferencia = Math.floor(diffMs / 86400000) + 1;
+    totalDiasCalendario = Math.floor(Math.max(0, dFimCal.getTime() - dInicioCal.getTime()) / 86400000) + 1;
+    fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
+  }
 
   const allOS = osRes.data ?? [];
   const todasAsEquips = eqRes.data ?? [];
   const escalas = escalasRes.data ?? [];
+  const prevData = prevRes.data ?? [];
   
   const frotaAtiva = todasAsEquips.filter(eq => String(eq.status || 'Ativo').toUpperCase().trim() !== "INATIVO");
   
@@ -625,9 +637,6 @@ export async function getDashboardData(filtros?: {
     });
   }
 
-  const { data: prevData } = await supabase
-    .from("preventivas")
-    .select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa, categoria)");
 
   const MESES_NOME = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
