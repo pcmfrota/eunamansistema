@@ -199,8 +199,8 @@ export async function getDashboardData(filtros?: {
     const dInicio = new Date(inicioFiltro);
     const dFim = new Date(filtros.dataFim);
     const fimEfetivo = dFim > agoraRef ? agoraRef : dFim;
-    const diffMs = Math.max(0, fimEfetivo.getTime() - dInicio.getTime());
-    diasReferencia = Math.floor(diffMs / 86400000) + 1;
+    const diffMsRange = Math.max(0, fimEfetivo.getTime() - dInicio.getTime());
+    diasReferencia = Math.floor(diffMsRange / 86400000) + 1;
     totalDiasCalendario = diasReferencia;
     fimFiltro = fimEfetivo.toISOString();
     dataInicioExibicao = filtros.dataInicio;
@@ -225,26 +225,25 @@ export async function getDashboardData(filtros?: {
       
       const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
       
-      // Ajuste crítico: Se o mês operacional ainda não começou a ter dias passados (ontem < inicio),
-      // usamos o próprio início como fim temporário para evitar range negativo.
       let fimEfetivoCal = dFimCal;
       if (isMesFuturoOuAtual && dFimCal > ontem) {
         fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
       }
       
-      const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
-      diasReferencia = Math.floor(diffMs / 86400000) + 1;
-
-      const diffTotalMs = Math.max(0, dFimCal.getTime() - dInicioCal.getTime());
-      totalDiasCalendario = Math.floor(diffTotalMs / 86400000) + 1;
-      
+      const diffMsSuzano = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
+      diasReferencia = Math.floor(diffMsSuzano / 86400000) + 1;
+      const diffTotalMsSuzano = Math.max(0, dFimCal.getTime() - dInicioCal.getTime());
+      totalDiasCalendario = Math.floor(diffTotalMsSuzano / 86400000) + 1;
       fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
-      const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMes, 23, 59, 59);
+    } else {
+      inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
+      const diasNoMesCivil = new Date(anoFiltro, mesFiltro, 0).getDate();
+      const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMesCivil, 23, 59, 59);
       const fimEfetivoCivil = dFimCivil > agoraRef ? agoraRef : dFimCivil;
       const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
-      const diffMs = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
-      diasReferencia = Math.floor(diffMs / 86400000) + 1;
-      totalDiasCalendario = diasNoMes;
+      const diffMsCivil = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
+      diasReferencia = Math.floor(diffMsCivil / 86400000) + 1;
+      totalDiasCalendario = diasNoMesCivil;
       fimFiltro = fimEfetivoCivil.toISOString();
       dataInicioExibicao = inicioFiltro;
       dataFimExibicao = fimFiltro.split("T")[0];
@@ -284,18 +283,17 @@ export async function getDashboardData(filtros?: {
 
   if (!calSuzano && calSuzanoExtraRes.data) {
     calSuzano = calSuzanoExtraRes.data;
-    // Re-calcula datas baseadas no calendário recém-chegado
     inicioFiltro = calSuzano.data_inicio;
     dataInicioExibicao = calSuzano.data_inicio;
     dataFimExibicao = calSuzano.data_fim;
-    const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
-    const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
-    let fimEfetivoCal = dFimCal;
-    if (dFimCal > ontem) fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
-    const diffMs = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
-    diasReferencia = Math.floor(diffMs / 86400000) + 1;
-    totalDiasCalendario = Math.floor(Math.max(0, dFimCal.getTime() - dInicioCal.getTime()) / 86400000) + 1;
-    fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
+    const dFimCalExtra = new Date(calSuzano.data_fim + 'T23:59:59');
+    const dInicioCalExtra = new Date(calSuzano.data_inicio + 'T00:00:00');
+    let fimEfetivoCalExtra = dFimCalExtra;
+    if (dFimCalExtra > ontem) fimEfetivoCalExtra = ontem < dInicioCalExtra ? dInicioCalExtra : ontem;
+    const diffMsExtra = Math.max(0, fimEfetivoCalExtra.getTime() - dInicioCalExtra.getTime());
+    diasReferencia = Math.floor(diffMsExtra / 86400000) + 1;
+    totalDiasCalendario = Math.floor(Math.max(0, dFimCalExtra.getTime() - dInicioCalExtra.getTime()) / 86400000) + 1;
+    fimFiltro = dFimCalExtra.toISOString().split('T')[0] + 'T23:59:59';
   }
 
   const allOS = osRes.data ?? [];
