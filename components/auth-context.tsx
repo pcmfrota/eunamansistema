@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userEmailBase = u.email?.toLowerCase().trim() || '';
     
     // Tenta carregar do cache local primeiro para resposta instantânea
-    if (typeof window !== 'undefined' && !profile) {
+    if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(`eunaman_profile_${u.id}`);
       if (cached) {
         try {
@@ -125,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.groupEnd();
       setLoading(false);
     }
-  }, [supabase, router, profile]);
+  }, [supabase, router]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -196,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, router, pathname, fetchProfile]);
+  }, [supabase, router]); // Removido fetchProfile e pathname para evitar loops e re-inicializações
 
   const signOut = async () => {
     console.log('[Auth] Iniciando Logout...');

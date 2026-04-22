@@ -56,7 +56,7 @@ const adminNavigation = [
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const { profile, signOut, loading: authLoading } = useAuth();
+  const { profile, signOut, loading: authLoading, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -94,9 +94,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   const isDark = theme === 'dark';
 
-  // Se estiver carregando auth E não tiver perfil, mostra o loader premium
-  // Se já tiver perfil (do cache), renderiza o layout e deixa o refresh acontecer em background
-  if (authLoading && !profile) {
+  // Só mostra o loader de tela cheia se NÃO tivermos nem sessão (user) nem perfil, 
+  // o que acontece no primeiro segundo do carregamento inicial frio.
+  // Se já temos o 'user', renderizamos o layout com placeholders para o profile.
+  if (authLoading && !profile && !user) {
     return (
       <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-500", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
         <PremiumLoader type="squares-sequential" text="Iniciando Sessão" subtext="PCM • EUNAMAN SISTEMA" />
