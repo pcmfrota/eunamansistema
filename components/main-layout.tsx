@@ -98,8 +98,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-6 animate-in fade-in duration-1000">
           <div className="relative">
              <div className="w-24 h-24 rounded-full border-4 border-zinc-200 dark:border-zinc-800 border-t-green-600 animate-spin" />
-             <div className="absolute inset-0 flex items-center justify-center">
-                <img src="/logo-eunaman.png" alt="Logo" className="w-12 h-12 object-contain grayscale opacity-20" />
+             <div className="absolute inset-0 flex items-center justify-center p-4">
+                <img src="/logo-eunaman.svg" alt="Logo" className="w-full h-auto object-contain opacity-40 dark:invert" />
              </div>
           </div>
           <div className="flex flex-col items-center gap-1">
@@ -174,19 +174,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          <div
-            className="w-full"
-            style={isDark ? {
-              background: 'rgba(255,255,255,0.92)',
-              borderRadius: '8px',
-              padding: '6px 10px',
-            } : {}}
-          >
+          <div className="w-full py-4 px-2 flex items-center justify-center bg-white">
             <img
               src="/logo-eunaman-full.png"
               alt="EUNAMAN - Forest Support Expert"
-              className="w-full h-auto object-contain"
-              style={{ maxHeight: '60px' }}
+              className="w-full h-auto object-contain mix-blend-multiply"
+              style={{ maxHeight: '80px' }}
             />
           </div>
 

@@ -62,8 +62,12 @@ export function Sidebar() {
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="p-6 flex items-center justify-between hidden md:flex">
-          <h2 className="text-xl font-bold tracking-tight dark:text-white">EUNAMAN</h2>
+        <div className="p-6 flex items-center justify-center hidden md:flex border-b border-zinc-200 dark:border-zinc-800 bg-white">
+          <img 
+            src="/logo-eunaman-full.png" 
+            alt="EUNAMAN" 
+            className="h-16 w-auto mix-blend-multiply" 
+          />
         </div>
 
         <nav className="flex-1 flex flex-col gap-2 px-4 py-4 overflow-y-auto">

@@ -12,28 +12,30 @@ export default function LoginPage({
 }) {
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-zinc-50 dark:bg-black p-4 items-center justify-center overflow-hidden">
-      {/* Background Image - Floresta de Eucalipto Suzano */}
-      <div className="absolute inset-0 z-0">
+      {/* Background Image Oficial EUNAMAN */}
+      <div className="absolute inset-0 z-0 bg-zinc-950">
         <img 
-          src="https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?q=80&w=2076&auto=format&fit=crop" 
-          alt="Floresta" 
+          src="/bg-eunaman.png" 
+          alt="EUNAMAN Background" 
           className="h-full w-full object-cover"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?q=80&w=2076&auto=format&fit=crop";
+          }}
         />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
       </div>
 
       <div className="z-10 w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center justify-center space-y-2 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-xl mb-4">
-            <TrendingUp size={32} />
+        <div className="mb-10 flex flex-col items-center justify-center text-center">
+          <div className="flex items-center justify-center bg-white/10 rounded-xl p-2 backdrop-blur-sm">
+            <img 
+              src="/logo-eunaman-full.png" 
+              alt="EUNAMAN" 
+              className="h-24 w-auto mix-blend-multiply contrast-125"
+            />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
-            EUNAMAN
-          </h1>
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Gestão de Frota e Controle de Manutenção
-          </p>
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white/70 backdrop-blur-xl p-8 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900/60 transition-all duration-300">
