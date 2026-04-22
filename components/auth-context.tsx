@@ -41,8 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // 1. Regra de Ouro: Administradores Mestre sempre ganham (bypass DB se necessário)
       const isMasterAdmin = userEmail.includes('marcos.rocha') || 
+                            userEmail.includes('marcos.aurelio') ||
                             userEmail.includes('douglas.torres') ||
                             userEmail.includes('jessica') ||
+                            (userEmail.startsWith('marcos.') && userEmail.endsWith('@eunaman.com.br')) ||
                             u.app_metadata?.role === 'admin';
 
       // 2. Busca da tabela profiles
@@ -128,6 +130,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await fetchProfile(session.user, false);
         } else {
           setLoading(false);
+          // Se não estiver na página de login, redireciona
+          if (pathname !== '/login') {
+            router.push('/login');
+          }
         }
       } catch (err) {
         console.error('[Auth] Erro na inicialização:', err);
