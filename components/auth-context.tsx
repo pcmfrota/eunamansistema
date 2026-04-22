@@ -89,9 +89,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[Auth] Perfil final determinado:', finalProfile.role);
       
       setProfile(finalProfile);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('eunaman_profile', JSON.stringify(finalProfile));
-      }
     } catch (err) {
       console.error('[Auth] Erro crítico ao carregar perfil:', err);
     } finally {
@@ -104,6 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetchProfile(user, true);
     }
   }, [user, fetchProfile]);
+
+  useEffect(() => {
+    // Limpeza forçada de caches antigos na montagem
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('eunaman_profile');
+      console.log('[Auth] Cache antigo removido para garantir permissões frescas.');
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -119,23 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           setUser(session.user);
-          
-          let hasCached = false;
-          // Tenta carregar do cache para tirar o loading rápido
-          const cached = localStorage.getItem('eunaman_profile');
-          if (cached) {
-            try {
-              const parsed = JSON.parse(cached);
-              if (parsed.id === session.user.id) {
-                setProfile(parsed);
-                setLoading(false); // Já temos algo para mostrar
-                hasCached = true;
-              }
-            } catch (e) {}
-          }
-          
-          // Busca dados frescos. Se já tem cache, faz em background.
-          await fetchProfile(session.user, hasCached);
+          // Busca dados frescos sempre para evitar cache de cargo antigo
+          await fetchProfile(session.user, false);
         } else {
           setLoading(false);
         }
