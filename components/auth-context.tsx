@@ -36,8 +36,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = useCallback(async (u: User, skipLoading = false) => {
     const userEmailBase = u.email?.toLowerCase().trim() || '';
     
-    // Tenta carregar do cache local primeiro para resposta instantânea
-    if (typeof window !== 'undefined' && !profile) {
+    // 1. Determinação OTIMISTA de Role e Nome (Sem DB)
+    const isMasterAdmin = 
+      userEmailBase.includes('marcos.rocha') || 
+      userEmailBase.includes('marcos.aurelio') ||
+      userEmailBase.includes('marcos.aurelio.rocha') ||
+      userEmailBase.includes('douglas.torres') ||
+      userEmailBase.includes('jessica') ||
+      userEmailBase.includes('pcmfrota') ||
+      userEmailBase.includes('marcos.eunaman') ||
+      userEmailBase.includes('eunaman.sistema') ||
+      userEmailBase.endsWith('@eunaman.com.br') || 
+      u.app_metadata?.role === 'admin';
+
+    // Perfil inicial (otimista)
+    let initialProfile: Profile = {
+      id: u.id,
+      email: userEmailBase,
+      full_name: u.user_metadata?.full_name || u.user_metadata?.name || userEmailBase.split('@')[0] || 'Usuário',
+      role: isMasterAdmin ? 'admin' : 'visitante',
+      avatar_url: u.user_metadata?.avatar_url || null
+    };
+
+    // 2. Tenta carregar do cache local primeiro para resposta instantânea
+    if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(`eunaman_profile_${u.id}`);
       if (cached) {
         try {
@@ -46,40 +68,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(parsed);
           setLoading(false); // Já libera a UI
           skipLoading = true; 
+          initialProfile = parsed;
         } catch (e) {
           console.error('[Auth] Erro ao ler cache de perfil:', e);
         }
       }
     }
 
-    // Se já temos o perfil no estado (ex: de uma navegação anterior), liberamos o loading
-    if (profile) {
-      setLoading(false);
-      skipLoading = true;
-    }
-
-    // Só ativamos o loading global se realmente não tivermos NADA para mostrar
-    if (!profile && !skipLoading) {
-      setLoading(true);
+    // 3. SE NÃO TEM CACHE, USAMOS O PERFIL OTIMISTA (METADATA) PARA NÃO TRAVAR A UI
+    if (!skipLoading) {
+      console.log('[Auth] Usando Perfil Otimista (Metadata) para evitar trava de UI');
+      setProfile(initialProfile);
+      setLoading(false); // LIBERA A UI IMEDIATAMENTE PARA TODOS
     }
     
-    console.group(`[Auth] Carregando Perfil do Banco: ${userEmailBase}`);
+    console.group(`[Auth] Buscando Perfil Real no Banco: ${userEmailBase}`);
     
     try {
-      // 1. Regra de Ouro: Administradores Mestre (Bypass DB)
-      const isMasterAdmin = 
-        userEmailBase.includes('marcos.rocha') || 
-        userEmailBase.includes('marcos.aurelio') ||
-        userEmailBase.includes('marcos.aurelio.rocha') ||
-        userEmailBase.includes('douglas.torres') ||
-        userEmailBase.includes('jessica') ||
-        userEmailBase.includes('pcmfrota') ||
-        userEmailBase.includes('marcos.eunaman') ||
-        userEmailBase.includes('eunaman.sistema') ||
-        userEmailBase.endsWith('@eunaman.com.br') || 
-        u.app_metadata?.role === 'admin';
-
-      // 2. Busca da tabela profiles - Otimizada: seleciona apenas o necessário
+      // 3. Busca da tabela profiles - Otimizada: seleciona apenas o necessário
       const { data: profileData, error } = await supabase
         .from('profiles')
         .select('id, full_name, role, avatar_url')
@@ -90,36 +96,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('[Auth] Erro ao buscar profile:', error);
       }
 
-      // 3. Determinação da Role e Nome
-      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' = 'visitante';
-      if (isMasterAdmin) {
-        finalRole = 'admin';
-      } else if (profileData?.role) {
+      // 4. Determinação Final da Role e Nome
+      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' = isMasterAdmin ? 'admin' : 'visitante';
+      if (profileData?.role) {
         finalRole = profileData.role as any;
       }
 
-      const fullName = profileData?.full_name || 
-                       u.user_metadata?.full_name || 
-                       u.user_metadata?.name || 
-                       userEmailBase.split('@')[0] || 
-                       'Usuário';
+      const fullName = profileData?.full_name || initialProfile.full_name;
 
       const finalProfile: Profile = {
         id: u.id,
         email: userEmailBase,
         full_name: fullName,
         role: finalRole,
-        avatar_url: profileData?.avatar_url || u.user_metadata?.avatar_url || null
+        avatar_url: profileData?.avatar_url || initialProfile.avatar_url
       };
 
-      // 4. Salva no Cache Local para o próximo acesso
+      // 5. Salva no Cache Local para o próximo acesso
       if (typeof window !== 'undefined') {
         localStorage.setItem(`eunaman_profile_${u.id}`, JSON.stringify(finalProfile));
       }
 
       setProfile(finalProfile);
 
-      // 5. Redirecionamento inteligente apenas se estiver na tela de login
+      // 6. Redirecionamento inteligente apenas se estiver na tela de login
       if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/auth/callback')) {
         console.log('[Auth] Redirecionando para Dashboard após login bem-sucedido');
         router.replace('/');
