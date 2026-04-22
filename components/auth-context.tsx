@@ -35,19 +35,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = useCallback(async (u: User, skipLoading = false) => {
     if (!skipLoading) setLoading(true);
-    const userEmail = u.email?.toLowerCase() || '';
-    console.log('[Auth] Iniciando busca de perfil para:', userEmail);
-    
     try {
-      console.log('[Auth] Verificando privilégios para:', userEmail);
+      const userEmailBase = u.email?.toLowerCase().trim() || '';
       
       // 1. Regra de Ouro: Administradores Mestre sempre ganham (bypass DB se necessário)
-      const isMasterAdmin = userEmail.includes('marcos.rocha') || 
-                            userEmail.includes('marcos.aurelio') ||
-                            userEmail.includes('douglas.torres') ||
-                            userEmail.includes('jessica') ||
-                            userEmail.includes('pcmfrota') ||
-                            (userEmail.startsWith('marcos.') && userEmail.endsWith('@eunaman.com.br')) ||
+      const isMasterAdmin = userEmailBase.includes('marcos.rocha') || 
+                            userEmailBase.includes('marcos.aurelio') ||
+                            userEmailBase.includes('douglas.torres') ||
+                            userEmailBase.includes('jessica') ||
+                            userEmailBase.includes('pcmfrota') ||
+                            userEmailBase.includes('marcos.eunaman') ||
+                            (userEmailBase.startsWith('marcos') && userEmailBase.endsWith('@eunaman.com.br')) ||
                             u.app_metadata?.role === 'admin';
 
       // 2. Busca da tabela profiles
@@ -66,12 +64,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const fullName = profileData?.full_name || 
                        u.user_metadata?.full_name || 
                        u.user_metadata?.name || 
-                       userEmail.split('@')[0] || 
+                       userEmailBase.split('@')[0] || 
                        'Usuário';
 
       const finalProfile: Profile = {
         id: u.id,
-        email: userEmail,
+        email: userEmailBase,
         full_name: fullName,
         role: role as any,
         avatar_url: profileData?.avatar_url || u.user_metadata?.avatar_url || null
@@ -117,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(session.user);
           // Busca dados frescos sempre para evitar cache de cargo antigo
           await fetchProfile(session.user, false);
+          if (mounted) setLoading(false);
         } else {
           setLoading(false);
           // Se não estiver na página de login, redireciona
@@ -179,17 +178,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      setLoading(true);
+      // Logout direto sem Splash para evitar travamento
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.replace('/login');
       }
     } catch (err) {
       console.error('[Auth] Erro ao sair:', err);
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.replace('/login');
       }
     }
   };
