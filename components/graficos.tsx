@@ -157,7 +157,7 @@ function ModalDetalhe({
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
               <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
               <p className="text-3xl font-black" style={{ color: getColorDisp(veiculo.dispDM) }}>
-                {veiculo.dispDM.toFixed(1)}%
+                {(veiculo.dispDM || 0).toFixed(1)}%
               </p>
               <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
                 <p className="text-[9px] text-zinc-500">Horas Totais: {Number(veiculo.hTotalDM || 0)}h</p>
@@ -170,7 +170,7 @@ function ModalDetalhe({
                 <h4 className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider">DO (OPERACIONAL)</h4>
                 <span className="text-orange-500 font-mono text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded">PCM</span>
               </div>
-              <div className="text-4xl font-black text-orange-500 mb-4">{veiculo.dispDO.toFixed(1)}%</div>
+              <div className="text-4xl font-black text-orange-500 mb-4">{(veiculo.dispDO || 0).toFixed(1)}%</div>
               <div className="space-y-2">
                 <p className="text-[9px] text-zinc-500">Carga Horária: {Number(veiculo.hTotalDO || 0)}h</p>
                 <p className="text-[9px] text-red-500/80">Indisp. no Turno: {Number(veiculo.horasOperacional || 0)}h</p>
@@ -437,7 +437,7 @@ export function GraficoVeiculos({
     const isDO = tipoAvailability === "DO";
     const valBase = isDO ? v.disponibilidade_operacional : v.disponibilidade;
     
-    let dispExibida = mostrarIndisponibilidade ? Number((100 - valBase).toFixed(1)) : valBase;
+    let dispExibida = mostrarIndisponibilidade ? Number((100 - (valBase || 0)).toFixed(1)) : (valBase || 0);
     
     return {
       ...v,
@@ -1287,7 +1287,7 @@ export function GraficoDispCategoria({
         <div className="mt-6 p-4 rounded-2xl bg-zinc-100/50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/50 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-inner" style={{ background: getColorDisp(selecionado.dm) }}>
-              {selecionado.dm}%
+              {(selecionado.dm || 0).toFixed(1)}%
             </div>
             <div>
               <h4 className="font-bold text-zinc-800 dark:text-zinc-100 uppercase tracking-wide flex items-center gap-2">
@@ -1303,8 +1303,8 @@ export function GraficoDispCategoria({
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase font-bold mb-1">Taxa Disponibilidade</span>
               <div className="flex items-center gap-2">
-                <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600">DM: {selecionado.dm}%</div>
-                <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-600">DO: {selecionado.doOp}%</div>
+                <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600">DM: {(selecionado.dm || 0).toFixed(1)}%</div>
+                <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-600">DO: {(selecionado.doOp || 0).toFixed(1)}%</div>
               </div>
             </div>
             <button 
