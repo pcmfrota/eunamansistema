@@ -47,11 +47,16 @@ function fmtDT(s: string | null | undefined) {
 }
 
 function calcHoras(abertura: string, fechamento: string | null): string {
-  if (!fechamento) return "—";
+  const agora = new Date();
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  ontem.setHours(23, 59, 59, 999);
+
+  const dFim = fechamento ? new Date(fechamento) : ontem;
   const diff = Math.floor(
-    (new Date(fechamento).getTime() - new Date(abertura).getTime()) / 60000
+    (dFim.getTime() - new Date(abertura).getTime()) / 60000
   );
-  if (diff <= 0) return "—";
+  if (diff <= 0) return "00:00";
   const h = Math.floor(diff / 60);
   const min = diff % 60;
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
@@ -208,7 +213,12 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
           .single();
 
         const start = parseLocal(os.horario_parada || os.data_abertura);
-        const endRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : new Date().getTime();
+        
+        const agora = new Date();
+        const ontem = new Date(agora);
+        ontem.setDate(ontem.getDate() - 1);
+        ontem.setHours(23, 59, 59, 999);
+        const endRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : ontem.getTime();
         
         let endDO = endRaw;
         if (os.foi_enviado_reserva) {
@@ -417,7 +427,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
               </div>`).join("")}
           </div>
           <div style="display:flex;justify-content:space-between;padding:5px 10px;background:#f9fafb;border-top:1px solid #d1d5db;">
-            <p style="font-size:9px;color:#9ca3af;">Gerado em: ${new Date().toLocaleString("pt-BR")}</p>
+            <p style="font-size:9px;color:#9ca3af;">Gerado em: ${new Date().toLocaleString("pt-BR")} | Regra D-1 (PCM Suzano)</p>
             <p style="font-size:9px;color:#6b7280;font-weight:700;">EUNAMAN — Sistema de Controle de Manutenção</p>
             <p style="font-size:9px;color:#9ca3af;font-family:monospace;">O.S: ${os.numero_os}</p>
           </div>
@@ -661,7 +671,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   {/* Rodapé */}
                   <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-t border-gray-300">
                     <p className="text-[9px] text-gray-400">
-                      Gerado em: {new Date().toLocaleString("pt-BR")}
+                      Gerado em: {new Date().toLocaleString("pt-BR")} | Regra D-1 (PCM Suzano)
                     </p>
                     <p className="text-[9px] text-gray-500 font-semibold">
                       EUNAMAN — Sistema de Controle de Manutenção

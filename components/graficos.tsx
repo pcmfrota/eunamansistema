@@ -156,8 +156,8 @@ function ModalDetalhe({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3 flex flex-col shadow-sm">
               <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">DM (Mecânica)</p>
-              <p className="text-3xl font-black" style={{ color: getColorDisp(Number(veiculo.disponibilidade || 0)) }}>
-                {Number(veiculo.disponibilidade || 0).toFixed(1)}%
+              <p className="text-3xl font-black" style={{ color: getColorDisp(veiculo.dispDM) }}>
+                {veiculo.dispDM.toFixed(1)}%
               </p>
               <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-700/30">
                 <p className="text-[9px] text-zinc-500">Horas Totais: {Number(veiculo.hTotalDM || 0)}h</p>
@@ -170,7 +170,7 @@ function ModalDetalhe({
                 <h4 className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider">DO (OPERACIONAL)</h4>
                 <span className="text-orange-500 font-mono text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded">PCM</span>
               </div>
-              <div className="text-4xl font-black text-orange-500 mb-4">{Number(veiculo.disponibilidade_operacional || 0).toFixed(1)}%</div>
+              <div className="text-4xl font-black text-orange-500 mb-4">{veiculo.dispDO.toFixed(1)}%</div>
               <div className="space-y-2">
                 <p className="text-[9px] text-zinc-500">Carga Horária: {Number(veiculo.hTotalDO || 0)}h</p>
                 <p className="text-[9px] text-red-500/80">Indisp. no Turno: {Number(veiculo.horasOperacional || 0)}h</p>
@@ -409,6 +409,7 @@ interface GraficoVeiculosProps {
   ano?: number;
   dataInicio?: string;
   dataFim?: string;
+  dataAtualizacao?: string;
   title?: string;
   mostrarIndisponibilidade?: boolean;
   tipoAvailability?: "DM" | "DO";
@@ -421,6 +422,7 @@ export function GraficoVeiculos({
   ano,
   dataInicio,
   dataFim, 
+  dataAtualizacao,
   title = "Disponibilidade Operacional",
   mostrarIndisponibilidade = false,
   tipoAvailability = "DM"
@@ -528,6 +530,11 @@ export function GraficoVeiculos({
             {periodoLabel && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
                 {periodoLabel}
+              </span>
+            )}
+            {dataAtualizacao && (
+              <span className="text-[10px] px-2 py-0.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase tracking-wider">
+                Atualizado: {dataAtualizacao}
               </span>
             )}
           </div>
@@ -857,8 +864,11 @@ export function ResumoHoras({
   horasManutencao = 0,
   totalEquipamentos = 0,
 }: ResumoHorasProps) {
-  const hoje = new Date();
-  const diasTranscorridos = hoje.getDate();
+  // Aplica regra D-1: considerar apenas até ontem
+  const agora = new Date();
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  const diasTranscorridos = Math.max(1, ontem.getDate());
   const horasPeriodo = diasTranscorridos * 24 * totalEquipamentos;
   const horasDisponiveis = Math.max(0, horasPeriodo - horasManutencao);
 

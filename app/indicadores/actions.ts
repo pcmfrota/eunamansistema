@@ -54,9 +54,15 @@ export async function getIndicadoresData(filtros?: {
   placa?: string
 }): Promise<IndicadoresData> {
   const supabase = createClient()
-  const hoje = hojeBR()
-  const mesAtual = hoje.getMonth() + 1
-  const anoAtual = hoje.getFullYear()
+  
+  // Regra D-1: Hoje é D0, Ontem é D-1
+  const agora = new Date()
+  const ontem = new Date(agora)
+  ontem.setDate(ontem.getDate() - 1)
+  ontem.setHours(23, 59, 59, 999)
+
+  const mesAtual = agora.getMonth() + 1
+  const anoAtual = agora.getFullYear()
 
   const mesFiltro = filtros?.mes && filtros.mes > 0 ? filtros.mes : null
   const anoFiltro = filtros?.ano && filtros.ano > 0 ? filtros.ano : null
@@ -70,31 +76,47 @@ export async function getIndicadoresData(filtros?: {
     inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-01`
     const fimMesDate = new Date(anoFiltro, mesFiltro, 0)
     diasNoMes = fimMesDate.getDate()
-    fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-${String(diasNoMes).padStart(2, '0')}T23:59:59`
-    diasTranscorridos = mesFiltro === mesAtual && anoFiltro === anoAtual ? hoje.getDate() : diasNoMes
+    
+    // Se for o mês atual, conta apenas até ontem
+    if (mesFiltro === mesAtual && anoFiltro === anoAtual) {
+      diasTranscorridos = Math.max(0, ontem.getDate())
+      fimFiltro = ontem.toISOString()
+    } else {
+      diasTranscorridos = diasNoMes
+      fimFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-${String(diasNoMes).padStart(2, '0')}T23:59:59`
+    }
   } else if (anoFiltro && !mesFiltro) {
     inicioFiltro = `${anoFiltro}-01-01`
     const isCurrentYear = anoFiltro === anoAtual
-    fimFiltro = isCurrentYear ? null : `${anoFiltro}-12-31T23:59:59`
-    const fim = isCurrentYear ? hoje : new Date(anoFiltro, 11, 31)
-    diasTranscorridos = Math.floor((fim.getTime() - new Date(anoFiltro, 0, 1).getTime()) / 86400000) + 1
+    const dInicioAno = new Date(anoFiltro, 0, 1)
+    
+    if (isCurrentYear) {
+      fimFiltro = ontem.toISOString()
+      diasTranscorridos = Math.max(0, Math.floor((ontem.getTime() - dInicioAno.getTime()) / 86400000) + 1)
+    } else {
+      fimFiltro = `${anoFiltro}-12-31T23:59:59`
+      diasTranscorridos = 365 // simplificação, ou calculo exato se bissexto
+      const dFimAno = new Date(anoFiltro, 11, 31)
+      diasTranscorridos = Math.floor((dFimAno.getTime() - dInicioAno.getTime()) / 86400000) + 1
+    }
     diasNoMes = 31
   } else {
-    inicioFiltro = null
-    fimFiltro = null
+    // Default: ano atual até ontem
+    inicioFiltro = `${anoAtual}-01-01`
+    fimFiltro = ontem.toISOString()
+    const dInicioAno = new Date(anoAtual, 0, 1)
+    diasTranscorridos = Math.max(0, Math.floor((ontem.getTime() - dInicioAno.getTime()) / 86400000) + 1)
     diasNoMes = 31
-    diasTranscorridos = Math.floor((hoje.getTime() - new Date(anoAtual, 0, 1).getTime()) / 86400000) + 1
   }
 
   const periodoLabel =
     mesFiltro && anoFiltro ? `${MESES_NOME[mesFiltro]} ${anoFiltro}` :
     anoFiltro ? `Ano ${anoFiltro}` :
-    mesFiltro ? `${MESES_NOME[mesFiltro]} (todos os anos)` :
     'Todos os períodos'
 
   const horasTotaisPeriodo = diasTranscorridos * 24
 
-  // Buscar OS do período
+  // Buscar OS do período (limitado a D-1)
   let osQuery = supabase
     .from('ordens_servico')
     .select('id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe')
@@ -172,11 +194,7 @@ export async function getIndicadoresData(filtros?: {
     const osDoVeiculo = osPorPlaca[placa] || []
     const info = placaInfoMap.get(placa) ?? { categoria: '', modulo: '' }
 
-    // ── Cálculo de horas de manutenção (corretiva + preventiva = DM)
     let horasManutTotalDM = 0
-    // ── Para DO: horas de paradas operacionais (exclui operação)
-    // Como não temos campo de parada operacional, usamos o mesmo conceito:
-    // DO = tempo disponível para operar = total - manutenção (simplificação consistente com o sistema)
     let osAbertas = 0
     let osFechadasV = 0
 
@@ -192,8 +210,8 @@ export async function getIndicadoresData(filtros?: {
         horasOS = Math.max(0, (fe - ab) / 3600000)
       } else if (os.status === 'Aberta' && os.data_abertura) {
         const ab = new Date(os.data_abertura).getTime()
-        horasOS = Math.max(0, (Date.now() - ab) / 3600000)
-        horasOS = Math.min(horasOS, horasTotaisPeriodo)
+        // Regra D-1: se aberta, conta apenas até ontem
+        horasOS = Math.max(0, (ontem.getTime() - ab) / 3600000)
       }
 
       horasManutTotalDM += horasOS
@@ -203,13 +221,10 @@ export async function getIndicadoresData(filtros?: {
 
     horasManutTotalDM = Math.min(horasManutTotalDM, horasTotaisPeriodo)
 
-    // DM = (TotalHoras - HorasManut) / TotalHoras * 100
     const dm = horasTotaisPeriodo > 0
       ? Math.max(0, Math.min(100, ((horasTotaisPeriodo - horasManutTotalDM) / horasTotaisPeriodo) * 100))
       : 100
 
-    // DO = HorasOperacionais / TotalHoras * 100
-    // HorasOperacionais = TotalHoras - HorasManut (paradas operacionais não rastreadas separadamente)
     const horasOp = Math.max(0, horasTotaisPeriodo - horasManutTotalDM)
     const do_ = horasTotaisPeriodo > 0
       ? Math.max(0, Math.min(100, (horasOp / horasTotaisPeriodo) * 100))

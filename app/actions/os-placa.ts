@@ -67,6 +67,10 @@ export async function buscarOSporPlaca(
   }
   const supabase = createClient()
   const agoraRef = new Date()
+  // D-1: nunca considerar dados do dia atual
+  const ontem = new Date(agoraRef)
+  ontem.setDate(ontem.getDate() - 1)
+  ontem.setHours(23, 59, 59, 999)
 
   let inicio: string
   let fim: string
@@ -85,7 +89,10 @@ export async function buscarOSporPlaca(
 
     if (cal) {
       inicio = cal.data_inicio
-      fim = `${cal.data_fim}T23:59:59`
+      // Aplicar D-1: nunca considerar além de ontem
+      const calFim = new Date(cal.data_fim + 'T23:59:59')
+      const fimEfetivo = calFim > ontem ? ontem : calFim
+      fim = fimEfetivo.toISOString()
     } else {
       // Fallback: mês civil
       inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
@@ -102,9 +109,23 @@ export async function buscarOSporPlaca(
       .from('ordens_servico')
       .select('*')
       .eq('equipamento_id', eqId)
+      // D-1: Nunca considerar OS abertas hoje
+      .lte("data_abertura", ontem.toISOString())
       .order('data_abertura', { ascending: false })
       .limit(50)
-    const result = (data || []) as OrdemServicoResumo[];
+    
+    // Para as OS retornadas, calcular as horas respeitando D-1
+    const result = (data || []).map(os => {
+      const osStart = parseLocal(os.horario_parada || os.data_abertura)
+      const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontem.getTime()
+      let hMecCalculada = os.horas_manutencao || Math.max(0, (endMec - osStart) / 3600000)
+      
+      return {
+        ...os,
+        horas_manutencao: Math.round(hMecCalculada * 10) / 10
+      }
+    }) as OrdemServicoResumo[];
+
     osPlacaCache.set(cacheKey, { data: result, timestamp: now });
     return result;
   }
@@ -144,18 +165,16 @@ export async function buscarOSporPlaca(
   const osCalculadas = (data || []).map((os: any) => {
     let hImpactoDO = 0
     const osStart = parseLocal(os.horario_parada || os.data_abertura)
-    const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : agoraRef.getTime()
+    // Regra D-1: se aberta, conta apenas até ontem
+    const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontem.getTime()
 
     // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
     let osEndDO = endMec
-    if (os.foi_enviado_reserva) {
-      if (os.horas_reserva_chegou) {
-        const reservaTime = parseLocal(os.horas_reserva_chegou)
-        if (reservaTime > osStart && reservaTime < endMec) {
-          osEndDO = reservaTime
-        }
-      } else {
-        osEndDO = osStart
+    if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
+      const reservaTime = parseLocal(os.horas_reserva_chegou)
+      // O reserva só "para" o cronômetro operacional se chegar ANTES do conserto acabar (e respeitando o limite D-1)
+      if (reservaTime > osStart && reservaTime < endMec) {
+        osEndDO = reservaTime
       }
     }
 

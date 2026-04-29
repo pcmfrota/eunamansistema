@@ -71,6 +71,7 @@ export type DashboardData = {
   statusFrota: any[];
   manutPorTipo: any[];
   dispPorCategoria: { categoria: string; dm: number; doOp: number; total: number; qtdOS: number }[];
+  dataAtualizacao?: string;
 };
 
 // Helper para fundir intervalos de tempo sobrepostos (evita duplicidade de horas)
@@ -210,12 +211,11 @@ export async function getDashboardData(filtros?: {
 
   if (filtros?.dataInicio && filtros?.dataFim) {
     inicioFiltro = filtros.dataInicio;
-    const dInicio = new Date(inicioFiltro);
-    const dFim = new Date(filtros.dataFim);
-    const fimEfetivo = dFim > agoraRef ? agoraRef : dFim;
+    const dInicio = new Date(inicioFiltro + 'T00:00:00');
+    const dFim = new Date(filtros.dataFim + 'T23:59:59');
+    const fimEfetivo = dFim > ontem ? (ontem < dInicio ? dInicio : ontem) : dFim;
     const diffMsRange = Math.max(0, fimEfetivo.getTime() - dInicio.getTime());
     diasReferencia = Math.floor(diffMsRange / 86400000) + 1;
-    totalDiasCalendario = diasReferencia;
     fimFiltro = fimEfetivo.toISOString();
     dataInicioExibicao = filtros.dataInicio;
     dataFimExibicao = filtros.dataFim;
@@ -226,27 +226,22 @@ export async function getDashboardData(filtros?: {
     const dFimCal = new Date(calSuzano.data_fim + 'T23:59:59');
     const dInicioCal = new Date(calSuzano.data_inicio + 'T00:00:00');
     
-    const isMesFuturoOuAtual = (anoFiltro > anoAtualRef) || (anoFiltro === anoAtualRef && mesFiltro >= mesAtualRef);
-    
     let fimEfetivoCal = dFimCal;
-    if (isMesFuturoOuAtual && dFimCal > ontem) {
+    if (dFimCal > ontem) {
       fimEfetivoCal = ontem < dInicioCal ? dInicioCal : ontem;
     }
     
     const diffMsSuzano = Math.max(0, fimEfetivoCal.getTime() - dInicioCal.getTime());
     diasReferencia = Math.floor(diffMsSuzano / 86400000) + 1;
-    const diffTotalMsSuzano = Math.max(0, dFimCal.getTime() - dInicioCal.getTime());
-    totalDiasCalendario = Math.floor(diffTotalMsSuzano / 86400000) + 1;
-    fimFiltro = dFimCal.toISOString().split('T')[0] + 'T23:59:59';
+    fimFiltro = fimEfetivoCal.toISOString();
   } else {
     inicioFiltro = `${anoFiltro}-${String(mesFiltro).padStart(2, "0")}-01`;
     const diasNoMesCivil = new Date(anoFiltro, mesFiltro, 0).getDate();
     const dFimCivil = new Date(anoFiltro, mesFiltro - 1, diasNoMesCivil, 23, 59, 59);
-    const fimEfetivoCivil = dFimCivil > agoraRef ? agoraRef : dFimCivil;
     const dInicioCivil = new Date(inicioFiltro + 'T00:00:00');
+    const fimEfetivoCivil = dFimCivil > ontem ? (ontem < dInicioCivil ? dInicioCivil : ontem) : dFimCivil;
     const diffMsCivil = Math.max(0, fimEfetivoCivil.getTime() - dInicioCivil.getTime());
     diasReferencia = Math.floor(diffMsCivil / 86400000) + 1;
-    totalDiasCalendario = diasNoMesCivil;
     fimFiltro = fimEfetivoCivil.toISOString();
     dataInicioExibicao = inicioFiltro;
     dataFimExibicao = fimFiltro.split("T")[0];
@@ -378,9 +373,10 @@ export async function getDashboardData(filtros?: {
     const osDoVeiculo = osPorPlaca.get(placa) || [];
     const escala = escalaMap.get(placa);
     
-    // Cálculo das horas planejadas para este veículo no mês/período
-    const hPlanejadasDM = 24 * totalDiasCalendario;
-    const hPlanejadasDO_TotalMensal = escala ? Number(escala.carga_horaria) * totalDiasCalendario : 24 * totalDiasCalendario;
+    // Cálculo das horas planejadas para este veículo no mês/período (Limitado a D-1)
+    const diasUteisNoPeriodo = diasReferencia > 0 ? diasReferencia : 1;
+    const hPlanejadasDM = 24 * diasUteisNoPeriodo;
+    const hPlanejadasDO_TotalMensal = escala ? Number(escala.carga_horaria) * diasUteisNoPeriodo : 24 * diasUteisNoPeriodo;
 
     // --- OTIMIZAÇÃO: Fast Path para veículos sem OS no período ---
     if (osDoVeiculo.length === 0) {
@@ -413,7 +409,7 @@ export async function getDashboardData(filtros?: {
 
       // Lógica de Término Operacional (Fim da IO ao chegar o reserva ou fechar a OS)
       let endDO = endDM;
-      if (os.horas_reserva_chegou) {
+      if (os.foi_enviado_reserva && os.horas_reserva_chegou) {
         const reservaTime = parseLocal(os.horas_reserva_chegou);
         // O reserva só "para" o cronômetro operacional se chegar ANTES do conserto acabar
         if (reservaTime > start && reservaTime < endDM) {
@@ -504,9 +500,10 @@ export async function getDashboardData(filtros?: {
   });
 
   // 5. Consolidação Final
+  const diasUteisNoPeriodoGeral = diasReferencia > 0 ? diasReferencia : 1;
   const hIndispDMTotal = veiculos.reduce((acc, v) => acc + v.horasManut, 0);
   const hIndispDOTotal = veiculos.reduce((acc, v) => acc + v.horasOperacional, 0);
-  const hTotalDMPlanejadaGeral = veiculos.length * 24 * totalDiasCalendario;
+  const hTotalDMPlanejadaGeral = veiculos.length * 24 * diasUteisNoPeriodoGeral;
   const hTotalDOPlanejadaGeral = veiculos.reduce((acc, v) => acc + v.hTotalDO, 0);
 
   const dm = hTotalDMPlanejadaGeral > 0 ? Math.round(((hTotalDMPlanejadaGeral - hIndispDMTotal) / hTotalDMPlanejadaGeral) * 1000) / 10 : 0;
@@ -683,6 +680,7 @@ export async function getDashboardData(filtros?: {
      data_fim: dataFimExibicao,
      mesSelecionado: mesFiltro,
      anoSelecionado: anoFiltro,
+     dataAtualizacao: ontem.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
   };
 
   // Salva no cache antes de retornar

@@ -86,7 +86,14 @@ function calcularHorasOS(o: OS) {
   if (!startStr) return 0;
   
   const dInicio = new Date(startStr);
-  const dFim = o.data_fechamento ? new Date(o.data_fechamento) : new Date();
+  
+  // Regra D-1: se a OS estiver aberta, conta apenas até ontem
+  const agora = new Date();
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  ontem.setHours(23, 59, 59, 999);
+
+  const dFim = o.data_fechamento ? new Date(o.data_fechamento) : ontem;
   
   if (isNaN(dInicio.getTime()) || isNaN(dFim.getTime())) return 0;
 
@@ -101,7 +108,8 @@ function calcularHorasNoPeriodo(o: OS, inicioPeriodo: Date, fimPeriodo: Date) {
   ontem.setHours(23, 59, 59, 999);
 
   const inicioOS = new Date(o.horario_parada || o.data_abertura);
-  const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : agora;
+  // Se aberta, limita a ontem (D-1)
+  const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : ontem;
   
   // Limita o fim do período ao D-1 se for o período atual
   const fimP = fimPeriodo > ontem ? ontem : fimPeriodo;

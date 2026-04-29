@@ -31,6 +31,7 @@ type OS = {
   sistema: string | null;
   sub_sistema: string | null;
   equipamento_id: string;
+  horario_parada?: string | null;
 };
 
 // ─── Tooltip escuro personalizado ────────────────────────────────────────────
@@ -186,13 +187,15 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
   const encerradas = ordensFiltradas.filter(o => o.status === "Fechada" || o.status === "Concluída").length;
   
   // Limites do período para "clipar" as horas (Padrão PCM)
+  // Regra D-1: Nunca considerar dados do dia atual
   const agoraRef = new Date();
   const ontem = new Date(agoraRef);
   ontem.setDate(ontem.getDate() - 1);
   ontem.setHours(23, 59, 59, 999);
+  const dataAtualizacao = ontem.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   const LIMITE_INI = periodoSelecionado ? new Date(periodoSelecionado.data_inicio + "T00:00:00") : null;
-  // O fim do período nunca deve passar de ontem (D-1) para o mês atual
+  // O fim do período nunca deve passar de ontem (D-1)
   let LIMITE_FIM = periodoSelecionado ? new Date(periodoSelecionado.data_fim + "T23:59:59") : null;
   if (LIMITE_FIM && LIMITE_FIM > ontem) {
     LIMITE_FIM = ontem;
@@ -335,7 +338,8 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       "Horas Manut.": (() => {
         if (o.horas_manutencao != null && o.horas_manutencao > 0) return o.horas_manutencao;
         const ini = new Date(o.horario_parada || o.data_abertura).getTime();
-        const fim = o.data_fechamento ? new Date(o.data_fechamento).getTime() : Date.now();
+        // Regra D-1: se aberta, conta apenas até ontem
+        const fim = o.data_fechamento ? new Date(o.data_fechamento).getTime() : ontem.getTime();
         return Math.round((Math.max(0, fim - ini) / 3600000) * 10) / 10;
       })(),
       "Classe": o.classe || "",
@@ -352,6 +356,16 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
 
   return (
     <div className="flex flex-col gap-6 w-full">
+
+      {/* Header com Regra D-1 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="px-2 py-0.5 bg-green-500/10 border border-green-500/20 rounded-md">
+            <span className="text-[10px] font-bold text-green-500 uppercase tracking-tighter">Regra D-1 (PCM Suzano)</span>
+          </div>
+          <span className="text-xs text-zinc-500 font-medium">Dados atualizados até {dataAtualizacao} 23:59</span>
+        </div>
+      </div>
 
       {/* ── Barra de filtros ── */}
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-800 bg-[#0f1623] p-4 shadow">
@@ -532,6 +546,9 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       <div className="text-center text-[10px] text-zinc-700 pb-2">
         {ordens.length} OS no banco · Período exibido: {periodoLabel}
         {periodoSelecionado && ` (${periodoSelecionado.data_inicio} → ${periodoSelecionado.data_fim})`}
+        <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold border border-emerald-200">
+          Dados até: {dataAtualizacao} (D-1)
+        </span>
       </div>
     </div>
   );

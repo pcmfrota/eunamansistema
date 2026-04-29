@@ -49,6 +49,8 @@ export async function getOSDashboardData(): Promise<OSDashboardData> {
         horario_parada, foi_enviado_reserva, qual_reserva, horas_reserva_chegou,
         equipamento:equipamento_id (placa, modulo)
       `)
+      // Regra D-1: Nunca considerar dados do dia atual (D0)
+      .lte("data_abertura", new Date(new Date().setHours(0,0,0,0)).toISOString())
       .order("data_abertura", { ascending: false }),
   ]);
 

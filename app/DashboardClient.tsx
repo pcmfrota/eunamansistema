@@ -176,9 +176,16 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       >
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-800">Dashboard Operacional</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Visão geral da manutenção e disponibilidade da frota
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-sm text-zinc-500">
+              Visão geral da manutenção e disponibilidade da frota
+            </p>
+            {data.dataAtualizacao && (
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
+                Dados atualizados até: {data.dataAtualizacao}
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={exportarRelatorio}
@@ -272,6 +279,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             ano={filtros.ano || undefined}
             dataInicio={data.data_inicio || undefined}
             dataFim={data.data_fim || undefined}
+            dataAtualizacao={data.dataAtualizacao}
             mostrarIndisponibilidade={mostrarIndisp}
             tipoAvailability={availabilityType}
           />
