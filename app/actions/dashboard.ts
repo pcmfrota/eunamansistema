@@ -467,8 +467,8 @@ export async function getDashboardData(filtros?: {
 
       historicoDiario.push({
         data: dStr,
-        disponibilidadeDM: Math.round(Math.max(0, (24 - indispDMdia) / 2.4)) / 10,
-        disponibilidadeDO: cargaHorariaDia > 0 ? Math.round(Math.max(0, (cargaHorariaDia - indispDOdia) / (cargaHorariaDia / 100)) * 10) / 100 : 100
+        disponibilidadeDM: Math.round(Math.max(0, ((24 - indispDMdia) / 24) * 100) * 10) / 10,
+        disponibilidadeDO: cargaHorariaDia > 0 ? Math.round(Math.max(0, ((cargaHorariaDia - indispDOdia) / cargaHorariaDia) * 100) * 10) / 10 : 100
       });
     });
 
@@ -513,7 +513,7 @@ export async function getDashboardData(filtros?: {
   const mttr = osCorretivas.filter(o => o.status === 'Fechada' || o.status === 'Concluída').length > 0 
     ? Math.round((hIndispDMTotal / osCorretivas.filter(o => o.status === 'Fechada' || o.status === 'Concluída').length) * 10) / 10 
     : 0;
-  const mtbf = osCorretivas.length > 0 ? Math.round((Math.max(0, hTotalDOPlanejadaGeral - hIndispDMTotal) / osCorretivas.length) * 10) / 10 : 0;
+  const mtbf = osCorretivas.length > 0 ? Math.round((Math.max(0, hTotalDOPlanejadaGeral - hIndispDOTotal) / osCorretivas.length) * 10) / 10 : 0;
 
   // 6. Dados para Gráficos (Otimizado com Mapeamento Único)
   const categoriasMap = new Map<string, number>();
@@ -648,7 +648,7 @@ export async function getDashboardData(filtros?: {
     totalEquipamentos: frotaAtiva.length,
     totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
-    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasManut) / (v as any).falhas)*10)/10 : 0 })),
+    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasOperacional) / (v as any).falhas)*10)/10 : 0 })),
     paradasPorCategoria: Array.from(categoriasMap.entries()).map(([categoria, quantidade]) => ({ categoria, quantidade })),
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([tipo, quantidade]) => ({ tipo, quantidade })),
     dispPorTipo: Array.from(modelosMap.entries()).map(([tipo, data]) => ({ tipo, disponibilidade: Math.round((data.soma / data.count) * 10) / 10, total: data.count })),

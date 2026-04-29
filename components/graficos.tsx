@@ -572,11 +572,9 @@ export function GraficoVeiculos({
             onClick={(data) => {
               if (data?.activePayload?.[0]?.payload?.nome) {
                 const p = data.activePayload[0].payload.nome;
-                const found = (dados ?? []).find(d => d.placa === p);
+                const found = chartData.find(d => d.placa === p);
                 if (found) {
                   setSelected(found as any);
-                } else {
-                  setSelected(data.activePayload[0].payload as any);
                 }
               }
             }}
