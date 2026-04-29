@@ -315,7 +315,12 @@ export default function ControleOSClient({
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Controle de OS</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Gerenciar ordens de serviço de manutenção</p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Gerenciar ordens de serviço de manutenção</p>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-500/20">
+              Dados até: {new Date(new Date().setDate(new Date().getDate() - 1)).toLocaleDateString('pt-BR')} (D-1)
+            </span>
+          </div>
         </div>
         <div className="flex gap-3 items-center flex-wrap">
           {/* ── Tab Switcher ── */}

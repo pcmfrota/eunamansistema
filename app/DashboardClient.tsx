@@ -9,6 +9,7 @@ import { getDashboardData, type DashboardData } from "@/app/actions/dashboard";
 
 // Componentes estáticos que não usam bibliotecas pesadas de gráficos
 import { PainelFormulas } from "@/components/graficos";
+import { PremiumLoader } from "@/components/premium-loader";
 
 // Importação dinâmica dos gráficos pesados (Recharts) para deixar o carregamento inicial mais leve
 const GraficoVeiculos = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoVeiculos), { ssr: false, loading: () => <CarregandoGrafico /> });
@@ -182,7 +183,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             </p>
             {data.dataAtualizacao && (
               <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
-                Dados atualizados até: {data.dataAtualizacao}
+                Dados atualizados até: {data.dataAtualizacao} (D-1)
               </span>
             )}
           </div>

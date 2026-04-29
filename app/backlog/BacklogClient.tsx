@@ -132,6 +132,9 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
               <p className="text-sm text-zinc-500 dark:text-zinc-400 font-black flex items-center gap-2 tracking-widest mt-1">
                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                  PCM • PLANEJAMENTO E CONTROLE
+                 <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    Dados até: {new Date(new Date().setDate(new Date().getDate() - 1)).toLocaleDateString('pt-BR')} (D-1)
+                 </span>
               </p>
             </div>
          </div>
