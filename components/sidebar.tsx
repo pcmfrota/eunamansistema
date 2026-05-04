@@ -18,6 +18,7 @@ import {
   User,
   Shield,
   BarChart2,
+  Droplets,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,6 +30,7 @@ import AlterarSenhaModal from "./AlterarSenhaModal";
 const routes = [
   { name: "Dashboard",                path: "/",                        icon: LayoutDashboard },
   { name: "Controle de OS",           path: "/os",                      icon: FileText },
+  { name: "CONTROLE DE LAVAGENS",      path: "/lavagens",                icon: Droplets },
   { name: "Controle de Horímetros",   path: "/preventivas",             icon: Calendar },
   { name: "Boletim de Pneus",         path: "/pneus",                   icon: Disc },
   { name: "Backlog",                  path: "/backlog",                 icon: Wrench },
