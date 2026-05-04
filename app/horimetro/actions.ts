@@ -16,7 +16,6 @@ export async function registrarHorimetro(formData: FormData) {
     await HorimetroService.create(data);
     
     revalidatePath('/horimetro');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
     return { error: error.message };
@@ -36,7 +35,6 @@ export async function atualizarHorimetro(id: string, formData: FormData) {
     await HorimetroService.update(id, data);
     
     revalidatePath('/horimetro');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
     return { error: error.message };
@@ -47,7 +45,6 @@ export async function excluirHorimetro(id: string) {
   try {
     await HorimetroService.delete(id);
     revalidatePath('/horimetro');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
     return { error: error.message };

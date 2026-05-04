@@ -17,23 +17,17 @@ export default async function ControleHorimetrosPage() {
 
   const { data: equipamentos } = await supabase
     .from('equipamentos')
-    .select('*, horimetros(horimetro_final)')
+    .select('*')
 
-  const eqTransformados = equipamentos?.map(eq => {
-    let lastH = 0;
-    if (eq.horimetros && eq.horimetros.length > 0) {
-      lastH = Math.max(...eq.horimetros.map((h: any) => h.horimetro_final));
-    }
-    return {
-      id: eq.id,
-      placa: eq.placa,
-      modelo: eq.modelo || "",
-      tipo: eq.tipo,
-      modulo: eq.modulo,
-      categoria: eq.categoria,
-      ultimoHist: lastH > 0 ? lastH : (eq.horimetro || 0)
-    }
-  }) || [];
+  const eqTransformados = equipamentos?.map(eq => ({
+    id: eq.id,
+    placa: eq.placa,
+    modelo: eq.modelo || "",
+    tipo: eq.tipo,
+    modulo: eq.modulo,
+    categoria: eq.categoria,
+    ultimoHist: eq.ultimoHist || eq.horimetro || 0
+  })) || [];
 
   const { data: preventivas } = await supabase
     .from('preventivas')

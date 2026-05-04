@@ -21,7 +21,6 @@ export async function criarPreventiva(formData: FormData) {
     await PreventivaService.create(data, extra);
     
     revalidatePath('/preventivas');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
     return { error: error.message };
@@ -32,7 +31,6 @@ export async function excluirPreventiva(id: string) {
   try {
     await PreventivaService.delete(id);
     revalidatePath('/preventivas');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
     return { error: error.message };
@@ -54,7 +52,6 @@ export async function atualizarPreventiva(id: string, dados: {
       .eq('id', id);
     if (error) throw error;
     revalidatePath('/preventivas');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
     return { error: error.message };
@@ -66,7 +63,6 @@ export async function importarPreventivas(data: any[]) {
   try {
     const result = await PreventivaService.importBulk(data);
     revalidatePath('/preventivas');
-    revalidatePath('/');
     return result;
   } catch (error: any) {
     return { error: error.message };
@@ -84,23 +80,58 @@ export async function registrarHorimetro(formData: FormData) {
       observacoes: formData.get('observacoes') as string
     };
 
+    if (isNaN(data.horimetro_inicial) || isNaN(data.horimetro_final)) {
+      throw new Error('Horímetros inicial e final devem ser números válidos');
+    }
+
+    // 1. Registrar no histórico de horímetros
     await HorimetroService.create(data);
     
-    // Sincronizar com a tabela de preventivas (atualizar horímetro atual e data)
+    // 2. Sincronizar com a tabela de preventivas
     const { createClient } = await import('@/utils/supabase/server');
     const supabase = createClient();
-    await supabase
+    
+    // Tenta atualizar primeiro
+    const { data: existing, error: fetchError } = await supabase
       .from('preventivas')
-      .update({ 
-        horimetro_atual: data.horimetro_final,
-        data_atualizacao: data.data_referencia 
-      })
-      .eq('equipamento_id', data.equipamento_id);
+      .select('id')
+      .eq('equipamento_id', data.equipamento_id)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      console.error('Erro ao buscar preventiva:', fetchError);
+    }
+
+    if (existing) {
+      // Atualiza registro existente
+      const { error: updateError } = await supabase
+        .from('preventivas')
+        .update({ 
+          horimetro_atual: data.horimetro_final,
+          data_atualizacao: data.data_referencia 
+        })
+        .eq('id', existing.id);
+      
+      if (updateError) throw updateError;
+    } else {
+      // Cria novo registro de controle preventivo
+      const { error: insertError } = await supabase
+        .from('preventivas')
+        .insert({
+          equipamento_id: data.equipamento_id,
+          ultimo_horimetro: data.horimetro_inicial,
+          horimetro_atual: data.horimetro_final,
+          intervalo_horas: 500, // Padrão
+          data_atualizacao: data.data_referencia
+        });
+      
+      if (insertError) throw insertError;
+    }
 
     revalidatePath('/preventivas');
-    revalidatePath('/');
     return { success: true };
   } catch (error: any) {
-    return { error: error.message };
+    console.error('Erro em registrarHorimetro:', error);
+    return { error: error.message || 'Erro interno ao salvar apontamento' };
   }
 }
