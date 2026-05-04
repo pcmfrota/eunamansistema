@@ -186,10 +186,9 @@ export async function getDashboardData(filtros?: {
       ? supabase.from("calendario_suzano").select("*").lte("data_inicio", todayStr).gte("data_fim", todayStr).single()
       : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single(),
     supabase.from("equipamentos")
-      .select("id, placa, tipo, categoria, modulo, modelo, status")
-      .or("status.is.null,status.neq.Inativo,status.neq.INATIVO"),
+      .select("id, placa, tipo, categoria, modulo, modelo, status"),
     supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
-    supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, equipamentos(placa, categoria)")
+    supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas")
   ]);
 
   if (infraRes.data) {
@@ -261,21 +260,19 @@ export async function getDashboardData(filtros?: {
   }
 
   const [osRes] = await Promise.all([queryOS]);
-
   const allOS = osRes.data ?? [];
+
   const todasAsEquips = eqRes.data ?? [];
   const escalas = escalasRes.data ?? [];
   const prevData = prevRes.data ?? [];
   
-  const frotaAtiva = todasAsEquips.filter(eq => String(eq.status || 'Ativo').toUpperCase().trim() !== "INATIVO");
-  
-  // Mapas de busca rápida O(1)
+  // 1. Mapas de busca rápida
   const eqMapById = new Map();
   const eqMapByPlaca = new Map();
   const categoriasSet = new Set<string>();
   const modulosSet = new Set<string>();
   
-  frotaAtiva.forEach(eq => {
+  todasAsEquips.forEach(eq => {
     const p = eq.placa?.toUpperCase().trim();
     eqMapById.set(eq.id, eq);
     if (p) eqMapByPlaca.set(p, eq);
@@ -283,9 +280,9 @@ export async function getDashboardData(filtros?: {
     if (eq.modulo) modulosSet.add(eq.modulo);
   });
 
-  // ─── OTIMIZAÇÃO: Mapear OS e Escalas por Placa ───
+  // 2. Agrupar OS por placa
   const osPorPlaca = new Map<string, any[]>();
-  allOS.forEach(os => {
+  (allOS ?? []).forEach(os => {
     let p = os.placa?.toUpperCase().trim();
     if (!p && os.equipamento_id) {
       p = eqMapById.get(os.equipamento_id)?.placa?.toUpperCase().trim();
@@ -296,7 +293,31 @@ export async function getDashboardData(filtros?: {
     }
   });
 
-  // Auxiliar para parsing de tempo em ms desde meia-noite
+  // 3. FILTRO DE FROTA DINÂMICA
+  const frotaFiltrada = todasAsEquips.filter(eq => {
+    const p = eq.placa?.toUpperCase().trim();
+    if (!p || ["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p)) return false;
+
+    const isCurrentlyInactive = String(eq.status || '').toUpperCase().trim() === "INATIVO";
+    const hadActivity = osPorPlaca.has(p);
+    
+    // Se o veículo for inativo e não teve nenhuma OS no período, ele não entra no gráfico.
+    if (isCurrentlyInactive && !hadActivity) return false;
+
+    // Filtros de Categoria/Modulo/Placa
+    const cat = (filtros?.categoria || "").toUpperCase().trim();
+    if (cat && eq.categoria?.toUpperCase().trim() !== cat) return false;
+    if (!cat && !["PESADA", "LEVE"].includes(eq.categoria?.toUpperCase().trim())) return false;
+    
+    if (filtros?.modulo && eq.modulo?.toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
+    if (filtros?.placa && p !== filtros.placa.toUpperCase().trim()) return false;
+
+    return true;
+  });
+
+  let placasFiltradas = frotaFiltrada.map(eq => eq.placa?.toUpperCase().trim());
+
+  // 4. Escala e Cálculo
   const timeToMs = (tStr: string) => {
     if (!tStr) return 0;
     const [h, m] = tStr.split(':').map(Number);
@@ -317,36 +338,6 @@ export async function getDashboardData(filtros?: {
       });
     }
   });
-
-  let placasFiltradas = frotaAtiva
-    .filter(eq => {
-      // Filtro de Categoria
-      const cat = (filtros?.categoria || "").toUpperCase().trim();
-      if (cat && eq.categoria?.toUpperCase().trim() !== cat) return false;
-      
-      // Se não houver filtro, incluímos apenas PESADA e LEVE por padrão (conforme solicitado)
-      if (!cat) {
-        const eqCat = (eq.categoria || "").toUpperCase().trim();
-        if (eqCat !== "PESADA" && eqCat !== "LEVE") return false;
-      }
-
-      // Filtro de Módulo
-      if (filtros?.modulo && eq.modulo?.toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
-
-      // Filtro de Status
-      if (filtros?.status) {
-        // Mapeamento de status para o que o dashboard entende
-        const osAbertaAtiva = (osPorPlaca.get(eq.placa?.toUpperCase().trim() || "") || []).find(o => o.status === 'Aberta' || o.status === 'Em Andamento');
-        let statusLabel = "Disponível";
-        if (osAbertaAtiva) statusLabel = "Manutenção";
-        // Nota: DM não calculada aqui ainda, mas o filtro de status é secundário
-        if (statusLabel !== filtros.status) return false;
-      }
-
-      return true;
-    })
-    .map(eq => eq.placa?.toUpperCase().trim())
-    .filter(p => p && !["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p));
 
   // Filtros em memória (como fallback de segurança para placas específicas ocultas)
   if (filtros?.placa) {
@@ -645,7 +636,7 @@ export async function getDashboardData(filtros?: {
     mttr,
     mtbf,
     backlog: Math.round((allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
-    totalEquipamentos: frotaAtiva.length,
+    totalEquipamentos: frotaFiltrada.length,
     totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
     rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasOperacional) / (v as any).falhas)*10)/10 : 0 })),
