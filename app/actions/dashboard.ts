@@ -186,7 +186,7 @@ export async function getDashboardData(filtros?: {
       ? supabase.from("calendario_suzano").select("*").lte("data_inicio", todayStr).gte("data_fim", todayStr).single()
       : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single(),
     supabase.from("equipamentos")
-      .select("id, placa, tipo, categoria, modulo, modelo, status"),
+      .select("id, placa, tipo, categoria, modulo, modelo, status, created_at"),
     supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
     supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas")
   ]);
@@ -293,7 +293,11 @@ export async function getDashboardData(filtros?: {
     }
   });
 
-  // 3. FILTRO DE FROTA DINÂMICA
+  // 3. Objetos de Período
+  const periodoInicioObj = new Date(inicioFiltro);
+  const periodoFimObj = new Date(fimFiltro);
+
+  // 4. FILTRO DE FROTA DINÂMICA
   const frotaFiltrada = todasAsEquips.filter(eq => {
     const p = eq.placa?.toUpperCase().trim();
     if (!p || ["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p)) return false;
@@ -301,7 +305,13 @@ export async function getDashboardData(filtros?: {
     const isCurrentlyInactive = String(eq.status || '').toUpperCase().trim() === "INATIVO";
     const hadActivity = osPorPlaca.has(p);
     
-    // Se o veículo for inativo e não teve nenhuma OS no período, ele não entra no gráfico.
+    // REGRA DE VISIBILIDADE:
+    // 1. Não mostrar se foi cadastrado DEPOIS do fim do mês do filtro
+    const createdAt = eq.created_at ? new Date(eq.created_at).getTime() : 0;
+    const fimMesFiltro = new Date(anoFiltro, mesFiltro, 0, 23, 59, 59).getTime();
+    if (createdAt > fimMesFiltro) return false;
+
+    // 2. Se o veículo for inativo e não teve nenhuma OS no período, ele não entra no gráfico.
     if (isCurrentlyInactive && !hadActivity) return false;
 
     // Filtros de Categoria/Modulo/Placa
@@ -344,10 +354,8 @@ export async function getDashboardData(filtros?: {
     placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
   }
 
-  // 4. Cálculos Otimizados
+  // 5. Cálculos Otimizados
   const veiculos: VeiculoDisp[] = [];
-  const periodoInicioObj = new Date(inicioFiltro);
-  const periodoFimObj = new Date(fimFiltro);
   const allOSProcessed: any[] = [];
 
   // --- OTIMIZAÇÃO: Pré-calculo dos carimbos de data dos dias do mês ---

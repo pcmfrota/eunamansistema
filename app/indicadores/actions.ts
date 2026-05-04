@@ -116,76 +116,66 @@ export async function getIndicadoresData(filtros?: {
 
   const horasTotaisPeriodo = diasTranscorridos * 24
 
-  // Buscar OS do período (limitado a D-1)
-  let osQuery = supabase
-    .from('ordens_servico')
-    .select('id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe')
+  // ─── BUSCA PARALELA OTIMIZADA ───
+  const [osRes, eqRes, yearsRes] = await Promise.all([
+    supabase.from('ordens_servico').select('id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe')
+      .or(`data_abertura.lte.${fimFiltro},data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
+    supabase.from('equipamentos').select('id, placa, tipo, categoria, modulo, status, created_at'),
+    supabase.from('ordens_servico').select('data_abertura')
+  ]);
 
-  if (inicioFiltro) osQuery = osQuery.gte('data_abertura', inicioFiltro)
-  if (fimFiltro) osQuery = osQuery.lte('data_abertura', fimFiltro)
+  const allOS = osRes.data ?? [];
+  const todosEquipamentos = eqRes.data ?? [];
+  const allOSYears = yearsRes.data ?? [];
 
-  const { data: osPeriodo } = await osQuery
-  const allOS = osPeriodo ?? []
+  const eqMap = new Map();
+  const placaInfoMap = new Map();
+  const categoriasSet = new Set<string>();
+  const todasPlacas = new Set<string>();
 
-  // Buscar equipamentos
-  const { data: equipamentos } = await supabase
-    .from('equipamentos')
-    .select('id, placa, tipo, categoria, modulo')
+  const fimFiltroTimestamp = new Date(fimFiltro!).getTime();
 
-  const eqMap = new Map<string, { placa: string; categoria: string; modulo: string }>()
-  const categoriasSet = new Set<string>()
-  const todasPlacas = new Set<string>()
+  todosEquipamentos.forEach((eq) => {
+    if (!eq.placa) return;
+    const p = eq.placa.toUpperCase().trim();
+    if (PLACAS_BLOQUEADAS.has(p)) return;
 
-  equipamentos?.forEach((eq) => {
-    if (eq.placa) {
-      const p = eq.placa.toUpperCase().trim()
-      if (!PLACAS_BLOQUEADAS.has(p)) {
-        eqMap.set(eq.id, {
-          placa: p,
-          categoria: eq.categoria || '',
-          modulo: eq.modulo || '',
-        })
-        todasPlacas.add(p)
-        if (eq.categoria) categoriasSet.add(eq.categoria)
-      }
-    }
-  })
+    // REGRA DE VISIBILIDADE:
+    // 1. Não mostrar se foi cadastrado DEPOIS do fim do mês do filtro
+    const createdAt = eq.created_at ? new Date(eq.created_at).getTime() : 0;
+    const fimMesFiltro = new Date(anoFiltro!, mesFiltro!, 0, 23, 59, 59).getTime();
+    if (createdAt > fimMesFiltro) return;
 
-  // Agrupar OS por placa
-  const osPorPlaca: Record<string, typeof allOS> = {}
-  for (const os of allOS) {
-    let placa = ''
-    if (os.equipamento_id && eqMap.has(os.equipamento_id)) {
-      placa = eqMap.get(os.equipamento_id)!.placa
-    } else if (os.placa) {
-      placa = os.placa.toUpperCase().trim()
-    }
-    if (!placa || PLACAS_BLOQUEADAS.has(placa)) continue
-    if (!osPorPlaca[placa]) osPorPlaca[placa] = []
-    osPorPlaca[placa].push(os)
-    todasPlacas.add(placa)
-  }
+    eqMap.set(eq.id, { ...eq, placa: p });
+    placaInfoMap.set(p, eq);
+    todasPlacas.add(p);
+    if (eq.categoria) categoriasSet.add(eq.categoria);
+  });
 
-  // Mapa placa → info do equipamento
-  const placaInfoMap = new Map<string, { categoria: string; modulo: string }>()
-  equipamentos?.forEach((eq) => {
-    if (eq.placa) {
-      const p = eq.placa.toUpperCase().trim()
-      placaInfoMap.set(p, { categoria: eq.categoria || '', modulo: eq.modulo || '' })
-    }
-  })
+  // 2. Agrupar OS por placa
+  const osPorPlaca: Record<string, typeof allOS> = {};
+  allOS.forEach(os => {
+    let p = os.placa?.toUpperCase().trim();
+    if (!p && os.equipamento_id) p = eqMap.get(os.equipamento_id)?.placa;
+    if (!p || PLACAS_BLOQUEADAS.has(p)) return;
+    if (!osPorPlaca[p]) osPorPlaca[p] = [];
+    osPorPlaca[p].push(os);
+  });
 
-  // Filtrar placas
-  let placasFiltradas = Array.from(todasPlacas)
-  if (filtros?.placa) {
-    placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase())
-  }
-  if (filtros?.categoria) {
-    placasFiltradas = placasFiltradas.filter(p => {
-      const info = placaInfoMap.get(p)
-      return info?.categoria?.toUpperCase() === filtros.categoria!.toUpperCase()
-    })
-  }
+  // 3. Filtro de Placas e Status Inativo
+  let placasFiltradas = Array.from(todasPlacas).filter(p => {
+    const eq = placaInfoMap.get(p);
+    const isCurrentlyInactive = String(eq?.status || '').toUpperCase().trim() === "INATIVO";
+    const hadActivity = !!osPorPlaca[p];
+
+    // Se está inativo e não teve atividade no período, oculta (atende ao pedido do usuário)
+    if (isCurrentlyInactive && !hadActivity) return false;
+
+    if (filtros?.placa && p !== filtros.placa.toUpperCase()) return false;
+    if (filtros?.categoria && eq?.categoria?.toUpperCase() !== filtros.categoria.toUpperCase()) return false;
+    
+    return true;
+  });
 
   // Calcular indicadores por veículo
   const veiculos: IndicadorVeiculo[] = []
@@ -259,15 +249,14 @@ export async function getIndicadoresData(filtros?: {
     ? Math.round(Math.max(0, Math.min(100, (horasOpFrota / horasTotaisFrota) * 100)) * 10) / 10
     : 100
 
-  // Anos disponíveis
-  const { data: allOSYears } = await supabase.from('ordens_servico').select('data_abertura')
-  const anosSet = new Set<number>([anoAtual])
-  allOSYears?.forEach((o) => {
+  // Médias e Filtros já foram carregados no Promise.all
+  const anosSet = new Set<number>([anoAtual]);
+  allOSYears?.forEach((o: any) => {
     if (o.data_abertura) {
-      const y = parseInt(o.data_abertura.slice(0, 4))
-      if (!isNaN(y)) anosSet.add(y)
+      const y = parseInt(o.data_abertura.slice(0, 4));
+      if (!isNaN(y)) anosSet.add(y);
     }
-  })
+  });
 
   const filtroOpcoes = {
     meses: [
