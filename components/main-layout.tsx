@@ -26,6 +26,7 @@ import {
   Users,
   Loader2,
   X,
+  Droplets,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from './premium-loader';
@@ -42,6 +43,7 @@ const navigation = [
   { name: 'Base de Dados',            path: '/base-dados',             icon: Database },
   { name: 'PCM',                      path: '/pcm',                    icon: Settings },
   { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
+  { name: 'CONTROLE DE LAVAGENS',      path: '/lavagens',               icon: Droplets },
 ];
 
 function getFilteredNavigation(role: string | null | undefined) {

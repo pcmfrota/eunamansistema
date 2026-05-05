@@ -30,7 +30,6 @@ import AlterarSenhaModal from "./AlterarSenhaModal";
 const routes = [
   { name: "Dashboard",                path: "/",                        icon: LayoutDashboard },
   { name: "Controle de OS",           path: "/os",                      icon: FileText },
-  { name: "CONTROLE DE LAVAGENS",      path: "/lavagens",                icon: Droplets },
   { name: "Controle de Horímetros",   path: "/preventivas",             icon: Calendar },
   { name: "Boletim de Pneus",         path: "/pneus",                   icon: Disc },
   { name: "Backlog",                  path: "/backlog",                 icon: Wrench },
@@ -38,6 +37,7 @@ const routes = [
   { name: "Base de Frotas",           path: "/base-frotas",             icon: LayoutDashboard },
   { name: "Base de Dados",            path: "/base-dados",              icon: LayoutDashboard },
   { name: "PCM",                      path: "/pcm",                     icon: Settings },
+  { name: "CONTROLE DE LAVAGENS",      path: "/lavagens",                icon: Droplets },
 ];
 
 
