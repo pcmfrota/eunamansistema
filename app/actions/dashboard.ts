@@ -71,6 +71,7 @@ export type DashboardData = {
   statusFrota: any[];
   manutPorTipo: any[];
   dispPorCategoria: { categoria: string; dm: number; doOp: number; total: number; qtdOS: number }[];
+  dispPorModulo: { modulo: string; dm: number; doOp: number; hManut: number; hTotal: number; veiculos: number }[];
   dataAtualizacao?: string;
 };
 
@@ -600,7 +601,32 @@ export async function getDashboardData(filtros?: {
     };
   });
 
-  // E. Disponibilidade Semanal (Otimizada)
+  // E. Disponibilidade por MÓDULO
+  const moduloDispMap = new Map<string, { hManutDM: number; hTotalDM: number; hManutDO: number; hTotalDO: number; count: number }>();
+  veiculos.forEach(v => {
+    const eq = eqMapByPlaca.get(v.placa.toUpperCase().trim());
+    const mod = (eq?.modulo || "SEM MÓDULO").toUpperCase().trim();
+    const curr = moduloDispMap.get(mod) || { hManutDM: 0, hTotalDM: 0, hManutDO: 0, hTotalDO: 0, count: 0 };
+    moduloDispMap.set(mod, {
+      hManutDM: curr.hManutDM + v.horasManut,
+      hTotalDM: curr.hTotalDM + v.hTotalDM,
+      hManutDO: curr.hManutDO + v.horasOperacional,
+      hTotalDO: curr.hTotalDO + v.hTotalDO,
+      count: curr.count + 1,
+    });
+  });
+  const dispPorModulo = Array.from(moduloDispMap.entries())
+    .map(([modulo, d]) => ({
+      modulo,
+      dm:   d.hTotalDM > 0 ? Math.round(((d.hTotalDM - d.hManutDM) / d.hTotalDM) * 1000) / 10 : 100,
+      doOp: d.hTotalDO > 0 ? Math.round(((d.hTotalDO - d.hManutDO) / d.hTotalDO) * 1000) / 10 : 100,
+      hManut: Math.round(d.hManutDM * 10) / 10,
+      hTotal: Math.round(d.hTotalDM * 10) / 10,
+      veiculos: d.count,
+    }))
+    .sort((a, b) => a.dm - b.dm); // pior → melhor
+
+  // E2. Disponibilidade Semanal (Otimizada)
   const dispSemanal = [];
   const pInicioTime = periodoInicioObj.getTime();
   const pFimTime = periodoFimObj.getTime();
@@ -652,6 +678,7 @@ export async function getDashboardData(filtros?: {
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([tipo, quantidade]) => ({ tipo, quantidade })),
     dispPorTipo: Array.from(modelosMap.entries()).map(([tipo, data]) => ({ tipo, disponibilidade: Math.round((data.soma / data.count) * 10) / 10, total: data.count })),
     dispPorCategoria,
+    dispPorModulo,
     statusFrota: statusFrota.sort((a, b) => a.disponibilidade - b.disponibilidade),
     dispSemanal,
     preventivas: (prevData ?? [])

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useTransition } from "react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, LineChart, Line, Legend,
+  CartesianGrid, Tooltip, LineChart, Line, Legend, ReferenceLine, Cell,
 } from "recharts";
 import { Download } from "lucide-react";
 import { getOSDashboardData, type PeriodoSuzano } from "./actions-dashboard";
@@ -259,6 +259,54 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
     return Array.from(map.entries()).map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty);
   }, [ordensFiltradas]);
 
+  // ── DM (Disponibilidade Mecânica) por Módulo ──────────────────────────────
+  const dmPorModulo = useMemo(() => {
+    if (!LIMITE_INI || !LIMITE_FIM) return [];
+
+    // Dias no período (D-1)
+    const diasPeriodo = Math.max(1,
+      Math.round((LIMITE_FIM.getTime() - LIMITE_INI.getTime()) / (24 * 3600000))
+    );
+
+    // Agrupa placas únicas por módulo para calcular H_Total (24h × dias × nVeículos)
+    const placasPorModulo = new Map<string, Set<string>>();
+    // Horas de manutenção por módulo (clipadas ao período)
+    const horasManutPorModulo = new Map<string, number>();
+
+    ordensFiltradas.forEach(o => {
+      const modulo = (o.modulo || "SEM MÓDULO").toUpperCase();
+      const placa = o.placa || "S/P";
+
+      // Registrar placa no módulo
+      if (!placasPorModulo.has(modulo)) placasPorModulo.set(modulo, new Set());
+      placasPorModulo.get(modulo)!.add(placa);
+
+      // Calcular horas de manutenção clipadas ao período
+      const inicioOS = new Date(o.horario_parada || o.data_abertura);
+      const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : LIMITE_FIM;
+
+      const clipIni = inicioOS > LIMITE_INI ? inicioOS : LIMITE_INI;
+      const clipFim = fimOS < LIMITE_FIM ? fimOS : LIMITE_FIM;
+
+      if (clipIni < clipFim) {
+        const horas = (clipFim.getTime() - clipIni.getTime()) / 3600000;
+        horasManutPorModulo.set(modulo, (horasManutPorModulo.get(modulo) ?? 0) + horas);
+      }
+    });
+
+    const resultado: { modulo: string; dm: number; hTotal: number; hManut: number; veiculos: number }[] = [];
+
+    placasPorModulo.forEach((placas, modulo) => {
+      const nVeiculos = placas.size;
+      const hTotal = diasPeriodo * 24 * nVeiculos;
+      const hManut = Math.round((horasManutPorModulo.get(modulo) ?? 0) * 10) / 10;
+      const dm = hTotal > 0 ? Math.round(((hTotal - hManut) / hTotal) * 1000) / 10 : 100;
+      resultado.push({ modulo, dm: Math.min(100, Math.max(0, dm)), hTotal, hManut, veiculos: nVeiculos });
+    });
+
+    return resultado.sort((a, b) => a.dm - b.dm); // do pior para o melhor
+  }, [ordensFiltradas, LIMITE_INI, LIMITE_FIM]);
+
   // ── Anos disponíveis nos períodos Suzano
   const anosDisponiveis = useMemo(() =>
     Array.from(new Set(periodos.map(p => p.ano))).sort(),
@@ -487,6 +535,90 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
             </table>
           </div>
         </div>
+      </div>
+
+      {/* ══ Gráfico DM por Módulo ══ */}
+      <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+              Disponibilidade Mecânica (DM%) por Módulo
+            </p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">
+              Fórmula PCM: DM = ((H_Total - H_Manut) / H_Total) × 100 · Meta: ≥ 95%
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> ≥ 95%</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> 90–94%</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> &lt; 90%</div>
+          </div>
+        </div>
+
+        {dmPorModulo.length === 0 ? (
+          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Sem dados de módulo no período selecionado.</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart
+              data={dmPorModulo}
+              margin={{ top: 24, right: 16, left: -16, bottom: 8 }}
+              barCategoryGap="20%"
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis
+                dataKey="modulo"
+                tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                tickLine={false}
+                axisLine={{ stroke: "#1e293b" }}
+                interval={0}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  return (
+                    <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 16px", minWidth: 200 }}>
+                      <p style={{ color: "#94a3b8", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{d.modulo}</p>
+                      <p style={{ color: d.dm >= 95 ? "#22c55e" : d.dm >= 90 ? "#f59e0b" : "#ef4444", fontSize: 20, fontWeight: 900, margin: "2px 0" }}>
+                        DM: {d.dm.toFixed(1)}%
+                      </p>
+                      <div style={{ height: 1, background: "#1e293b", margin: "6px 0" }} />
+                      <p style={{ color: "#94a3b8", fontSize: 11, margin: "2px 0" }}>Veículos: <span style={{ color: "#f1f5f9", fontWeight: 700 }}>{d.veiculos}</span></p>
+                      <p style={{ color: "#94a3b8", fontSize: 11, margin: "2px 0" }}>H. Total: <span style={{ color: "#f1f5f9", fontWeight: 700 }}>{d.hTotal}h</span></p>
+                      <p style={{ color: "#ef4444", fontSize: 11, margin: "2px 0" }}>H. Manut: <span style={{ color: "#f1f5f9", fontWeight: 700 }}>{d.hManut}h</span></p>
+                    </div>
+                  );
+                }}
+              />
+              {/* Linha de meta 95% */}
+              <ReferenceLine
+                y={95}
+                stroke="#22c55e"
+                strokeDasharray="6 4"
+                strokeWidth={1.5}
+                label={{ value: "Meta 95%", fill: "#22c55e", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
+              />
+              <Bar dataKey="dm" radius={[4, 4, 0, 0]}
+                label={{ position: "top", fill: "#e2e8f0", fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}
+              >
+                {dmPorModulo.map((entry, index) => (
+                  <Cell
+                    key={`cell-dm-${index}`}
+                    fill={entry.dm >= 95 ? "#22c55e" : entry.dm >= 90 ? "#f59e0b" : "#ef4444"}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* ══ Gráficos de Linha ══ */}

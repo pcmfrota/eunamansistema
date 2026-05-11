@@ -102,6 +102,8 @@ export default function OSFormModal({
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     fd.set("placa", equip?.placa || "");
+    // CRÍTICO: módulo é readOnly — precisa ser setado manualmente no FormData
+    fd.set("modulo", equip?.modulo || "");
     fd.set("horas_manutencao", String(Number((diffMin/60).toFixed(2))));
     fd.set("sistema", sistema);
     fd.set("sub_sistema", subSistema);
@@ -172,10 +174,11 @@ export default function OSFormModal({
             </Field>
           </div>
 
-          {/* Módulo só leitura */}
-          <Field label="Módulo">
-            <input type="text" readOnly value={equip?.modulo || ""}
-              className={`${I} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed`} />
+          {/* Módulo só leitura - puxado automaticamente da placa */}
+          <Field label="Módulo (automático pela placa)">
+            <input type="text" name="modulo" readOnly value={equip?.modulo || ""}
+              placeholder="Selecione a placa para puxar o módulo..."
+              className={`${I} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed text-emerald-700 dark:text-emerald-400 font-semibold`} />
           </Field>
 
           {/* Horímetro, Operação, Local */}

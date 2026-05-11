@@ -1318,3 +1318,108 @@ export function GraficoDispCategoria({
     </div>
   );
 }
+
+// ─── GraficoDMModulo ──────────────────────────────────────────────────────────
+export function GraficoDMModulo({
+  dados,
+}: {
+  dados: { modulo: string; dm: number; doOp: number; hManut: number; hTotal: number; veiculos: number }[];
+}) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  const bg     = isDark ? "#0f1623" : "#ffffff";
+  const border = isDark ? "#1e293b" : "#e2e8f0";
+  const grid   = isDark ? "#1e293b" : "#f1f5f9";
+  const tickC  = isDark ? "#94a3b8" : "#64748b";
+  const labelC = isDark ? "#e2e8f0" : "#1e293b";
+
+  if (!dados || dados.length === 0) {
+    return (
+      <div className="rounded-3xl border p-6 flex flex-col gap-3" style={{ background: bg, borderColor: border }}>
+        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: tickC }}>
+          Disponibilidade Mecânica (DM%) por Módulo
+        </p>
+        <div className="flex items-center justify-center h-40 text-sm" style={{ color: tickC }}>
+          Sem dados de módulo disponíveis.
+        </div>
+      </div>
+    );
+  }
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload;
+    const cor = d.dm >= 95 ? "#22c55e" : d.dm >= 90 ? "#f59e0b" : "#ef4444";
+    return (
+      <div style={{ background: isDark ? "#0f172a" : "#fff", border: `1px solid ${border}`, borderRadius: 12, padding: "10px 16px", minWidth: 210, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+        <p style={{ color: tickC, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{d.modulo}</p>
+        <p style={{ color: cor, fontSize: 22, fontWeight: 900, margin: "2px 0" }}>DM: {d.dm.toFixed(1)}%</p>
+        <div style={{ height: 1, background: border, margin: "6px 0" }} />
+        <p style={{ color: tickC, fontSize: 11, margin: "2px 0" }}>Veículos: <span style={{ color: labelC, fontWeight: 700 }}>{d.veiculos}</span></p>
+        <p style={{ color: tickC, fontSize: 11, margin: "2px 0" }}>H. Total: <span style={{ color: labelC, fontWeight: 700 }}>{d.hTotal}h</span></p>
+        <p style={{ color: "#ef4444", fontSize: 11, margin: "2px 0" }}>H. Manut: <span style={{ color: labelC, fontWeight: 700 }}>{d.hManut}h</span></p>
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col gap-4 shadow-sm">
+      {/* Cabeçalho */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: tickC }}>
+            Disponibilidade Mecânica (DM%) por Módulo
+          </p>
+          <p className="text-[11px] mt-0.5" style={{ color: isDark ? "#475569" : "#94a3b8" }}>
+            Fórmula PCM · DM = ((H_Total − H_Manut) / H_Total) × 100 · Meta ≥ 95%
+          </p>
+        </div>
+        <div className="flex items-center gap-4 text-[11px] font-semibold flex-wrap">
+          {[["#22c55e","≥ 95% Meta"],["#f59e0b","90–94% Atenção"],["#ef4444","< 90% Crítico"]].map(([cor, label]) => (
+            <span key={label} className="flex items-center gap-1.5" style={{ color: tickC }}>
+              <span style={{ display:"inline-block", width:10, height:10, borderRadius:"50%", background: cor }} />
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Gráfico */}
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={dados} margin={{ top: 24, right: 16, left: -16, bottom: 8 }} barCategoryGap="22%">
+          <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+          <XAxis
+            dataKey="modulo"
+            tick={{ fill: tickC, fontSize: 11, fontWeight: 700 }}
+            tickLine={false}
+            axisLine={{ stroke: grid }}
+            interval={0}
+          />
+          <YAxis
+            domain={[0, 100]}
+            tick={{ fill: isDark ? "#64748b" : "#94a3b8", fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => `${v}%`}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.07)" }} />
+          <ReferenceLine
+            y={95}
+            stroke="#22c55e"
+            strokeDasharray="6 4"
+            strokeWidth={1.5}
+            label={{ value: "Meta 95%", fill: "#22c55e", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
+          />
+          <Bar dataKey="dm" radius={[5, 5, 0, 0]}
+            label={{ position: "top", fill: labelC, fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}
+          >
+            {dados.map((entry, i) => (
+              <Cell key={`mod-${i}`} fill={entry.dm >= 95 ? "#22c55e" : entry.dm >= 90 ? "#f59e0b" : "#ef4444"} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
