@@ -36,7 +36,6 @@ const routes = [
   { name: "Prog. Preventiva",         path: "/programacao-preventiva",  icon: Settings2 },
   { name: "Base de Frotas",           path: "/base-frotas",             icon: LayoutDashboard },
   { name: "Base de Dados",            path: "/base-dados",              icon: LayoutDashboard },
-  { name: "PCM",                      path: "/pcm",                     icon: Settings },
   { name: "CONTROLE DE LAVAGENS",      path: "/lavagens",                icon: Droplets },
 ];
 

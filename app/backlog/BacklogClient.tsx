@@ -81,20 +81,23 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const [filterPlaca, setFilterPlaca] = useState("");
   const [filterModulo, setFilterModulo] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterCriticidade, setFilterCriticidade] = useState("");
 
-  const hasActiveFilters = search || filterPlaca || filterModulo || filterStatus;
+  const hasActiveFilters = search || filterPlaca || filterModulo || filterStatus || filterCriticidade;
 
   const clearFilters = () => {
     setSearch("");
     setFilterPlaca("");
     setFilterModulo("");
     setFilterStatus("");
+    setFilterCriticidade("");
   };
 
   // Dynamic options from data - MEMOIZED
   const placaOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort(), [items]);
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
   const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
+  const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
 
   const filteredItems = React.useMemo(() => {
     return items.filter(i => {
@@ -105,9 +108,10 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       const matchPlaca = !filterPlaca || i.frota === filterPlaca;
       const matchModulo = !filterModulo || i.modulo === filterModulo;
       const matchStatus = !filterStatus || i.status === filterStatus;
-      return matchSearch && matchPlaca && matchModulo && matchStatus;
+      const matchCriticidade = !filterCriticidade || i.criticidade === filterCriticidade;
+      return matchSearch && matchPlaca && matchModulo && matchStatus && matchCriticidade;
     });
-  }, [items, search, filterPlaca, filterModulo, filterStatus]);
+  }, [items, search, filterPlaca, filterModulo, filterStatus, filterCriticidade]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -277,6 +281,23 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
             <option value="">📋 TODOS OS STATUS</option>
             {statusOptions.map(s => (
               <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+
+          {/* Criticidade filter */}
+          <select
+            value={filterCriticidade}
+            onChange={e => setFilterCriticidade(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[180px]",
+              filterCriticidade
+                ? "bg-orange-600 text-white border-orange-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">⚠️ TODA CRITICIDADE</option>
+            {criticidadeOptions.map(c => (
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </div>
