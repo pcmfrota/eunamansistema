@@ -1,6 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { getUsers } from "./actions";
+import { getUsers, getRolePermissions } from "./actions";
 import UsuariosClient from "./UsuariosClient";
 
 export const metadata = {
@@ -26,9 +26,15 @@ export default async function UsuariosPage() {
     redirect("/dashboard");
   }
 
-  const { profiles = [], error } = await getUsers();
+  const [{ profiles = [] }, { permissions = [] }] = await Promise.all([
+    getUsers(),
+    getRolePermissions()
+  ]);
 
   return (
-    <UsuariosClient initialProfiles={profiles} />
+    <UsuariosClient 
+      initialProfiles={profiles} 
+      initialPermissions={permissions} 
+    />
   );
 }

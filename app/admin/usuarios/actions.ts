@@ -141,3 +141,44 @@ export async function deleteUser(userId: string) {
     return { error: error.message };
   }
 }
+
+export async function getRolePermissions() {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("role_permissions")
+    .select("*");
+
+  if (error) return { error: error.message };
+  return { permissions: data };
+}
+
+export async function updateRolePermissions(role: string, allowedTabs: string[]) {
+  const supabase = createServerClient();
+  
+  // Verifica se quem está tentando atualizar é admin
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado" };
+
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (adminProfile?.role !== 'admin') {
+    return { error: "Apenas administradores podem alterar permissões." };
+  }
+
+  const { error } = await supabase
+    .from("role_permissions")
+    .upsert({ 
+      role, 
+      allowed_tabs: allowedTabs,
+      updated_at: new Date().toISOString()
+    });
+
+  if (error) return { error: error.message };
+  
+  revalidatePath("/"); // Revalida para atualizar a sidebar
+  return { success: true };
+}

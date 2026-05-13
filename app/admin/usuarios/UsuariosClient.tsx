@@ -12,9 +12,18 @@ import {
   Key,
   User as UserIcon,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Settings2,
+  ChevronRight,
+  ChevronDown,
+  Layout
 } from "lucide-react";
-import { updateUserRole, createNewUser, deleteUser } from "./actions";
+import { 
+  updateUserRole, 
+  createNewUser, 
+  deleteUser, 
+  updateRolePermissions 
+} from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -26,8 +35,21 @@ type Profile = {
   updated_at: string;
 };
 
-export default function UsuariosClient({ initialProfiles }: { initialProfiles: Profile[] }) {
+type RolePermission = {
+  role: string;
+  allowed_tabs: string[];
+};
+
+export default function UsuariosClient({ 
+  initialProfiles,
+  initialPermissions 
+}: { 
+  initialProfiles: Profile[],
+  initialPermissions: RolePermission[] 
+}) {
   const [profiles, setProfiles] = useState(initialProfiles);
+  const [permissions, setPermissions] = useState<RolePermission[]>(initialPermissions);
+  const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -83,6 +105,41 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
     }
   };
 
+  const handleUpdatePermissions = async (role: string, tabs: string[]) => {
+    startTransition(async () => {
+      const result = await updateRolePermissions(role, tabs);
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        setPermissions(prev => prev.map(p => p.role === role ? { ...p, allowed_tabs: tabs } : p));
+      }
+    });
+  };
+
+  const toggleTab = (role: string, path: string) => {
+    const rolePerm = permissions.find(p => p.role === role);
+    const currentTabs = rolePerm?.allowed_tabs || [];
+    const newTabs = currentTabs.includes(path)
+      ? currentTabs.filter(t => t !== path)
+      : [...currentTabs, path];
+    
+    handleUpdatePermissions(role, newTabs);
+  };
+
+  const availableTabs = [
+    { name: 'Dashboard', path: '/' },
+    { name: 'Controle de OS', path: '/os' },
+    { name: 'Controle de Horímetros', path: '/preventivas' },
+    { name: 'Boletim de Pneus', path: '/pneus' },
+    { name: 'Backlog', path: '/backlog' },
+    { name: 'Prog. Preventiva', path: '/programacao-preventiva' },
+    { name: 'Base de Frotas', path: '/base-frotas' },
+    { name: 'Base de Dados', path: '/base-dados' },
+    { name: 'Calendário Suzano', path: '/calendario' },
+    { name: 'Controle de Lavagens', path: '/lavagens' },
+    { name: 'Gestão de Usuários', path: '/admin/usuarios' },
+  ];
+
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-6xl mx-auto w-full">
       {/* Header */}
@@ -111,7 +168,83 @@ export default function UsuariosClient({ initialProfiles }: { initialProfiles: P
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Role Permissions Section */}
+      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Shield className="text-blue-600" /> Configuração de Acesso por Cargo
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Defina quais abas do sistema cada cargo pode visualizar</p>
+          </div>
+        </div>
+        
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
+          {['admin', 'pcm', 'gestao', 'visitante'].map(role => {
+            const rolePerm = permissions.find(p => p.role === role);
+            const isEditing = editingPermissions === role;
+            
+            return (
+              <div key={role} className="p-4">
+                <button 
+                  onClick={() => setEditingPermissions(isEditing ? null : role)}
+                  className="w-full flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-900/50 p-2 rounded-lg transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      role === 'admin' ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30" :
+                      role === 'pcm' ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30" :
+                      role === 'gestao' ? "bg-green-100 text-green-600 dark:bg-green-900/30" :
+                      "bg-zinc-100 text-zinc-600 dark:bg-zinc-900/30"
+                    )}>
+                      <Layout size={18} />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-sm capitalize text-zinc-900 dark:text-zinc-100">{role}</p>
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                        {rolePerm?.allowed_tabs.length || 0} abas liberadas
+                      </p>
+                    </div>
+                  </div>
+                  {isEditing ? <ChevronDown size={18} className="text-zinc-400" /> : <ChevronRight size={18} className="text-zinc-400" />}
+                </button>
+
+                {isEditing && (
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 px-2 animate-in slide-in-from-top-2 duration-200">
+                    {availableTabs.map(tab => {
+                      const isAllowed = rolePerm?.allowed_tabs.includes(tab.path);
+                      return (
+                        <button
+                          key={tab.path}
+                          onClick={() => toggleTab(role, tab.path)}
+                          disabled={isPending}
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-xl border text-xs font-medium transition-all",
+                            isAllowed 
+                              ? "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400"
+                              : "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-900/50 dark:border-zinc-800 dark:text-zinc-500 grayscale opacity-60"
+                          )}
+                        >
+                          <span>{tab.name}</span>
+                          <div className={cn(
+                            "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
+                            isAllowed ? "bg-blue-600 border-blue-600" : "border-zinc-300 dark:border-zinc-700"
+                          )}>
+                            {isAllowed && <CheckCircle2 size={10} className="text-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* User Management Section */}
       <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         {/* Search Bar */}
         <div className="p-4 border-b border-zinc-100 dark:border-zinc-800">

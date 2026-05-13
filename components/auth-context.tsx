@@ -21,22 +21,74 @@ type AuthContextType = {
   signOut: () => Promise<void>
   updatePassword: (newPassword: string) => Promise<void>
   refreshProfile: () => Promise<void>
+  permissions: string[]
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Função auxiliar para carregar dados do cache de forma síncrona na inicialização
+  const getInitialAuth = () => {
+    if (typeof window === 'undefined') return { user: null, profile: null, permissions: [], loading: true };
+    
+    try {
+      // 1. Tenta recuperar o Project Ref da URL para encontrar a chave do Supabase
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const projectRef = supabaseUrl.split('.')[0].split('//')[1];
+      const supabaseKey = projectRef ? `sb-${projectRef}-auth-token` : null;
+      
+      let user: User | null = null;
+      if (supabaseKey) {
+        const sessionStr = localStorage.getItem(supabaseKey);
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          user = session.user || null;
+        }
+      }
+
+      // 2. Se temos usuário, tentamos recuperar o perfil específico dele
+      const lastId = user?.id || localStorage.getItem('eunaman_last_user_id');
+      if (!lastId) {
+        // Se não há ID nenhum, mas existe um token, podemos estar carregando
+        return { user, profile: null, permissions: [], loading: !!user }; 
+      }
+      
+      const cachedProfile = localStorage.getItem(`eunaman_profile_${lastId}`);
+      const cachedPerms = localStorage.getItem(`eunaman_perms_${lastId}`);
+      
+      if (cachedProfile) {
+        const profile = JSON.parse(cachedProfile);
+        return {
+          user,
+          profile,
+          permissions: cachedPerms ? JSON.parse(cachedPerms) : [],
+          loading: false // SUCESSO: Carregamento instantâneo
+        };
+      }
+    } catch (e) {
+      console.warn('[Auth] Erro ao carregar cache inicial:', e);
+    }
+    return { user: null, profile: null, permissions: [], loading: true };
+  };
+
+  const initial = getInitialAuth();
+  const [user, setUser] = useState<User | null>(initial.user)
+  const [profile, setProfile] = useState<Profile | null>(initial.profile)
+  const [permissions, setPermissions] = useState<string[]>(initial.permissions)
+  const [loading, setLoading] = useState(initial.loading)
   const supabase = createClient()
   const router = useRouter()
   const pathname = usePathname()
 
-  const fetchProfile = useCallback(async (u: User, skipLoading = false, ignoreCache = false) => {
-    const userEmailBase = u.email?.toLowerCase().trim() || '';
+  const fetchProfile = useCallback(async (u: any, force = false, ignoreCache = false) => {
+    if (!u?.id) return;
     
-    // 1. Determinação OTIMISTA de Role e Nome (Sem DB)
+    // Atualiza o ID do último usuário para o próximo carregamento instantâneo
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('eunaman_last_user_id', u.id);
+    }
+
+    const userEmailBase = u.email?.toLowerCase().trim() || '';
     const isMasterAdmin = 
       userEmailBase.includes('marcos.rocha') || 
       userEmailBase.includes('marcos.aurelio') ||
@@ -46,92 +98,117 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userEmailBase.includes('pcmfrota') ||
       userEmailBase.includes('marcos.eunaman') ||
       userEmailBase.includes('eunaman.sistema') ||
-      userEmailBase.endsWith('@eunaman.com.br') || 
-      u.app_metadata?.role === 'admin';
+      userEmailBase.endsWith('@eunaman.com.br');
 
-    // Perfil inicial (otimista)
-    let initialProfile: Profile = {
+    // Perfil inicial básico
+    let currentProfile: Profile = {
       id: u.id,
-      email: userEmailBase,
-      full_name: u.user_metadata?.full_name || u.user_metadata?.name || userEmailBase.split('@')[0] || 'Usuário',
+      email: u.email || '',
+      full_name: userEmailBase.split('@')[0] || 'Usuário',
       role: isMasterAdmin ? 'admin' : 'visitante',
-      avatar_url: u.user_metadata?.avatar_url || null
+      avatar_url: null
     };
 
-    // 2. Tenta carregar do cache local primeiro para resposta instantânea
-    if (typeof window !== 'undefined' && !ignoreCache) {
-      const cached = localStorage.getItem(`eunaman_profile_${u.id}`);
-      if (cached) {
+    let skipLoading = false;
+
+    // 1. TENTA CARREGAR DO CACHE IMEDIATAMENTE (FLUXO ULTRA RÁPIDO)
+    if (!ignoreCache && !force) {
+      const cachedProfile = typeof window !== 'undefined' ? localStorage.getItem(`eunaman_profile_${u.id}`) : null;
+      const cachedPerms = typeof window !== 'undefined' ? localStorage.getItem(`eunaman_perms_${u.id}`) : null;
+
+      if (cachedProfile) {
         try {
-          const parsed = JSON.parse(cached);
-          console.log('[Auth] Carregando Perfil do Cache Local:', parsed);
-          setProfile(parsed);
-          setLoading(false); // Já libera a UI
+          const parsedProfile = JSON.parse(cachedProfile);
+          const parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : null;
+          
+          setProfile(parsedProfile);
+          if (parsedPerms) setPermissions(parsedPerms);
+          
+          // Se temos cache, já liberamos o loader
+          setLoading(false);
           skipLoading = true; 
-          initialProfile = parsed;
+          currentProfile = parsedProfile;
+          
+          console.log('[Auth] Perfil restaurado do cache (Instantâneo)');
+          
+          // Redirecionamento rápido se estiver na tela de login
+          if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/auth/callback')) {
+            router.replace('/');
+          }
+
+          // Se não for um carregamento forçado, podemos fazer a sincronização em background sem bloquear
+          if (!force) {
+            // Disparamos a sincronização mas não aguardamos aqui se já temos cache
+            syncWithDatabase(u, isMasterAdmin, currentProfile);
+            return;
+          }
         } catch (e) {
-          console.error('[Auth] Erro ao ler cache de perfil:', e);
+          console.warn('[Auth] Erro ao ler cache');
         }
       }
     }
 
-    // 3. SE NÃO TEM CACHE, USAMOS O PERFIL OTIMISTA (METADATA) PARA NÃO TRAVAR A UI
-    if (!skipLoading) {
-      console.log('[Auth] Usando Perfil Otimista (Metadata) para evitar trava de UI');
-      setProfile(initialProfile);
-      setLoading(false); // LIBERA A UI IMEDIATAMENTE PARA TODOS
-    }
-    
-    console.group(`[Auth] Buscando Perfil Real no Banco: ${userEmailBase}`);
-    
+    if (!skipLoading) setLoading(true);
+    await syncWithDatabase(u, isMasterAdmin, currentProfile);
+  }, [supabase, router]);
+
+  // Função isolada para sincronização com o banco (Background ou Foreground)
+  const syncWithDatabase = async (u: any, isMasterAdmin: boolean, currentProfile: Profile) => {
     try {
-      // 3. Busca da tabela profiles - Otimizada: seleciona apenas o necessário
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, avatar_url')
-        .eq('id', u.id)
-        .single();
+      // 2. Busca profile e permissões em PARALELO (Otimizado)
+      const [profileRes, permRes] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, role, avatar_url').eq('id', u.id).maybeSingle(),
+        supabase.from('role_permissions').select('role, allowed_tabs')
+      ]);
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('[Auth] Erro ao buscar profile:', error);
-      }
+      const profileData = profileRes.data;
+      const allPerms = permRes.data || [];
 
-      // 4. Determinação Final da Role e Nome
+      // 3. Determinação da Role
       let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' = isMasterAdmin ? 'admin' : 'visitante';
-      if (profileData?.role) {
-        finalRole = profileData.role as any;
-      }
-
-      const fullName = profileData?.full_name || initialProfile.full_name;
+      if (profileData?.role) finalRole = profileData.role as any;
 
       const finalProfile: Profile = {
         id: u.id,
-        email: userEmailBase,
-        full_name: fullName,
+        email: u.email || '',
+        full_name: profileData?.full_name || currentProfile.full_name,
         role: finalRole,
-        avatar_url: profileData?.avatar_url || initialProfile.avatar_url
+        avatar_url: profileData?.avatar_url || null
       };
 
-      // 5. Salva no Cache Local para o próximo acesso
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`eunaman_profile_${u.id}`, JSON.stringify(finalProfile));
+      // 4. Determinação das Permissões
+      const rolePerm = allPerms.find(p => p.role === finalRole);
+      let finalPerms: string[] = [];
+
+      const allTabs = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/admin/usuarios'];
+      if (rolePerm?.allowed_tabs && rolePerm.allowed_tabs.length > 0) {
+        finalPerms = rolePerm.allowed_tabs;
+      } else {
+        if (finalRole === 'admin') finalPerms = allTabs;
+        else if (finalRole === 'visitante') finalPerms = ['/', '/preventivas', '/backlog', '/calendario'];
+        else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
       }
 
+      // 5. Atualiza State e Cache
       setProfile(finalProfile);
+      setPermissions(finalPerms);
 
-      // 6. Redirecionamento inteligente apenas se estiver na tela de login
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`eunaman_profile_${u.id}`, JSON.stringify(finalProfile));
+        localStorage.setItem(`eunaman_perms_${u.id}`, JSON.stringify(finalPerms));
+      }
+
+      // 6. Redirecionamento final (se necessário)
       if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/auth/callback')) {
-        console.log('[Auth] Redirecionando para Dashboard após login bem-sucedido');
         router.replace('/');
       }
 
     } catch (err) {
-      console.error('[Auth] Erro crítico no fetchProfile:', err);
+      console.error('[Auth] Erro na sincronização:', err);
     } finally {
-      console.groupEnd();
       setLoading(false);
     }
-  }, [supabase, router]);
+  };
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -162,7 +239,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           setUser(session.user);
-          await fetchProfile(session.user, false);
+          // Não aguardamos o fetchProfile aqui para permitir que a inicialização termine rápido
+          // O fetchProfile já lida com o estado interno (loading/profile)
+          fetchProfile(session.user, false);
         } else {
           setLoading(false);
           if (pathname !== '/login' && pathname !== '/auth/callback') {
@@ -178,36 +257,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[Auth] Evento Supabase: ${event}`);
+      console.log(`[Auth] Evento Supabase: ${event}`, session?.user?.email);
 
       if (!mounted) return;
 
-      if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
         setUser(null);
         setProfile(null);
+        setPermissions([]);
         setLoading(false);
-        window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+          localStorage.clear();
+        }
         return;
       }
 
       if (session?.user) {
-        const previousUserId = user?.id;
-        setUser(session.user);
+        // Se houver uma troca de usuário ou uma nova entrada, garantimos que o estado seja limpo
+        const currentUser = session.user;
         
         if (event === 'SIGNED_IN') {
-          // Se o usuário mudou, forçamos um reload total para limpar qualquer estado residual
-          if (previousUserId && previousUserId !== session.user.id) {
-            window.location.href = '/';
-            return;
-          }
-          await fetchProfile(session.user, false, true);
+          console.log('[Auth] Novo login detectado, buscando perfil fresco...');
+          setLoading(true); // Trava a UI para evitar dados antigos
+          fetchProfile(currentUser, false, true); // ignoreCache = true
         } else if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-          await fetchProfile(session.user, false);
+          setUser(currentUser);
+          fetchProfile(currentUser, false);
         }
-      } else {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
       }
     });
 
@@ -215,7 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, router, user]); // Adicionado user para detectar mudanças de sessão corretamente
+  }, [supabase, router]); // Removido user daqui para evitar loops e garantir registro único do listener
 
   const signOut = async () => {
     console.log('[Auth] Iniciando Logout...');
@@ -254,7 +330,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isVisitante = profile?.role === 'visitante'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isVisitante, signOut, updatePassword, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, isVisitante, signOut, updatePassword, refreshProfile, permissions }}>
       {children}
     </AuthContext.Provider>
   )

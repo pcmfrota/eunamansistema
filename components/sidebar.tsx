@@ -26,6 +26,7 @@ import { useState } from "react";
 import { useTheme } from "./theme-provider";
 import { logout } from "@/app/login/actions";
 import AlterarSenhaModal from "./AlterarSenhaModal";
+import { useAuth } from "./auth-context";
 
 const routes = [
   { name: "Dashboard",                path: "/",                        icon: LayoutDashboard },
@@ -36,7 +37,9 @@ const routes = [
   { name: "Prog. Preventiva",         path: "/programacao-preventiva",  icon: Settings2 },
   { name: "Base de Frotas",           path: "/base-frotas",             icon: LayoutDashboard },
   { name: "Base de Dados",            path: "/base-dados",              icon: LayoutDashboard },
+  { name: "Calendário Suzano",        path: "/calendario",              icon: Calendar },
   { name: "CONTROLE DE LAVAGENS",      path: "/lavagens",                icon: Droplets },
+  { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: Users },
 ];
 
 
@@ -45,6 +48,11 @@ export function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { permissions, profile } = useAuth();
+
+  const filteredRoutes = routes.filter(route => 
+    profile?.role === 'admin' || permissions.includes(route.path)
+  );
 
   return (
     <>
@@ -72,7 +80,7 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 flex flex-col gap-2 px-4 py-4 overflow-y-auto">
-          {routes.map((route) => {
+          {filteredRoutes.map((route) => {
             const Icon = route.icon;
             const isActive = pathname === route.path;
 

@@ -4,20 +4,17 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 // ── Permissões por módulo ──────────────────────────────────────────────────────
 const MODULO_PERMISSOES: Record<string, string[]> = {
   '/admin':                    ['admin'],
-  '/base-frotas':              ['admin', 'gestor'],
-  '/pcm':                      ['admin', 'gestor', 'tecnico'],
-  '/indicadores':              ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/preventivas':              ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/programacao-preventiva':   ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/os':                       ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/pneus':                    ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/horimetro':                ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/backlog':                  ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/base-dados':               ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/semanal':                  ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/custos':                   ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/perfil':                   ['admin', 'gestor', 'tecnico', 'visitante'],
-  '/calendario':               ['admin', 'gestor', 'tecnico', 'visitante'],
+  '/base-frotas':              ['admin', 'pcm', 'gestao'],
+  '/pcm':                      ['admin', 'pcm'],
+  '/preventivas':              ['admin', 'pcm', 'gestao', 'visitante'],
+  '/programacao-preventiva':   ['admin', 'pcm', 'gestao'],
+  '/os':                       ['admin', 'pcm', 'gestao'],
+  '/pneus':                    ['admin', 'pcm', 'gestao'],
+  '/lavagens':                 ['admin', 'pcm', 'gestao'],
+  '/backlog':                  ['admin', 'pcm', 'gestao', 'visitante'],
+  '/base-dados':               ['admin', 'pcm', 'gestao'],
+  '/calendario':               ['admin', 'pcm', 'gestao'],
+  '/perfil':                   ['admin', 'pcm', 'gestao', 'visitante'],
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────

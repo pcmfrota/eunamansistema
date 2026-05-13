@@ -45,9 +45,21 @@ const navigation = [
   { name: 'CONTROLE DE LAVAGENS',      path: '/lavagens',               icon: Droplets },
 ];
 
-function getFilteredNavigation(role: string | null | undefined) {
-  // Visitantes agora veem tudo do sistema operacional
-  return navigation;
+function getFilteredNavigation(permissions: string[], role?: string) {
+  // Segurança: Admin sempre vê tudo
+  if (role === 'admin') return navigation;
+  
+  // Segurança: Visitante sempre vê as 4 abas obrigatórias (Dashboard, Horímetros, Backlog, Calendário)
+  if (role === 'visitante') {
+    return navigation.filter(item => 
+      ['/', '/preventivas', '/backlog', '/calendario'].includes(item.path)
+    );
+  }
+
+  // Se não houver permissões carregadas ainda, retorna apenas Dashboard por segurança
+  if (!permissions || permissions.length === 0) return [navigation[0]];
+  
+  return navigation.filter(item => permissions.includes(item.path));
 }
 
 const adminNavigation = [
@@ -57,7 +69,7 @@ const adminNavigation = [
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const { profile, signOut, loading: authLoading, user } = useAuth();
+  const { profile, signOut, loading: authLoading, user, permissions } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -95,13 +107,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   const isDark = theme === 'dark';
 
-  // Só mostra o loader de tela cheia se NÃO tivermos nem sessão (user) nem perfil, 
-  // o que acontece no primeiro segundo do carregamento inicial frio.
-  // Se já temos o 'user', renderizamos o layout com placeholders para o profile.
-  if (authLoading && !profile && !user) {
+  // Mantém o loader de tela cheia se estiver carregando a autenticação OU 
+  // se já temos o usuário mas o perfil detalhado ainda não chegou.
+  if (authLoading || (user && !profile)) {
     return (
-      <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-500", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
-        <PremiumLoader type="squares-sequential" text="Iniciando Sessão" subtext="PCM • EUNAMAN SISTEMA" />
+      <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-200", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
+        <PremiumLoader type="squares-sequential" text="Carregando Perfil" subtext="PCM • EUNAMAN SISTEMA" />
       </div>
     );
   }
@@ -313,7 +324,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="space-y-0.5">
-            {getFilteredNavigation(profile?.role).map((item, index) => {
+            {getFilteredNavigation(permissions, profile?.role).map((item, index) => {
               const isActive = pathname === item.path;
               return (
                 <Link
@@ -377,7 +388,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 </p>
               </div>
               <div className="space-y-0.5">
-                {adminNavigation.map((item, index) => {
+                {adminNavigation
+                  .filter(item => profile?.role === 'admin' || permissions.includes(item.path))
+                  .map((item, index) => {
                   const isActive = pathname === item.path;
                   return (
                     <Link
