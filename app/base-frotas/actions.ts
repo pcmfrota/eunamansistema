@@ -29,6 +29,7 @@ export async function salvarVeiculoCompleto(id: string, dados: {
   tipo: string;
   categoria: string;
   modulo: string;
+  area?: string;
   status: string;
   horimetro: string;
   ultimaAtualizacao: string;
@@ -44,6 +45,7 @@ export async function salvarVeiculoCompleto(id: string, dados: {
     tipo: dados.tipo?.toUpperCase().trim(),
     categoria: dados.categoria?.toUpperCase().trim(),
     modulo: dados.modulo?.trim(),
+    area: dados.area?.toUpperCase().trim(),
     status: dados.status,
   }).eq('id', id);
 
@@ -138,6 +140,7 @@ export async function criarEquipamento(formData: FormData) {
       tipo: (formData.get('tipo') as string),
       categoria: (formData.get('categoria') as string),
       modulo: (formData.get('modulo') as string),
+      area: (formData.get('area') as string),
       status: (formData.get('status') as string) || 'Ativo',
     };
 
@@ -197,6 +200,7 @@ export async function atualizarEquipamento(id: string, formData: FormData) {
       tipo: (formData.get('tipo') as string),
       categoria: (formData.get('categoria') as string),
       modulo: (formData.get('modulo') as string),
+      area: (formData.get('area') as string),
       status: (formData.get('status') as string) || 'Ativo',
     };
 

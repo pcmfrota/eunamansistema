@@ -7,6 +7,7 @@ const EquipamentoSchema = z.object({
   tipo: z.string().min(1, 'Tipo é obrigatório').transform((val: string) => val.toUpperCase().trim()),
   categoria: z.string().default('PESADA').transform((val: string) => val.toUpperCase().trim()),
   modulo: z.string().default('BASE').transform((val: string) => val.trim()),
+  area: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
   modelo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
   horimetro_limite_preventiva: z.number().optional().default(500),
   status: z.string().optional().default('Ativo'),
@@ -51,6 +52,7 @@ export class EquipamentoService {
       tipo: String(data.tipo).toUpperCase().trim(),
       categoria: String(data.categoria || 'PESADA').toUpperCase().trim(),
       modulo: String(data.modulo || 'BASE').trim(),
+      area: data.area ? String(data.area).toUpperCase().trim() : null,
       status: String(data.status || 'Ativo').trim(),
     };
 
@@ -67,6 +69,7 @@ export class EquipamentoService {
     if (data.tipo) cleanData.tipo = String(data.tipo).toUpperCase().trim();
     if (data.categoria) cleanData.categoria = String(data.categoria).toUpperCase().trim();
     if (data.modulo !== undefined) cleanData.modulo = String(data.modulo).trim();
+    if (data.area !== undefined) cleanData.area = data.area ? String(data.area).toUpperCase().trim() : null;
     if (data.status !== undefined) cleanData.status = String(data.status).trim();
 
     const { error } = await EquipamentoRepository.update(id, cleanData);

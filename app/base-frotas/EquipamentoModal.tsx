@@ -27,6 +27,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
     customTipo: '',
     categoria: 'PESADA',
     modulo: '',
+    area: '',
     status: 'Ativo',
     horimetro: '',
     ultimaAtualizacao: todayStr(),
@@ -44,6 +45,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         customTipo: '',
         categoria: editingVehicle.categoria || 'PESADA',
         modulo: editingVehicle.modulo || '',
+        area: editingVehicle.area || '',
         status: editingVehicle.status || 'Ativo',
         horimetro: String(editingVehicle.ultimo_hist ?? editingVehicle.ultimoHist ?? ''),
         ultimaAtualizacao: todayStr(),
@@ -63,6 +65,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         customTipo: '',
         categoria: 'PESADA',
         modulo: '',
+        area: '',
         status: 'Ativo',
         horimetro: '',
         ultimaAtualizacao: todayStr(),
@@ -92,6 +95,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
           tipo: tipoFinal,
           categoria: f.categoria,
           modulo: f.modulo,
+          area: f.area,
           status: f.status,
           horimetro: f.horimetro,
           ultimaAtualizacao: f.ultimaAtualizacao,
@@ -110,6 +114,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         // CRIAÇÃO — via FormData
         const fd = new FormData(e.currentTarget)
         if (f.tipo === 'OUTROS') fd.set('tipo', f.customTipo)
+        fd.set('area', f.area)
         fd.set('horimetro', f.horimetro)
         fd.set('ultimaAtualizacao', f.ultimaAtualizacao)
         fd.set('carga_horaria', f.carga_horaria)
@@ -210,6 +215,12 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
                 <div>
                   <label className={labelCls}>Módulo <span className="text-red-500">*</span></label>
                   <input name="modulo" required type="text" value={f.modulo} onChange={set('modulo')} placeholder="BASE" className={inputCls} />
+                </div>
+
+                {/* Área */}
+                <div>
+                  <label className={labelCls}>Área</label>
+                  <input name="area" type="text" value={f.area} onChange={set('area')} placeholder="Ex: MANUTENÇÃO" className={inputCls} />
                 </div>
 
                 {/* Status */}

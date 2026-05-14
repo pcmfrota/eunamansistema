@@ -250,6 +250,7 @@ export default function BaseFrotasPage() {
                 <th className="py-4 px-6 font-semibold">Tipo</th>
                 <th className="py-4 px-6 font-semibold">Categoria</th>
                 <th className="py-4 px-6 font-semibold">Módulo</th>
+                <th className="py-4 px-6 font-semibold">Área</th>
                 <th className="py-4 px-6 font-semibold">Horímetro Atual</th>
                 <th className="py-4 px-6 font-semibold">Carga Horária</th>
                 <th className="py-4 px-6 font-semibold">Período</th>
@@ -260,13 +261,13 @@ export default function BaseFrotasPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-20 text-center">
+                  <td colSpan={11} className="py-20 text-center">
                     <PremiumLoader type="squares-sequential" text="Carregando Frota" subtext="Acessando base central..." />
                   </td>
                 </tr>
               ) : filteredVehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-20 text-center">
+                  <td colSpan={11} className="py-20 text-center">
                     <div className="flex flex-col items-center gap-2 text-zinc-400">
                       <Search size={32} className="opacity-20" />
                       <p className="text-sm font-medium">Nenhum veículo encontrado para "{searchTerm}"</p>
@@ -297,6 +298,7 @@ export default function BaseFrotasPage() {
                     </span>
                   </td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 uppercase">{vehicle.modulo}</td>
+                  <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 uppercase">{vehicle.area || '-'}</td>
                   <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300 font-mono">{vehicle.ultimo_hist || vehicle.ultimoHist || 0}h</td>
                   <td className="py-3.5 px-6">
                     {vehicle.escala ? (
