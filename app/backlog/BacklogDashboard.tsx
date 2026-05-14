@@ -128,7 +128,14 @@ export default function BacklogDashboard({ items }: Props) {
   // Dynamic filter options
   const crits = Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort()
   const statuses = Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort()
-  const modulos = Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort()
+  const modulos = [
+    "MÓDULO 5",
+    "MÓDULO 2",
+    "MÓDULO 7",
+    "CARREGAMENTO",
+    "RESERVA",
+    "MALHA VIÁRIA"
+  ]
 
   const hasFilters = filterCrit || filterStatus || filterModulo
 

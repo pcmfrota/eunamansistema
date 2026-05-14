@@ -696,7 +696,14 @@ export async function getDashboardData(filtros?: {
       anos: [2024, 2025, 2026],
       categorias: Array.from(categoriasSet),
       placas: placasFiltradas.sort(),
-      modulos: Array.from(modulosSet),
+      modulos: [
+        "MÓDULO 5",
+        "MÓDULO 2",
+        "MÓDULO 7",
+        "CARREGAMENTO",
+        "RESERVA",
+        "MALHA VIÁRIA"
+      ],
       statusList: ["Disponível", "Manutenção", "Atenção", "Crítico"]
     },
     periodoLabel: filtros?.dataInicio && filtros?.dataFim 

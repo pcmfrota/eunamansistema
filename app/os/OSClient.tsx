@@ -172,8 +172,16 @@ export default function ControleOSClient({
 
   // Derived lists for filter dropdowns
   const modulos = React.useMemo(() => 
-    ["Todos Módulos", ...Array.from(new Set(ordens.map(o => o.modulo).filter(Boolean)))],
-    [ordens]
+    [
+      "Todos Módulos",
+      "MÓDULO 5",
+      "MÓDULO 2",
+      "MÓDULO 7",
+      "CARREGAMENTO",
+      "RESERVA",
+      "MALHA VIÁRIA"
+    ],
+    []
   );
 
   // Filter + sort - MEMOIZED for performance
