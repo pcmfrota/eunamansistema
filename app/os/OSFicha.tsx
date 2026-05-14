@@ -427,7 +427,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
               </div>`).join("")}
           </div>
           <div style="display:flex;justify-content:space-between;padding:5px 10px;background:#f9fafb;border-top:1px solid #d1d5db;">
-            <p style="font-size:9px;color:#9ca3af;">Gerado em: ${new Date().toLocaleString("pt-BR")} | Regra D-1 (PCM Suzano)</p>
+            <p style="font-size:9px;color:#9ca3af;">Gerado em: ${new Date().toLocaleString("pt-BR")} | Regra D+1 (PCM Suzano)</p>
             <p style="font-size:9px;color:#6b7280;font-weight:700;">EUNAMAN — Sistema de Controle de Manutenção</p>
             <p style="font-size:9px;color:#9ca3af;font-family:monospace;">O.S: ${os.numero_os}</p>
           </div>
@@ -671,7 +671,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   {/* Rodapé */}
                   <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-t border-gray-300">
                     <p className="text-[9px] text-gray-400">
-                      Gerado em: {new Date().toLocaleString("pt-BR")} | Regra D-1 (PCM Suzano)
+                      Gerado em: {new Date().toLocaleString("pt-BR")} | Regra D+1 (PCM Suzano)
                     </p>
                     <p className="text-[9px] text-gray-500 font-semibold">
                       EUNAMAN — Sistema de Controle de Manutenção

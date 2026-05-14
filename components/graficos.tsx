@@ -1163,7 +1163,7 @@ export function PainelFormulas() {
           </code>
         </div>
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">D-1 (Ontem)</strong>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">D+1 (Ontem)</strong>
           <p className="mb-2">Todos os dados de hoje são consolidados apenas no dia seguinte. O dashboard reflete o fechamento de ontem.</p>
           <span className="text-[10px] text-zinc-400">Referência: Regra PCM Suzano</span>
         </div>

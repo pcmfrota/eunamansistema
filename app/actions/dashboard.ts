@@ -166,7 +166,7 @@ export async function getDashboardData(filtros?: {
 
   const supabase = createClient();
   const agoraRef = new Date();
-  // Ontem às 23:59:59 (D-1)
+  // Ontem às 23:59:59 (D+1)
   const ontem = new Date(agoraRef);
   ontem.setDate(ontem.getDate() - 1);
   ontem.setHours(23, 59, 59, 999);
@@ -373,7 +373,7 @@ export async function getDashboardData(filtros?: {
     const osDoVeiculo = osPorPlaca.get(placa) || [];
     const escala = escalaMap.get(placa);
     
-    // Cálculo das horas planejadas para este veículo no mês/período (Limitado a D-1)
+    // Cálculo das horas planejadas para este veículo no mês/período (Limitado a D+1)
     const diasUteisNoPeriodo = diasReferencia > 0 ? diasReferencia : 1;
     const hPlanejadasDM = 24 * diasUteisNoPeriodo;
     const hPlanejadasDO_TotalMensal = escala ? Number(escala.carga_horaria) * diasUteisNoPeriodo : 24 * diasUteisNoPeriodo;

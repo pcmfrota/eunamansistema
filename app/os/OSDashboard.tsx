@@ -409,7 +409,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="px-2 py-0.5 bg-green-500/10 border border-green-500/20 rounded-md">
-            <span className="text-[10px] font-bold text-green-500 uppercase tracking-tighter">Regra D-1 (PCM Suzano)</span>
+            <span className="text-[10px] font-bold text-green-500 uppercase tracking-tighter">Regra D+1 (PCM Suzano)</span>
           </div>
           <span className="text-xs text-zinc-500 font-medium">Dados atualizados até {dataAtualizacao} 23:59</span>
         </div>
@@ -679,7 +679,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
         {ordens.length} OS no banco · Período exibido: {periodoLabel}
         {periodoSelecionado && ` (${periodoSelecionado.data_inicio} → ${periodoSelecionado.data_fim})`}
         <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold border border-emerald-200">
-          Dados até: {dataAtualizacao} (D-1)
+          Dados até: {dataAtualizacao} (D+1)
         </span>
       </div>
     </div>

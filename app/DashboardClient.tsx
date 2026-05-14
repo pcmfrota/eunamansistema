@@ -184,7 +184,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             </p>
             {data.dataAtualizacao && (
               <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
-                Dados atualizados até: {data.dataAtualizacao} (D-1)
+                Dados atualizados até: {data.dataAtualizacao} (D+1)
               </span>
             )}
           </div>
