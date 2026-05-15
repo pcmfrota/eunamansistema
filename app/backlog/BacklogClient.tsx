@@ -46,7 +46,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
 
   const refreshData = async () => {
     setLoading(true);
-    const res = await getBacklog(100);
+    const res = await getBacklog(5000);
     if (!res.error) setItems(res.data || []);
     setLoading(false);
   };

@@ -3,7 +3,7 @@
 import { BacklogService } from '@/src/services/BacklogService';
 import { revalidatePath } from 'next/cache';
 
-export async function getBacklog(limit: number = 100) {
+export async function getBacklog(limit: number = 5000) {
   try {
     const data = await BacklogService.getAll(limit);
     return { data };

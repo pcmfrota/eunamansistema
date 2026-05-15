@@ -219,10 +219,10 @@ export default function BacklogTable({
         </table>
       </div>
       
-      {items.length >= 100 && (
+      {items.length >= 5000 && (
          <div className="p-4 bg-zinc-50/50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-900 text-center">
             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center gap-2">
-              <Clock size={12} /> Exibindo 100 registros mais recentes
+              <Clock size={12} /> Exibindo 5000 registros mais recentes
             </span>
          </div>
       )}
