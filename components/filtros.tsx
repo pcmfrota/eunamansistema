@@ -9,6 +9,7 @@ export interface FiltrosValues {
   categoria: string;
   placa: string;
   modulo: string;
+  area: string;
   status: string;
   dataInicio: string;
   dataFim: string;
@@ -122,6 +123,14 @@ export function Filtros({ opcoes, valores, onChange, onReset, periodoLabel }: Fi
           onChange={(v) => onChange("modulo", v)}
           options={opcoes.modulos.map((m) => ({ value: m, label: m }))}
           placeholder="Todos os Módulos"
+        />
+
+        {/* Área */}
+        <SelectFilter
+          value={valores.area}
+          onChange={(v) => onChange("area", v)}
+          options={(opcoes.areas || []).map((a) => ({ value: a, label: a }))}
+          placeholder="Todas as Áreas"
         />
 
         {/* Status */}

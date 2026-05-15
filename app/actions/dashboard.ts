@@ -37,6 +37,7 @@ export type FiltroOpcoes = {
   categorias: string[];
   placas: string[];
   modulos: string[];
+  areas: string[];
   statusList: string[];
 };
 
@@ -140,6 +141,7 @@ export async function getDashboardData(filtros?: {
   categoria?: string;
   placa?: string;
   modulo?: string;
+  area?: string;
   status?: string;
   dataInicio?: string;
   dataFim?: string;
@@ -151,6 +153,7 @@ export async function getDashboardData(filtros?: {
     categoria: (filtros?.categoria || "").toUpperCase(),
     placa: (filtros?.placa || "").toUpperCase(),
     modulo: (filtros?.modulo || "").toUpperCase(),
+    area: (filtros?.area || "").toUpperCase(),
     status: (filtros?.status || "").toUpperCase(),
     dataInicio: filtros?.dataInicio || "",
     dataFim: filtros?.dataFim || ""
@@ -187,7 +190,7 @@ export async function getDashboardData(filtros?: {
       ? supabase.from("calendario_suzano").select("*").lte("data_inicio", todayStr).gte("data_fim", todayStr).single()
       : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single(),
     supabase.from("equipamentos")
-      .select("id, placa, tipo, categoria, modulo, modelo, status, created_at"),
+      .select("id, placa, tipo, categoria, modulo, modelo, status, area, created_at"),
     supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
     supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas")
   ]);
@@ -251,7 +254,8 @@ export async function getDashboardData(filtros?: {
   let queryOS = supabase.from("ordens_servico").select(`
     id, status, horas_manutencao, data_abertura, data_fechamento, 
     equipamento_id, placa, classe, foi_enviado_reserva,
-    horario_parada, horas_reserva_chegou, descricao, numero_os
+    horario_parada, horas_reserva_chegou, descricao, numero_os,
+    equipamento:equipamento_id(area)
   `)
   .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`)
   .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`);
@@ -272,6 +276,7 @@ export async function getDashboardData(filtros?: {
   const eqMapByPlaca = new Map();
   const categoriasSet = new Set<string>();
   const modulosSet = new Set<string>();
+  const areasSet = new Set<string>();
   
   todasAsEquips.forEach(eq => {
     const p = eq.placa?.toUpperCase().trim();
@@ -279,6 +284,7 @@ export async function getDashboardData(filtros?: {
     if (p) eqMapByPlaca.set(p, eq);
     if (eq.categoria) categoriasSet.add(eq.categoria);
     if (eq.modulo) modulosSet.add(eq.modulo);
+    if (eq.area) areasSet.add(eq.area);
   });
 
   // 2. Agrupar OS por placa
@@ -317,10 +323,19 @@ export async function getDashboardData(filtros?: {
 
     // Filtros de Categoria/Modulo/Placa
     const cat = (filtros?.categoria || "").toUpperCase().trim();
-    if (cat && eq.categoria?.toUpperCase().trim() !== cat) return false;
-    if (!cat && !["PESADA", "LEVE"].includes(eq.categoria?.toUpperCase().trim())) return false;
+    const eqCat = (eq.categoria || "").toUpperCase().trim();
+    if (cat && eqCat !== cat) return false;
+    if (!cat && !["PESADA", "LEVE"].includes(eqCat)) return false;
     
-    if (filtros?.modulo && eq.modulo?.toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
+    if (filtros?.modulo && (eq.modulo || "").toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
+    
+    // Filtro de Área - Robusto
+    if (filtros?.area) {
+      const fArea = filtros.area.toUpperCase().trim();
+      const eArea = (eq.area || "").toUpperCase().trim();
+      if (fArea && eArea !== fArea) return false;
+    }
+
     if (filtros?.placa && p !== filtros.placa.toUpperCase().trim()) return false;
 
     return true;
@@ -704,6 +719,7 @@ export async function getDashboardData(filtros?: {
         "RESERVA",
         "MALHA VIÁRIA"
       ],
+      areas: Array.from(new Set(["COLHEITA", "CARREGAMENTO", "BASE", ...areasSet])).sort(),
       statusList: ["Disponível", "Manutenção", "Atenção", "Crítico"]
     },
     periodoLabel: filtros?.dataInicio && filtros?.dataFim 

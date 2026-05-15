@@ -219,8 +219,14 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
 
                 {/* Área */}
                 <div>
-                  <label className={labelCls}>Área</label>
-                  <input name="area" type="text" value={f.area} onChange={set('area')} placeholder="Ex: MANUTENÇÃO" className={inputCls} />
+                  <label className={labelCls}>Área <span className="text-red-500">*</span></label>
+                  <select name="area" required value={f.area} onChange={set('area')} className={inputCls}>
+                    <option value="">Selecione</option>
+                    <option value="COLHEITA">COLHEITA</option>
+                    <option value="CARREGAMENTO">CARREGAMENTO</option>
+                    <option value="BASE">BASE</option>
+                    <option value="OUTROS">OUTROS</option>
+                  </select>
                 </div>
 
                 {/* Status */}

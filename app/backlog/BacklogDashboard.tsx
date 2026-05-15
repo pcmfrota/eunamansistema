@@ -11,7 +11,10 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface Props { items: any[] }
+interface Props { 
+  items: any[]
+  placas: any[]
+}
 
 const CRITICIDADE_COLOR: Record<string, string> = {
   A: '#ef4444', B: '#f97316', C: '#eab308', D: '#22c55e'
@@ -64,17 +67,24 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-export default function BacklogDashboard({ items }: Props) {
+export default function BacklogDashboard({ items, placas }: Props) {
   const [filterCrit, setFilterCrit] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterModulo, setFilterModulo] = useState('')
+  const [filterArea, setFilterArea] = useState('')
 
   const filtered = useMemo(() => items.filter(i => {
     if (filterCrit && i.criticidade !== filterCrit) return false
     if (filterStatus && i.status !== filterStatus) return false
     if (filterModulo && i.modulo !== filterModulo) return false
+    
+    if (filterArea) {
+      const pInfo = placas.find(p => p.placa === i.frota);
+      if (pInfo?.area !== filterArea) return false;
+    }
+
     return true
-  }), [items, filterCrit, filterStatus, filterModulo])
+  }), [items, filterCrit, filterStatus, filterModulo, filterArea, placas])
 
   // KPIs
   const total = filtered.length
@@ -127,6 +137,7 @@ export default function BacklogDashboard({ items }: Props) {
 
   // Dynamic filter options
   const crits = Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort()
+  const areasOptions = Array.from(new Set(placas.map(p => p.area).filter(Boolean))).sort()
   const statuses = Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort()
   const modulos = [
     "MÓDULO 5",
@@ -137,7 +148,7 @@ export default function BacklogDashboard({ items }: Props) {
     "MALHA VIÁRIA"
   ]
 
-  const hasFilters = filterCrit || filterStatus || filterModulo
+  const hasFilters = filterCrit || filterStatus || filterModulo || filterArea
 
   const selectCls = (active: boolean) => cn(
     "px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border outline-none cursor-pointer appearance-none transition-all",
@@ -170,8 +181,13 @@ export default function BacklogDashboard({ items }: Props) {
           {modulos.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
 
+        <select value={filterArea} onChange={e => setFilterArea(e.target.value)} className={selectCls(!!filterArea)}>
+          <option value="">🏢 ÁREA</option>
+          {areasOptions.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+
         {hasFilters && (
-          <button onClick={() => { setFilterCrit(''); setFilterStatus(''); setFilterModulo('') }}
+          <button onClick={() => { setFilterCrit(''); setFilterStatus(''); setFilterModulo(''); setFilterArea(''); }}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-all">
             <X size={12} /> Limpar
           </button>

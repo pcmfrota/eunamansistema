@@ -80,21 +80,24 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   // Filter States
   const [filterPlaca, setFilterPlaca] = useState("");
   const [filterModulo, setFilterModulo] = useState("");
+  const [filterArea, setFilterArea] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCriticidade, setFilterCriticidade] = useState("");
 
-  const hasActiveFilters = search || filterPlaca || filterModulo || filterStatus || filterCriticidade;
+  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatus || filterCriticidade;
 
   const clearFilters = () => {
     setSearch("");
     setFilterPlaca("");
     setFilterModulo("");
+    setFilterArea("");
     setFilterStatus("");
     setFilterCriticidade("");
   };
 
   // Dynamic options from data - MEMOIZED
   const placaOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort(), [items]);
+  const areaOptions = React.useMemo(() => Array.from(new Set(placas.map(p => p.area).filter(Boolean))).sort(), [placas]);
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
   const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
   const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
@@ -107,11 +110,18 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
         i.descricao?.toLowerCase().includes(q);
       const matchPlaca = !filterPlaca || i.frota === filterPlaca;
       const matchModulo = !filterModulo || i.modulo === filterModulo;
+      
+      let matchArea = true;
+      if (filterArea) {
+        const pInfo = placas.find(p => p.placa === i.frota);
+        matchArea = pInfo?.area === filterArea;
+      }
+
       const matchStatus = !filterStatus || i.status === filterStatus;
       const matchCriticidade = !filterCriticidade || i.criticidade === filterCriticidade;
-      return matchSearch && matchPlaca && matchModulo && matchStatus && matchCriticidade;
+      return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade;
     });
-  }, [items, search, filterPlaca, filterModulo, filterStatus, filterCriticidade]);
+  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, placas]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -267,6 +277,23 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
             ))}
           </select>
 
+          {/* Área filter */}
+          <select
+            value={filterArea}
+            onChange={e => setFilterArea(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[170px]",
+              filterArea
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">🏢 TODAS AS ÁREAS</option>
+            {areaOptions.map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+
           {/* Status filter */}
           <select
             value={filterStatus}
@@ -305,7 +332,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
 
       {view === 'Dashboard' ? (
         /* Dashboard View */
-        <BacklogDashboard items={items} />
+        <BacklogDashboard items={items} placas={placas} />
       ) : (
         <>
           {/* Multi-Select Floating Bar */}

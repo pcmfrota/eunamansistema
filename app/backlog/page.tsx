@@ -6,13 +6,14 @@ export default async function BacklogPage() {
 
   const { data: equipamentos } = await supabase
     .from('equipamentos')
-    .select('id, placa, modulo')
+    .select('id, placa, modulo, area')
     .order('placa')
 
   const placas = (equipamentos || []).map(e => ({
     id: e.id,
     placa: e.placa as string,
     modulo: e.modulo as string | null,
+    area: e.area as string | null,
   }))
 
   return <BacklogClient placas={placas} />

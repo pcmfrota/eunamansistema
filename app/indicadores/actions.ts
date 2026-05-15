@@ -6,6 +6,7 @@ export type IndicadorVeiculo = {
   placa: string
   categoria: string
   modulo: string
+  area: string
   // DM: Disponibilidade Mecânica
   dm: number          // %
   dmHorasTotal: number
@@ -32,6 +33,7 @@ export type IndicadoresData = {
     anos: number[]
     categorias: string[]
     placas: string[]
+    areas: string[]
   }
 }
 
@@ -51,6 +53,7 @@ export async function getIndicadoresData(filtros?: {
   mes?: number
   ano?: number
   categoria?: string
+  area?: string
   placa?: string
 }): Promise<IndicadoresData> {
   const supabase = createClient()
@@ -120,7 +123,7 @@ export async function getIndicadoresData(filtros?: {
   const [osRes, eqRes, yearsRes] = await Promise.all([
     supabase.from('ordens_servico').select('id, status, horas_manutencao, data_abertura, data_fechamento, equipamento_id, placa, classe')
       .or(`data_abertura.lte.${fimFiltro},data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`),
-    supabase.from('equipamentos').select('id, placa, tipo, categoria, modulo, status, created_at'),
+    supabase.from('equipamentos').select('id, placa, tipo, categoria, modulo, area, status, created_at'),
     supabase.from('ordens_servico').select('data_abertura')
   ]);
 
@@ -131,6 +134,7 @@ export async function getIndicadoresData(filtros?: {
   const eqMap = new Map();
   const placaInfoMap = new Map();
   const categoriasSet = new Set<string>();
+  const areasSet = new Set<string>();
   const todasPlacas = new Set<string>();
 
   const fimFiltroTimestamp = new Date(fimFiltro!).getTime();
@@ -150,6 +154,7 @@ export async function getIndicadoresData(filtros?: {
     placaInfoMap.set(p, eq);
     todasPlacas.add(p);
     if (eq.categoria) categoriasSet.add(eq.categoria);
+    if (eq.area) areasSet.add(eq.area);
   });
 
   // 2. Agrupar OS por placa
@@ -171,8 +176,9 @@ export async function getIndicadoresData(filtros?: {
     // Se está inativo e não teve atividade no período, oculta (atende ao pedido do usuário)
     if (isCurrentlyInactive && !hadActivity) return false;
 
-    if (filtros?.placa && p !== filtros.placa.toUpperCase()) return false;
-    if (filtros?.categoria && eq?.categoria?.toUpperCase() !== filtros.categoria.toUpperCase()) return false;
+    if (filtros?.placa && p !== filtros.placa.toUpperCase().trim()) return false;
+    if (filtros?.categoria && (eq?.categoria || "").toUpperCase().trim() !== filtros.categoria.toUpperCase().trim()) return false;
+    if (filtros?.area && (eq?.area || "").toUpperCase().trim() !== filtros.area.toUpperCase().trim()) return false;
     
     return true;
   });
@@ -182,7 +188,7 @@ export async function getIndicadoresData(filtros?: {
 
   for (const placa of placasFiltradas) {
     const osDoVeiculo = osPorPlaca[placa] || []
-    const info = placaInfoMap.get(placa) ?? { categoria: '', modulo: '' }
+    const info = placaInfoMap.get(placa) ?? { categoria: '', modulo: '', area: '' }
 
     let horasManutTotalDM = 0
     let osAbertas = 0
@@ -224,6 +230,7 @@ export async function getIndicadoresData(filtros?: {
       placa,
       categoria: info.categoria,
       modulo: info.modulo,
+      area: info.area || 'SEM ÁREA',
       dm: Math.round(dm * 10) / 10,
       dmHorasTotal: horasTotaisPeriodo,
       dmHorasManut: Math.round(horasManutTotalDM * 10) / 10,
@@ -270,6 +277,7 @@ export async function getIndicadoresData(filtros?: {
     anos: Array.from(anosSet).sort((a, b) => b - a),
     categorias: Array.from(categoriasSet).sort(),
     placas: Array.from(todasPlacas).sort(),
+    areas: Array.from(new Set(["COLHEITA", "CARREGAMENTO", "BASE", ...areasSet])).sort(),
   }
 
   return {

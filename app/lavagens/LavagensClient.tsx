@@ -50,6 +50,13 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
   const [activeDate, setActiveDate] = useState(new Date(currentAno, currentMes - 1))
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('Todos')
+  const [filterArea, setFilterArea] = useState('Todas')
+
+  const areaOptions = useMemo(() => {
+    const s = new Set<string>()
+    equipamentos.forEach(e => { if (e.area) s.add(e.area) })
+    return ['Todas', ...Array.from(s).sort()]
+  }, [equipamentos])
   
   // Modal State
   const [modalData, setModalData] = useState<any>({
@@ -76,9 +83,16 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
     return lavagens.filter(l => {
       const matchesSearch = l.placa.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesStatus = filterStatus === 'Todos' || l.status === filterStatus
-      return matchesSearch && matchesStatus
+      
+      let matchesArea = true
+      if (filterArea !== 'Todas') {
+        const eq = equipamentos.find(e => e.placa === l.placa)
+        matchesArea = eq?.area === filterArea
+      }
+
+      return matchesSearch && matchesStatus && matchesArea
     })
-  }, [lavagens, searchTerm, filterStatus])
+  }, [lavagens, searchTerm, filterStatus, filterArea, equipamentos])
 
   const getStatus = (placa: string, date: Date) => {
     const lavagem = lavagens.find(l => l.placa === placa && isSameDay(new Date(l.data + 'T12:00:00'), date))
@@ -185,9 +199,17 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               placeholder="Filtrar por placa..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-64"
+              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-48"
             />
           </div>
+
+          <select
+            value={filterArea}
+            onChange={(e) => setFilterArea(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer appearance-none min-w-[120px] font-bold text-zinc-400"
+          >
+            {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+          </select>
           
           <button 
             onClick={() => setActiveDate(subMonths(activeDate, 1))}
@@ -227,7 +249,11 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                   </tr>
                 </thead>
                 <tbody>
-                  {equipamentos.filter(e => e.placa.toLowerCase().includes(searchTerm.toLowerCase())).map(eq => (
+                  {equipamentos.filter(e => {
+                    const matchesSearch = e.placa.toLowerCase().includes(searchTerm.toLowerCase())
+                    const matchesArea = filterArea === 'Todas' || e.area === filterArea
+                    return matchesSearch && matchesArea
+                  }).map(eq => (
                     <tr key={eq.placa} className="hover:bg-zinc-800/30 transition-colors group">
                       <td className="p-3 border-b border-r border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-zinc-950 group-hover:bg-zinc-900 transition-colors">
                         <div className="flex flex-col">

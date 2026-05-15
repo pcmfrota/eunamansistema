@@ -44,7 +44,7 @@ export async function getEquipamentos() {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('equipamentos')
-    .select('placa, modulo, categoria')
+    .select('placa, modulo, categoria, area')
     .order('placa')
 
   if (error) {

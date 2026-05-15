@@ -47,6 +47,7 @@ type Equipamento = {
   id: string;
   placa: string;
   modulo?: string;
+  area?: string;
   ultimoHist?: number;
 };
 
@@ -142,6 +143,7 @@ export default function ControleOSClient({
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos Status");
   const [filtroModulo, setFiltroModulo] = useState("Todos Módulos");
+  const [filtroArea, setFiltroArea] = useState("Todas as Áreas");
   const [filtroPeriodo, setFiltroPeriodo] = useState("Todos Períodos");
   const [filtroOrdem, setFiltroOrdem] = useState("Mais Recente");
   const [showModal, setShowModal] = useState(false);
@@ -184,6 +186,12 @@ export default function ControleOSClient({
     []
   );
 
+  const areasOptions = React.useMemo(() => {
+    const s = new Set<string>();
+    equipamentos.forEach(e => { if (e.area) s.add(e.area); });
+    return ["Todas as Áreas", ...Array.from(s).sort()];
+  }, [equipamentos]);
+
   // Filter + sort - MEMOIZED for performance
   const filtradas = React.useMemo(() => {
     return ordens
@@ -192,6 +200,12 @@ export default function ControleOSClient({
         const matchBusca = !q || o.numero_os.toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
         const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
         const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
+        
+        let matchArea = true;
+        if (filtroArea !== "Todas as Áreas") {
+          const eq = equipamentos.find(e => e.id === o.equipamento_id || e.placa === o.placa);
+          matchArea = eq ? eq.area === filtroArea : false;
+        }
         
         let matchPeriodo = true;
         if (filtroPeriodo !== "Todos Períodos" && periodos.length > 0) {
@@ -207,14 +221,14 @@ export default function ControleOSClient({
           }
         }
 
-        return matchBusca && matchStatus && matchModulo && matchPeriodo;
+        return matchBusca && matchStatus && matchModulo && matchArea && matchPeriodo;
       })
       .sort((a, b) => {
         if (filtroOrdem === "Mais Recente") return new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime();
         if (filtroOrdem === "Mais Antiga") return new Date(a.data_abertura).getTime() - new Date(b.data_abertura).getTime();
         return 0;
       });
-  }, [ordens, busca, filtroStatus, filtroModulo, filtroPeriodo, filtroOrdem, periodos]);
+  }, [ordens, busca, filtroStatus, filtroModulo, filtroArea, filtroPeriodo, filtroOrdem, periodos, equipamentos]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filtradas.length) {
@@ -422,12 +436,13 @@ export default function ControleOSClient({
                   className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all font-bold"
                 />
               </div>
-              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos" || filtroPeriodo !== "Todos Períodos") && (
+              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos" || filtroArea !== "Todas as Áreas" || filtroPeriodo !== "Todos Períodos") && (
                 <button
                   onClick={() => { 
                     setBusca(""); 
                     setFiltroStatus("Todos Status"); 
                     setFiltroModulo("Todos Módulos"); 
+                    setFiltroArea("Todas as Áreas");
                     setFiltroPeriodo("Todos Períodos");
                   }}
                   className="px-3 py-2 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"
@@ -458,6 +473,9 @@ export default function ControleOSClient({
               </select>
               <select value={filtroModulo} onChange={e => setFiltroModulo(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
                 {modulos.map(m => <option key={m}>{m}</option>)}
+              </select>
+              <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
+                {areasOptions.map(a => <option key={a}>{a}</option>)}
               </select>
               <select value={filtroOrdem} onChange={e => setFiltroOrdem(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
                 <option>Mais Recente</option>

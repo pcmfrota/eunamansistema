@@ -228,36 +228,39 @@ export default function IndicadoresClient({ initialData }: Props) {
   const [mes, setMes] = useState(0)
   const [ano, setAno] = useState(new Date().getFullYear())
   const [categoria, setCategoria] = useState('')
+  const [filtroArea, setFiltroArea] = useState('')
   const [filtroPlaca, setFiltroPlaca] = useState('')
   const [abaAtiva, setAbaAtiva] = useState<'todos' | 'leves' | 'pesados'>('todos')
   const [filtroIndisp, setFiltroIndisp] = useState<'todos' | 'apenas_indisp' | 'apenas_100'>('todos')
 
-  const fetchData = useCallback((params: { mes: number; ano: number; categoria: string; placa: string }) => {
+  const fetchData = useCallback((params: { mes: number; ano: number; categoria: string; area: string; placa: string }) => {
     startTransition(async () => {
       const result = await getIndicadoresData({
         mes: params.mes > 0 ? params.mes : undefined,
         ano: params.ano > 0 ? params.ano : undefined,
         categoria: params.categoria || undefined,
+        area: params.area || undefined,
         placa: params.placa || undefined,
       })
       setData(result)
     })
   }, [])
 
-  function handleChange(updates: Partial<{ mes: number; ano: number; categoria: string; placa: string }>) {
-    const next = { mes, ano, categoria, placa: filtroPlaca, ...updates }
+  function handleChange(updates: Partial<{ mes: number; ano: number; categoria: string; area: string; placa: string }>) {
+    const next = { mes, ano, categoria, area: filtroArea, placa: filtroPlaca, ...updates }
     if (updates.mes !== undefined) setMes(updates.mes)
     if (updates.ano !== undefined) setAno(updates.ano)
     if (updates.categoria !== undefined) setCategoria(updates.categoria)
+    if (updates.area !== undefined) setFiltroArea(updates.area)
     if (updates.placa !== undefined) setFiltroPlaca(updates.placa)
     fetchData(next)
   }
 
   function handleReset() {
     const now = new Date()
-    setMes(0); setAno(now.getFullYear()); setCategoria(''); setFiltroPlaca('')
+    setMes(0); setAno(now.getFullYear()); setCategoria(''); setFiltroArea(''); setFiltroPlaca('')
     setAbaAtiva('todos'); setFiltroIndisp('todos')
-    fetchData({ mes: 0, ano: now.getFullYear(), categoria: '', placa: '' })
+    fetchData({ mes: 0, ano: now.getFullYear(), categoria: '', area: '', placa: '' })
   }
 
   // Filtro por aba (categoria)
@@ -371,6 +374,14 @@ export default function IndicadoresClient({ initialData }: Props) {
           ))}
         </select>
 
+        <select value={filtroArea} onChange={e => handleChange({ area: e.target.value })}
+          className={selectCls(!!filtroArea)}>
+          <option value="">📍 Área</option>
+          {data.filtroOpcoes.areas.map(a => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+
         <select value={filtroPlaca} onChange={e => handleChange({ placa: e.target.value })}
           className={selectCls(!!filtroPlaca)}>
           <option value="">🚗 Veículo</option>
@@ -398,7 +409,7 @@ export default function IndicadoresClient({ initialData }: Props) {
           ))}
         </div>
 
-        {(mes > 0 || categoria || filtroPlaca || filtroIndisp !== 'todos') && (
+        {(mes > 0 || categoria || filtroArea || filtroPlaca || filtroIndisp !== 'todos') && (
           <button onClick={handleReset}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-all ml-auto">
             <X size={12} /> Limpar
@@ -562,9 +573,9 @@ export default function IndicadoresClient({ initialData }: Props) {
 
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
 function exportCSV(veiculos: any[], periodo: string) {
-  const headers = ['Placa', 'Categoria', 'Módulo', 'OS Total', 'OS Fechadas', 'OS Abertas', 'Horas Manutenção', 'DM %', 'DO %', 'Status DM']
+  const headers = ['Placa', 'Categoria', 'Módulo', 'Área', 'OS Total', 'OS Fechadas', 'OS Abertas', 'Horas Manutenção', 'DM %', 'DO %', 'Status DM']
   const rows = veiculos.map(v => [
-    v.placa, v.categoria, v.modulo, v.totalOS, v.osFechadas, v.osAbertas,
+    v.placa, v.categoria, v.modulo, v.area, v.totalOS, v.osFechadas, v.osAbertas,
     v.dmHorasManut.toFixed(1),
     v.dm.toFixed(1), v.do_.toFixed(1),
     v.dm >= META ? 'OK' : v.dm >= 90 ? 'Atenção' : 'Crítico'

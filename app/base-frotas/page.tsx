@@ -42,7 +42,14 @@ export default function BaseFrotasPage() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterArea, setFilterArea] = useState('Todas');
   const [isPending, startTransition] = React.useTransition();
+
+  const areaOptions = React.useMemo(() => {
+    const s = new Set<string>();
+    vehicles.forEach(v => { if (v.area) s.add(v.area) });
+    return ['Todas', ...Array.from(s).sort()];
+  }, [vehicles]);
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -148,12 +155,17 @@ export default function BaseFrotasPage() {
 
   const filteredVehicles = React.useMemo(() => {
     const q = searchTerm.toLowerCase();
-    return vehicles.filter(v => 
-      v.placa?.toLowerCase().includes(q) ||
-      v.tipo?.toLowerCase().includes(q) ||
-      v.modulo?.toLowerCase().includes(q)
-    );
-  }, [vehicles, searchTerm]);
+    return vehicles.filter(v => {
+      const matchesSearch = !q || 
+        v.placa?.toLowerCase().includes(q) ||
+        v.tipo?.toLowerCase().includes(q) ||
+        v.modulo?.toLowerCase().includes(q);
+      
+      const matchesArea = filterArea === 'Todas' || v.area === filterArea;
+      
+      return matchesSearch && matchesArea;
+    });
+  }, [vehicles, searchTerm, filterArea]);
 
   const getTipoColor = (tipo: string) => {
     if (!tipo) return 'slate';
@@ -227,15 +239,25 @@ export default function BaseFrotasPage() {
             )}
           </div>
           
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text"
-              placeholder="Buscar por placa, tipo ou módulo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400 font-bold"
-            />
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <select
+              value={filterArea}
+              onChange={(e) => setFilterArea(e.target.value)}
+              className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer appearance-none min-w-[140px] font-bold text-zinc-600 dark:text-zinc-400"
+            >
+              {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+            </select>
+
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Buscar por placa, tipo ou módulo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400 font-bold"
+              />
+            </div>
           </div>
         </div>
 
