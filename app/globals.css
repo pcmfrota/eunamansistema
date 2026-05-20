@@ -23,11 +23,11 @@
   --border-color:    rgba(0, 0, 0, 0.10);
   --border-input:    #d1d5db;
 
-  /* Brand */
-  --eu-green-700: #15803d;
-  --eu-green-600: #16a34a;
-  --eu-green-500: #22c55e;
-  --eu-green-400: #4ade80;
+  /* Brand - Soft Sage & Muted Emerald */
+  --eu-green-700: #345747;
+  --eu-green-600: #416e5a;
+  --eu-green-500: #558b73;
+  --eu-green-400: #7aa893;
 
   /* Status */
   --color-success: #15803d;
@@ -67,9 +67,9 @@ body {
   line-height: 1.5;
 }
 
-/* ── FOREST BACKGROUND (modo normal - usa imagem) ── */
+/* ── FOREST BACKGROUND (Suave e Premium - Neblina de Floresta) ── */
 .eunaman-app {
-  background-image: url('/bg-eunaman.png'), linear-gradient(135deg, #052005 0%, #0a2e0a 50%, #071a07 100%);
+  background-image: url('/bg-eunaman.png'), linear-gradient(135deg, #091711 0%, #11261d 50%, #091510 100%);
   background-size: cover, cover;
   background-position: center top, center;
   background-attachment: fixed, fixed;
@@ -82,8 +82,8 @@ body {
   background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(12px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18) !important;
+  border: 1px solid rgba(200, 215, 208, 0.35) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12) !important;
 }
 
 .dark .glass-card {
@@ -132,7 +132,7 @@ textarea::placeholder {
 
 /* ── TABELAS ── */
 table th {
-  color: #3b82f6 !important;
+  color: var(--eu-green-600) !important;
   font-weight: 600 !important;
   font-size: 11px !important;
   text-transform: uppercase;

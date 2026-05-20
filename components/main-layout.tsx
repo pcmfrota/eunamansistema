@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from "./theme-provider";
@@ -73,7 +73,11 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -108,8 +112,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const isDark = theme === 'dark';
 
   // Mantém o loader de tela cheia se estiver carregando a autenticação OU 
-  // se já temos o usuário mas o perfil detalhado ainda não chegou.
-  if (authLoading || (user && !profile)) {
+  // se já temos o usuário mas o perfil detalhado ainda não chegou OU
+  // se o componente ainda não foi montado (para evitar erro de hidratação)
+  if (!mounted || authLoading || (user && !profile)) {
     return (
       <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-200", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
         <PremiumLoader type="squares-sequential" text="Carregando Perfil" subtext="PCM • EUNAMAN SISTEMA" />

@@ -39,22 +39,22 @@ function MultiSelect({ label, options, value, onChange }: {
   return (
     <div ref={ref} className="relative min-w-[160px]">
       <button onClick={() => setOpen(!open)}
-        className="flex items-center justify-between gap-2 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 hover:border-zinc-500 transition-colors">
+        className="flex items-center justify-between gap-2 w-full px-3 py-2 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-text-primary hover:border-slate-400 dark:hover:border-slate-500 transition-colors">
         <span className="truncate">{allSelected ? 'Todos' : value.length === 1 ? value[0] : `${value.length} selecionados`}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-max min-w-full max-h-56 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl py-1">
-          <button onClick={() => onChange([])} className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-zinc-800 ${allSelected ? 'text-blue-400' : 'text-zinc-400'}`}>
-            <div className={`w-4 h-4 rounded border flex items-center justify-center ${allSelected ? 'bg-blue-500 border-blue-500' : 'border-zinc-600'}`}>
+        <div className="absolute top-full left-0 mt-1 z-50 w-max min-w-full max-h-56 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl py-1">
+          <button onClick={() => onChange([])} className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${allSelected ? 'text-blue-500' : 'text-text-muted'}`}>
+            <div className={`w-4 h-4 rounded border flex items-center justify-center ${allSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
               {allSelected && <svg width="10" height="8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
             </div>
             Todos
           </button>
           {options.map(opt => (
             <button key={opt} onClick={() => toggle(opt)}
-              className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-zinc-800 ${value.includes(opt) ? 'text-blue-400' : 'text-zinc-300'}`}>
-              <div className={`w-4 h-4 rounded border flex items-center justify-center ${value.includes(opt) ? 'bg-blue-500 border-blue-500' : 'border-zinc-600'}`}>
+              className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${value.includes(opt) ? 'text-blue-500' : 'text-text-secondary'}`}>
+              <div className={`w-4 h-4 rounded border flex items-center justify-center ${value.includes(opt) ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
                 {value.includes(opt) && <svg width="10" height="8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
               </div>
               {opt}
@@ -89,9 +89,9 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
   const MIN_W = sorted.length * (fullWidth ? 64 : 52)
 
   return (
-    <div className="bg-zinc-950 rounded-xl border border-zinc-800 overflow-hidden h-full">
-      <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/80">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-300">{title}</h3>
+    <div className="glass-card rounded-xl overflow-hidden h-full">
+      <div className="px-3 py-2 border-b border-border-color bg-white/40 dark:bg-black/20">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary">{title}</h3>
       </div>
       <div className="overflow-x-auto">
         <svg
@@ -102,9 +102,9 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
           {/* Grid */}
           {[0.33, 0.66, 1].map(f => (
             <line key={f} x1={0} y1={BASELINE - POS_H * f * 0.95} x2={SVG_W} y2={BASELINE - POS_H * f * 0.95}
-              stroke="#27272a" strokeWidth={0.6} />
+              stroke="currentColor" strokeWidth={0.5} className="text-slate-200/50 dark:text-zinc-800/40" />
           ))}
-          <line x1={0} y1={BASELINE} x2={SVG_W} y2={BASELINE} stroke="#52525b" strokeWidth={1.2} />
+          <line x1={0} y1={BASELINE} x2={SVG_W} y2={BASELINE} stroke="currentColor" strokeWidth={1} className="text-slate-400/80 dark:text-zinc-600" />
 
           {sorted.map((p, i) => {
             const falta = getFalta(p)
@@ -122,12 +122,12 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
                     onMouseEnter={e => e.currentTarget.setAttribute('opacity', '1')}
                     onMouseLeave={e => e.currentTarget.setAttribute('opacity', '0.92')} />
                   {/* Badge above bar */}
-                  <rect x={barCx - 16} y={barY - 18} width={32} height={15} rx={3} fill="#18181b" stroke="#3f3f46" strokeWidth={0.5} />
-                  <text x={barCx} y={barY - 7} textAnchor="middle" fontSize={9} fontWeight="700" fill="white" pointerEvents="none">
+                  <rect x={barCx - 16} y={barY - 18} width={32} height={15} rx={3} fill="var(--bg-primary)" stroke="var(--border-color)" strokeWidth={0.5} />
+                  <text x={barCx} y={barY - 7} textAnchor="middle" fontSize={9} fontWeight="700" fill="var(--text-primary)" pointerEvents="none">
                     {falta === 0 ? '0' : `+${falta}`}
                   </text>
                   {/* Só placa embaixo — sem módulo para evitar sobreposição */}
-                  <text x={barCx} y={BASELINE + NEG_H + 16} textAnchor="middle" fontSize={9} fontWeight="600" fill="#e4e4e7" pointerEvents="none">
+                  <text x={barCx} y={BASELINE + NEG_H + 16} textAnchor="middle" fontSize={9} fontWeight="700" fill="currentColor" className="text-slate-600 dark:text-slate-400" pointerEvents="none">
                     {p.equipamentos?.placa}
                   </text>
                 </g>
@@ -141,10 +141,10 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
                     onMouseEnter={e => e.currentTarget.setAttribute('opacity', '1')}
                     onMouseLeave={e => e.currentTarget.setAttribute('opacity', '0.92')} />
                   {/* Badge INSIDE bar at top */}
-                  <rect x={barCx - 16} y={BASELINE + 3} width={32} height={14} rx={3} fill="rgba(0,0,0,0.6)" />
-                  <text x={barCx} y={BASELINE + 14} textAnchor="middle" fontSize={9} fontWeight="700" fill="white" pointerEvents="none">{falta}</text>
+                  <rect x={barCx - 16} y={BASELINE + 3} width={32} height={14} rx={3} fill="var(--bg-primary)" stroke="var(--border-color)" strokeWidth={0.5} />
+                  <text x={barCx} y={BASELINE + 14} textAnchor="middle" fontSize={9} fontWeight="700" fill="var(--text-primary)" pointerEvents="none">{falta}</text>
                   {/* Só placa */}
-                  <text x={barCx} y={BASELINE + NEG_H + 16} textAnchor="middle" fontSize={9} fontWeight="600" fill="#e4e4e7" pointerEvents="none">
+                  <text x={barCx} y={BASELINE + NEG_H + 16} textAnchor="middle" fontSize={9} fontWeight="700" fill="currentColor" className="text-slate-600 dark:text-slate-400" pointerEvents="none">
                     {p.equipamentos?.placa}
                   </text>
                 </g>
@@ -171,14 +171,14 @@ function VehicleDetailModal({ vehicle, onClose, unit = 'h', warnThreshold = 75 }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+      <div className="glass-card rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-5">
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Detalhes do Veículo</p>
-            <h2 className="text-3xl font-black text-white tracking-tight">{eq?.placa}</h2>
-            <p className="text-zinc-400 text-sm mt-0.5">{eq?.tipo} — {eq?.categoria} {eq?.modulo ? `— ${eq.modulo}` : ''}</p>
+            <h2 className="text-3xl font-black text-text-primary tracking-tight">{eq?.placa}</h2>
+            <p className="text-text-secondary text-sm mt-0.5">{eq?.tipo} — {eq?.categoria} {eq?.modulo ? `— ${eq.modulo}` : ''}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-text-muted hover:text-text-primary">
             <X size={18} />
           </button>
         </div>
@@ -202,20 +202,20 @@ function VehicleDetailModal({ vehicle, onClose, unit = 'h', warnThreshold = 75 }
             { label: 'Atual', value: `${vehicle.horimetro_atual.toLocaleString('pt-BR')}${U}` },
             { label: 'Próxima', value: `${proxima.toLocaleString('pt-BR')}${U}` },
           ].map(s => (
-            <div key={s.label} className="bg-zinc-900 rounded-xl p-3 border border-zinc-800 text-center">
-              <p className="text-lg font-bold text-white">{s.value}</p>
-              <p className="text-[10px] text-zinc-500 uppercase mt-0.5">{s.label}</p>
+            <div key={s.label} className="bg-white/50 dark:bg-slate-900/50 rounded-xl p-3 border border-border-color text-center">
+              <p className="text-lg font-bold text-text-primary">{s.value}</p>
+              <p className="text-[10px] text-text-muted uppercase mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
 
         {/* Progress bar */}
         <div className="mb-5">
-          <div className="flex justify-between text-xs text-zinc-500 mb-2">
+          <div className="flex justify-between text-xs text-text-muted mb-2">
             <span>Progresso desde última manutenção</span>
             <span>{progress.toFixed(0)}%</span>
           </div>
-          <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+          <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full rounded-full transition-all"
               style={{ width: `${Math.min(progress, 100)}%`, backgroundColor: color }} />
           </div>
@@ -335,16 +335,16 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
   return (
     <div className="flex flex-col gap-2">
       {/* ── Header compacto ── */}
-      <div className="relative rounded-xl overflow-hidden">
-        <div className="bg-gradient-to-r from-green-950 via-green-900 to-green-800 px-5 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-base font-black text-white">E</span>
+      <div className="relative rounded-xl overflow-hidden border border-emerald-200/50 dark:border-emerald-800/30">
+        <div className="bg-gradient-to-r from-emerald-50/90 via-emerald-100/90 to-teal-50/90 dark:from-emerald-950/40 dark:via-emerald-900/30 dark:to-teal-950/40 px-5 py-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-emerald-600 dark:bg-emerald-500/20 border border-emerald-700/10 dark:border-emerald-400/20 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <span className="text-base font-black text-white dark:text-emerald-200">E</span>
           </div>
           <div>
-            <h1 className="text-lg font-black text-white tracking-wider uppercase leading-tight">
+            <h1 className="text-lg font-black text-emerald-900 dark:text-emerald-100 tracking-wider uppercase leading-tight">
               {unit === 'km' ? 'Controle de Km Rodados' : 'Controle de Horímetro'}
             </h1>
-            <p className="text-green-300 text-xs">
+            <p className="text-emerald-700 dark:text-emerald-300 text-xs font-medium">
               {unit === 'km' ? 'Veículos Leves — Troca a cada 10.000 km' : 'Veículos Pesados — Intervalo padrão 500 horas'} — clique em qualquer barra
             </p>
           </div>
@@ -356,20 +356,20 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
       </div>
 
       {/* ── Filtros em linha única ── */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
+      <div className="glass-card rounded-xl px-3 py-2">
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+          <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider flex items-center gap-1 mr-1">
             <Filter size={8} /> Filtros:
           </span>
           <MultiSelect label="Tipo" options={tipoOptions} value={tipoFilter} onChange={setTipoFilter} />
           <MultiSelect label="Placa" options={placaOptions} value={placaFilter} onChange={setPlacaFilter} />
           <select value={mesFilter} onChange={e => setMesFilter(e.target.value)}
-            className="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 outline-none">
+            className="px-2 py-1.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-text-primary outline-none hover:border-slate-400 dark:hover:border-slate-500 transition-colors">
             <option value="">Todos os Meses</option>
             {mesOptions.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
           <select value={anoFilter} onChange={e => setAnoFilter(e.target.value)}
-            className="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 outline-none">
+            className="px-2 py-1.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-text-primary outline-none hover:border-slate-400 dark:hover:border-slate-500 transition-colors">
             <option value="">Todos</option>
             {anoOptions.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
@@ -384,23 +384,35 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
 
       {/* ── KPI Cards compactos ── */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 bg-gradient-to-br from-emerald-700 to-emerald-600 border border-emerald-600/40">
-          <span className="text-3xl font-black text-white tabular-nums">{counts.ok}</span>
-          <div><p className="text-sm font-bold text-white leading-tight">NO PRAZO</p><p className="text-emerald-200 text-[10px]">Dentro do intervalo</p></div>
+        {/* NO PRAZO */}
+        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 shadow-sm transition-all duration-300 hover:shadow-md">
+          <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{counts.ok}</span>
+          <div>
+            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-200 leading-tight">NO PRAZO</p>
+            <p className="text-emerald-600/80 dark:text-emerald-400/80 text-[10px] font-medium">Dentro do intervalo</p>
+          </div>
         </div>
-        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 bg-gradient-to-br from-yellow-600 to-amber-500 border border-yellow-500/40">
-          <span className="text-3xl font-black text-white tabular-nums">{counts.warn}</span>
-          <div><p className="text-sm font-bold text-white leading-tight">ATENÇÃO</p><p className="text-yellow-100 text-[10px]">Menos de {warnThreshold.toLocaleString('pt-BR')}{unit} restantes</p></div>
+        {/* ATENÇÃO */}
+        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/30 shadow-sm transition-all duration-300 hover:shadow-md">
+          <span className="text-3xl font-black text-amber-600 dark:text-amber-400 tabular-nums">{counts.warn}</span>
+          <div>
+            <p className="text-sm font-bold text-amber-800 dark:text-amber-200 leading-tight">ATENÇÃO</p>
+            <p className="text-amber-600/80 dark:text-amber-400/80 text-[10px] font-medium">Menos de {warnThreshold.toLocaleString('pt-BR')}{unit} restantes</p>
+          </div>
         </div>
-        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 bg-gradient-to-br from-red-700 to-red-600 border border-red-600/40">
-          <span className="text-3xl font-black text-white tabular-nums">{counts.late}</span>
-          <div><p className="text-sm font-bold text-white leading-tight">ATRASADO</p><p className="text-red-200 text-[10px]">Manutenção vencida</p></div>
+        {/* ATRASADO */}
+        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 bg-red-50/80 dark:bg-red-950/20 border border-red-200/60 dark:border-red-800/30 shadow-sm transition-all duration-300 hover:shadow-md">
+          <span className="text-3xl font-black text-red-600 dark:text-red-400 tabular-nums">{counts.late}</span>
+          <div>
+            <p className="text-sm font-bold text-red-800 dark:text-red-200 leading-tight">ATRASADO</p>
+            <p className="text-red-600/80 dark:text-red-400/80 text-[10px] font-medium">Manutenção vencida</p>
+          </div>
         </div>
       </div>
 
       {/* ── Gráficos ── */}
       {groups.length === 0 ? (
-        <div className="text-center py-10 text-zinc-500 bg-zinc-900/50 rounded-xl border border-zinc-800 text-sm">
+        <div className="text-center py-10 text-text-muted glass-card rounded-xl text-sm">
           Nenhum dado para os filtros selecionados.
         </div>
       ) : (
@@ -423,7 +435,7 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
         {[{ color: '#16a34a', label: `NO PRAZO (> ${warnThreshold.toLocaleString('pt-BR')}${unit})` }, { color: '#eab308', label: `ATENÇÃO (≤ ${warnThreshold.toLocaleString('pt-BR')}${unit})` }, { color: '#dc2626', label: 'ATRASADO (< 0)' }].map(l => (
           <div key={l.label} className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded" style={{ backgroundColor: l.color }} />
-            <span className="text-[10px] text-zinc-400">{l.label}</span>
+            <span className="text-[10px] text-text-muted">{l.label}</span>
           </div>
         ))}
       </div>

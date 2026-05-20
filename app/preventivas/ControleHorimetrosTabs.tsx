@@ -93,9 +93,9 @@ function BarChart({ items, intervalo }: { items: Prev[]; intervalo: number }) {
 function DashboardCard({ title, items, intervalo }: { title: string; items: Prev[]; intervalo: number }) {
   if (!items.length) return null
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">{title}</h3>
+    <div className="glass-card rounded-xl overflow-hidden shadow-sm">
+      <div className="px-4 py-3 border-b border-border-color bg-white/40 dark:bg-black/20">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-text-secondary">{title}</h3>
       </div>
       <BarChart items={items} intervalo={intervalo} />
     </div>
@@ -207,23 +207,23 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
       <ExportBar data={data} label={label} fileInputRef={fileInputRef} onImport={handleImportExcel} />
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
           <input type="text" placeholder="Buscar placa..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-sm outline-none" />
+            className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 text-sm text-text-primary outline-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors" />
         </div>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 bg-zinc-50 dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 outline-none">
+          className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white/50 dark:bg-slate-900/50 text-sm text-text-secondary outline-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
           <option>Todos Status</option>
           <option>NO PRAZO</option>
           <option>ATENÇÃO</option>
           <option>ATRASADO</option>
         </select>
-        <span className="text-xs text-zinc-400">{filtered.length} veículos</span>
+        <span className="text-xs text-text-muted">{filtered.length} veículos</span>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <div className="overflow-x-auto rounded-xl border border-slate-200/60 dark:border-slate-800/50">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 dark:bg-zinc-900 text-zinc-500 text-xs uppercase tracking-wider">
+          <thead className="bg-slate-50/50 dark:bg-slate-900/30 text-text-muted text-xs uppercase tracking-wider">
             <tr>
               <th className="px-4 py-3 text-left">Placa</th>
               <th className="px-4 py-3 text-left">Tipo</th>
@@ -362,16 +362,16 @@ export default function ControleHorimetrosTabs({ data, isVisitante }: Props) {
       <Script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" strategy="lazyOnload" />
 
       {/* Header action bar */}
-      <div className="flex flex-wrap gap-2 items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3">
-        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Exportar todos os dados:</span>
+      <div className="flex flex-wrap gap-2 items-center justify-between bg-white/40 dark:bg-slate-900/30 border border-slate-200/50 dark:border-slate-800/50 rounded-xl p-3 backdrop-blur-sm">
+        <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Exportar todos os dados:</span>
         <div className="flex gap-2">
           <input type="file" accept=".xlsx,.xls,.csv" ref={fileInputAllRef} className="hidden" />
           <button onClick={() => exportXLSX(allData, 'horimetros_completo')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
             <FileSpreadsheet size={13} /> Excel Completo
           </button>
           <button onClick={() => exportCSV(allData, 'horimetros_completo')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-600 hover:bg-zinc-700 text-white shadow-sm">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-600 hover:bg-zinc-700 text-white shadow-sm transition-colors">
             <FileText size={13} /> CSV Completo
           </button>
         </div>
@@ -431,10 +431,10 @@ export default function ControleHorimetrosTabs({ data, isVisitante }: Props) {
             {[100, 500, 1000].map(interv => {
               const group = zocar.filter(p => p.intervalo_horas === interv)
               return (
-                <div key={interv} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 bg-white dark:bg-zinc-900">
-                  <p className="text-xs text-zinc-400 font-medium">Intervalo {interv}h</p>
-                  <p className="text-2xl font-black text-zinc-800 dark:text-zinc-100">{group.length}</p>
-                  <p className="text-xs text-zinc-500">equipamentos</p>
+                <div key={interv} className="glass-card rounded-xl p-3 shadow-sm">
+                  <p className="text-xs text-text-muted font-medium">Intervalo {interv}h</p>
+                  <p className="text-2xl font-black text-text-primary">{group.length}</p>
+                  <p className="text-xs text-text-muted">equipamentos</p>
                 </div>
               )
             })}
