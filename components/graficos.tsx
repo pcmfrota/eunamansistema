@@ -11,6 +11,7 @@ import {
   X, Truck, ClipboardList, CheckCircle2, Clock,
   Wrench, TrendingUp, AlertTriangle, Loader2, FileText, Printer
 } from "lucide-react";
+import { getOSporCategoriaV3 } from "@/app/actions/os-categoria";
 import type { VeiculoDisp, PreventivaStatus } from "@/app/actions/dashboard";
 import type { OrdemServicoResumo } from "@/app/actions/os-placa";
 import OSFichaModal, { type OSFichaData } from "@/app/os/OSFicha";
@@ -105,7 +106,7 @@ function ModalDetalhe({
       if (!cancelled) { setOsList([]); setLoading(false); }
     });
     return () => { cancelled = true; };
-  }, [veiculo.nome, mes, ano, dataInicio, dataFim]);
+  }, [veiculo.placa, mes, ano, dataInicio, dataFim]);
 
   if (!mounted) return null;
 
@@ -187,7 +188,7 @@ function ModalDetalhe({
           <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl p-4 mb-6">
             <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-3">
               <Clock size={16} />
-              <h4 className="font-black text-xs uppercase tracking-widest">Memória de Cálculo PCM</h4>
+              <h4 className="font-black text-xs uppercase tracking-widest">MEMÓRIA DE CÁLCULO PCM</h4>
             </div>
             <div className="text-[11px] space-y-2">
               <p className="text-zinc-600 dark:text-zinc-400 mt-1">
@@ -197,7 +198,7 @@ function ModalDetalhe({
                 <b>DO:</b> Mede o impacto na produção. Formula: ((CH - H_Indisp) / CH) × 100 onde CH = {Number(veiculo.hTotalDO || 0) > 0 ? (Number(veiculo.hTotalDO || 0) / Math.max(1, Math.round(Number(veiculo.hTotalDM || 0) / 24))).toFixed(1) : "0"}h/dia.
               </p>
               <div className="bg-white/50 dark:bg-zinc-900/50 p-3 rounded border border-blue-100 dark:border-blue-900/30 mt-2">
-                <p className="text-blue-800 dark:text-blue-300 font-bold mb-1">EXEMPLO DE TURNO (08:00h às 16:00h):</p>
+                <p className="text-blue-800 dark:text-blue-300 font-bold mb-1">EXEMPLO DE TURNO (08:00H ÀS 16:00H):</p>
                 <p className="text-zinc-500 dark:text-zinc-500 italic">"Se o caminhão quebrar às 13:00h, ele ficará indisponível por 3 horas durante a carga horária operacional. Se quebrar após as 16:00h, não há impacto na DO."</p>
               </div>
             </div>
@@ -207,15 +208,15 @@ function ModalDetalhe({
           {veiculo.historicoDiario && veiculo.historicoDiario.length > 0 && (
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden">
                <div className="bg-zinc-50 dark:bg-zinc-800/80 px-3 py-2 border-b border-zinc-200 dark:border-zinc-700/50">
-                  <h3 className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">Histórico de Performance Diária</h3>
+                  <h3 className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">HISTÓRICO DE PERFORMANCE DIÁRIA</h3>
                </div>
                <div className="max-h-[180px] overflow-y-auto">
                  <table className="w-full text-[10px] text-left border-collapse">
                    <thead className="sticky top-0 bg-white dark:bg-[#1a1f2e] shadow-sm">
                      <tr className="text-zinc-500 uppercase tracking-tighter font-bold">
-                       <th className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">Data</th>
-                       <th className="px-2 py-2 border-b border-zinc-100 dark:border-zinc-800 text-center">Programado</th>
-                       <th className="px-2 py-2 border-b border-zinc-100 dark:border-zinc-800 text-center">Indisp.</th>
+                       <th className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">DATA</th>
+                       <th className="px-2 py-2 border-b border-zinc-100 dark:border-zinc-800 text-center">PROGRAMADO</th>
+                       <th className="px-2 py-2 border-b border-zinc-100 dark:border-zinc-800 text-center">INDISP.</th>
                        <th className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 text-right">DO (%)</th>
                      </tr>
                    </thead>
@@ -245,10 +246,10 @@ function ModalDetalhe({
                 <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-500/15">
                   <ClipboardList className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Total de OS</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">TOTAL DE OS</p>
               </div>
               <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{veiculo.totalOS}</p>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ordens de serviço</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ORDENS DE SERVIÇO</p>
             </div>
 
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4">
@@ -256,10 +257,10 @@ function ModalDetalhe({
                 <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-500/15">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">OS Concluídas</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">OS CONCLUÍDAS</p>
               </div>
               <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{veiculo.osFechadas}</p>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">fechadas no período</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">FECHADAS NO PERÍODO</p>
             </div>
 
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-4">
@@ -267,13 +268,13 @@ function ModalDetalhe({
                 <div className={`p-1.5 rounded-lg ${osAbertas > 0 ? "bg-amber-100 dark:bg-amber-500/15" : "bg-zinc-100 dark:bg-zinc-700/50"}`}>
                   <Clock className={`w-3.5 h-3.5 ${osAbertas > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-400 dark:text-zinc-500"}`} />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">OS em Aberto</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">OS EM ABERTO</p>
               </div>
               <p className={`text-2xl font-bold ${osAbertas > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-900 dark:text-zinc-100"}`}>
                 {osAbertas}
               </p>
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                {osAbertas > 0 ? "⚠ atenção necessária" : "nenhuma pendente"}
+                {osAbertas > 0 ? "⚠ ATENÇÃO NECESSÁRIA" : "NENHUMA PENDENTE"}
               </p>
             </div>
 
@@ -282,12 +283,12 @@ function ModalDetalhe({
                 <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-500/15">
                   <Wrench className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Hs Manutenção</p>
+                <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">HS MANUTENÇÃO</p>
               </div>
               <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
                 {veiculo.horasManut > 0 ? `${veiculo.horasManut}h` : "—"}
               </p>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">no período</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">NO PERÍODO</p>
             </div>
           </div>
 
@@ -298,39 +299,39 @@ function ModalDetalhe({
                 <AlertTriangle className="w-4 h-4 text-violet-600 dark:text-violet-400" />
               </div>
               <div>
-                <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">MTTR</p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-500">Tempo Médio de Reparo</p>
+                <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">MTTR</p>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-500 uppercase tracking-wider">TEMPO MÉDIO DE REPARO</p>
               </div>
             </div>
             <div className="text-right">
               <span className="text-2xl font-black text-violet-600 dark:text-violet-400">
                 {mttr}{mttr !== "—" ? "h" : ""}
               </span>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">por OS concluída</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">POR OS CONCLUÍDA</p>
             </div>
           </div>
 
             <div className="mt-6">
               <h3 className="font-black text-sm uppercase tracking-widest text-zinc-800 dark:text-zinc-200 mb-4 flex items-center gap-2">
                 <ClipboardList size={18} className="text-blue-500" />
-                Ordens de Serviço ({osList.length})
+                ORDENS DE SERVIÇO ({osList.length})
               </h3>
               
               {loading ? (
                 <div className="flex items-center justify-center py-10 gap-2 text-zinc-500">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">Carregando dados...</span>
+                  <span className="text-sm">CARREGANDO DADOS...</span>
                 </div>
               ) : osList.length > 0 ? (
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse bg-white dark:bg-[#1a1f2e]">
                     <thead>
                       <tr className="bg-zinc-50 dark:bg-zinc-800/80 text-[10px] font-bold uppercase text-zinc-500 tracking-wider">
-                        <th className="px-4 py-3">Descrição da Atividade</th>
-                        <th className="px-3 py-3 text-center">Status</th>
-                        <th className="px-3 py-3 text-center">Mecânica</th>
-                        <th className="px-3 py-3 text-center">Operacional</th>
-                        <th className="px-4 py-3 text-right">Ficha</th>
+                        <th className="px-4 py-3">DESCRIÇÃO DA ATIVIDADE</th>
+                        <th className="px-3 py-3 text-center">STATUS</th>
+                        <th className="px-3 py-3 text-center">MECÂNICA</th>
+                        <th className="px-3 py-3 text-center">OPERACIONAL</th>
+                        <th className="px-4 py-3 text-right">FICHA</th>
                       </tr>
                     </thead>
                     <tbody className="text-[11px] divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -458,8 +459,8 @@ export function GraficoVeiculos({
     return (
       <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
-            {title}
+          <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+            {String(title).toUpperCase()}
           </h3>
           {periodoLabel && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
@@ -525,8 +526,8 @@ export function GraficoVeiculos({
     <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-3">
-            <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
-              {title}
+            <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+              {String(title).toUpperCase()}
             </h3>
             {periodoLabel && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
@@ -535,7 +536,7 @@ export function GraficoVeiculos({
             )}
             {dataAtualizacao && (
               <span className="text-[10px] px-2 py-0.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase tracking-wider">
-                Atualizado: {dataAtualizacao}
+                ATUALIZADO: {dataAtualizacao}
               </span>
             )}
           </div>
@@ -693,18 +694,18 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
-          Status das Preventivas por Placa
+        <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+          STATUS DAS PREVENTIVAS POR PLACA
         </h3>
         <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> Atrasado
+            <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> ATRASADO
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> Atenção
+            <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ATENÇÃO
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> No Prazo
+            <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> NO PRAZO
           </div>
         </div>
       </div>
@@ -773,8 +774,8 @@ export function GraficoSemanal({ dados, periodoLabel }: GraficoSemanalProps) {
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">
-          Disponibilidade por Semana do Mês
+        <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+          DISPONIBILIDADE POR SEMANA DO MÊS
           {periodoLabel && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium ml-2">
               {periodoLabel}
@@ -873,8 +874,8 @@ export function ResumoHoras({
 
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <h3 className="font-semibold text-[15px] mb-6 text-zinc-800 dark:text-zinc-200">
-        Resumo de Horas
+      <h3 className="font-semibold text-[15px] mb-6 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+        RESUMO DE HORAS
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="flex flex-col gap-1.5">
@@ -910,8 +911,8 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
   if (!dados || dados.length === 0) return null;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
-        Paradas por Categoria
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+        PARADAS POR CATEGORIA
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <PieChart>
@@ -952,7 +953,7 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
 export function RankingFalhas({ dados }: { dados: { placa: string; falhas: number; mtbf: number }[] }) {
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
         Ranking de Falhas (Top 10)
       </h3>
       <div className="overflow-x-auto">
@@ -1007,8 +1008,8 @@ export function GraficoManuTipo({ dados }: { dados: { tipo: string; quantidade: 
   if (!dados || dados.length === 0) return null;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
-        Composição da Manutenção (Tipos de OS)
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+        COMPOSIÇÃO DA MANUTENÇÃO (TIPOS DE OS)
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }} barCategoryGap="15%">
@@ -1047,8 +1048,8 @@ export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilid
   if (!dados || dados.length === 0) return null;
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
-        Disponibilidade Operacional por Categoria de Veículo
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+        DISPONIBILIDADE OPERACIONAL POR CATEGORIA DE VEÍCULO
       </h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={dados} margin={{ top: 10, right: 0, left: -20, bottom: 5 }} barSize={35}>
@@ -1082,18 +1083,18 @@ export function GraficoDispTipo({ dados }: { dados: { tipo: string; disponibilid
 export function TabelaStatusFrota({ dados }: { dados: { placa: string; tipo: string; status: string; disponibilidade: number; modulo: string }[] }) {
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm w-full">
-      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200">
-        Mapa de Status da Frota
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+        MAPA DE STATUS DA FROTA
       </h3>
       <div className="overflow-x-auto max-h-[400px]">
         <table className="w-full text-left text-[13px] border-collapse relative">
           <thead className="sticky top-0 bg-white dark:bg-[#0f1115] z-10 shadow-[0_1px_0_0_#e4e4e7] dark:shadow-[0_1px_0_0_#27272a]">
             <tr className="text-zinc-500">
-              <th className="pb-3 px-3 font-medium">Placa</th>
-              <th className="pb-3 px-3 font-medium">Equipamento</th>
-              <th className="pb-3 px-3 font-medium">Status Atual</th>
-              <th className="pb-3 px-3 font-medium">Disp. no Período</th>
-              <th className="pb-3 px-3 font-medium">Módulo</th>
+              <th className="pb-3 px-3 font-medium">PLACA</th>
+              <th className="pb-3 px-3 font-medium">EQUIPAMENTO</th>
+              <th className="pb-3 px-3 font-medium">STATUS ATUAL</th>
+              <th className="pb-3 px-3 font-medium">DISP. NO PERÍODO</th>
+              <th className="pb-3 px-3 font-medium">MÓDULO</th>
             </tr>
           </thead>
           <tbody>
@@ -1138,33 +1139,33 @@ export function TabelaStatusFrota({ dados }: { dados: { placa: string; tipo: str
 export function PainelFormulas() {
   return (
     <div className="bg-zinc-50 dark:bg-zinc-900/40 rounded-3xl border border-zinc-200 dark:border-zinc-800/50 p-6 flex flex-col w-full text-[13px] text-zinc-600 dark:text-zinc-400">
-      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+      <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-blue-500" /> Entenda os Indicadores (Fórmulas PCM Florestal)
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Disponibilidade Operacional (DO)</strong>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Disponibilidade Operacional (DO)</strong>
           <p className="mb-2">Mede a proporção do tempo em que o veículo esteve operando ou apto, considerando apenas as horas da escala Suzano.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-blue-600 dark:text-blue-400 font-mono block w-fit">
             DO = (Ht - Indisp. Shift) / Ht × 100
           </code>
         </div>
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Disponibilidade Mecânica (DM)</strong>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Disponibilidade Mecânica (DM)</strong>
           <p className="mb-2">Mede o tempo real livre de manutenção dentro do período planejado de trabalho (Escala).</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-emerald-600 dark:text-emerald-400 font-mono block w-fit">
             DM = (Ht - H.Manut Shift) / Ht × 100
           </code>
         </div>
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">Ht = Horas Planejadas</strong>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Ht = Horas Planejadas</strong>
           <p className="mb-2">Baseado no cadastro de Escala da Frota (Ex: 16h/dia de 08:00 às 00:00). Se não cadastrado, assume 24h.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-purple-600 dark:text-purple-400 font-mono block w-fit">
             Ht = Dias × Carga Horária
           </code>
         </div>
         <div>
-          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1">D+1 (Ontem)</strong>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">D+1 (Ontem)</strong>
           <p className="mb-2">Todos os dados de hoje são consolidados apenas no dia seguinte. O dashboard reflete o fechamento de ontem.</p>
           <span className="text-[10px] text-zinc-400">Referência: Regra PCM Suzano</span>
         </div>
@@ -1181,14 +1182,233 @@ const categoriaMock = [
   { categoria: 'MULTI',   dm: 87.3, doOp: 85.1, total: 0, qtdOS: 0 },
 ];
 
+// ─── ModalDetalheCategoria ───────────────────────────────────────────────────
+function ModalDetalheCategoria({
+  categoria,
+  mes,
+  ano,
+  dataInicio,
+  dataFim,
+  onClose,
+}: {
+  categoria: string;
+  mes?: number;
+  ano?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  onClose: () => void;
+}) {
+  const [osList, setOsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getOSporCategoriaV3(categoria, mes, ano, dataInicio, dataFim)
+      .then((data) => {
+        if (!cancelled) {
+          setOsList(data || []);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading OS por categoria:", err);
+        if (!cancelled) {
+          setOsList([]);
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [categoria, mes, ano, dataInicio, dataFim]);
+
+  if (!mounted) return null;
+
+  const totalOS = osList.length;
+  const osFechadas = osList.filter(os => os.status === "Fechada" || os.status === "Concluída").length;
+  const osAbertas = totalOS - osFechadas;
+  const horasManutTotal = osList.reduce((acc, os) => acc + Number(os.horas_manutencao || 0), 0);
+  const mttr = osFechadas > 0 ? (horasManutTotal / osFechadas).toFixed(1) : "—";
+
+  return createPortal(
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-md" onClick={onClose} />
+
+      {/* Ficha Modal (sobreposto) */}
+      {fichaOS && (
+        <OSFichaModal os={fichaOS} onClose={() => setFichaOS(null)} />
+      )}
+
+      {/* Panel */}
+      <div
+        className="relative z-10 w-full max-w-3xl bg-white dark:bg-[#1a1f2e] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden flex flex-col"
+        style={{ maxHeight: "95vh" }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800/50 dark:to-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+                ORDENS DE SERVIÇO - TIPO DE FROTA {String(categoria).toUpperCase()}
+              </h2>
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                LISTA DE OS ABERTAS OU PARADAS NO PERÍODO SELECIONADO
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
+          >
+            <X className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4 flex flex-col gap-4">
+          
+          {/* KPI Grid */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3">
+              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-0.5">TOTAL DE OS</p>
+              <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{loading ? "..." : totalOS}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3">
+              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-0.5">OS CONCLUÍDAS</p>
+              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{loading ? "..." : osFechadas}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3">
+              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-0.5">OS EM ABERTO</p>
+              <p className={`text-xl font-bold ${osAbertas > 0 ? "text-amber-600" : "text-zinc-900 dark:text-zinc-100"}`}>{loading ? "..." : osAbertas}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 p-3">
+              <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-0.5">MTTR MÉDIO</p>
+              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{loading ? "..." : `${mttr}h`}</p>
+            </div>
+          </div>
+
+          <div className="mt-2">
+            {loading ? (
+              <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Buscando ordens de serviço...</span>
+              </div>
+            ) : osList.length > 0 ? (
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse bg-white dark:bg-[#1a1f2e]">
+                  <thead>
+                    <tr className="bg-zinc-50 dark:bg-zinc-800/80 text-[10px] font-bold uppercase text-zinc-500 tracking-wider">
+                      <th className="px-4 py-3">EQUIPAMENTO</th>
+                      <th className="px-3 py-3">DESCRIÇÃO DA ATIVIDADE</th>
+                      <th className="px-3 py-3 text-center">STATUS</th>
+                      <th className="px-3 py-3 text-center">HORAS MANUT.</th>
+                      <th className="px-3 py-3 text-center">HORAS IMP.</th>
+                      <th className="px-4 py-3 text-right">FICHA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[11px] divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {osList.map((os: any) => {
+                      const hMec = Number(os.horas_manutencao || 0);
+                      const hOp = Number(os.horas_impacto_do || 0);
+                      const isFechada = os.status === "Fechada" || os.status === "Concluída";
+                      return (
+                        <tr 
+                          key={os.id} 
+                          className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors cursor-pointer group"
+                          onClick={() => setFichaOS(os as any)}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-zinc-900 dark:text-zinc-100">
+                              {os.placa}
+                            </div>
+                            <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                              {os.modelo} · Mód. {os.modulo}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                              <span className="opacity-50 text-[10px]">#{os.numero_os || os.id.slice(0,6)}</span>
+                              {hOp > 0 && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Afeta Disponibilidade Operacional" />}
+                            </div>
+                            <div className="text-zinc-500 text-[10px] line-clamp-1 mt-0.5" title={os.descricao}>{os.descricao || 'Atividade de manutenção'}</div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              isFechada ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200' : 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 border border-orange-200'
+                            }`}>
+                              {os.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center font-mono font-bold text-zinc-700 dark:text-zinc-300">
+                            {hMec > 0 ? `${hMec.toFixed(1)}h` : '—'}
+                          </td>
+                          <td className={`px-3 py-3 text-center font-mono font-bold ${hOp > 0 ? 'text-red-500' : 'text-emerald-500 opacity-30'}`}>
+                            {hOp > 0 ? `${hOp.toFixed(1)}h` : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button 
+                              onClick={() => setFichaOS(os)}
+                              className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-blue-500 hover:text-white transition-all"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="bg-zinc-50 dark:bg-zinc-800/40 rounded-xl p-10 flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 dark:border-zinc-700/50">
+                <ClipboardList className="w-8 h-8 text-zinc-200 mb-3" />
+                <p className="text-zinc-500 dark:text-zinc-400 font-medium italic text-sm text-center">Nenhuma OS encontrada para este período.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700/50 shrink-0">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl text-sm font-medium bg-zinc-700 dark:bg-zinc-800 hover:bg-zinc-600 dark:hover:bg-zinc-700 text-white transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function GraficoDispCategoria({
   dados,
   periodoLabel,
+  mes,
+  ano,
+  dataInicio,
+  dataFim,
 }: {
   dados?: { categoria: string; dm: number; doOp: number; total: number; qtdOS: number }[];
   periodoLabel?: string;
+  mes?: number;
+  ano?: number;
+  dataInicio?: string;
+  dataFim?: string;
 }) {
   const [selecionado, setSelecionado] = useState<any>(null);
+  const [verOS, setVerOS] = useState(false);
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const tickColor = isDark ? '#94a3b8' : '#64748b';
@@ -1226,7 +1446,7 @@ export function GraficoDispCategoria({
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <div className="flex justify-between items-start mb-5">
         <div>
-          <h3 className="font-bold text-[15px] text-zinc-800 dark:text-zinc-100">Disponibilidade por Tipo de Frota</h3>
+          <h3 className="font-bold text-[15px] text-zinc-800 dark:text-zinc-100 uppercase tracking-wider">DISPONIBILIDADE POR TIPO DE FROTA</h3>
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
             {periodoLabel ? periodoLabel + ' · ' : ''}DM e DO por tipo (PIPA · COMBOIO · MUNCK · MULTI)
             {isMock && <span className="ml-1 text-amber-500 italic">(prévia — sem dados)</span>}
@@ -1246,7 +1466,9 @@ export function GraficoDispCategoria({
           barGap={4}
           onClick={(data) => {
             if (data && data.activePayload && data.activePayload.length > 0) {
-              setSelecionado(data.activePayload[0].payload);
+              const cat = data.activePayload[0].payload;
+              setSelecionado(cat);
+              setVerOS(true);
             }
           }}
           style={{ cursor: 'pointer' }}
@@ -1260,25 +1482,30 @@ export function GraficoDispCategoria({
             label={{ value: '90%', position: 'insideTopRight', fontSize: 8, fill: '#f59e0b' }} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
           <Bar dataKey="dm" name="DM (Mecânica)" radius={[4, 4, 0, 0]}
-            label={{ position: 'top', fill: '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
-            {source.map((entry, i) => <Cell key={`dm-${i}`} fill={getColorDisp(entry.dm)} opacity={0.88} />)}
-          </Bar>
+            label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}
+            fill="#22c55e"
+          />
           <Bar dataKey="doOp" name="DO (Operacional)" radius={[4, 4, 0, 0]}
-            label={{ position: 'top', fill: '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
-            {source.map((entry, i) => (
-              <Cell key={`do-${i}`} fill={entry.doOp >= 95 ? '#3b82f6' : entry.doOp >= 90 ? '#6366f1' : '#a855f7'} opacity={0.80} />
-            ))}
-          </Bar>
+            label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}
+            fill="#3b82f6"
+          />
         </BarChart>
       </ResponsiveContainer>
 
       <div className="flex gap-2 mt-3 flex-wrap">
         {source.map((item) => (
-          <div key={item.categoria} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+          <button 
+            key={item.categoria} 
+            onClick={() => {
+              setSelecionado(item);
+              setVerOS(true);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50 hover:bg-zinc-100 dark:hover:bg-zinc-700/80 transition-all text-left"
+          >
             <div className="w-2 h-2 rounded-full" style={{ background: getColorDisp(item.dm) }} />
             <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{item.categoria}</span>
             {item.total > 0 && <span className="text-[9px] text-zinc-400 dark:text-zinc-400">({item.total})</span>}
-          </div>
+          </button>
         ))}
       </div>
 
@@ -1298,7 +1525,7 @@ export function GraficoDispCategoria({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase font-bold mb-1">Taxa Disponibilidade</span>
               <div className="flex items-center gap-2">
@@ -1306,15 +1533,33 @@ export function GraficoDispCategoria({
                 <div className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-600">DO: {(selecionado.doOp || 0).toFixed(1)}%</div>
               </div>
             </div>
+            <button
+              onClick={() => setVerOS(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all"
+            >
+              <ClipboardList size={14} />
+              Ver OSs
+            </button>
             <button 
               onClick={() => setSelecionado(null)}
-              className="p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-300 transition-all"
+              className="p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-300 transition-all ml-2"
               title="Fechar detalhes"
             >
               <X size={16} />
             </button>
           </div>
         </div>
+      )}
+
+      {verOS && selecionado && (
+        <ModalDetalheCategoria
+          categoria={selecionado.categoria}
+          mes={mes}
+          ano={ano}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          onClose={() => setVerOS(false)}
+        />
       )}
     </div>
   );
@@ -1443,22 +1688,15 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     const dm = payload.find((p: any) => p.dataKey === "dm");
-    const doOp = payload.find((p: any) => p.dataKey === "doOp");
     return (
       <div className="bg-white dark:bg-[#1a1f2e] rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 p-3 text-xs pointer-events-none min-w-[140px]">
         <p className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-2">{label}</p>
         {dm && (
-          <p className="flex justify-between gap-4 mb-1">
+          <p className="flex justify-between gap-4">
             <span className="text-zinc-500">DM (Mecânica):</span>
             <span className="font-bold" style={{ color: dm.value >= 95 ? "#22c55e" : dm.value >= 90 ? "#f59e0b" : "#ef4444" }}>
               {dm.value.toFixed(1)}%
             </span>
-          </p>
-        )}
-        {doOp && (
-          <p className="flex justify-between gap-4">
-            <span className="text-zinc-500">DO (Operacional):</span>
-            <span className="font-bold text-orange-500">{doOp.value.toFixed(1)}%</span>
           </p>
         )}
       </div>
@@ -1469,18 +1707,12 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
     <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <div className="flex justify-between items-center mb-5">
         <div>
-          <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">DM por Mês</h3>
+          <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">DM POR MÊS</h3>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Disponibilidade Mecânica — últimos 6 meses</p>
         </div>
-        <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            DM Mecânica
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-400" />
-            DO Operacional
-          </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          DM Mecânica
         </div>
       </div>
 
@@ -1491,16 +1723,12 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
       ) : dados.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-zinc-400 text-sm">Sem dados disponíveis.</div>
       ) : (
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={dados} margin={{ top: 20, right: 16, left: -16, bottom: 8 }}>
+        <ResponsiveContainer width="100%" height={260}>
+          <AreaChart data={dados} margin={{ top: 32, right: 16, left: -16, bottom: 8 }}>
             <defs>
               <linearGradient id="gradDM" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#22c55e" stopOpacity={isDark ? 0.25 : 0.18} />
                 <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gradDO" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f97316" stopOpacity={isDark ? 0.22 : 0.15} />
-                <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
@@ -1533,16 +1761,22 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
               fill="url(#gradDM)"
               dot={{ fill: "#22c55e", r: 4, strokeWidth: 0 }}
               activeDot={{ r: 6, fill: "#22c55e", strokeWidth: 0 }}
-            />
-            <Area
-              type="monotone"
-              dataKey="doOp"
-              stroke="#f97316"
-              strokeWidth={2}
-              fill="url(#gradDO)"
-              dot={{ fill: "#f97316", r: 3.5, strokeWidth: 0 }}
-              activeDot={{ r: 5.5, fill: "#f97316", strokeWidth: 0 }}
-              strokeDasharray="5 3"
+              label={(props: any) => {
+                const { x, y, value } = props;
+                if (value == null) return null;
+                return (
+                  <text
+                    x={x}
+                    y={y - 10}
+                    textAnchor="middle"
+                    fill={labelC}
+                    fontSize={10}
+                    fontWeight={800}
+                  >
+                    {`${Number(value).toFixed(1)}%`}
+                  </text>
+                );
+              }}
             />
           </AreaChart>
         </ResponsiveContainer>

@@ -42,8 +42,8 @@ export default async function ControleHorimetrosPage() {
             <Gauge size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">
-              Controle de Horímetros
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100 uppercase">
+              CONTROLE DE HORÍMETROS
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
               Pesados (500h) • Leves (10.000 km) • Implemento Zocar (100/500/1.000h)

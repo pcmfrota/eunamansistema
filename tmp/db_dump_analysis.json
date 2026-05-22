@@ -1,0 +1,269 @@
+{
+  "timestamp": "2026-05-22T13:15:35.422Z",
+  "equipmentsCount": 37,
+  "osCount": 482,
+  "equipments_by_tipo": {
+    "MUNCK": 8,
+    "COMBOIO": 11,
+    "PIPA": 7,
+    "SAVEIRO": 4,
+    "MULTIFUNCIONAL": 2,
+    "SKID": 2,
+    "C3": 2,
+    "ESTRADA": 1
+  },
+  "os_by_placa": {
+    "TCA4B26": 5,
+    "SGJ7I82": 21,
+    "TCC6G17": 12,
+    "LMT7E29": 28,
+    "ROE8F63": 14,
+    "TCN7J90": 39,
+    "ROG1I38": 36,
+    "ROG1I41": 40,
+    "ROG1I26": 50,
+    "PTV3A59": 22,
+    "PTV4G53": 26,
+    "TCC4D15": 4,
+    "ROE8F66": 33,
+    "TCC2E83": 19,
+    "LUC7J90": 14,
+    "TCN7J82": 18,
+    "SGJ1G11": 13,
+    "ROG1I40": 29,
+    "TCN7J72": 20,
+    "PTF4236": 5,
+    "TCA4B23": 14,
+    "PTV5G37": 6,
+    "PTW0F01": 7,
+    "SFR4F28": 3,
+    "PTT8D76": 3,
+    "PTV4G49": 1
+  },
+  "os_unmatched_plates": [],
+  "os_without_placa_or_equip_id": [],
+  "equips_sample": [
+    {
+      "id": "64b4cb84-8c4f-435e-b8da-62a124d39047",
+      "placa": "SGJ7I82",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "0457834e-9428-4810-b24a-c54767f9fbd4",
+      "placa": "SGJ1G11",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "064ce428-a3f0-4185-9554-386c5d084920",
+      "placa": "LMT7E29",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "4f3f9a2e-8871-4564-9356-557545f22666",
+      "placa": "SFR4F37",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "8f74b07b-982c-42c5-9e13-d694d6ec288a",
+      "placa": "SFR4F28",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "32ff4b72-5f7e-4e2f-883f-e62780997d00",
+      "placa": "TCC4D15",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "173be0f6-5679-4dbb-85bd-a8f09c841cdd",
+      "placa": "TCA4B23",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "ad2bae29-7c6c-404f-8b11-d37cd8dcf3dd",
+      "placa": "TCA4B26",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "9cb2a71f-a4b7-4f65-ae69-030e8857d37e",
+      "placa": "GCU3E91",
+      "tipo": "SAVEIRO",
+      "categoria": "LEVE"
+    },
+    {
+      "id": "d1a229d1-2359-4c4b-a775-0a228917702b",
+      "placa": "TCC2E83",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "da7eee0f-1388-4a6b-8f17-83460c1b70ba",
+      "placa": "LUC7J90",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "96244275-2788-46c6-9444-0692e3260b95",
+      "placa": "TCC6G17",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "856e43a0-af62-4440-a289-022d3e59dd89",
+      "placa": "PTF4236",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "ca5aa261-cd06-4acb-aeb7-4bb968d4079e",
+      "placa": "TCN7J72",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "08c98ce8-d126-4a2e-9b8a-e5d0b8b52a58",
+      "placa": "PTT8D76",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "754fc725-d9fa-4bd4-8e5e-c70a77c8dcd1",
+      "placa": "PTV3A59",
+      "tipo": "MULTIFUNCIONAL",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "ff3cb08e-ae60-4bce-9cd1-2c28b7a33c5a",
+      "placa": "TCN7J82",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "c5625a1f-9361-4872-9e4a-9ca415db0fd2",
+      "placa": "TCN7J90",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "b290b2ec-2500-4d05-b639-1b0dc144a7fc",
+      "placa": "TZB1G12",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "8a18a763-8193-4219-9056-717cba57cac8",
+      "placa": "PTV4G49",
+      "tipo": "PIPA",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "fe2915ea-a6f3-43a3-88cf-fff9c2aa6251",
+      "placa": "PTV4G53",
+      "tipo": "MULTIFUNCIONAL",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "adba648e-ed8f-4c96-bbed-dd09352abeb1",
+      "placa": "PTV5G37",
+      "tipo": "SKID",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "048adb1d-fba4-4a09-8a22-a3c5351f9bfc",
+      "placa": "TZB1G41",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "7c7a335e-c22b-4156-b9db-44a92d123fb5",
+      "placa": "TZD6D14",
+      "tipo": "MUNCK",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "85e20c03-29bb-43ea-beef-640e26c744fc",
+      "placa": "TCW3A28",
+      "tipo": "C3",
+      "categoria": "LEVE"
+    },
+    {
+      "id": "36a27251-61c1-4ebe-81ee-d37a04afc407",
+      "placa": "PTW0F01",
+      "tipo": "SKID",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "1b0f916b-7a4b-43c3-acfa-90a1e7b66129",
+      "placa": "ROE8F63",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "3d9f5600-05ff-4234-aaa2-74e8b4ab7856",
+      "placa": "ROE8F66",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "fb276070-4727-45f5-8c4e-456b6f689145",
+      "placa": "ROG1I26",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "f33f06ec-14f4-461d-b16c-00c5b340a210",
+      "placa": "ROG1I38",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "98099685-b110-4d11-9a44-9d6c5564224e",
+      "placa": "ROG1I40",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "39a4ea2a-4c46-48c9-919d-82e355797799",
+      "placa": "ROG1I41",
+      "tipo": "COMBOIO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "9d68b888-4fbc-4aef-9102-d3ce765177cb",
+      "placa": "TCW3A29",
+      "tipo": "C3",
+      "categoria": "LEVE"
+    },
+    {
+      "id": "d90f966d-5a2a-4135-b885-b58e86a9a2f9",
+      "placa": "TEZ7A70",
+      "tipo": "ESTRADA",
+      "categoria": "LEVE"
+    },
+    {
+      "id": "6bb1f4e6-3ecb-4164-b4be-872b6031ca60",
+      "placa": "TIS4I06",
+      "tipo": "SAVEIRO",
+      "categoria": "LEVE"
+    },
+    {
+      "id": "2fea8cef-9c51-4bbe-b6a9-64268403dbeb",
+      "placa": "TJJ3E07",
+      "tipo": "SAVEIRO",
+      "categoria": "LEVE"
+    },
+    {
+      "id": "35444261-ca18-4ebc-bbfc-951fb6d89e1c",
+      "placa": "TWY2I61",
+      "tipo": "SAVEIRO",
+      "categoria": "LEVE"
+    }
+  ]
+}

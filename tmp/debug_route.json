@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-05-22T11:12:35.534Z",
+  "inputs": {
+    "categoria": "MULTI",
+    "mes": 5,
+    "ano": 2026,
+    "dataInicio": null,
+    "dataFim": null
+  },
+  "allEquipsCount": 0,
+  "eqError": null,
+  "filteredEquipsCount": 0,
+  "inicioFiltro": "2026-05-01T00:00:00",
+  "fimFiltro": "2026-05-30T23:59:59",
+  "allOsInDatabaseCount": 0,
+  "osError": null,
+  "escalasError": null,
+  "osFiltradasDataCount": 0,
+  "finalResultCount": 0
+}

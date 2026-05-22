@@ -193,14 +193,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         }}
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-800">Dashboard Operacional</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-800 uppercase">DASHBOARD OPERACIONAL</h1>
           <div className="flex items-center gap-3 mt-1">
             <p className="text-sm text-zinc-500">
               Visão geral da manutenção e disponibilidade da frota
             </p>
             {data.dataAtualizacao && (
               <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
-                Dados atualizados até: {data.dataAtualizacao} (D+1)
+                DADOS ATUALIZADOS ATÉ: {data.dataAtualizacao} (D+1)
               </span>
             )}
           </div>
@@ -217,7 +217,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           {isExporting ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</>
           ) : (
-            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg> Exportar Relatório PCM</>
+            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg> EXPORTAR RELATÓRIO PCM</>
           )}
         </button>
       </div>
@@ -234,7 +234,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       {/* ── Período inline (pequeno, abaixo dos filtros) ── */}
       {data.data_inicio && data.data_fim && (
         <div className="flex items-center gap-2 -mt-3 pb-1">
-          <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Período Operacional:</span>
+          <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">PERÍODO OPERACIONAL:</span>
           <span className="px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md text-xs text-zinc-700 dark:text-zinc-300 font-mono">
             {data.data_inicio.split('-').reverse().join('/')}
           </span>
@@ -264,15 +264,15 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             <div className="flex items-center gap-4">
                <button 
                  onClick={() => setAvailabilityType("DM")}
-                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all uppercase tracking-wider ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
                >
-                 Mecânica (DM)
+                 MECÂNICA (DM)
                </button>
                <button 
                  onClick={() => setAvailabilityType("DO")}
-                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all uppercase tracking-wider ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
                >
-                 Operacional (DO)
+                 OPERACIONAL (DO)
                </button>
             </div>
             <div className="flex items-center gap-2">
@@ -284,7 +284,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                     : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800"
                 }`}
               >
-                {mostrarIndisp ? "Ver Disponibilidade" : "Ver Indisponibilidade"}
+                {mostrarIndisp ? "VER DISPONIBILIDADE" : "VER INDISPONIBILIDADE"}
               </button>
             </div>
           </div>
@@ -303,7 +303,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           />
         </div>
 
-        <GraficoDispCategoria dados={data.dispPorCategoria} periodoLabel={data.periodoLabel} />
+        <GraficoDispCategoria 
+          dados={data.dispPorCategoria} 
+          periodoLabel={data.periodoLabel} 
+          mes={filtros.mes || data.mesSelecionado}
+          ano={filtros.ano || data.anoSelecionado}
+          dataInicio={data.data_inicio || undefined}
+          dataFim={data.data_fim || undefined}
+        />
 
         <GraficoDMModulo dados={data.dispPorModulo} />
 
@@ -345,7 +352,7 @@ function MiniCard({ label, value, sub, color = 'text-zinc-800' }: {
         boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
       }}
     >
-      <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-muted)' }}>{label.toUpperCase()}</p>
       <p className={`text-lg font-black leading-tight ${color}`}>{value}</p>
       <p className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{sub}</p>
     </div>

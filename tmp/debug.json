@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-05-22T11:03:28.025Z",
+  "inputs": {
+    "categoria": "MULTI",
+    "mes": 5,
+    "ano": 2026
+  },
+  "tipoFiltro": [
+    "multi",
+    "MULTI",
+    "Multi",
+    "multifuncional",
+    "MULTIFUNCIONAL",
+    "Multifuncional"
+  ],
+  "allEquipsCount": 37,
+  "eqError": null,
+  "filteredEquipsCount": 2,
+  "filteredEquipsSample": [
+    {
+      "id": "754fc725-d9fa-4bd4-8e5e-c70a77c8dcd1",
+      "placa": "PTV3A59",
+      "tipo": "MULTIFUNCIONAL",
+      "modelo": null,
+      "modulo": "CARREGAMENTO",
+      "categoria": "PESADA"
+    },
+    {
+      "id": "fe2915ea-a6f3-43a3-88cf-fff9c2aa6251",
+      "placa": "PTV4G53",
+      "tipo": "MULTIFUNCIONAL",
+      "modelo": null,
+      "modulo": "RESERVA",
+      "categoria": "PESADA"
+    }
+  ],
+  "placas": [
+    "PTV3A59",
+    "ptv3a59",
+    "PTV4G53",
+    "ptv4g53"
+  ],
+  "inicioFiltro": "2026-04-22T00:00:00",
+  "fimFiltro": "2026-05-21T23:59:59",
+  "allOsForPlacasCount": 0,
+  "osError": {
+    "code": "42703",
+    "details": null,
+    "hint": null,
+    "message": "column ordens_servico.horas_impacto_do does not exist"
+  },
+  "osFiltradasDataCount": 0,
+  "finalResultCount": 0
+}

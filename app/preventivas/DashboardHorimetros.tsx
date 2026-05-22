@@ -91,7 +91,7 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
   return (
     <div className="glass-card rounded-xl overflow-hidden h-full">
       <div className="px-3 py-2 border-b border-border-color bg-white/40 dark:bg-black/20">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-text-secondary">{title.toUpperCase()}</h3>
       </div>
       <div className="overflow-x-auto">
         <svg
@@ -174,9 +174,9 @@ function VehicleDetailModal({ vehicle, onClose, unit = 'h', warnThreshold = 75 }
       <div className="glass-card rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-5">
           <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Detalhes do Veículo</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">DETALHES DO VEÍCULO</p>
             <h2 className="text-3xl font-black text-text-primary tracking-tight">{eq?.placa}</h2>
-            <p className="text-text-secondary text-sm mt-0.5">{eq?.tipo} — {eq?.categoria} {eq?.modulo ? `— ${eq.modulo}` : ''}</p>
+            <p className="text-text-secondary text-sm mt-0.5 uppercase">{eq?.tipo} — {eq?.categoria} {eq?.modulo ? `— ${eq.modulo}` : ''}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-text-muted hover:text-text-primary">
             <X size={18} />
@@ -198,9 +198,9 @@ function VehicleDetailModal({ vehicle, onClose, unit = 'h', warnThreshold = 75 }
         {/* Stats grid */}
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
-            { label: 'Último', value: `${vehicle.ultimo_horimetro.toLocaleString('pt-BR')}${U}` },
-            { label: 'Atual', value: `${vehicle.horimetro_atual.toLocaleString('pt-BR')}${U}` },
-            { label: 'Próxima', value: `${proxima.toLocaleString('pt-BR')}${U}` },
+            { label: 'ÚLTIMO', value: `${vehicle.ultimo_horimetro.toLocaleString('pt-BR')}${U}` },
+            { label: 'ATUAL', value: `${vehicle.horimetro_atual.toLocaleString('pt-BR')}${U}` },
+            { label: 'PRÓXIMA', value: `${proxima.toLocaleString('pt-BR')}${U}` },
           ].map(s => (
             <div key={s.label} className="bg-white/50 dark:bg-slate-900/50 rounded-xl p-3 border border-border-color text-center">
               <p className="text-lg font-bold text-text-primary">{s.value}</p>
@@ -211,7 +211,7 @@ function VehicleDetailModal({ vehicle, onClose, unit = 'h', warnThreshold = 75 }
 
         {/* Progress bar */}
         <div className="mb-5">
-          <div className="flex justify-between text-xs text-text-muted mb-2">
+          <div className="flex justify-between text-xs text-text-muted mb-2 uppercase tracking-wider font-semibold">
             <span>Progresso desde última manutenção</span>
             <span>{progress.toFixed(0)}%</span>
           </div>
@@ -221,24 +221,24 @@ function VehicleDetailModal({ vehicle, onClose, unit = 'h', warnThreshold = 75 }
           </div>
           <div className="flex justify-between text-xs text-zinc-600 mt-1">
             <span>{vehicle.ultimo_horimetro.toLocaleString('pt-BR')}{U}</span>
-            <span className="text-zinc-400">Intervalo: {vehicle.intervalo_horas.toLocaleString('pt-BR')}{U}</span>
+            <span className="text-zinc-400 uppercase font-semibold">Intervalo: {vehicle.intervalo_horas.toLocaleString('pt-BR')}{U}</span>
             <span>{proxima.toLocaleString('pt-BR')}{U}</span>
           </div>
         </div>
 
         {/* Falta bar */}
-        <div className="p-4 rounded-xl border" style={{ borderColor: color + '40', backgroundColor: color + '15' }}>
+        <div className="p-4 rounded-xl border uppercase tracking-wider" style={{ borderColor: color + '40', backgroundColor: color + '15' }}>
           <div className="flex justify-between items-center">
-            <p className="text-sm font-medium" style={{ color }}>
-              {falta >= 0 ? `${U === 'km' ? 'Km restantes' : 'Horas restantes'} para manutenção` : `${U === 'km' ? 'Km em atraso' : 'Horas em atraso'}`}
+            <p className="text-sm font-bold" style={{ color }}>
+              {falta >= 0 ? `${U === 'km' ? 'KM RESTANTES' : 'HORAS RESTANTES'} PARA MANUTENÇÃO` : `${U === 'km' ? 'KM EM ATRASO' : 'HORAS EM ATRASO'}`}
             </p>
             <p className="text-2xl font-black" style={{ color }}>
               {falta >= 0 ? `+${falta.toLocaleString('pt-BR')}` : falta.toLocaleString('pt-BR')}{U}
             </p>
           </div>
           {vehicle.data_atualizacao && (
-            <p className="text-xs text-zinc-500 mt-2">
-              Última atualização: {vehicle.data_atualizacao.split('T')[0].split('-').reverse().join('/')}
+            <p className="text-xs text-zinc-500 mt-2 font-semibold">
+              ÚLTIMA ATUALIZAÇÃO: {vehicle.data_atualizacao.split('T')[0].split('-').reverse().join('/')}
             </p>
           )}
         </div>
@@ -342,7 +342,7 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
           </div>
           <div>
             <h1 className="text-lg font-black text-emerald-900 dark:text-emerald-100 tracking-wider uppercase leading-tight">
-              {unit === 'km' ? 'Controle de Km Rodados' : 'Controle de Horímetro'}
+              {(unit === 'km' ? 'Controle de Km Rodados' : 'Controle de Horímetro').toUpperCase()}
             </h1>
             <p className="text-emerald-700 dark:text-emerald-300 text-xs font-medium">
               {unit === 'km' ? 'Veículos Leves — Troca a cada 10.000 km' : 'Veículos Pesados — Intervalo padrão 500 horas'} — clique em qualquer barra
