@@ -66,11 +66,15 @@ export async function buscarOSporPlaca(
     return cached.data;
   }
   const supabase = createClient()
-  const agoraRef = new Date()
+  
   // D+1: nunca considerar dados do dia atual
-  const ontem = new Date(agoraRef)
-  ontem.setDate(ontem.getDate() - 1)
-  ontem.setHours(23, 59, 59, 999)
+  const agoraRef = new Date()
+  const ontemDate = new Date(agoraRef.getTime() - 24 * 60 * 60 * 1000)
+  const yyyy = ontemDate.getFullYear()
+  const mm = String(ontemDate.getMonth() + 1).padStart(2, '0')
+  const dd = String(ontemDate.getDate()).padStart(2, '0')
+  const ontemStr = `${yyyy}-${mm}-${dd}T23:59:59`
+  const ontemTime = parseLocal(ontemStr)
 
   let inicio: string
   let fim: string
@@ -90,34 +94,37 @@ export async function buscarOSporPlaca(
     if (cal) {
       inicio = cal.data_inicio
       // Aplicar D+1: nunca considerar além de ontem
-      const calFim = new Date(cal.data_fim + 'T23:59:59')
-      const fimEfetivo = calFim > ontem ? ontem : calFim
-      fim = fimEfetivo.toISOString()
+      const calFim = cal.data_fim + 'T23:59:59'
+      fim = calFim > ontemStr ? ontemStr : calFim
     } else {
       // Fallback: mês civil
       inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
       const lastDay = new Date(ano, mes, 0).getDate()
-      fim = `${ano}-${String(mes).padStart(2, '0')}-${lastDay}T23:59:59`
+      const calFim = `${ano}-${String(mes).padStart(2, '0')}-${lastDay}T23:59:59`
+      fim = calFim > ontemStr ? ontemStr : calFim
     }
   } else {
     // Sem filtro de data — retorna tudo
     const { data: eqData } = await supabase.from('equipamentos').select('id').ilike('placa', placa.trim()).maybeSingle();
     const eqId = eqData?.id;
-    if (!eqId) return [];
 
-    const { data, error } = await supabase
-      .from('ordens_servico')
-      .select('*')
-      .eq('equipamento_id', eqId)
+    let query = supabase.from('ordens_servico').select('*');
+    if (eqId) {
+      query = query.or(`equipamento_id.eq.${eqId},placa.ilike.${placa.trim()}`);
+    } else {
+      query = query.ilike('placa', placa.trim());
+    }
+
+    const { data, error } = await query
       // D+1: Nunca considerar OS abertas hoje
-      .lte("data_abertura", ontem.toISOString())
+      .lte("data_abertura", ontemStr)
       .order('data_abertura', { ascending: false })
-      .limit(50)
+      .limit(50);
     
     // Para as OS retornadas, calcular as horas respeitando D+1
     const result = (data || []).map(os => {
       const osStart = parseLocal(os.horario_parada || os.data_abertura)
-      const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontem.getTime()
+      const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontemTime
       let hMecCalculada = os.horas_manutencao || Math.max(0, (endMec - osStart) / 3600000)
       
       return {
@@ -130,9 +137,6 @@ export async function buscarOSporPlaca(
     return result;
   }
 
-  // OS que tocam o período:
-  // - Abertas até o fim do período (data_abertura ou horario_parada), E
-  // - Ainda não fechadas OU fechadas após o início do período
   // 1. Busca o ID do equipamento de forma robusta
   const { data: eqData } = await supabase
     .from('equipamentos')
@@ -141,19 +145,33 @@ export async function buscarOSporPlaca(
     .maybeSingle();
 
   const eqId = eqData?.id;
-  if (!eqId) return [];
 
-  // OS que tocam o período:
-  const { data, error } = await supabase
+  let query = supabase
     .from('ordens_servico')
-    .select('*, equipamento:equipamento_id(placa)')
-    .eq('equipamento_id', eqId)
-    .or(`data_abertura.lte.${fim},horario_parada.lte.${fim}`)
-    .or(`data_fechamento.is.null,data_fechamento.gte.${inicio}`)
-    .order('data_abertura', { ascending: false })
-    .limit(100);
+    .select('*, equipamento:equipamento_id(placa)');
+
+  if (eqId) {
+    query = query.or(`equipamento_id.eq.${eqId},placa.ilike.${placa.trim()}`);
+  } else {
+    query = query.ilike('placa', placa.trim());
+  }
+
+  const { data, error } = await query.order('data_abertura', { ascending: false });
 
   if (error || !data) return [];
+
+  const inicioTime = parseLocal(inicio);
+  const fimTime = parseLocal(fim);
+
+  // Filtra localmente por data usando parseLocal (segurança total contra timezones no banco)
+  const osFiltradasData = data.filter(os => {
+    const osStart = parseLocal(os.horario_parada || os.data_abertura);
+    const osEnd = os.data_fechamento ? parseLocal(os.data_fechamento) : null;
+
+    const part1 = osStart <= fimTime;
+    const part2 = !osEnd || osEnd >= inicioTime;
+    return part1 && part2;
+  });
 
   // --- Coleta de Dados da Escala ---
   const { data: escala } = await supabase
@@ -162,11 +180,11 @@ export async function buscarOSporPlaca(
     .ilike('placa', placa.trim())
     .maybeSingle();
 
-  const osCalculadas = (data || []).map((os: any) => {
+  const osCalculadas = osFiltradasData.map((os: any) => {
     let hImpactoDO = 0
     const osStart = parseLocal(os.horario_parada || os.data_abertura)
     // Regra D+1: se aberta, conta apenas até ontem
-    const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontem.getTime()
+    const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontemTime
 
     // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
     let osEndDO = endMec

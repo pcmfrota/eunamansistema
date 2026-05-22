@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Legend,
-  XAxis, YAxis, CartesianGrid, Tooltip, Cell, ReferenceLine
+  XAxis, YAxis, CartesianGrid, Tooltip, Cell, ReferenceLine,
+  LineChart, Line, Area, AreaChart
 } from "recharts";
 import {
   X, Truck, ClipboardList, CheckCircle2, Clock,
@@ -1420,6 +1421,132 @@ export function GraficoDMModulo({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Gráfico DM Mensal ────────────────────────────────────────────────────────
+export type DMMensalItem = { mes: string; dm: number; doOp: number };
+
+interface GraficoDMMensalProps {
+  dados: DMMensalItem[];
+  loading?: boolean;
+}
+
+export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const tickC = isDark ? "#94a3b8" : "#64748b";
+  const grid = isDark ? "#1e293b" : "#e2e8f0";
+  const labelC = isDark ? "#f8fafc" : "#0f172a";
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const dm = payload.find((p: any) => p.dataKey === "dm");
+    const doOp = payload.find((p: any) => p.dataKey === "doOp");
+    return (
+      <div className="bg-white dark:bg-[#1a1f2e] rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 p-3 text-xs pointer-events-none min-w-[140px]">
+        <p className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-2">{label}</p>
+        {dm && (
+          <p className="flex justify-between gap-4 mb-1">
+            <span className="text-zinc-500">DM (Mecânica):</span>
+            <span className="font-bold" style={{ color: dm.value >= 95 ? "#22c55e" : dm.value >= 90 ? "#f59e0b" : "#ef4444" }}>
+              {dm.value.toFixed(1)}%
+            </span>
+          </p>
+        )}
+        {doOp && (
+          <p className="flex justify-between gap-4">
+            <span className="text-zinc-500">DO (Operacional):</span>
+            <span className="font-bold text-orange-500">{doOp.value.toFixed(1)}%</span>
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
+      <div className="flex justify-between items-center mb-5">
+        <div>
+          <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200">DM por Mês</h3>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Disponibilidade Mecânica — últimos 6 meses</p>
+        </div>
+        <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            DM Mecânica
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-orange-400" />
+            DO Operacional
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+        </div>
+      ) : dados.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-zinc-400 text-sm">Sem dados disponíveis.</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={dados} margin={{ top: 20, right: 16, left: -16, bottom: 8 }}>
+            <defs>
+              <linearGradient id="gradDM" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#22c55e" stopOpacity={isDark ? 0.25 : 0.18} />
+                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gradDO" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#f97316" stopOpacity={isDark ? 0.22 : 0.15} />
+                <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+            <XAxis
+              dataKey="mes"
+              tick={{ fill: tickC, fontSize: 11, fontWeight: 700 }}
+              tickLine={false}
+              axisLine={{ stroke: grid }}
+            />
+            <YAxis
+              domain={[60, 100]}
+              tick={{ fill: isDark ? "#64748b" : "#94a3b8", fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => `${v}%`}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: isDark ? "#334155" : "#cbd5e1", strokeWidth: 1.5 }} />
+            <ReferenceLine
+              y={95}
+              stroke="#22c55e"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              label={{ value: "Meta 95%", fill: "#22c55e", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
+            />
+            <Area
+              type="monotone"
+              dataKey="dm"
+              stroke="#22c55e"
+              strokeWidth={2.5}
+              fill="url(#gradDM)"
+              dot={{ fill: "#22c55e", r: 4, strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: "#22c55e", strokeWidth: 0 }}
+            />
+            <Area
+              type="monotone"
+              dataKey="doOp"
+              stroke="#f97316"
+              strokeWidth={2}
+              fill="url(#gradDO)"
+              dot={{ fill: "#f97316", r: 3.5, strokeWidth: 0 }}
+              activeDot={{ r: 5.5, fill: "#f97316", strokeWidth: 0 }}
+              strokeDasharray="5 3"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

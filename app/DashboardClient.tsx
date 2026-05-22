@@ -6,6 +6,7 @@ import { Loader2, RefreshCcw } from "lucide-react";
 import { Filtros, type FiltrosValues } from "@/components/filtros";
 import { gerarSlideHTML } from "@/lib/gerar-slide";
 import { getDashboardData, type DashboardData } from "@/app/actions/dashboard";
+import { getHistoricoMensal } from "@/app/actions/historico";
 
 // Componentes estáticos que não usam bibliotecas pesadas de gráficos
 import { PainelFormulas } from "@/components/graficos";
@@ -22,6 +23,7 @@ const GraficoDispTipo = dynamic(() => import("@/components/graficos").then((mod)
 const TabelaStatusFrota = dynamic(() => import("@/components/graficos").then((mod) => mod.TabelaStatusFrota), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDispCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDMModulo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMModulo), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoDMMensal = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMMensal), { ssr: false, loading: () => <CarregandoGrafico /> });
 
 function CarregandoGrafico() {
   return (
@@ -56,6 +58,18 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const [filtros, setFiltros] = useState<FiltrosValues>(defaultFiltros);
   const [mostrarIndisp, setMostrarIndisp] = useState(false);
   const [availabilityType, setAvailabilityType] = useState<"DM" | "DO">("DM");
+  const [historicoMensal, setHistoricoMensal] = useState<{ mes: string; dm: number; doOp: number }[]>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+
+  // Busca histórico mensal de DM (últimos 6 meses)
+  useEffect(() => {
+    setLoadingHistorico(true);
+    const categoria = filtros.categoria || "PESADA";
+    getHistoricoMensal(categoria)
+      .then(setHistoricoMensal)
+      .catch(() => setHistoricoMensal([]))
+      .finally(() => setLoadingHistorico(false));
+  }, [filtros.categoria]);
 
   // Busca inicial caso não tenha dados vindos do servidor
   useEffect(() => {
@@ -292,6 +306,9 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         <GraficoDispCategoria dados={data.dispPorCategoria} periodoLabel={data.periodoLabel} />
 
         <GraficoDMModulo dados={data.dispPorModulo} />
+
+        {/* Gráfico de tendência mensal de DM */}
+        <GraficoDMMensal dados={historicoMensal} loading={loadingHistorico} />
 
         <div className="grid grid-cols-1 gap-6">
           <RankingFalhas dados={data.rankingFalhas} />
