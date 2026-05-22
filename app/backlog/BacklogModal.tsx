@@ -39,7 +39,7 @@ const getCurrentLocalDatetime = () => {
 
 const initialValues = {
   data_evidencia: getCurrentLocalDatetime(),
-  status: 'Aberta',
+  status: 'PENDENTE',
   criticidade: 'B',
   semana: '', mes: '', ano: '', modulo: '', regiao_programa: '',
   frota: '', tag: '', tipo: '', descricao: '', origem: '',
@@ -89,7 +89,7 @@ export default function BacklogModal({
 
   // Auto-preencher data de conclusão ao encerrar
   useEffect(() => {
-    if (form.status === 'Encerrada' && !form.data_conclusao) {
+    if (form.status === 'ENCERRADO' && !form.data_conclusao) {
       setForm(prev => ({ ...prev, data_conclusao: getCurrentLocalDatetime() }))
     }
   }, [form.status, form.data_conclusao, setForm])
@@ -193,7 +193,7 @@ export default function BacklogModal({
                      <Field label="Criticidade">
                         <select className={inputCls} value={form.criticidade} onChange={e => setForm({...form, criticidade: e.target.value})}>
                           <option value="A">A - CRÍTICO</option>
-                          <option value="B">B - ALTO</option>
+                          <option value="B">B - NORMAL</option>
                         </select>
                      </Field>
                      <Field label="Tipo">
@@ -241,9 +241,9 @@ export default function BacklogModal({
                     </Field>
                     <Field label="Status Atual" span={2}>
                        <select className={inputCls} value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                          <option value="Aberta">🟡 Aberta</option>
-                          <option value="Em Andamento">🔵 Em Andamento</option>
-                          <option value="Encerrada">✅ Encerrada</option>
+                          <option value="PENDENTE">🟡 PENDENTE</option>
+                          <option value="PROGRAMADO">🟢 PROGRAMADO</option>
+                          <option value="ENCERRADO">✅ ENCERRADO</option>
                        </select>
                     </Field>
                  </div>

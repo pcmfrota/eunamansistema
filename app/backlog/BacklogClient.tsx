@@ -25,7 +25,7 @@ import BacklogImportModal from './BacklogImportModal';
 import BacklogDashboard from './BacklogDashboard';
 import { PremiumLoader } from '@/components/premium-loader';
 
-type Placa = { id: string; placa: string; modulo: string | null };
+type Placa = { id: string; placa: string; modulo: string | null; area: string | null };
 
 export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const { profile } = useAuth();
@@ -34,7 +34,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento'>('Geral');
+  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento'>('Dashboard');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -230,7 +230,8 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
         </div>
 
         {/* Row 2: Search + Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+        {view !== 'Dashboard' && (
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           {/* Text search */}
           <div className="relative flex-1 group">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -324,15 +325,16 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
           >
             <option value="">⚠️ TODA CRITICIDADE</option>
             {criticidadeOptions.map(c => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>
             ))}
           </select>
         </div>
+        )}
       </div>
 
       {view === 'Dashboard' ? (
         /* Dashboard View */
-        <BacklogDashboard items={items} placas={placas} />
+        <BacklogDashboard items={items} placas={placas} onEdit={handleEdit} onDelete={handleDelete} />
       ) : (
         <>
           {/* Multi-Select Floating Bar */}
@@ -364,7 +366,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
           <div className="flex-1 min-h-[400px]">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-full py-20 bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800">
-                <PremiumLoader type="squares-sequential" text="Carregando Backlog" subtext="Calculando aging e prioridades..." />
+                <PremiumLoader type="squares-sequential" text="Carregando Backlog" subtext="Calculando aging e criticidades..." />
               </div>
             ) : (
               <BacklogTable 

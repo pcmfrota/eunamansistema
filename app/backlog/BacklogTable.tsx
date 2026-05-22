@@ -27,27 +27,47 @@ interface BacklogTableProps {
   view: 'Geral' | 'Detalhamento'
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    'Aberta': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border-amber-200 dark:border-amber-800',
-    'Em Andamento': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-    'Encerrada': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+function StatusBadge({ status, statusProg }: { status: string, statusProg?: string }) {
+  // Normalize Status
+  let mappedStatus = 'PENDENTE'
+  const statusLower = String(status || '').toLowerCase()
+  const progLower = String(statusProg || '').toLowerCase()
+  if (statusLower === 'encerrada' || statusLower === 'concluída' || statusLower === 'concluido' || statusLower === 'encerrado') {
+    mappedStatus = 'ENCERRADO'
+  } else if (progLower === 'programado' || statusLower === 'programada' || statusLower === 'programado') {
+    mappedStatus = 'PROGRAMADO'
   }
+
+  const styles: Record<string, string> = {
+    'PENDENTE': 'bg-[#fef9c3] text-[#ca8a04] dark:bg-yellow-950/40 dark:text-yellow-400 border-[#fef08a] dark:border-yellow-900/50',
+    'PROGRAMADO': 'bg-[#dcfce7] text-[#16a34a] dark:bg-emerald-950/40 dark:text-emerald-400 border-[#bbf7d0] dark:border-emerald-900/50',
+    'ENCERRADO': 'bg-[#e2e8f0] text-[#475569] dark:bg-zinc-800 dark:text-zinc-400 border-[#cbd5e1] dark:border-zinc-700'
+  }
+
   return (
-    <span className={cn("px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm", styles[status] || styles['Aberta'])}>
-      {status}
+    <span className={cn("px-2.5 py-1 rounded border text-[8px] font-black uppercase tracking-widest shadow-sm", styles[mappedStatus] || styles['PENDENTE'])}>
+      {mappedStatus}
     </span>
   )
 }
 
 function CritBadge({ crit }: { crit: string }) {
-  const styles: Record<string, string> = {
-    'A': 'bg-red-500 text-white shadow-red-500/20',
-    'B': 'bg-orange-500 text-white shadow-orange-500/20',
+  const critUpper = String(crit || 'B').toUpperCase().trim();
+  
+  // Normalize priority to A / B
+  let mapped = 'B';
+  if (critUpper === 'A' || critUpper === 'INTERDIÇÃO' || critUpper === 'INTERDICAO' || critUpper === 'ALTA') {
+    mapped = 'A';
   }
+
+  const styles: Record<string, string> = {
+    'A': 'bg-[#fde8e8] text-[#e74c3c] dark:bg-red-950/40 dark:text-red-400 border-red-200 dark:border-red-900/50',
+    'B': 'bg-[#ebf5fb] text-[#2563eb] dark:bg-blue-950/40 dark:text-blue-400 border-blue-200 dark:border-blue-900/50',
+  }
+
   return (
-    <span className={cn("w-6 h-6 flex items-center justify-center rounded-lg text-[10px] font-black shadow-lg border-b-2 border-black/10", styles[crit] || 'bg-zinc-500 text-white')}>
-      {crit}
+    <span className={cn("px-2.5 py-1 rounded text-[8px] font-black uppercase tracking-widest border shadow-sm", styles[mapped] || styles['B'])}>
+      {mapped}
     </span>
   )
 }
@@ -135,7 +155,7 @@ export default function BacklogTable({
                        <CritBadge crit={item.criticidade} />
                     </td>
                     <td className="px-4 py-4">
-                       <StatusBadge status={item.status} />
+                       <StatusBadge status={item.status} statusProg={item.status_programacao} />
                     </td>
                     <td className="px-4 py-4">
                        <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-400">
