@@ -52,11 +52,11 @@ function DarkTooltip({ active, payload, label }: any) {
 // ─── KPI Card ────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-[#0f1623] p-5 flex flex-col gap-1 shadow-lg">
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 flex flex-col gap-1 shadow-sm">
       <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl" style={{ background: color }} />
-      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{label}</p>
+      <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{label}</p>
       <p className="text-4xl font-black leading-none mt-1" style={{ color }}>{value}</p>
-      {sub && <p className="text-xs text-zinc-600 mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{sub}</p>}
     </div>
   );
 }
@@ -65,23 +65,23 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
 function OsBarChart({ title, data, color = "#22c55e" }: { title: string; data: { name: string; qty: number }[]; color?: string }) {
   if (!data.length) {
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5 flex flex-col gap-3">
-        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{title}</p>
-        <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Sem dados no período</div>
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 flex flex-col gap-3 shadow-sm">
+        <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">{title}</p>
+        <div className="flex items-center justify-center h-40 text-zinc-400 dark:text-zinc-600 text-sm">Sem dados no período</div>
       </div>
     );
   }
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5">
-      <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">{title}</p>
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 shadow-sm">
+      <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest mb-4">{title}</p>
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 14, right: 8, left: -20, bottom: 60 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-          <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 10, fontWeight: 700 }} angle={-38} textAnchor="end" interval={0} />
-          <YAxis tick={{ fill: "#64748b", fontSize: 10 }} allowDecimals={false} />
-          <Tooltip content={<DarkTooltip />} />
+        <BarChart data={data} margin={{ top: 20, right: 8, left: -20, bottom: 60 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" vertical={false} opacity={0.3} />
+          <XAxis dataKey="name" tick={{ fill: "#71717a", fontSize: 10, fontWeight: 700 }} angle={-38} textAnchor="end" interval={0} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#71717a", fontSize: 10 }} allowDecimals={false} axisLine={false} tickLine={false} />
+          <Tooltip content={<DarkTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
           <Bar dataKey="qty" name="OS" fill={color} radius={[4, 4, 0, 0]}
-            label={{ position: "top", fill: "#e2e8f0", fontSize: 10, fontWeight: 700 }} />
+            label={{ position: "top", fill: "#71717a", fontSize: 10, fontWeight: 700 }} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -416,17 +416,17 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       </div>
 
       {/* ── Barra de filtros ── */}
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-800 bg-[#0f1623] p-4 shadow">
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-4 shadow-sm">
         {/* Período Suzano */}
         <div className="flex flex-col gap-1 min-w-[160px]">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Período Operacional Suzano</label>
+          <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Período Operacional Suzano</label>
           {isPending && !periodos.length ? (
-            <div className="px-3 py-2 text-xs text-zinc-500 rounded-lg border border-zinc-700 bg-zinc-900">Carregando períodos...</div>
+            <div className="px-3 py-2 text-xs text-zinc-500 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#1e2028]">Carregando períodos...</div>
           ) : (
             <select
               value={periodoKey}
               onChange={e => setPeriodoKey(e.target.value)}
-              className="px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+              className="px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#1e2028] text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 cursor-pointer font-bold"
             >
               {periodos.map(p => (
                 <option key={`${p.mes}-${p.ano}`} value={`${p.mes}-${p.ano}`}>
@@ -439,18 +439,18 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
 
         {/* Placa */}
         <div className="flex flex-col gap-1 min-w-[150px]">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Placa</label>
+          <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Placa</label>
           <select value={filtroPlaca} onChange={e => setFiltroPlaca(e.target.value)}
-            className="px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30">
+            className="px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#1e2028] text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer font-bold">
             {placas.map(p => <option key={p}>{p}</option>)}
           </select>
         </div>
 
         {/* Classe */}
         <div className="flex flex-col gap-1 min-w-[160px]">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Tipo de Manutenção</label>
+          <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-widest">Tipo de Manutenção</label>
           <select value={filtroClasse} onChange={e => setFiltroClasse(e.target.value)}
-            className="px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30">
+            className="px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#1e2028] text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer font-bold">
             <option>Todos</option>
             <option>CORRETIVA</option>
             <option>PREVENTIVA</option>
@@ -467,10 +467,10 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
           </button>
           
           <div className="text-right">
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Período ativo</p>
-            <p className="text-lg font-black text-green-400">{periodoLabel}</p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Período ativo</p>
+            <p className="text-lg font-black text-green-600 dark:text-green-400">{periodoLabel}</p>
             {periodoSelecionado && (
-              <p className="text-[10px] text-zinc-600 mt-0.5">
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
                 {periodoSelecionado.data_inicio} → {periodoSelecionado.data_fim}
               </p>
             )}
@@ -499,37 +499,37 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <OsBarChart title="QTD de O.S × Classe de Manutenção" data={porClasse} color="#a78bfa" />
 
-        <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5">
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 shadow-sm">
+          <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest mb-4">
             Espelho Resumido — {periodoLabel}
           </p>
           <div className="overflow-auto max-h-[240px]">
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left py-2 px-3 text-[10px] text-zinc-500 uppercase">Nº OS</th>
-                  <th className="text-left py-2 px-3 text-[10px] text-zinc-500 uppercase">Placa</th>
-                  <th className="text-left py-2 px-3 text-[10px] text-zinc-500 uppercase">Sistema</th>
-                  <th className="text-left py-2 px-3 text-[10px] text-zinc-500 uppercase">Status</th>
+                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="text-left py-2 px-3 text-[10px] text-zinc-400 dark:text-zinc-500 uppercase">Nº OS</th>
+                  <th className="text-left py-2 px-3 text-[10px] text-zinc-400 dark:text-zinc-500 uppercase">Placa</th>
+                  <th className="text-left py-2 px-3 text-[10px] text-zinc-400 dark:text-zinc-500 uppercase">Sistema</th>
+                  <th className="text-left py-2 px-3 text-[10px] text-zinc-400 dark:text-zinc-500 uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {ordensFiltradas.slice(0, 50).map(o => (
-                  <tr key={o.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                  <tr key={o.id} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
                     <td className="py-2 px-3 font-mono text-[11px] text-zinc-500">{o.numero_os}</td>
-                    <td className="py-2 px-3 font-bold text-amber-400 text-[12px]">{o.placa ?? "-"}</td>
-                    <td className="py-2 px-3 text-zinc-400 text-[11px]">{o.sistema ?? "-"}</td>
+                    <td className="py-2 px-3 font-bold text-amber-600 dark:text-amber-400 text-[12px]">{o.placa ?? "-"}</td>
+                    <td className="py-2 px-3 text-zinc-600 dark:text-zinc-400 text-[11px]">{o.sistema ?? "-"}</td>
                     <td className="py-2 px-3">
                       {(o.status === "Fechada" || o.status === "Concluída")
-                        ? <span className="text-[10px] font-bold text-emerald-400">✅ Fechada</span>
+                        ? <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">✅ Fechada</span>
                         : o.status === "Em Andamento"
-                          ? <span className="text-[10px] font-bold text-amber-400">⚙️ Em Andamento</span>
-                          : <span className="text-[10px] font-bold text-blue-400">📋 Aberta</span>}
+                          ? <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">⚙️ Em Andamento</span>
+                          : <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">📋 Aberta</span>}
                     </td>
                   </tr>
                 ))}
                 {ordensFiltradas.length === 0 && (
-                  <tr><td colSpan={4} className="py-10 text-center text-zinc-600 text-sm">Sem OS no período selecionado</td></tr>
+                  <tr><td colSpan={4} className="py-10 text-center text-zinc-400 dark:text-zinc-600 text-sm">Sem OS no período selecionado</td></tr>
                 )}
               </tbody>
             </table>
@@ -538,17 +538,17 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       </div>
 
       {/* ══ Gráfico DM por Módulo ══ */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 shadow-sm">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+            <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest">
               Disponibilidade Mecânica (DM%) por Módulo
             </p>
-            <p className="text-[11px] text-zinc-600 mt-0.5">
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
               Fórmula PCM: DM = ((H_Total - H_Manut) / H_Total) × 100 · Meta: ≥ 95%
             </p>
           </div>
-          <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
+          <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> ≥ 95%</div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> 90–94%</div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> &lt; 90%</div>
@@ -556,7 +556,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
         </div>
 
         {dmPorModulo.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Sem dados de módulo no período selecionado.</div>
+          <div className="flex items-center justify-center h-40 text-zinc-400 dark:text-zinc-600 text-sm">Sem dados de módulo no período selecionado.</div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <BarChart
@@ -564,23 +564,23 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
               margin={{ top: 24, right: 16, left: -16, bottom: 8 }}
               barCategoryGap="20%"
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" vertical={false} opacity={0.3} />
               <XAxis
                 dataKey="modulo"
-                tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 700 }}
+                tick={{ fill: "#71717a", fontSize: 11, fontWeight: 700 }}
                 tickLine={false}
-                axisLine={{ stroke: "#1e293b" }}
+                axisLine={{ stroke: "#cbd5e1" }}
                 interval={0}
               />
               <YAxis
                 domain={[0, 100]}
-                tick={{ fill: "#64748b", fontSize: 11 }}
+                tick={{ fill: "#71717a", fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `${v}%`}
               />
               <Tooltip
-                cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                cursor={{ fill: "rgba(0,0,0,0.03)" }}
                 content={({ active, payload }: any) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload;
@@ -607,7 +607,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
                 label={{ value: "Meta 95%", fill: "#22c55e", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
               />
               <Bar dataKey="dm" radius={[4, 4, 0, 0]}
-                label={{ position: "top", fill: "#e2e8f0", fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}
+                label={{ position: "top", fill: "#71717a", fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}
               >
                 {dmPorModulo.map((entry, index) => (
                   <Cell
@@ -622,21 +622,21 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       </div>
 
       {/* ══ Gráficos de Linha ══ */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5">
-        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 shadow-sm">
+        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest mb-1">
           % de O.S por Mês Suzano — Distribuição Percentual por Ano
         </p>
-        <p className="text-[11px] text-zinc-600 mb-4">
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-4">
           Mostra qual % do total anual de OS foi registrada em cada mês operacional. Identifica sazonalidade e picos.
         </p>
         {anosDisponiveis.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dadosPctMensal} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="mes" tick={{ fill: "#64748b", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} unit="%" domain={[0, "auto"]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.3} />
+              <XAxis dataKey="mes" tick={{ fill: "#71717a", fontSize: 11, fontWeight: 700 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: "#71717a", fontSize: 11 }} unit="%" domain={[0, "auto"]} tickLine={false} axisLine={false} />
               <Tooltip content={<DarkTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#71717a" }} />
               {anosDisponiveis.map((ano, i) => (
                 <Line key={ano} type="monotone" dataKey={String(ano)} stroke={LINE_COLORS[i % LINE_COLORS.length]}
                   strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} name={String(ano)} />
@@ -644,25 +644,25 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Carregando dados do calendário Suzano...</div>
+          <div className="flex items-center justify-center h-40 text-zinc-400 dark:text-zinc-650 text-sm">Carregando dados do calendário Suzano...</div>
         )}
       </div>
 
-      <div className="rounded-2xl border border-zinc-800 bg-[#0f1623] p-5">
-        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#12141c] p-5 shadow-sm">
+        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest mb-1">
           Quantidade de O.S Fechadas por Mês Suzano — Evolução por Ano
         </p>
-        <p className="text-[11px] text-zinc-600 mb-4">
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-4">
           Acompanha a produção da equipe: quantas OS foram encerradas em cada mês, comparando anos.
         </p>
         {anosDisponiveis.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dadosOsFechadas} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="mes" tick={{ fill: "#64748b", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.3} />
+              <XAxis dataKey="mes" tick={{ fill: "#71717a", fontSize: 11, fontWeight: 700 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: "#71717a", fontSize: 11 }} allowDecimals={false} tickLine={false} axisLine={false} />
               <Tooltip content={<DarkTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#71717a" }} />
               {anosDisponiveis.map((ano, i) => (
                 <Line key={ano} type="monotone" dataKey={String(ano)} stroke={LINE_COLORS[i % LINE_COLORS.length]}
                   strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }}
@@ -671,14 +671,14 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Carregando dados do calendário Suzano...</div>
+          <div className="flex items-center justify-center h-40 text-zinc-400 dark:text-zinc-650 text-sm">Carregando dados do calendário Suzano...</div>
         )}
       </div>
 
-      <div className="text-center text-[10px] text-zinc-700 pb-2">
+      <div className="text-center text-[10px] text-zinc-500 dark:text-zinc-400 pb-2">
         {ordens.length} OS no banco · Período exibido: {periodoLabel}
         {periodoSelecionado && ` (${periodoSelecionado.data_inicio} → ${periodoSelecionado.data_fim})`}
-        <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold border border-emerald-200">
+        <span className="ml-2 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded text-[9px] font-bold border border-emerald-200 dark:border-emerald-500/20">
           Dados até: {dataAtualizacao} (D+1)
         </span>
       </div>
