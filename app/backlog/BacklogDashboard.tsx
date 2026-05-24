@@ -219,6 +219,18 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
       .map(([name, value]) => ({ name, value }))
   }, [filtered])
 
+  // Horizontal Bar Chart: Etiqueta por Módulo
+  const barModuloData = useMemo(() => {
+    const map: Record<string, number> = {}
+    filtered.forEach(i => {
+      const key = i.modulo || 'N/A'
+      map[key] = (map[key] || 0) + 1
+    })
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
   // Trend Column Chart: Tendência de Etiquetas (Month to month)
   const trendData = useMemo(() => {
     const map: Record<string, number> = {}
@@ -392,6 +404,55 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                 <Bar
                   dataKey="value"
                   fill="#0055b8"
+                  radius={[0, 4, 4, 0]}
+                  label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                  barSize={14}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Card: ETIQUETA POR MÓDULOS */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
+          <div className="border-l-4 border-[#00a859] pl-3 mb-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+              ETIQUETA POR MÓDULOS
+            </h3>
+          </div>
+
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={barModuloData}
+                layout="vertical"
+                margin={{ left: -10, right: 30, top: 10, bottom: 10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+                <XAxis type="number" hide />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={110}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0]
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-[#00a859]">{data.value}</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar
+                  dataKey="value"
+                  fill="#00a859"
                   radius={[0, 4, 4, 0]}
                   label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                   barSize={14}
