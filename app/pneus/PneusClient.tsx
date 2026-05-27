@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth-context";
 import PneusModal from "./PneusModal";
 import PneusImportModal from "./PneusImportModal";
 import PneusAIReport from "./PneusAIReport";
+import PneuEsquemaModal from "./PneuEsquemaModal";
 import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
@@ -114,6 +115,7 @@ export default function PneusClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moduloFiltro, setModuloFiltro] = useState<string>("TODOS");
   const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
+  const [selectedSchematic, setSelectedSchematic] = useState<Inspecao | null>(null);
 
   const toggleModulo = (mod: string) => {
     const next = new Set(collapsedModulos);
@@ -842,7 +844,10 @@ export default function PneusClient({
                               return (
                                 <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
                                   <td className="px-6 py-3">
-                                    <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">
+                                    <span 
+                                      onClick={() => setSelectedSchematic(ins)}
+                                      className="block text-sm text-zinc-900 dark:text-zinc-50 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                                    >
                                       {ins.equipamentos?.placa}
                                       {(ins as any)._isPendingSync && (
                                         <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
@@ -883,7 +888,23 @@ export default function PneusClient({
                               return (
                                 <tr key={`pendente-${row.eq.id}`} className="bg-zinc-50/30 dark:bg-zinc-900/20 border-l-2 border-dashed border-zinc-300 dark:border-zinc-700 opacity-70">
                                   <td className="px-6 py-3">
-                                    <span className="block text-sm text-zinc-500 dark:text-zinc-400 font-black">
+                                    <span 
+                                      onClick={() => setSelectedSchematic({
+                                        id: `pendente-${row.eq.id}`,
+                                        equipamento_id: row.eq.id,
+                                        data_inspecao: new Date().toISOString(),
+                                        km_atual: null,
+                                        de: null, dd: null, tei: null, tee: null, tdi: null, tde: null, tei1: null, tee1: null, tdi1: null, tde1: null, estepe: null,
+                                        condicao: "PENDENTE",
+                                        equipamentos: {
+                                          placa: row.eq.placa,
+                                          tipo: row.eq.tipo,
+                                          modulo: row.eq.modulo,
+                                          categoria: row.eq.categoria
+                                        }
+                                      })}
+                                      className="block text-sm text-zinc-500 dark:text-zinc-400 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                                    >
                                       {row.eq.placa}
                                     </span>
                                     <span className="text-[9px] text-zinc-300 dark:text-zinc-600 block tracking-widest italic">sem boletim no período</span>
@@ -997,7 +1018,12 @@ export default function PneusClient({
                       <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors group">
                         <td className="px-6 py-4"><input type="checkbox" checked={selectedIds.has(ins.id)} onChange={() => toggleSelect(ins.id)} /></td>
                         <td className="px-4 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
-                          {ins.equipamentos?.placa}
+                          <span
+                            onClick={() => setSelectedSchematic(ins)}
+                            className="hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                          >
+                            {ins.equipamentos?.placa}
+                          </span>
                           {ins._isPendingSync && (
                             <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão">
                               <RefreshCw size={9} className="animate-spin mr-1" />
@@ -1046,7 +1072,14 @@ export default function PneusClient({
                   <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
                     {filteredInspecoesRows.map(ins => (
                       <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
-                        <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">{ins.equipamentos?.placa}</td>
+                        <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
+                          <span
+                            onClick={() => setSelectedSchematic(ins)}
+                            className="hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                          >
+                            {ins.equipamentos?.placa}
+                          </span>
+                        </td>
                         <td className="px-4 py-4 text-zinc-500">{fmtDate(ins.data_inspecao)}</td>
                         <td className="px-4 py-4 text-center font-black text-blue-600">{ins.km_atual || '??'}</td>
                         {POSICOES.map(p => (
@@ -1087,6 +1120,13 @@ export default function PneusClient({
         <PneusAIReport 
           inspecoes={inspecoes} 
           onClose={() => setIsAIReportOpen(false)} 
+        />
+      )}
+
+      {selectedSchematic && (
+        <PneuEsquemaModal
+          inspecao={selectedSchematic}
+          onClose={() => setSelectedSchematic(null)}
         />
       )}
     </div>
