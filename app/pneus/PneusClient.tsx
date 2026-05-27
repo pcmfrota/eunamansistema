@@ -14,7 +14,7 @@ import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null };
+type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
 type Inspecao = {
   id: string;
   equipamento_id: string;
@@ -25,7 +25,7 @@ type Inspecao = {
   tei1: number | null; tee1: number | null; tdi1: number | null; tde1: number | null;
   estepe: number | null;
   condicao: string;
-  equipamentos?: { placa: string; tipo?: string | null };
+  equipamentos?: { placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
 };
 
 const POSICOES = ["de","dd","tei","tee","tdi","tde","tei1","tee1","tdi1","tde1","estepe"] as const;
@@ -62,7 +62,7 @@ function fmtDate(dateStr: string | null) {
   return `${d}/${m}/${y}`;
 }
 
-type Tab = "dashboard" | "lista" | "historico";
+type Tab = "dashboard" | "leves" | "lista" | "historico";
 
 export default function PneusClient({
   equipamentos,
@@ -106,11 +106,20 @@ export default function PneusClient({
   const isVisitante = profile?.role === "visitante";
 
   const [tab, setTab] = useState<Tab>("dashboard");
+  const handleSetTab = (t: Tab) => { setTab(t); setModuloFiltro("TODOS"); };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAIReportOpen, setIsAIReportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Inspecao | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moduloFiltro, setModuloFiltro] = useState<string>("TODOS");
+  const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
+
+  const toggleModulo = (mod: string) => {
+    const next = new Set(collapsedModulos);
+    if (next.has(mod)) next.delete(mod); else next.add(mod);
+    setCollapsedModulos(next);
+  };
 
   // Pré-carrega SheetJS via CDN para Export e Import
   useEffect(() => {
@@ -210,37 +219,110 @@ export default function PneusClient({
     setDateFim(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`);
   };
 
-  // ── Dashboard Logic (Latest per Plate) ──
-  // Ponto 4: "Sempre que lançar um novo... deixar o mais recente no dashboard"
-  const latestByEq = Object.values(filteredInspecoesRows.reduce((acc, current) => {
-    // Como os dados veem do Supabase ordenados do mais recente (DESC),
-    // a PRIMEIRA ocorrência é garantidamente o último boletim lançado
-    if (!acc[current.equipamento_id]) {
-      acc[current.equipamento_id] = current;
-    }
-    return acc;
-  }, {} as Record<string, Inspecao>));
+  // ── Unified row type ──
+  type DashRow = 
+    | { kind: 'inspecao'; ins: Inspecao }
+    | { kind: 'pendente'; eq: Equipamento };
 
-  const counts = { BOM: 0, REGULAR: 0, ATENCAO: 0, CRITICO: 0, TROCAR: 0 };
-  latestByEq.forEach(ins => { 
-    if (ins.condicao in counts) (counts as any)[ins.condicao]++; 
-    else if (ins.condicao === 'REGULAR') counts.ATENCAO++;
-  });
-  const total = latestByEq.length || 1;
-  const criticos = latestByEq.filter(i => i.condicao === "CRITICO" || i.condicao === "TROCAR");
-  const pieData = Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
-  
-  const globalLatestDate = latestByEq.length > 0 
-    ? latestByEq.reduce((latest, current) => {
-        const d = current.data_inspecao;
-        return !latest || d > latest ? d : latest;
-      }, "") 
-    : null;
+  // ── Per-module KPI helper ──
+  const getModuloCounts = (items: DashRow[]) => {
+    const c = { BOM: 0, REGULAR: 0, ATENCAO: 0, CRITICO: 0, TROCAR: 0, PENDENTE: 0 };
+    items.forEach(row => {
+      if (row.kind === 'pendente') { c.PENDENTE++; return; }
+      const cond = row.ins.condicao;
+      if (cond in c) (c as any)[cond]++;
+    });
+    return c;
+  };
 
-  const posMedia = POSICOES.map(pos => {
-    const vals = latestByEq.map(i => i[pos]).filter(v => v != null) as number[];
-    return { pos: pos.toUpperCase(), media: vals.length ? Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10 : 0 };
-  }).filter(d => d.media > 0);
+  // ── Build dashboard data for a given category filter ──
+  const buildDashData = (catFilter: 'PESADA' | 'LEVE') => {
+    // Equipamentos da categoria
+    const eqs = equipamentos.filter(e => (e.categoria || 'PESADA').toUpperCase() === catFilter);
+
+    // Latest inspection per equipamento, scoped to filtered inspections
+    const latest = Object.values(filteredInspecoesRows.reduce((acc, ins) => {
+      const cat = (ins.equipamentos as any)?.categoria || 'PESADA';
+      if (cat.toUpperCase() !== catFilter) return acc;
+      if (!acc[ins.equipamento_id]) acc[ins.equipamento_id] = ins;
+      return acc;
+    }, {} as Record<string, Inspecao>));
+
+    const insByEqId: Record<string, Inspecao> = {};
+    latest.forEach(ins => { insByEqId[ins.equipamento_id] = ins; });
+
+    // Grupos por módulo
+    const grupos: Record<string, DashRow[]> = {};
+    eqs.forEach(eq => {
+      const mod = eq.modulo || 'SEM MÓDULO';
+      if (!grupos[mod]) grupos[mod] = [];
+      const ins = insByEqId[eq.id];
+      if (ins) {
+        grupos[mod].push({ kind: 'inspecao', ins });
+      } else {
+        grupos[mod].push({ kind: 'pendente', eq });
+      }
+    });
+    Object.keys(grupos).forEach(k => {
+      grupos[k].sort((a, b) => {
+        const pa = a.kind === 'inspecao' ? a.ins.equipamentos?.placa || '' : a.eq.placa;
+        const pb = b.kind === 'inspecao' ? b.ins.equipamentos?.placa || '' : b.eq.placa;
+        if (a.kind === 'pendente' && b.kind === 'inspecao') return 1;
+        if (a.kind === 'inspecao' && b.kind === 'pendente') return -1;
+        return pa.localeCompare(pb);
+      });
+    });
+
+    const modulos = ['TODOS', ...Object.keys(grupos).sort((a, b) =>
+      a === 'SEM MÓDULO' ? 1 : b === 'SEM MÓDULO' ? -1 : a.localeCompare(b)
+    )];
+
+    const counts = { BOM: 0, REGULAR: 0, ATENCAO: 0, CRITICO: 0, TROCAR: 0 };
+    latest.forEach(ins => {
+      if (ins.condicao in counts) (counts as any)[ins.condicao]++;
+    });
+    const pendentesCount = eqs.length - latest.length;
+    const critList = latest.filter(i => i.condicao === 'CRITICO' || i.condicao === 'TROCAR');
+    const pieData = Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
+    const latestDate = latest.length > 0
+      ? latest.reduce((l, c) => (!l || c.data_inspecao > l ? c.data_inspecao : l), '')
+      : null;
+    const pMedia = POSICOES.map(pos => {
+      const vals = latest.map(i => i[pos]).filter(v => v != null) as number[];
+      return { pos: pos.toUpperCase(), media: vals.length ? Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10 : 0 };
+    }).filter(d => d.media > 0);
+
+    return { eqs, latest, grupos, modulos, counts, pendentesCount, critList, pieData, latestDate, pMedia };
+  };
+
+  const pesadosData = React.useMemo(() => buildDashData('PESADA'), [equipamentos, filteredInspecoesRows]);
+  const levesData   = React.useMemo(() => buildDashData('LEVE'),   [equipamentos, filteredInspecoesRows]);
+
+  // ── Active category data (feeds shared dashboard JSX) ──
+  const isLevesTab = tab === 'leves';
+  const activeData = isLevesTab ? levesData : pesadosData;
+
+  // Keep old variables pointing to active data (used by existing JSX)
+  const latestByEq     = activeData.latest;
+  const gruposPorModulo= activeData.grupos;
+  const counts         = activeData.counts;
+  const pendentesTotal = activeData.pendentesCount;
+  const criticos       = activeData.critList;
+  const pieData        = activeData.pieData;
+  const globalLatestDate = activeData.latestDate;
+  const posMedia       = activeData.pMedia;
+  const total          = activeData.latest.length || 1;
+
+  const modulosDisponiveis = React.useMemo(
+    () => (isLevesTab ? levesData : pesadosData).modulos,
+    [isLevesTab, levesData, pesadosData]
+  );
+
+  const gruposFiltrados = React.useMemo(() => {
+    if (moduloFiltro === 'TODOS') return gruposPorModulo;
+    return { [moduloFiltro]: gruposPorModulo[moduloFiltro] || [] };
+  }, [gruposPorModulo, moduloFiltro]);
+
 
   const exportExcel = () => {
     const XLSXLib = (window as any).XLSX;
@@ -557,110 +639,305 @@ export default function PneusClient({
       {/* Main Tabs */}
       <div className="flex flex-col gap-6">
         <div className="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl w-fit border border-zinc-200 dark:border-zinc-800">
-           {(["dashboard", "lista", "historico"] as Tab[]).map((t) => (
-             <button 
-               key={t} onClick={() => setTab(t)}
-               className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === t ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
-             >
-               {t}
-             </button>
-           ))}
+           {/* Pesados */}
+           <button 
+             onClick={() => handleSetTab("dashboard")}
+             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "dashboard" ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
+           >
+             🚛 Pesados
+           </button>
+           {/* Carros Leves */}
+           <button 
+             onClick={() => handleSetTab("leves")}
+             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "leves" ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
+           >
+             🚗 Carros Leves
+           </button>
+           {/* Lista */}
+           <button 
+             onClick={() => handleSetTab("lista")}
+             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "lista" ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
+           >
+             Lista
+           </button>
+           {/* Histórico */}
+           <button 
+             onClick={() => handleSetTab("historico")}
+             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "historico" ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
+           >
+             Histórico
+           </button>
         </div>
 
-        {tab === "dashboard" && (
+        {(tab === "dashboard" || tab === "leves") && (
           <div className="space-y-6">
-            {/* Matrix Table - NOW PRINCIPAL AT THE TOP */}
-            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
-               <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                    <button 
-                      onClick={() => setIsAIReportOpen(true)}
-                      className="flex items-center gap-3 px-6 py-4 bg-zinc-900 dark:bg-orange-500/10 text-white dark:text-orange-400 border border-zinc-800 dark:border-orange-500/30 rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
+
+            {/* Dashboard Header: AI Report + Module Filter + Legend */}
+            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                <button 
+                  onClick={() => setIsAIReportOpen(true)}
+                  className="flex items-center gap-3 px-6 py-4 bg-zinc-900 dark:bg-orange-500/10 text-white dark:text-orange-400 border border-zinc-800 dark:border-orange-500/30 rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <Sparkles size={20} className="text-orange-500 animate-pulse" />
+                  RELATÓRIO IA
+                </button>
+                <div>
+                  <h3 className="font-black text-zinc-800 dark:text-zinc-200 tracking-tight text-lg">
+                    {tab === 'leves' ? '🚗 Painel — Carros Leves' : '🚛 Painel — Veículos Pesados'}
+                  </h3>
+                  <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-2">
+                    <CalendarCheck size={14} className="text-emerald-500" />
+                    Última Atualização: <span className="text-zinc-900 dark:text-zinc-50">{fmtDate(globalLatestDate)}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Module Filter Tabs */}
+                <div className="flex flex-wrap gap-2">
+                  {modulosDisponiveis.map(mod => (
+                    <button
+                      key={mod}
+                      onClick={() => setModuloFiltro(mod)}
+                      className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border ${
+                        moduloFiltro === mod
+                          ? "bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/20"
+                          : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:border-orange-300"
+                      }`}
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                      <Sparkles size={20} className="text-orange-500 animate-pulse" />
-                      RELATÓRIO IA
+                      {mod}
                     </button>
-                    <div>
-                      <h3 className="font-black text-zinc-800 dark:text-zinc-200 tracking-tight text-lg">Painel de Monitoramento Detalhado</h3>
-                      <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-2">
-                        <CalendarCheck size={14} className="text-emerald-500" />
-                        Última Atualização: <span className="text-zinc-900 dark:text-zinc-50">{fmtDate(globalLatestDate)}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 text-[10px] font-black uppercase tracking-tighter text-zinc-400">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-400" /> Crítico</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Trocar</span>
-                  </div>
-               </div>
-               <div className="overflow-x-auto">
-                 <table className="w-full text-[10px]">
-                   <thead>
-                     <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
-                       <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center">Data</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
-                       <th className="px-4 py-4 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
-                       <th className="px-6 py-4 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
-                     </tr>
-                     <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
-                       <th className="px-6 py-2" />
-                       <th className="px-4 py-2" />
-                       {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
-                         <th key={l} className="px-1 py-2 text-center text-orange-500/70 font-black">{l}</th>
-                       ))}
-                     </tr>
-                   </thead>
-                    <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                      {latestByEq.map((ins: any) => (
-                       <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
-                         <td className="px-6 py-4">
-                            <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">
-                              {ins.equipamentos?.placa}
-                              {ins._isPendingSync && (
-                                <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
-                                  <RefreshCw size={9} className="animate-spin mr-1" />
-                                  (Offline)
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || ins.horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
-                         </td>
-                         <td className="px-4 py-4 text-center">
-                            <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
-                              {ins.data_inspecao.split('T')[0].split('-').slice(1, 3).reverse().join('/')}
-                            </span>
-                         </td>
-                         {POSICOES.map(pos => (
-                           <td key={pos} className="px-1 py-4 text-center">
-                              {ins[pos] != null ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span> : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>}
-                           </td>
-                         ))}
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-               </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 text-[10px] font-black uppercase tracking-tighter text-zinc-400 ml-2">
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Atenção</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-400" /> Crítico</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Trocar</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-300" /> Pendente</span>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {/* Global KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
               {Object.entries(counts).map(([label, val]) => (
-                <div key={label} className="bg-white dark:bg-zinc-950 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow group">
-                   <div className="flex items-center justify-between mb-4">
-                      <span className={`p-2.5 rounded-xl ${label === 'BOM' ? 'bg-emerald-50 text-emerald-500' : label === 'REGULAR' ? 'bg-yellow-50 text-yellow-500' : 'bg-red-50 text-red-500'}`}>
-                         <Circle size={20} fill="currentColor" fillOpacity={0.2} />
+                <div key={label} className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow group">
+                   <div className="flex items-center justify-between mb-3">
+                      <span className={`p-2 rounded-xl ${
+                        label === 'BOM' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10' :
+                        label === 'REGULAR' || label === 'ATENCAO' ? 'bg-yellow-50 text-yellow-500 dark:bg-yellow-500/10' :
+                        label === 'CRITICO' ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10' :
+                        'bg-red-50 text-red-500 dark:bg-red-500/10'
+                      }`}>
+                         <Circle size={18} fill="currentColor" fillOpacity={0.2} />
                       </span>
-                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">Consolidado</span>
+                      <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">Global</span>
                    </div>
-                   <div className="text-3xl font-black text-zinc-900 dark:text-zinc-50">{val}</div>
-                   <p className="text-xs font-bold text-zinc-500 mt-1">{label} - {Math.round((val/total)*100)}%</p>
+                   <div className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{val}</div>
+                   <p className="text-[10px] font-bold text-zinc-500 mt-0.5">{label} · {Math.round((val/total)*100)}%</p>
                 </div>
               ))}
+              {/* Pendente Card */}
+              <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 shadow-sm hover:shadow-md transition-shadow group">
+                 <div className="flex items-center justify-between mb-3">
+                    <span className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400">
+                       <Circle size={18} className="opacity-40" />
+                    </span>
+                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">Global</span>
+                 </div>
+                 <div className="text-2xl font-black text-zinc-400">{pendentesTotal}</div>
+                 <p className="text-[10px] font-bold text-zinc-400 mt-0.5">PENDENTE · sem boletim</p>
+              </div>
             </div>
 
+            {/* Per-Module Monitoring Tables */}
+            {Object.entries(gruposFiltrados).map(([modulo, items]) => {
+              const modCounts = getModuloCounts(items);
+              const modTotal = items.length || 1;
+              const modCriticos = items.filter(row => row.kind === 'inspecao' && (row.ins.condicao === "CRITICO" || row.ins.condicao === "TROCAR"));
+              const modPendentes = items.filter(row => row.kind === 'pendente');
+              const isCollapsed = collapsedModulos.has(modulo);
+
+              return (
+                <div key={modulo} className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
+                  {/* Module Header */}
+                  <button
+                    onClick={() => toggleModulo(modulo)}
+                    className="w-full p-5 flex items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-orange-500/10 rounded-xl">
+                          <Circle size={16} className="text-orange-500" fill="currentColor" fillOpacity={0.3} />
+                        </div>
+                        <div className="text-left">
+                          <h4 className="font-black text-zinc-800 dark:text-zinc-200 text-base uppercase tracking-wider">
+                            🚛 Módulo: {modulo}
+                          </h4>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                            {items.length} veículo{items.length !== 1 ? "s" : ""}
+                            {modCriticos.length > 0 && (
+                              <span className="ml-2 text-red-500 animate-pulse">⚠ {modCriticos.length} crítico{modCriticos.length !== 1 ? "s" : ""}</span>
+                            )}
+                            {modPendentes.length > 0 && (
+                              <span className="ml-2 text-zinc-400">— {modPendentes.length} sem boletim</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* Mini KPI pills */}
+                      <div className="hidden md:flex gap-2">
+                        {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
+                          <span key={lbl} className={`px-2.5 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
+                            lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
+                            lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
+                            lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' :
+                            lbl === 'TROCAR' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                            'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                          }`}>
+                            {v} {lbl}
+                          </span>
+                        ))}
+                      </div>
+                      <svg
+                        className={`w-5 h-5 text-zinc-400 transition-transform duration-300 ${isCollapsed ? "rotate-0" : "rotate-180"}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+
+                  {/* Module Table */}
+                  {!isCollapsed && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px]">
+                        <thead>
+                          <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
+                            <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
+                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Data</th>
+                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
+                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
+                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
+                            <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
+                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Status</th>
+                          </tr>
+                          <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
+                            <th className="px-6 py-1.5" />
+                            <th className="px-4 py-1.5" />
+                            {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
+                              <th key={l} className="px-1 py-1.5 text-center text-orange-500/70 font-black">{l}</th>
+                            ))}
+                            <th className="px-4 py-1.5" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+                          {items.map((row, idx) => {
+                            if (row.kind === 'inspecao') {
+                              const ins = row.ins;
+                              return (
+                                <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
+                                  <td className="px-6 py-3">
+                                    <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">
+                                      {ins.equipamentos?.placa}
+                                      {(ins as any)._isPendingSync && (
+                                        <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
+                                          <RefreshCw size={9} className="animate-spin mr-1" />
+                                          (Offline)
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || (ins as any).horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
+                                      {ins.data_inspecao.split('T')[0].split('-').slice(1, 3).reverse().join('/')}
+                                    </span>
+                                  </td>
+                                  {POSICOES.map(pos => (
+                                    <td key={pos} className="px-1 py-3 text-center">
+                                      {ins[pos] != null
+                                        ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span>
+                                        : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>
+                                      }
+                                    </td>
+                                  ))}
+                                  <td className="px-4 py-3 text-center">
+                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${
+                                      ins.condicao === 'BOM' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30' :
+                                      ins.condicao === 'ATENCAO' || ins.condicao === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-900/30' :
+                                      ins.condicao === 'CRITICO' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-900/30' :
+                                      'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30'
+                                    }`}>
+                                      {ins.condicao}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            } else {
+                              // PENDENTE row - vehicle with no inspection in this period
+                              return (
+                                <tr key={`pendente-${row.eq.id}`} className="bg-zinc-50/30 dark:bg-zinc-900/20 border-l-2 border-dashed border-zinc-300 dark:border-zinc-700 opacity-70">
+                                  <td className="px-6 py-3">
+                                    <span className="block text-sm text-zinc-500 dark:text-zinc-400 font-black">
+                                      {row.eq.placa}
+                                    </span>
+                                    <span className="text-[9px] text-zinc-300 dark:text-zinc-600 block tracking-widest italic">sem boletim no período</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="text-[10px] font-black text-zinc-300 dark:text-zinc-700">—</span>
+                                  </td>
+                                  {POSICOES.map(pos => (
+                                    <td key={pos} className="px-1 py-3 text-center">
+                                      <span className="inline-block w-8 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 text-zinc-200 dark:text-zinc-700 text-center">—</span>
+                                    </td>
+                                  ))}
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border border-dashed border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500">
+                                      PENDENTE
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          })}
+                        </tbody>
+                        {/* Module Footer Summary */}
+                        <tfoot>
+                          <tr className="bg-zinc-50/80 dark:bg-zinc-900/60 border-t-2 border-zinc-100 dark:border-zinc-800">
+                            <td className="px-6 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest" colSpan={2}>
+                              Resumo ({items.length} veículos)
+                            </td>
+                            <td colSpan={10} className="px-4 py-2">
+                              <div className="flex gap-2 flex-wrap">
+                                {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
+                                  <span key={lbl} className={`px-2 py-0.5 text-[8px] font-black rounded-full uppercase ${
+                                    lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700' :
+                                    lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700' :
+                                    lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700' :
+                                    lbl === 'TROCAR' ? 'bg-red-100 text-red-700' :
+                                    'bg-zinc-100 text-zinc-500'
+                                  }`}>
+                                    {v} {lbl} ({Math.round((v/modTotal)*100)}%)
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2" />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                <div className="bg-white dark:bg-zinc-950 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm min-h-[400px]">
                  <h3 className="font-bold text-zinc-800 dark:text-zinc-200 mb-8 flex items-center gap-2">📊 Distribuição das Condições</h3>
@@ -690,7 +967,6 @@ export default function PneusClient({
                  </ResponsiveContainer>
                </div>
             </div>
-
 
           </div>
         )}

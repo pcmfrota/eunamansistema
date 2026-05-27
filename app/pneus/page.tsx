@@ -6,7 +6,7 @@ export default async function PneusPage() {
 
   const { data: equipamentos } = await supabase
     .from('equipamentos')
-    .select('id, placa, tipo, modulo')
+    .select('id, placa, tipo, modulo, categoria')
     .order('placa')
 
   const { data: inspecoes } = await supabase
@@ -14,7 +14,7 @@ export default async function PneusPage() {
     .select(`
       id, equipamento_id, data_inspecao, km_atual, condicao, observacoes, created_at,
       de, dd, tei, tee, tdi, tde, tei1, tee1, tdi1, tde1, estepe,
-      equipamentos(placa, tipo)
+      equipamentos(placa, tipo, modulo, categoria)
     `)
     .order('data_inspecao', { ascending: false })
     .order('created_at', { ascending: false })
