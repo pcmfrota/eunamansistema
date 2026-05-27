@@ -18,7 +18,7 @@ const MODULO_PERMISSOES: Record<string, string[]> = {
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
-const PUBLIC_PATHS = ['/login', '/api/']
+const PUBLIC_PATHS = ['/login', '/api/', '/manifest.json', '/sw.js']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -123,6 +123,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

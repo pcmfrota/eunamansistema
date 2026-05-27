@@ -24,12 +24,15 @@ import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
 import BacklogDashboard from './BacklogDashboard';
 import { PremiumLoader } from '@/components/premium-loader';
+import { useOffline } from '@/components/offline-provider';
+import { localDb } from '@/lib/offline-db';
 
 type Placa = { id: string; placa: string; modulo: string | null; area: string | null };
 
 export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const { profile } = useAuth();
   const isVisitante = profile?.role === 'visitante';
+  const { isOnline } = useOffline();
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,15 +47,63 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   // Search State
   const [search, setSearch] = useState("");
 
+  const [localPlacas, setLocalPlacas] = useState<Placa[]>(placas || []);
+
+  useEffect(() => {
+    if (placas && placas.length > 0) {
+      setLocalPlacas(placas);
+      if (isOnline) {
+        localDb.saveMany("equipamentos", placas);
+      }
+    } else {
+      const loadPlacas = async () => {
+        const dbPlacas = await localDb.getAll<Placa>("equipamentos");
+        if (dbPlacas && dbPlacas.length > 0) {
+          setLocalPlacas(dbPlacas);
+        }
+      };
+      loadPlacas();
+    }
+  }, [placas, isOnline]);
+
   const refreshData = async () => {
     setLoading(true);
-    const res = await getBacklog(5000);
-    if (!res.error) setItems(res.data || []);
+    if (isOnline) {
+      const res = await getBacklog(5000);
+      if (!res.error) {
+        setItems(res.data || []);
+        await localDb.saveMany("backlog", res.data || []);
+      }
+    } else {
+      const data = await localDb.getAll("backlog");
+      data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
+      setItems(data);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     refreshData();
+  }, [isOnline]);
+
+  useEffect(() => {
+    let active = true;
+    const loadFromDb = async () => {
+      const data = await localDb.getAll("backlog");
+      if (active) {
+        data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
+        setItems(data);
+      }
+    };
+    loadFromDb();
+
+    window.addEventListener("offline-db-updated-backlog", loadFromDb);
+    window.addEventListener("offline-sync-completed", loadFromDb);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-db-updated-backlog", loadFromDb);
+      window.removeEventListener("offline-sync-completed", loadFromDb);
+    };
   }, []);
 
   const handleEdit = (item: any) => {
@@ -62,19 +113,42 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão definitiva deste item?")) return;
-    const res = await deleteBacklogItems([id]);
-    if (res.success) refreshData();
-    else alert(res.error);
+    if (isOnline) {
+      const res = await deleteBacklogItems([id]);
+      if (res.success) {
+        await localDb.delete("backlog", id);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+      } else {
+        alert(res.error);
+      }
+    } else {
+      await localDb.delete("backlog", id);
+      await localDb.addToQueue('backlog', 'delete', [id]);
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+    }
   };
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
     if (!confirm(`Confirmar exclusão de ${selectedIds.size} itens?`)) return;
-    const res = await deleteBacklogItems(Array.from(selectedIds));
-    if (res.success) {
+    const idsArray = Array.from(selectedIds);
+    if (isOnline) {
+      const res = await deleteBacklogItems(idsArray);
+      if (res.success) {
+        await localDb.deleteMany("backlog", idsArray);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+        setSelectedIds(new Set());
+      } else {
+        alert(res.error);
+      }
+    } else {
+      await localDb.deleteMany("backlog", idsArray);
+      await localDb.addToQueue('backlog', 'delete', idsArray);
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
       setSelectedIds(new Set());
-      refreshData();
-    } else alert(res.error);
+    }
   };
 
   // Filter States
@@ -97,7 +171,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
 
   // Dynamic options from data - MEMOIZED
   const placaOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort(), [items]);
-  const areaOptions = React.useMemo(() => Array.from(new Set(placas.map(p => p.area).filter(Boolean))).sort(), [placas]);
+  const areaOptions = React.useMemo(() => Array.from(new Set(localPlacas.map(p => p.area).filter(Boolean))).sort(), [localPlacas]);
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
   const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
   const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
@@ -113,7 +187,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       
       let matchArea = true;
       if (filterArea) {
-        const pInfo = placas.find(p => p.placa === i.frota);
+        const pInfo = localPlacas.find(p => p.placa === i.frota);
         matchArea = pInfo?.area === filterArea;
       }
 
@@ -121,7 +195,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       const matchCriticidade = !filterCriticidade || i.criticidade === filterCriticidade;
       return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade;
     });
-  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, placas]);
+  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, localPlacas]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -334,7 +408,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
 
       {view === 'Dashboard' ? (
         /* Dashboard View */
-        <BacklogDashboard items={items} placas={placas} onEdit={handleEdit} onDelete={handleDelete} />
+        <BacklogDashboard items={items} placas={localPlacas} onEdit={handleEdit} onDelete={handleDelete} />
       ) : (
         <>
           {/* Multi-Select Floating Bar */}
@@ -403,7 +477,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       <BacklogModal 
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); refreshData(); }}
-        placas={placas}
+        placas={localPlacas}
         editData={editingItem}
       />
 

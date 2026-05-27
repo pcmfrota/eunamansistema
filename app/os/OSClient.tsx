@@ -13,6 +13,9 @@ import {
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
 import OSFormModal from "./NovoModal";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
+import { RefreshCw } from "lucide-react";
 import OSDashboard from "./OSDashboard";
 import OSFichaModal, { type OSFichaData } from "./OSFicha";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -138,7 +141,36 @@ export default function ControleOSClient({
   catalogo?: CatalogoItem[];
   periodos?: any[];
 }) {
+  const { isOnline } = useOffline();
   const [ordens, setOrdens] = useState(initialOrdens);
+
+  // Sync cache with initialOrdens from server when online
+  useEffect(() => {
+    if (isOnline && initialOrdens && initialOrdens.length > 0) {
+      localDb.saveMany("ordens_servico", initialOrdens);
+    }
+  }, [isOnline, initialOrdens]);
+
+  // Load from local DB dynamically
+  useEffect(() => {
+    let active = true;
+    const loadFromDb = async () => {
+      const data = await localDb.getAll("ordens_servico");
+      if (active) {
+        data.sort((a, b) => new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime());
+        setOrdens(data);
+      }
+    };
+    loadFromDb();
+
+    window.addEventListener("offline-db-updated-ordens_servico", loadFromDb);
+    window.addEventListener("offline-sync-completed", loadFromDb);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-db-updated-ordens_servico", loadFromDb);
+      window.removeEventListener("offline-sync-completed", loadFromDb);
+    };
+  }, []);
   const [activeTab, setActiveTab] = useState<"dashboard" | "lista">("lista");
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos Status");
@@ -249,14 +281,52 @@ export default function ControleOSClient({
     if (selectedIds.size === 0) return;
     if (confirm(`Tem certeza que deseja apagar ${selectedIds.size} chamados?`)) {
       startTransition(async () => {
-        const res = await excluirOrdensMassivo(Array.from(selectedIds));
-        if (res && 'error' in res) {
-          alert(`Erro: ${res.error}`);
+        if (isOnline) {
+          const res = await excluirOrdensMassivo(Array.from(selectedIds));
+          if (res && 'error' in res) {
+            alert(`Erro: ${res.error}`);
+          } else {
+            await localDb.deleteMany('ordens_servico', Array.from(selectedIds));
+            window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+            setSelectedIds(new Set());
+          }
         } else {
+          // Offline mode
+          const idsArray = Array.from(selectedIds);
+          await localDb.deleteMany('ordens_servico', idsArray);
+          await localDb.addToQueue('os', 'bulk_delete', idsArray);
+          window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
           setSelectedIds(new Set());
         }
       });
     }
+  };
+
+  const handleStatusUpdate = (id: string, novoStatus: string) => {
+    startTransition(async () => {
+      if (isOnline) {
+        const res = await atualizarStatusOS(id, novoStatus);
+        if (res && 'error' in res) {
+          alert(res.error);
+        } else {
+          const os = ordens.find(o => o.id === id);
+          if (os) {
+            await localDb.put('ordens_servico', { ...os, status: novoStatus });
+            window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+          }
+        }
+      } else {
+        const os = ordens.find(o => o.id === id);
+        if (os) {
+          const updated = { ...os, status: novoStatus, _isPendingSync: true };
+          await localDb.put('ordens_servico', updated);
+          await localDb.addToQueue('os', 'update_status', { id, status: novoStatus });
+          window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+        }
+      }
+    });
   };
 
   useEffect(() => {
@@ -283,18 +353,38 @@ export default function ControleOSClient({
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
       startTransition(async () => {
-        const res = await importarOrdensServico(data);
-        if (res && 'error' in res) {
-          alert("Erro ao importar: " + res.error);
-        } else if (res && 'count' in res) {
-          const r = res as any;
-          let msg = `✅ Importação concluída!\n\n📋 ${r.count} OS importadas com sucesso.`;
-          if (r.semCadastro > 0) {
-            msg += `\n\n⚠️ ${r.semCadastro} OS com placas não cadastradas na Base de Frotas.\n`;
-            msg += `Essas OS ficam ocultas na lista, mas são contabilizadas no Dashboard.\n\n`;
-            msg += `Placas: ${r.placasNaoCadastradas.slice(0, 10).join(', ')}${r.placasNaoCadastradas.length > 10 ? '...' : ''}`;
+        if (isOnline) {
+          const res = await importarOrdensServico(data);
+          if (res && 'error' in res) {
+            alert("Erro ao importar: " + res.error);
+          } else if (res && 'count' in res) {
+            const r = res as any;
+            let msg = `✅ Importação concluída!\n\n📋 ${r.count} OS importadas com sucesso.`;
+            if (r.semCadastro > 0) {
+              msg += `\n\n⚠️ ${r.semCadastro} OS com placas não cadastradas na Base de Frotas.\n`;
+              msg += `Essas OS ficam ocultas na lista, mas são contabilizadas no Dashboard.\n\n`;
+              msg += `Placas: ${r.placasNaoCadastradas.slice(0, 10).join(', ')}${r.placasNaoCadastradas.length > 10 ? '...' : ''}`;
+            }
+            alert(msg);
           }
-          alert(msg);
+        } else {
+          // Processamento offline local
+          const importedOS = data.map((row: any) => ({
+            ...row,
+            id: `temp_import_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            numero_os: row["Nº OS"] || row.numero_os || `OS-OFF-${Math.floor(Math.random() * 90000) + 10000}`,
+            placa: row.Placa || row.placa || "",
+            modulo: row["Módulo"] || row.modulo || "",
+            status: row.Status || row.status || "Aberta",
+            data_abertura: row.Abertura || row.data_abertura || new Date().toISOString(),
+            data_fechamento: row.Fechamento || row.data_fechamento || null,
+            _isPendingSync: true
+          }));
+          await localDb.saveMany('ordens_servico', importedOS);
+          await localDb.addToQueue('os', 'import', data);
+          window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+          alert(`✅ Importação offline concluída!\n\n📋 ${data.length} OS salvas localmente para sincronização.`);
         }
       });
       e.target.value = "";
@@ -514,7 +604,15 @@ export default function ControleOSClient({
                     <td className="px-4 py-3">
                       <input type="checkbox" checked={selectedIds.has(os.id)} onChange={() => toggleSelect(os.id)} className="rounded border-zinc-300" />
                     </td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{os.numero_os}</td>
+                    <td className="px-4 py-3 font-mono text-[12px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                      {os.numero_os}
+                      {(os as any)._isPendingSync && (
+                        <span className="ml-2 inline-flex items-center text-[10px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão para subir">
+                          <RefreshCw size={10} className="animate-spin mr-1 text-amber-500" />
+                          (Offline)
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">{os.placa || "-"}</td>
                     <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{os.modulo || "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={os.status} /></td>
@@ -547,12 +645,12 @@ export default function ControleOSClient({
                         {!isVisitante && (
                           <>
                             {os.status === "Aberta" && (
-                              <button title="Iniciar OS" onClick={() => startTransition(async () => { const res = await atualizarStatusOS(os.id, "Em Andamento"); if (res && 'error' in res) alert(res.error); })} className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                              <button title="Iniciar OS" onClick={() => handleStatusUpdate(os.id, "Em Andamento")} className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
                                 <Check size={14} />
                               </button>
                             )}
                             {os.status === "Em Andamento" && (
-                              <button title="Fechar OS" onClick={() => startTransition(async () => { const res = await atualizarStatusOS(os.id, "Fechada"); if (res && 'error' in res) alert(res.error); })} className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
+                              <button title="Fechar OS" onClick={() => handleStatusUpdate(os.id, "Fechada")} className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
                                 <Check size={14} />
                               </button>
                             )}
@@ -600,8 +698,20 @@ export default function ControleOSClient({
                 onClick={() => {
                   startTransition(async () => {
                     if (deletingId) {
-                      const res = await excluirOrdemServico(deletingId);
-                      if (res && 'error' in res) alert(res.error);
+                      if (isOnline) {
+                        const res = await excluirOrdemServico(deletingId);
+                        if (res && 'error' in res) {
+                          alert(res.error);
+                        } else {
+                          await localDb.delete('ordens_servico', deletingId);
+                          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+                        }
+                      } else {
+                        await localDb.delete('ordens_servico', deletingId);
+                        await localDb.addToQueue('os', 'delete', deletingId);
+                        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+                        window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+                      }
                     }
                     setDeletingId(null);
                   });

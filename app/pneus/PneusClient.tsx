@@ -4,12 +4,14 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
-import { excluirInspecao, excluirInspecoesMassivo } from "./actions";
+import { registrarInspecaoCompleta, atualizarInspecao, excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import PneusModal from "./PneusModal";
 import PneusImportModal from "./PneusImportModal";
 import PneusAIReport from "./PneusAIReport";
-import { Sparkles, CalendarCheck, Archive } from "lucide-react";
+import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null };
@@ -64,11 +66,41 @@ type Tab = "dashboard" | "lista" | "historico";
 
 export default function PneusClient({
   equipamentos,
-  inspecoes,
+  inspecoes: initialInspecoes,
 }: {
   equipamentos: Equipamento[];
   inspecoes: Inspecao[];
 }) {
+  const { isOnline } = useOffline();
+  const [inspecoes, setInspecoes] = useState(initialInspecoes);
+
+  // Sync cache with initialInspecoes from server when online
+  useEffect(() => {
+    if (isOnline && initialInspecoes && initialInspecoes.length > 0) {
+      localDb.saveMany("pneus_inspecao", initialInspecoes);
+    }
+  }, [isOnline, initialInspecoes]);
+
+  // Load from local DB dynamically
+  useEffect(() => {
+    let active = true;
+    const loadFromDb = async () => {
+      const data = await localDb.getAll("pneus_inspecao");
+      if (active) {
+        data.sort((a, b) => new Date(b.data_inspecao).getTime() - new Date(a.data_inspecao).getTime());
+        setInspecoes(data);
+      }
+    };
+    loadFromDb();
+
+    window.addEventListener("offline-db-updated-pneus_inspecao", loadFromDb);
+    window.addEventListener("offline-sync-completed", loadFromDb);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-db-updated-pneus_inspecao", loadFromDb);
+      window.removeEventListener("offline-sync-completed", loadFromDb);
+    };
+  }, []);
   const router = useRouter();
   const { profile } = useAuth();
   const isVisitante = profile?.role === "visitante";
@@ -107,13 +139,45 @@ export default function PneusClient({
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
     if (!confirm(`Confirmar exclusão de ${selectedIds.size} registros?`)) return;
-    const res = await excluirInspecoesMassivo(Array.from(selectedIds));
-    if (res && "error" in res) alert(res.error); else setSelectedIds(new Set());
+
+    if (isOnline) {
+      const res = await excluirInspecoesMassivo(Array.from(selectedIds));
+      if (res && "error" in res) {
+        alert(res.error);
+      } else {
+        await localDb.deleteMany("pneus_inspecao", Array.from(selectedIds));
+        window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
+        setSelectedIds(new Set());
+      }
+    } else {
+      const idsArray = Array.from(selectedIds);
+      await localDb.deleteMany("pneus_inspecao", idsArray);
+      await localDb.addToQueue("pneu", "bulk_delete", idsArray);
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
+      setSelectedIds(new Set());
+      alert("✅ Exclusão em lote registrada localmente!");
+    }
   };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Confirmar exclusão definitiva?")) return;
-    const res = await excluirInspecao(id);
-    if (res && "error" in res) alert(res.error);
+
+    if (isOnline) {
+      const res = await excluirInspecao(id);
+      if (res && "error" in res) {
+        alert(res.error);
+      } else {
+        await localDb.delete("pneus_inspecao", id);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
+      }
+    } else {
+      await localDb.delete("pneus_inspecao", id);
+      await localDb.addToQueue("pneu", "delete", id);
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
+      alert("✅ Exclusão registrada localmente!");
+    }
   };
 
   // ── Search & Filter ── (Default: Current Month)
@@ -554,7 +618,15 @@ export default function PneusClient({
                       {latestByEq.map((ins: any) => (
                        <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
                          <td className="px-6 py-4">
-                            <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">{ins.equipamentos?.placa}</span>
+                            <span className="block text-sm text-zinc-900 dark:text-zinc-50 font-black">
+                              {ins.equipamentos?.placa}
+                              {ins._isPendingSync && (
+                                <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
+                                  <RefreshCw size={9} className="animate-spin mr-1" />
+                                  (Offline)
+                                </span>
+                              )}
+                            </span>
                             <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || ins.horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
                          </td>
                          <td className="px-4 py-4 text-center">
@@ -648,7 +720,15 @@ export default function PneusClient({
                     {latestByEq.map(ins => (
                       <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors group">
                         <td className="px-6 py-4"><input type="checkbox" checked={selectedIds.has(ins.id)} onChange={() => toggleSelect(ins.id)} /></td>
-                        <td className="px-4 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">{ins.equipamentos?.placa}</td>
+                        <td className="px-4 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
+                          {ins.equipamentos?.placa}
+                          {ins._isPendingSync && (
+                            <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão">
+                              <RefreshCw size={9} className="animate-spin mr-1" />
+                              (Offline)
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-4 text-zinc-500">{fmtDate(ins.data_inspecao)}</td>
                         <td className="px-4 py-4 text-center font-black text-blue-600">{ins.km_atual || '??'}</td>
                         <td className="px-4 py-4 text-center">

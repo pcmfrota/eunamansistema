@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { Search, Edit2, Check, X, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText } from 'lucide-react'
+import { Search, Edit2, Check, X, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
 import Script from 'next/script'
 import { excluirPreventiva, atualizarPreventiva } from './actions'
 import DashboardHorimetros from './DashboardHorimetros'
+import { useEffect } from 'react'
+import { useOffline } from '@/components/offline-provider'
+import { localDb } from '@/lib/offline-db'
 
 type Prev = {
   id: string
@@ -142,6 +145,7 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
   limites: number[]
   label: string
 }) {
+  const { isOnline } = useOffline()
   const [editId, setEditId] = useState<string | null>(null)
   const [editVals, setEditVals] = useState({ ultimo: '', atual: '', intervalo: '', data: '' })
   const [search, setSearch] = useState('')
@@ -166,22 +170,61 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
 
   const handleSave = (id: string) => {
     startTransition(async () => {
-      const res = await atualizarPreventiva(id, {
+      const dataToSave = {
         ultimo_horimetro: parseFloat(editVals.ultimo),
         horimetro_atual: parseFloat(editVals.atual),
         intervalo_horas: parseFloat(editVals.intervalo),
         data_atualizacao: editVals.data
-      })
-      if ('error' in res) alert('Erro: ' + res.error)
-      else setEditId(null)
+      }
+
+      if (isOnline) {
+        const res = await atualizarPreventiva(id, dataToSave)
+        if ('error' in res) {
+          alert('Erro: ' + res.error)
+        } else {
+          // Atualiza localmente no IndexedDB
+          const prev = data.find(p => p.id === id)
+          if (prev) {
+            await localDb.put("preventivas", { ...prev, ...dataToSave })
+            window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
+          }
+          setEditId(null)
+        }
+      } else {
+        // Modo offline
+        const prev = data.find(p => p.id === id)
+        if (prev) {
+          const updated = { ...prev, ...dataToSave, _isPendingSync: true }
+          await localDb.put("preventivas", updated)
+          await localDb.addToQueue("preventiva", "update", { id, ...dataToSave })
+          window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+          window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
+        }
+        setEditId(null)
+        alert("✅ Alterações salvas localmente! Serão enviadas assim que estiver online.")
+      }
     })
   }
 
   const handleDelete = (id: string, placa: string) => {
     if (confirm(`Excluir preventiva de ${placa}?`)) {
       startTransition(async () => {
-        const res = await excluirPreventiva(id)
-        if ('error' in res) alert(res.error)
+        if (isOnline) {
+          const res = await excluirPreventiva(id)
+          if ('error' in res) {
+            alert(res.error)
+          } else {
+            await localDb.delete("preventivas", id)
+            window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
+          }
+        } else {
+          // Modo offline
+          await localDb.delete("preventivas", id)
+          await localDb.addToQueue("preventiva", "delete", id)
+          window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+          window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
+          alert("✅ Exclusão registrada localmente para sincronização.")
+        }
       })
     }
   }
@@ -254,7 +297,15 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
 
               return (
                 <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400">{eq?.placa}</td>
+                  <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400">
+                    {eq?.placa}
+                    {(p as any)._isPendingSync && (
+                      <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão para sincronizar">
+                        <RefreshCw size={9} className="animate-spin mr-1" />
+                        (Offline)
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{eq?.tipo}</td>
                   <td className="px-4 py-3 text-zinc-500 text-xs">{eq?.categoria}</td>
                   <td className="px-4 py-3 text-zinc-500 text-xs">{eq?.modulo || '-'}</td>
@@ -323,22 +374,52 @@ interface Props {
 
 type TabKey = 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves'
 
-export default function ControleHorimetrosTabs({ data, isVisitante }: Props) {
+export default function ControleHorimetrosTabs({ data: initialData, isVisitante }: Props) {
+  const { isOnline } = useOffline()
+  const [preventivas, setPreventivas] = useState(initialData)
+
+  // Sync cache with initialData from server when online
+  useEffect(() => {
+    if (isOnline && initialData && initialData.length > 0) {
+      localDb.saveMany("preventivas", initialData);
+    }
+  }, [isOnline, initialData]);
+
+  // Load from local DB dynamically
+  useEffect(() => {
+    let active = true;
+    const loadFromDb = async () => {
+      const dbData = await localDb.getAll("preventivas");
+      if (active) {
+        setPreventivas(dbData);
+      }
+    };
+    loadFromDb();
+
+    window.addEventListener("offline-db-updated-preventivas", loadFromDb);
+    window.addEventListener("offline-sync-completed", loadFromDb);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-db-updated-preventivas", loadFromDb);
+      window.removeEventListener("offline-sync-completed", loadFromDb);
+    };
+  }, []);
+
   const [tab, setTab] = useState<TabKey>('dashboard-pesados')
 
-  const pesados = data.filter(p => {
+  const pesados = preventivas.filter(p => {
     const cat = p.equipamentos?.categoria?.toUpperCase() || ''
     const tipo = p.equipamentos?.tipo?.toUpperCase() || ''
     return cat === 'PESADA' || ['COMBOIO', 'MUNCK', 'PIPA', 'SKID MOVEL', 'SKID', 'MULTIFUNCIONAL', 'ESCAVADEIRA'].includes(tipo)
   })
 
-  const leves = data.filter(p => {
+  const leves = preventivas.filter(p => {
     const cat = p.equipamentos?.categoria?.toUpperCase() || ''
     const tipo = p.equipamentos?.tipo?.toUpperCase() || ''
     return cat === 'LEVE' || ['CARRO', 'PICKUP', 'VAN', 'CAMINHONETE', 'LEVE'].includes(tipo)
   })
 
-  const zocar = data.filter(p => {
+  const zocar = preventivas.filter(p => {
     const tipo = p.equipamentos?.tipo?.toUpperCase() || ''
     const mod = p.equipamentos?.modulo?.toUpperCase() || ''
     return tipo.includes('ZOCAR') || mod.includes('ZOCAR') || (p.intervalo_horas <= 100 && p.intervalo_horas > 0)
@@ -355,7 +436,7 @@ export default function ControleHorimetrosTabs({ data, isVisitante }: Props) {
   ]
 
   const fileInputAllRef = useRef<HTMLInputElement>(null)
-  const allData = [...new Map(data.map(d => [d.id, d])).values()]
+  const allData = [...new Map(preventivas.map(d => [d.id, d])).values()]
 
   return (
     <div className="flex flex-col gap-4">

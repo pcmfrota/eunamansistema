@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">EUNAMAN PCM</string>
+    <string name="launch_url">https://eunaman-pcm.vercel.app/</string>
+    <string name="asset_host">eunaman-pcm.vercel.app</string>
+    <string name="asset_statements">
+        [{
+            \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+            \"target\": {
+                \"namespace\": \"web\",
+                \"site\": \"https://eunaman-pcm.vercel.app\"
+            }
+        }]
+    </string>
+</resources>

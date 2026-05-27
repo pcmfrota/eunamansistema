@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.eunaman.pcm",
+    "sha256_cert_fingerprints": [
+      "SUBSTITUIR_COM_SHA256_DO_KEYSTORE"
+    ]
+  }
+}]

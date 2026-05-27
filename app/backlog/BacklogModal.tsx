@@ -19,6 +19,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import { upsertBacklogItem } from './actions'
+import { useOffline } from '@/components/offline-provider'
+import { localDb } from '@/lib/offline-db'
 
 // ─── Types and Config ────────────────────────────────────────────────────────
 type Placa = { id: string; placa: string; modulo: string | null }
@@ -76,6 +78,7 @@ export default function BacklogModal({
 }) {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const { isOnline } = useOffline()
   const { form, setForm, clearDraft, hasContent } = useFormDraft('backlog', initialValues)
 
   useEffect(() => {
@@ -101,12 +104,31 @@ export default function BacklogModal({
 
   const handleSubmit = async () => {
     setLoading(true)
-    const res = await upsertBacklogItem(form)
-    if (res.success) {
+    if (isOnline) {
+      const res = await upsertBacklogItem(form)
+      if (res.success) {
+        // Salva cópia atualizada no banco local
+        await localDb.put("backlog", res.data || form)
+        window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"))
+        clearDraft()
+        onClose()
+      } else {
+        alert("Erro: " + res.error)
+      }
+    } else {
+      // Cenário offline: Gerar ID se for novo
+      const localItem = {
+        ...form,
+        id: form.id || `temp_backlog_${Date.now()}`,
+        _isPendingSync: true
+      }
+      await localDb.put("backlog", localItem)
+      await localDb.addToQueue("backlog", editData ? "update" : "create", localItem)
+      
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+      window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"))
       clearDraft()
       onClose()
-    } else {
-      alert("Erro: " + res.error)
     }
     setLoading(false)
   }

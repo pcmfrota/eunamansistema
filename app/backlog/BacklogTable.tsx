@@ -12,7 +12,8 @@ import {
   Calendar,
   Layers,
   MapPin,
-  Tag
+  Tag,
+  RefreshCw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/components/auth-context'
@@ -148,7 +149,14 @@ export default function BacklogTable({
                 {view === 'Geral' ? (
                   <>
                     <td className="px-4 py-4">
-                       <span className="block text-sm font-black text-zinc-900 dark:text-zinc-50 tracking-tight">{item.frota}</span>
+                       <span className="flex items-center gap-1.5">
+                         <span className="text-sm font-black text-zinc-900 dark:text-zinc-50 tracking-tight">{item.frota}</span>
+                         {item._isPendingSync && (
+                           <span className="inline-flex items-center gap-1 text-[9px] text-amber-500 font-bold" title="Pendente de sincronização offline">
+                             <RefreshCw size={9} className="animate-spin" /> (Off)
+                           </span>
+                         )}
+                       </span>
                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">{item.modulo || 'N/A'}</span>
                     </td>
                     <td className="px-4 py-4 text-center">
@@ -177,7 +185,14 @@ export default function BacklogTable({
                        <div className="flex items-start gap-4">
                           <CritBadge crit={item.criticidade} />
                           <div>
-                            <p className="text-sm font-black text-zinc-900 dark:text-zinc-50">{item.frota}</p>
+                            <span className="flex items-center gap-1.5">
+                              <p className="text-sm font-black text-zinc-900 dark:text-zinc-50">{item.frota}</p>
+                              {item._isPendingSync && (
+                                <span className="inline-flex items-center gap-1 text-[9px] text-amber-500 font-bold" title="Pendente de sincronização offline">
+                                  <RefreshCw size={9} className="animate-spin" /> (Off)
+                                </span>
+                              )}
+                            </span>
                             <p className="text-[10px] font-bold text-zinc-400 line-clamp-1 max-w-[200px]">{item.descricao}</p>
                           </div>
                        </div>

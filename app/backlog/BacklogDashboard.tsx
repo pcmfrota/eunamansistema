@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
-  ArrowRight, Search, Filter, X, ChevronRight, Edit3, Trash2
+  ArrowRight, Search, Filter, X, ChevronRight, Edit3, Trash2, RefreshCw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -775,7 +775,14 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                         onClick={() => onEdit(item)}
                       >
                         <td className="px-4 py-3 font-black text-zinc-900 dark:text-zinc-50">
-                          {item.frota}
+                          <span className="flex items-center gap-1.5">
+                            {item.frota}
+                            {item._isPendingSync && (
+                              <span className="inline-flex items-center gap-1 text-[8px] text-amber-500 font-bold" title="Pendente de sincronização offline">
+                                <RefreshCw size={8} className="animate-spin" />
+                              </span>
+                            )}
+                          </span>
                           {item.tag && <span className="block text-[8px] text-zinc-400 font-bold mt-0.5">{item.tag}</span>}
                         </td>
                         <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 uppercase font-bold">

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { X, Save, AlertCircle, Info, ChevronDown, Camera } from 'lucide-react'
 import { registrarInspecaoCompleta, atualizarInspecao } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
+import { useOffline } from '@/components/offline-provider'
+import { localDb, serializeFormData } from '@/lib/offline-db'
 
 interface PneusModalProps {
   isOpen: boolean
@@ -46,6 +48,7 @@ export default function PneusModal({
   editData, 
   onSuccess 
 }: PneusModalProps) {
+  const { isOnline } = useOffline()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -113,19 +116,106 @@ export default function PneusModal({
       const formData = new FormData()
       Object.entries(form).forEach(([key, value]) => formData.append(key, value))
 
-      let result
-      if (editData?.id) {
-        result = await atualizarInspecao(editData.id, formData)
-      } else {
-        result = await registrarInspecaoCompleta(formData)
-      }
+      if (isOnline) {
+        let result
+        if (editData?.id) {
+          result = await atualizarInspecao(editData.id, formData)
+        } else {
+          result = await registrarInspecaoCompleta(formData)
+        }
 
-      if (result && 'error' in result) {
-        setError(result.error)
+        if (result && 'error' in result) {
+          setError(result.error)
+        } else {
+          // Quando online, salvamos o novo registro no cache local.
+          // Para simplificar, recarregamos a página ou re-buscamos, mas vamos atualizar o cache local também.
+          const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
+          const newLocal = {
+            id: editData?.id || `ins_${Date.now()}`,
+            ...form,
+            km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
+            horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            de: form.de ? parseFloat(form.de) : null,
+            dd: form.dd ? parseFloat(form.dd) : null,
+            tei: form.tei ? parseFloat(form.tei) : null,
+            tee: form.tee ? parseFloat(form.tee) : null,
+            tdi: form.tdi ? parseFloat(form.tdi) : null,
+            tde: form.tde ? parseFloat(form.tde) : null,
+            tei1: form.tei1 ? parseFloat(form.tei1) : null,
+            tee1: form.tee1 ? parseFloat(form.tee1) : null,
+            tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
+            tde1: form.tde1 ? parseFloat(form.tde1) : null,
+            estepe: form.estepe ? parseFloat(form.estepe) : null,
+            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined
+          }
+          await localDb.put("pneus_inspecao", newLocal)
+          window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"))
+          
+          clearDraft()
+          onSuccess()
+          onClose()
+        }
       } else {
+        // Cenário offline
+        const serialized = serializeFormData(formData)
+        const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
+        
+        if (editData?.id) {
+          // Editar offline
+          const updated = {
+            ...editData,
+            ...form,
+            km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
+            horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            de: form.de ? parseFloat(form.de) : null,
+            dd: form.dd ? parseFloat(form.dd) : null,
+            tei: form.tei ? parseFloat(form.tei) : null,
+            tee: form.tee ? parseFloat(form.tee) : null,
+            tdi: form.tdi ? parseFloat(form.tdi) : null,
+            tde: form.tde ? parseFloat(form.tde) : null,
+            tei1: form.tei1 ? parseFloat(form.tei1) : null,
+            tee1: form.tee1 ? parseFloat(form.tee1) : null,
+            tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
+            tde1: form.tde1 ? parseFloat(form.tde1) : null,
+            estepe: form.estepe ? parseFloat(form.estepe) : null,
+            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : editData.equipamentos,
+            _isPendingSync: true
+          }
+          await localDb.put("pneus_inspecao", updated)
+          await localDb.addToQueue("pneu", "update", { id: editData.id, ...serialized })
+        } else {
+          // Criar offline
+          const tempId = `temp_pneu_${Date.now()}`
+          const newInspecao = {
+            id: tempId,
+            ...form,
+            km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
+            horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            de: form.de ? parseFloat(form.de) : null,
+            dd: form.dd ? parseFloat(form.dd) : null,
+            tei: form.tei ? parseFloat(form.tei) : null,
+            tee: form.tee ? parseFloat(form.tee) : null,
+            tdi: form.tdi ? parseFloat(form.tdi) : null,
+            tde: form.tde ? parseFloat(form.tde) : null,
+            tei1: form.tei1 ? parseFloat(form.tei1) : null,
+            tee1: form.tee1 ? parseFloat(form.tee1) : null,
+            tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
+            tde1: form.tde1 ? parseFloat(form.tde1) : null,
+            estepe: form.estepe ? parseFloat(form.estepe) : null,
+            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined,
+            _isPendingSync: true
+          }
+          await localDb.put("pneus_inspecao", newInspecao)
+          await localDb.addToQueue("pneu", "create", serialized)
+        }
+
+        window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+        window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"))
+        
         clearDraft()
         onSuccess()
         onClose()
+        alert('✅ Boletim de pneu salvo localmente! Sincronizará automaticamente quando restabelecer conexão.')
       }
     } catch (err) {
       setError('Erro ao processar requisição.')

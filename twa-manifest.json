@@ -1,0 +1,49 @@
+{
+  "packageId": "com.eunaman.pcm",
+  "host": "eunaman-pcm.vercel.app",
+  "name": "EUNAMAN PCM",
+  "launcherName": "EUNAMAN",
+  "display": "standalone",
+  "themeColor": "#09090b",
+  "navigationColor": "#09090b",
+  "navigationColorDark": "#09090b",
+  "navigationDividerColor": "#09090b",
+  "navigationDividerColorDark": "#09090b",
+  "backgroundColor": "#ffffff",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://eunaman-pcm.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://eunaman-pcm.vercel.app/icon-512.png",
+  "monochromeIconUrl": "https://eunaman-pcm.vercel.app/icon-512.png",
+  "appVersion": "1",
+  "appVersionName": "1.0.0",
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://eunaman-pcm.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://eunaman-pcm.vercel.app/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [],
+  "serviceAccountJsonFile": "",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

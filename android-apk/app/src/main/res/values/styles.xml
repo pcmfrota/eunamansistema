@@ -1,0 +1,10 @@
+<resources>
+    <!-- App theme - no action bar, dark background for splash -->
+    <style name="Theme.EUNAMAN" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/colorSplash</item>
+        <item name="android:statusBarColor">@color/colorPrimary</item>
+        <item name="android:navigationBarColor">@color/colorPrimary</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

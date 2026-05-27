@@ -16,6 +16,8 @@ import {
 import { registrarHorimetro } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import * as XLSX from 'xlsx'
+import { useOffline } from '@/components/offline-provider'
+import { localDb, serializeFormData } from '@/lib/offline-db'
 
 interface Equipamento {
   id: string
@@ -41,6 +43,7 @@ const INITIAL_FORM = {
 }
 
 export default function NovoModal({ equipamentos }: NovoModalProps) {
+  const { isOnline } = useOffline()
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,14 +77,50 @@ export default function NovoModal({ equipamentos }: NovoModalProps) {
       const formData = new FormData()
       Object.entries(form).forEach(([key, value]) => formData.append(key, value))
 
-      const result = await registrarHorimetro(formData)
+      if (isOnline) {
+        const result = await registrarHorimetro(formData)
 
-      if ('error' in result) {
-        setError(result.error)
+        if ('error' in result) {
+          setError(result.error)
+        } else {
+          // Quando online, precisamos recarregar os dados do Supabase. 
+          // O triggerSync ou a recarga da página cuidará disso, mas vamos 
+          // também atualizar o IndexedDB local preventivamente.
+          const localPrevs = await localDb.getAll('preventivas')
+          const matched = localPrevs.find(p => p.equipamento_id === form.equipamento_id)
+          if (matched) {
+            matched.horimetro_atual = parseFloat(form.horimetro_final)
+            matched.data_atualizacao = form.data_referencia
+            await localDb.put('preventivas', matched)
+            window.dispatchEvent(new CustomEvent('offline-db-updated-preventivas'))
+          }
+          clearDraft()
+          setIsOpen(false)
+        }
       } else {
+        // Cenário offline
+        const serialized = serializeFormData(formData)
+        await localDb.addToQueue('horimetro', 'register', serialized)
+
+        // Atualiza a preventiva no IndexedDB local imediatamente para refletir na tela
+        const localPrevs = await localDb.getAll('preventivas')
+        const matched = localPrevs.find(p => p.equipamento_id === form.equipamento_id)
+        if (matched) {
+          const updated = {
+            ...matched,
+            horimetro_atual: parseFloat(form.horimetro_final),
+            data_atualizacao: form.data_referencia,
+            _isPendingSync: true
+          }
+          await localDb.put('preventivas', updated)
+        }
+
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'))
+        window.dispatchEvent(new CustomEvent('offline-db-updated-preventivas'))
+        
         clearDraft()
         setIsOpen(false)
-        // O revalidatePath nas actions deve cuidar da atualização
+        alert('✅ Apontamento salvo localmente! Será sincronizado assim que a conexão retornar.')
       }
     } catch (err) {
       setError('Erro ao processar requisição.')
