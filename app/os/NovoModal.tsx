@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { criarOrdemServico, atualizarOrdemServico } from "./actions";
 import { useOffline } from "@/components/offline-provider";
@@ -64,6 +64,7 @@ export default function OSFormModal({
 }: OSFormModalProps) {
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
+  const isSubmitting = useRef(false); // Guard contra duplo clique
   const [equip, setEquip] = useState<Equipamento | null>(null);
   const [foiReserva, setFoiReserva] = useState(initialData?.foi_enviado_reserva || false);
   const [sistema, setSistema] = useState(initialData?.sistema || "");
@@ -102,7 +103,12 @@ export default function OSFormModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Guard contra duplo clique / duplo submit
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setLoading(true);
+
     try {
       const fd = new FormData(e.currentTarget);
       fd.set("placa", equip?.placa || "");
@@ -118,16 +124,24 @@ export default function OSFormModal({
           ? await atualizarOrdemServico(initialData.id, fd)
           : await criarOrdemServico(fd);
 
-        if (res && typeof res === "object" && "error" in res) { 
-          alert("Erro: " + res.error); 
-        } else { 
-          // Only save to localDb if res actually contains an id (it might just be { success: true })
+        if (res && typeof res === "object" && "error" in res) {
+          // Erro real vindo do servidor
+          alert("Erro ao salvar: " + res.error);
+          return;
+        }
+
+        // Salvo com sucesso no Supabase — atualiza cache local sem bloquear
+        try {
           if (res && typeof res === "object" && "id" in res) {
             await localDb.put("ordens_servico", res);
           }
-          window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
-          onClose(); 
+        } catch (cacheErr) {
+          // Erro no cache local é não-crítico: o dado já foi salvo no servidor
+          console.warn("[Cache] Falha ao atualizar IndexedDB (não-crítico):", cacheErr);
         }
+
+        window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
+        onClose();
       } else {
         // Cenário offline
         if (initialData) {
@@ -177,7 +191,7 @@ export default function OSFormModal({
           await localDb.put("ordens_servico", newOS);
           await localDb.addToQueue("os", "create", serialized);
         }
-        
+
         // Notifica as tabelas e fecha o modal
         window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
         window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
@@ -188,6 +202,7 @@ export default function OSFormModal({
       alert("Erro inesperado ao salvar a OS. Tente novamente.");
     } finally {
       setLoading(false);
+      isSubmitting.current = false;
     }
   };
 
@@ -389,7 +404,7 @@ export default function OSFormModal({
               Cancelar
             </button>
             <button type="submit" disabled={loading}
-              className="px-5 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm">
+              className="px-5 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
               {loading ? "Salvando..." : initialData ? "Salvar Alterações" : "Criar OS"}
             </button>
           </div>
