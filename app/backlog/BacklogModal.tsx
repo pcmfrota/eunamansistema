@@ -78,6 +78,7 @@ export default function BacklogModal({
 }) {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const isSubmitting = useRef(false)
   const { isOnline } = useOffline()
   const { form, setForm, clearDraft, hasContent } = useFormDraft('backlog', initialValues)
 
@@ -103,34 +104,51 @@ export default function BacklogModal({
   const handlePrev = () => step > 1 && setStep(step - 1)
 
   const handleSubmit = async () => {
+    if (isSubmitting.current) return
+    isSubmitting.current = true
     setLoading(true)
-    if (isOnline) {
-      const res = await upsertBacklogItem(form)
-      if (res.success) {
-        // Salva cópia atualizada no banco local
-        await localDb.put("backlog", res.data || form)
-        window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"))
+
+    try {
+      if (isOnline) {
+        const res = await upsertBacklogItem(form)
+
+        if (res.error) {
+          alert('Erro ao salvar: ' + res.error)
+          return
+        }
+
+        // Salva cópia atualizada no banco local (não-crítico)
+        try {
+          await localDb.put('backlog', res.data || form)
+        } catch (cacheErr) {
+          console.warn('[Cache] Falha ao atualizar IndexedDB:', cacheErr)
+        }
+
+        window.dispatchEvent(new CustomEvent('offline-db-updated-backlog'))
         clearDraft()
         onClose()
       } else {
-        alert("Erro: " + res.error)
+        // Cenário offline
+        const localItem = {
+          ...form,
+          id: form.id || `temp_backlog_${Date.now()}`,
+          _isPendingSync: true
+        }
+        await localDb.put('backlog', localItem)
+        await localDb.addToQueue('backlog', editData ? 'update' : 'create', localItem)
+
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'))
+        window.dispatchEvent(new CustomEvent('offline-db-updated-backlog'))
+        clearDraft()
+        onClose()
       }
-    } else {
-      // Cenário offline: Gerar ID se for novo
-      const localItem = {
-        ...form,
-        id: form.id || `temp_backlog_${Date.now()}`,
-        _isPendingSync: true
-      }
-      await localDb.put("backlog", localItem)
-      await localDb.addToQueue("backlog", editData ? "update" : "create", localItem)
-      
-      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
-      window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"))
-      clearDraft()
-      onClose()
+    } catch (error: any) {
+      console.error('Erro inesperado ao concluir backlog:', error)
+      alert('Erro inesperado. Tente novamente.')
+    } finally {
+      setLoading(false)
+      isSubmitting.current = false
     }
-    setLoading(false)
   }
 
   return (
@@ -352,9 +370,9 @@ export default function BacklogModal({
                <button
                  onClick={handleSubmit}
                  disabled={loading}
-                 className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-black shadow-xl shadow-indigo-500/30 transition-all font-bold"
+                 className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-black shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                >
-                 {loading ? <Clock size={16} className="animate-spin" /> : "CONCLUIR BACKLOG"}
+                 {loading ? <><Clock size={16} className="animate-spin" /> Salvando...</> : 'CONCLUIR BACKLOG'}
                </button>
              )}
           </div>
