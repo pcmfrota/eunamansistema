@@ -4,6 +4,15 @@ android {
     compileSdk 34
     namespace 'com.eunaman.pcm'
 
+    signingConfigs {
+        release {
+            storeFile file('../eunaman.keystore')
+            storePassword 'eunaman2024'
+            keyAlias 'eunaman'
+            keyPassword 'eunaman2024'
+        }
+    }
+
     defaultConfig {
         applicationId "com.eunaman.pcm"
         minSdk 21
@@ -21,7 +30,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug  // Remover para APK de produção
+            signingConfig signingConfigs.release
         }
     }
 

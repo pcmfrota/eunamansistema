@@ -103,83 +103,91 @@ export default function OSFormModal({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
-    fd.set("placa", equip?.placa || "");
-    // CRÍTICO: módulo é readOnly — precisa ser setado manualmente no FormData
-    fd.set("modulo", equip?.modulo || "");
-    fd.set("horas_manutencao", String(Number((diffMin/60).toFixed(2))));
-    fd.set("sistema", sistema);
-    fd.set("sub_sistema", subSistema);
-    fd.set("componente", componente);
+    try {
+      const fd = new FormData(e.currentTarget);
+      fd.set("placa", equip?.placa || "");
+      // CRÍTICO: módulo é readOnly — precisa ser setado manualmente no FormData
+      fd.set("modulo", equip?.modulo || "");
+      fd.set("horas_manutencao", String(Number((diffMin/60).toFixed(2))));
+      fd.set("sistema", sistema);
+      fd.set("sub_sistema", subSistema);
+      fd.set("componente", componente);
 
-    if (isOnline) {
-      const res = initialData
-        ? await atualizarOrdemServico(initialData.id, fd)
-        : await criarOrdemServico(fd);
+      if (isOnline) {
+        const res = initialData
+          ? await atualizarOrdemServico(initialData.id, fd)
+          : await criarOrdemServico(fd);
 
-      if ("error" in res) { 
-        alert("Erro: " + res.error); 
-      } else { 
-        await localDb.put("ordens_servico", res);
-        window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
-        onClose(); 
-      }
-    } else {
-      // Cenário offline
-      if (initialData) {
-        // Editar OS Offline
-        const serialized = serializeFormData(fd);
-        const updatedOS = {
-          ...initialData,
-          ...serialized,
-          horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
-          horas_manutencao: Number((diffMin/60).toFixed(2)),
-          foi_enviado_reserva: fd.get("foi_enviado_reserva") === "on",
-          _isPendingSync: true
-        };
-        await localDb.put("ordens_servico", updatedOS);
-        await localDb.addToQueue("os", "update", { id: initialData.id, ...serialized });
+        if (res && typeof res === "object" && "error" in res) { 
+          alert("Erro: " + res.error); 
+        } else { 
+          if (res) {
+            await localDb.put("ordens_servico", res);
+          }
+          window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
+          onClose(); 
+        }
       } else {
-        // Criar OS Offline
-        const serialized = serializeFormData(fd);
-        const tempId = `temp_os_${Date.now()}`;
-        const tempNum = `OS-OFF-${Math.floor(Math.random() * 9000) + 1000}`;
-        const newOS = {
-          id: tempId,
-          numero_os: tempNum,
-          placa: equip?.placa || "",
-          modulo: equip?.modulo || "",
-          status: fd.get("status") as string || "Aberta",
-          data_abertura: fd.get("data_abertura") as string,
-          data_fechamento: (fd.get("data_fechamento") as string) || null,
-          horas_manutencao: Number((diffMin/60).toFixed(2)),
-          descricao: fd.get("descricao") as string,
-          horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
-          operacao_tipo: fd.get("operacao_tipo") as string,
-          local: fd.get("local") as string,
-          classe: fd.get("classe") as string || "CORRETIVA",
-          foi_enviado_reserva: fd.get("foi_enviado_reserva") === "on",
-          motivo: fd.get("motivo") as string,
-          sistema: sistema,
-          sub_sistema: subSistema,
-          componente: componente,
-          horario_parada: (fd.get("horario_parada") as string) || null,
-          qual_reserva: (fd.get("qual_reserva") as string) || null,
-          horas_reserva_chegou: (fd.get("horas_reserva_chegou") as string) || null,
-          observacoes: fd.get("observacoes") as string,
-          equipamento_id: fd.get("equipamento_id") as string,
-          _isPendingSync: true
-        };
-        await localDb.put("ordens_servico", newOS);
-        await localDb.addToQueue("os", "create", serialized);
+        // Cenário offline
+        if (initialData) {
+          // Editar OS Offline
+          const serialized = serializeFormData(fd);
+          const updatedOS = {
+            ...initialData,
+            ...serialized,
+            horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
+            horas_manutencao: Number((diffMin/60).toFixed(2)),
+            foi_enviado_reserva: fd.get("foi_enviado_reserva") === "on",
+            _isPendingSync: true
+          };
+          await localDb.put("ordens_servico", updatedOS);
+          await localDb.addToQueue("os", "update", { id: initialData.id, ...serialized });
+        } else {
+          // Criar OS Offline
+          const serialized = serializeFormData(fd);
+          const tempId = `temp_os_${Date.now()}`;
+          const tempNum = `OS-OFF-${Math.floor(Math.random() * 9000) + 1000}`;
+          const newOS = {
+            id: tempId,
+            numero_os: tempNum,
+            placa: equip?.placa || "",
+            modulo: equip?.modulo || "",
+            status: fd.get("status") as string || "Aberta",
+            data_abertura: fd.get("data_abertura") as string,
+            data_fechamento: (fd.get("data_fechamento") as string) || null,
+            horas_manutencao: Number((diffMin/60).toFixed(2)),
+            descricao: fd.get("descricao") as string,
+            horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
+            operacao_tipo: fd.get("operacao_tipo") as string,
+            local: fd.get("local") as string,
+            classe: fd.get("classe") as string || "CORRETIVA",
+            foi_enviado_reserva: fd.get("foi_enviado_reserva") === "on",
+            motivo: fd.get("motivo") as string,
+            sistema: sistema,
+            sub_sistema: subSistema,
+            componente: componente,
+            horario_parada: (fd.get("horario_parada") as string) || null,
+            qual_reserva: (fd.get("qual_reserva") as string) || null,
+            horas_reserva_chegou: (fd.get("horas_reserva_chegou") as string) || null,
+            observacoes: fd.get("observacoes") as string,
+            equipamento_id: fd.get("equipamento_id") as string,
+            _isPendingSync: true
+          };
+          await localDb.put("ordens_servico", newOS);
+          await localDb.addToQueue("os", "create", serialized);
+        }
+        
+        // Notifica as tabelas e fecha o modal
+        window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+        window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
+        onClose();
       }
-      
-      // Notifica as tabelas e fecha o modal
-      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
-      window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
-      onClose();
+    } catch (error: any) {
+      console.error("Erro inesperado no handleSubmit:", error);
+      alert("Erro inesperado ao salvar a OS. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
