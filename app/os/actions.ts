@@ -30,10 +30,20 @@ const parseFormData = (formData: FormData): OSInsert => ({
   numero_os: '' // Generator will handle this if empty
 })
 
+const extractMecanicos = (formData: FormData): string[] => {
+  const mecanicos: string[] = [];
+  for (let i = 1; i <= 5; i++) {
+    const nome = (formData.get(`mecanico_${i}`) as string || '').trim();
+    if (nome) mecanicos.push(nome);
+  }
+  return mecanicos;
+}
+
 
 export async function criarOrdemServico(formData: FormData) {
   try {
     const data = parseFormData(formData)
+    data.mecanicos = extractMecanicos(formData)
     const result = await OSService.createOS(data)
     revalidatePath('/os')
     revalidatePath('/')
@@ -57,6 +67,7 @@ export async function atualizarStatusOS(id: string, novoStatus: string) {
 export async function atualizarOrdemServico(id: string, formData: FormData) {
   try {
     const data = parseFormData(formData)
+    data.mecanicos = extractMecanicos(formData)
     const result = await OSService.updateOS(id, data as OSUpdate)
     revalidatePath('/os')
     revalidatePath('/')

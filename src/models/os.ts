@@ -22,6 +22,7 @@ export interface OS {
   horas_reserva_chegou?: string | null;
   observacoes?: string | null;
   componente?: string | null;
+  mecanicos?: string[] | null;
   created_at?: string;
 }
 

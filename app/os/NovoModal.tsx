@@ -72,6 +72,9 @@ export default function OSFormModal({
   const [componente, setComponente] = useState(initialData?.componente || "");
   const [dataAbertura, setDataAbertura] = useState(initialData?.data_abertura?.slice(0,16) || getLocalDT());
   const [dataFechamento, setDataFechamento] = useState(initialData?.data_fechamento?.slice(0,16) || "");
+  const [mecanicos, setMecanicos] = useState<string[]>(
+    (initialData as any)?.mecanicos?.length ? (initialData as any).mecanicos : [""]
+  );
 
   // Catalogos em cascata
   const sistemasUnicos = Array.from(new Set(catalogo.map(c => c.sistema))).sort();
@@ -118,6 +121,11 @@ export default function OSFormModal({
       fd.set("sistema", sistema);
       fd.set("sub_sistema", subSistema);
       fd.set("componente", componente);
+
+      // Mecânicos: envia cada nome individualmente
+      mecanicos.forEach((nome, idx) => {
+        fd.set(`mecanico_${idx + 1}`, nome.trim());
+      });
 
       if (isOnline) {
         const res = initialData
@@ -181,6 +189,7 @@ export default function OSFormModal({
             sistema: sistema,
             sub_sistema: subSistema,
             componente: componente,
+            mecanicos: mecanicos.filter(m => m.trim() !== ""),
             horario_parada: (fd.get("horario_parada") as string) || null,
             qual_reserva: (fd.get("qual_reserva") as string) || null,
             horas_reserva_chegou: (fd.get("horas_reserva_chegou") as string) || null,
@@ -359,6 +368,52 @@ export default function OSFormModal({
               )}
             </select>
           </Field>
+
+          {/* Mecânicos */}
+          <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                🔧 Mecânicos Executores
+              </p>
+              {mecanicos.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() => setMecanicos(prev => [...prev, ""])}
+                  className="text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 font-medium flex items-center gap-1 transition-colors"
+                >
+                  <span className="text-base leading-none">+</span> Adicionar mecânico
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              {mecanicos.map((nome, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400 w-4 shrink-0">{idx + 1}.</span>
+                  <input
+                    type="text"
+                    value={nome}
+                    onChange={e => {
+                      const copia = [...mecanicos];
+                      copia[idx] = e.target.value;
+                      setMecanicos(copia);
+                    }}
+                    placeholder={`Nome do mecânico ${idx + 1}...`}
+                    className={`${I} flex-1`}
+                  />
+                  {mecanicos.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setMecanicos(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-red-400 hover:text-red-600 transition-colors text-lg leading-none px-1"
+                      title="Remover"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Sistema / Subsistema / Componente em cascata */}
           <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
