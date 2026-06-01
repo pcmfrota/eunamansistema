@@ -30,6 +30,7 @@ const OSSchema = z.object({
   qual_reserva: z.string().optional().nullable(),
   horas_reserva_chegou: z.string().optional().nullable(),
   observacoes: z.string().optional().nullable(),
+  componente: z.string().optional().nullable(),
 });
 
 export class OSService {

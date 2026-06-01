@@ -21,6 +21,7 @@ export interface OS {
   qual_reserva?: string | null;
   horas_reserva_chegou?: string | null;
   observacoes?: string | null;
+  componente?: string | null;
   created_at?: string;
 }
 

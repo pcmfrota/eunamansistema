@@ -121,7 +121,8 @@ export default function OSFormModal({
         if (res && typeof res === "object" && "error" in res) { 
           alert("Erro: " + res.error); 
         } else { 
-          if (res) {
+          // Only save to localDb if res actually contains an id (it might just be { success: true })
+          if (res && typeof res === "object" && "id" in res) {
             await localDb.put("ordens_servico", res);
           }
           window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
