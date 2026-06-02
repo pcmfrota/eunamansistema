@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { Edit2, Save, X, Calendar as CalendarIcon, ShieldAlert } from "lucide-react";
-import { saveCalendario, importarCronograma2026 } from "./actions";
+import { saveCalendario, importarCronograma2026, limparDuplicatasCalendario } from "./actions";
+
 import { useAuth } from "@/components/auth-context";
 
 const MESES_NOME = [
@@ -18,6 +19,7 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
 
   async function handleImport() {
     if (!confirm("Isso irá importar todos os meses de 2026. Deseja continuar?")) return;
@@ -25,10 +27,23 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
     try {
       await importarCronograma2026();
       window.location.reload();
-    } catch (error) {
-      alert("Erro ao importar!");
+    } catch (error: any) {
+      alert(error?.message || "Erro ao importar!");
     } finally {
       setIsImporting(false);
+    }
+  }
+
+  async function handleLimparDuplicatas() {
+    if (!confirm("Isso irá remover todas as duplicatas do calendário, mantendo apenas 1 registro por mês. Continuar?")) return;
+    setIsCleaning(true);
+    try {
+      await limparDuplicatasCalendario();
+      window.location.reload();
+    } catch (error: any) {
+      alert(error?.message || "Erro ao limpar duplicatas!");
+    } finally {
+      setIsCleaning(false);
     }
   }
 
@@ -45,20 +60,29 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         {isVisitante ? (
           <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl text-sm border border-zinc-200 dark:border-zinc-700 shadow-sm">
             <ShieldAlert size={16} />
             <span>Somente Leitura</span>
           </div>
         ) : (
-          <button
-            onClick={handleImport}
-            disabled={isImporting}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
-          >
-            {isImporting ? "Importando..." : "Importar Cronograma 2026"}
-          </button>
+          <>
+            <button
+              onClick={handleLimparDuplicatas}
+              disabled={isCleaning}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20 disabled:opacity-50"
+            >
+              {isCleaning ? "Limpando..." : "🧹 Limpar Duplicatas"}
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={isImporting}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+            >
+              {isImporting ? "Importando..." : "Importar Cronograma 2026"}
+            </button>
+          </>
         )}
       </div>
 
