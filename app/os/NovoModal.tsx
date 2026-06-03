@@ -29,6 +29,7 @@ type OS = {
   horas_reserva_chegou: string | null;
   observacoes: string | null;
   equipamento_id: string;
+  assinatura_mecanico?: string | null;
 };
 
 type Equipamento = { id: string; placa: string; modulo?: string; ultimoHist?: number };
@@ -75,6 +76,10 @@ export default function OSFormModal({
   const [mecanicos, setMecanicos] = useState<string[]>(
     (initialData as any)?.mecanicos?.length ? (initialData as any).mecanicos : [""]
   );
+  const [showSigPad, setShowSigPad] = useState(false);
+  const [assinaturaDataUrl, setAssinaturaDataUrl] = useState(initialData?.assinatura_mecanico || "");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   // Catalogos em cascata
   const sistemasUnicos = Array.from(new Set(catalogo.map(c => c.sistema))).sort();
@@ -104,6 +109,84 @@ export default function OSFormModal({
     setEquip(eq);
   };
 
+  // ─── Assinatura Digital Canvas Draw Logic ──────────────────────────────────
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.strokeStyle = '#1e3a8a'; // Caneta azul escura
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    setIsDrawing(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    if ('touches' in e) {
+      if (e.cancelable) e.preventDefault();
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const saveSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Validar se o canvas não está em branco
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) {
+      alert("Por favor, faça a assinatura antes de salvar.");
+      return;
+    }
+
+    setAssinaturaDataUrl(canvas.toDataURL());
+    setShowSigPad(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -121,6 +204,7 @@ export default function OSFormModal({
       fd.set("sistema", sistema);
       fd.set("sub_sistema", subSistema);
       fd.set("componente", componente);
+      fd.set("assinatura_mecanico", assinaturaDataUrl);
 
       // Mecânicos: envia cada nome individualmente
       mecanicos.forEach((nome, idx) => {
@@ -195,6 +279,7 @@ export default function OSFormModal({
             horas_reserva_chegou: (fd.get("horas_reserva_chegou") as string) || null,
             observacoes: fd.get("observacoes") as string,
             equipamento_id: fd.get("equipamento_id") as string,
+            assinatura_mecanico: assinaturaDataUrl,
             _isPendingSync: true
           };
           await localDb.put("ordens_servico", newOS);
@@ -413,6 +498,31 @@ export default function OSFormModal({
                 </div>
               ))}
             </div>
+
+            {mecanicos.some(m => m.trim() !== "") && (
+              <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800/40 flex flex-col xs:flex-row xs:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wide">
+                    Assinatura Digital do Mecânico
+                  </p>
+                  {assinaturaDataUrl ? (
+                    <div className="mt-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg max-w-[200px] shadow-sm flex items-center justify-center">
+                      <img src={assinaturaDataUrl} alt="Assinatura" className="h-10 object-contain max-w-full" />
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Nenhuma assinatura registrada para esta OS</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSigPad(true)}
+                  className="shrink-0 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm self-start xs:self-center"
+                >
+                  {assinaturaDataUrl ? "Alterar Assinatura" : "Assinar Digitalmente"}
+                </button>
+              </div>
+            )}
+            <input type="hidden" name="assinatura_mecanico" value={assinaturaDataUrl} />
           </div>
 
           {/* Sistema / Subsistema / Componente em cascata */}
@@ -465,6 +575,70 @@ export default function OSFormModal({
           </div>
         </form>
       </div>
+
+      {/* ── Modal de Assinatura Digital (Signature Pad) ── */}
+      {showSigPad && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-zinc-950/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
+                Assinatura Digital
+              </h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Assine com o dedo ou mouse no quadro abaixo
+              </p>
+            </div>
+
+            {/* Canvas Area */}
+            <div className="relative border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 rounded-xl overflow-hidden h-[180px] flex items-center justify-center">
+              <canvas
+                ref={canvasRef}
+                width={340}
+                height={176}
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={(e) => {
+                  if (e.cancelable) e.preventDefault();
+                  draw(e);
+                }}
+                onTouchEnd={stopDrawing}
+                className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSigPad(false);
+                  setIsDrawing(false);
+                }}
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={clearCanvas}
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+              >
+                Limpar
+              </button>
+              <button
+                type="button"
+                onClick={saveSignature}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-sm"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

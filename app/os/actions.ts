@@ -27,6 +27,7 @@ const parseFormData = (formData: FormData): OSInsert => ({
   qual_reserva: (formData.get('qual_reserva') as string) || null,
   horas_reserva_chegou: (formData.get('horas_reserva_chegou') as string) || null,
   componente: (formData.get('componente') as string) || null,
+  assinatura_mecanico: (formData.get('assinatura_mecanico') as string) || null,
   numero_os: '' // Generator will handle this if empty
 })
 

@@ -32,6 +32,7 @@ const OSSchema = z.object({
   observacoes: z.string().optional().nullable(),
   componente: z.string().optional().nullable(),
   mecanicos: z.array(z.string()).optional().nullable().default([]),
+  assinatura_mecanico: z.string().optional().nullable(),
 });
 
 export class OSService {

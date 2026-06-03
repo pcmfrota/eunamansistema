@@ -44,6 +44,7 @@ type OS = {
   observacoes: string | null;
   horario_parada: string | null;
   equipamento_id: string;
+  assinatura_mecanico?: string | null;
 };
 
 type Equipamento = {
@@ -184,7 +185,8 @@ export default function ControleOSClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
   const [selectedOSActions, setSelectedOSActions] = useState<OS | null>(null);
-  const [autoPrintFicha, setAutoPrintFicha] = useState(false);
+  const [pdfAction, setPdfAction] = useState<'download' | 'share' | 'print' | null>(null);
+  const [exportingOS, setExportingOS] = useState<OS | null>(null);
   const [isPending, startTransition] = useTransition();
   const { profile } = useAuth();
 
@@ -332,10 +334,17 @@ export default function ControleOSClient({
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined" && !(window as any).XLSX) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js";
-      document.body.appendChild(script);
+    if (typeof window !== "undefined") {
+      if (!(window as any).XLSX) {
+        const script = document.createElement("script");
+        script.src = "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js";
+        document.body.appendChild(script);
+      }
+      if (!(window as any).html2pdf) {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        document.body.appendChild(script);
+      }
     }
   }, []);
 
@@ -761,10 +770,96 @@ export default function ControleOSClient({
           os={fichaOS}
           onClose={() => {
             setFichaOS(null);
-            setAutoPrintFicha(false);
+            setPdfAction(null);
           }}
-          autoPrint={autoPrintFicha}
+          pdfAction={pdfAction}
         />
+      )}
+
+      {/* ── Modal de Escolha de Exportação de PDF ── */}
+      {exportingOS && (
+        <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm transition-opacity">
+          {/* Backdrop close */}
+          <div className="absolute inset-0" onClick={() => setExportingOS(null)} />
+
+          {/* Card */}
+          <div className="relative z-10 w-full max-w-sm bg-white dark:bg-zinc-950 rounded-t-2xl sm:rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            <div className="w-12 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto my-3 sm:hidden" />
+
+            <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
+                  Exportar PDF
+                </h3>
+                <p className="text-xs text-zinc-500 font-mono mt-0.5">
+                  OS Nº {exportingOS.numero_os}
+                </p>
+              </div>
+              <button
+                onClick={() => setExportingOS(null)}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-500 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col gap-2 bg-zinc-50/50 dark:bg-zinc-950/50">
+              {/* Option 1: Baixar no dispositivo */}
+              <button
+                onClick={() => {
+                  setPdfAction('download');
+                  setFichaOS(exportingOS as unknown as OSFichaData);
+                  setExportingOS(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left"
+              >
+                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400">
+                  <Download size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold">Baixar no Dispositivo</p>
+                  <p className="text-[11px] text-zinc-400 font-medium">Salvar o arquivo PDF localmente</p>
+                </div>
+              </button>
+
+              {/* Option 2: Compartilhar para outros aplicativos */}
+              <button
+                onClick={() => {
+                  setPdfAction('share');
+                  setFichaOS(exportingOS as unknown as OSFichaData);
+                  setExportingOS(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left"
+              >
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400">
+                  <Printer size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold">Baixar e Compartilhar</p>
+                  <p className="text-[11px] text-zinc-400 font-medium">Salvar e abrir menu de envio (WhatsApp, etc.)</p>
+                </div>
+              </button>
+
+              {/* Option 3: Imprimir via Navegador */}
+              <button
+                onClick={() => {
+                  setPdfAction('print');
+                  setFichaOS(exportingOS as unknown as OSFichaData);
+                  setExportingOS(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left"
+              >
+                <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                  <Printer size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold">Imprimir via Navegador</p>
+                  <p className="text-[11px] text-zinc-400 font-medium">Abrir visualização de impressão padrão</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modal de Ações da OS para Celular/Telas menores ── */}
@@ -845,8 +940,7 @@ export default function ControleOSClient({
               {/* Option 3: Exportar PDF */}
               <button
                 onClick={() => {
-                  setAutoPrintFicha(true);
-                  setFichaOS(selectedOSActions as unknown as OSFichaData);
+                  setExportingOS(selectedOSActions);
                   setSelectedOSActions(null);
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left"

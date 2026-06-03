@@ -31,6 +31,8 @@ export type OSFichaData = {
   observacoes: string | null;
   equipamento_id: string;
   horas_impacto_do?: number; // Novo campo
+  mecanicos?: string[] | null;
+  assinatura_mecanico?: string | null;
   // fallback fields from OrdemServicoResumo
   veiculo_placa?: string | null;
   equipamento?: { placa?: string | null } | null;
@@ -174,10 +176,10 @@ function EunamanLogo({ size = 64 }: { size?: number }) {
 interface OSFichaModalProps {
   os: OSFichaData;
   onClose: () => void;
-  autoPrint?: boolean;
+  pdfAction?: 'download' | 'share' | 'print' | null;
 }
 
-export default function OSFichaModal({ os, onClose, autoPrint = false }: OSFichaModalProps) {
+export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaModalProps) {
   const [minutosDO, setMinutosDO] = useState<number | null>(null);
 
   useEffect(() => {
@@ -420,15 +422,22 @@ export default function OSFichaModal({ os, onClose, autoPrint = false }: OSFicha
           ${secTitle("Controle e Assinaturas")}
           <div style="display:flex;border-bottom:1px solid #333;">
             ${[
-              { l: "Executante / Mecânico", s: "Nome e Matrícula" },
-              { l: "Encarregado / Supervisor", s: "Visto e Matrícula" },
-              { l: "PCM / Planejamento", s: "Data de Encerramento" },
-              { l: "Operador / Motorista", s: "Recebimento" },
+              { 
+                l: "Executante / Mecânico", 
+                s: os.mecanicos?.length ? os.mecanicos.join(" / ") : "Nome e Matrícula",
+                sig: os.assinatura_mecanico
+              },
+              { l: "Encarregado / Supervisor", s: "Visto e Matrícula", sig: "" },
+              { l: "PCM / Planejamento", s: "Data de Encerramento", sig: "" },
+              { l: "Operador / Motorista", s: "Recebimento", sig: "" },
             ].map((a, i) => `
-              <div style="flex:1;padding:8px 6px;${i < 3 ? 'border-right:1px solid #333;' : ''}">
-                <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:18px;">${a.l}</p>
-                <div style="border-bottom:1px solid #111;"></div>
-                <p style="font-size:8px;text-align:center;color:#9ca3af;margin-top:3px;">${a.s}</p>
+              <div style="flex:1;padding:6px;min-height:85px;display:flex;flex-direction:column;justify-content:space-between;${i < 3 ? 'border-right:1px solid #333;' : ''}">
+                <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin:0 0 4px 0;">${a.l}</p>
+                <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;">
+                  ${a.sig ? `<img src="${a.sig}" style="height:32px;object-fit:contain;" />` : ''}
+                </div>
+                <div style="border-bottom:1px solid #111;margin-top:2px;"></div>
+                <p style="font-size:8px;text-align:center;color:#9ca3af;margin:3px 0 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.s}">${a.s}</p>
               </div>`).join("")}
           </div>
           <div style="display:flex;justify-content:space-between;padding:5px 10px;background:#f9fafb;border-top:1px solid #d1d5db;">
@@ -446,19 +455,109 @@ export default function OSFichaModal({ os, onClose, autoPrint = false }: OSFicha
 
 
   const [mounted, setMounted] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (autoPrint && minutosDO !== null) {
-      handlePrint();
-      onClose();
+    if (pdfAction && minutosDO !== null) {
+      if (pdfAction === "print") {
+        handlePrint();
+        onClose();
+        return;
+      }
+
+      const html2pdf = (window as any).html2pdf;
+      if (!html2pdf) {
+        const t = setTimeout(() => {
+          setMinutosDO((prev) => (prev !== null ? prev : 0));
+        }, 300);
+        return () => clearTimeout(t);
+      }
+
+      setIsExporting(true);
+
+      const element = document.getElementById("ficha-os-print");
+      const opt = {
+        margin:       [5, 5, 5, 5],
+        filename:     `OS_${os.numero_os}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      if (pdfAction === "download") {
+        html2pdf()
+          .set(opt)
+          .from(element)
+          .save()
+          .then(() => {
+            setIsExporting(false);
+            onClose();
+          })
+          .catch((err: any) => {
+            console.error("Erro ao gerar PDF:", err);
+            setIsExporting(false);
+            onClose();
+          });
+      } else if (pdfAction === "share") {
+        html2pdf()
+          .set(opt)
+          .from(element)
+          .toPdf()
+          .output("blob")
+          .then(async (blob: Blob) => {
+            // 1. Baixar localmente primeiro
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `OS_${os.numero_os}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // 2. Compartilhar
+            const file = new File([blob], `OS_${os.numero_os}.pdf`, { type: "application/pdf" });
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+              try {
+                await navigator.share({
+                  files: [file],
+                  title: `OS ${os.numero_os}`,
+                  text: `Ficha da Ordem de Serviço ${os.numero_os}`
+                });
+              } catch (shareErr) {
+                console.log("Compartilhamento cancelado ou falhou:", shareErr);
+              }
+            } else {
+              alert("Compartilhamento não suportado neste dispositivo. O arquivo foi apenas baixado.");
+            }
+            setIsExporting(false);
+            onClose();
+          })
+          .catch((err: any) => {
+            console.error("Erro ao compartilhar PDF:", err);
+            setIsExporting(false);
+            onClose();
+          });
+      }
     }
-  }, [autoPrint, minutosDO]);
+  }, [pdfAction, minutosDO, os]);
 
   if (!mounted) return null;
 
   return createPortal(
     <>
+      {isExporting && (
+        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <h3 className="font-bold text-lg tracking-wide">Gerando PDF da OS...</h3>
+            <p className="text-sm text-zinc-400">Preparando o arquivo para baixar e compartilhar</p>
+          </div>
+        </div>
+      )}
+
       <div id="ficha-print-root" className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md">
         {/* Backdrop close */}
         <div className="absolute inset-0 no-print" onClick={onClose} />
@@ -667,22 +766,33 @@ export default function OSFichaModal({ os, onClose, autoPrint = false }: OSFicha
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-gray-900 text-black">
                     {[
-                      { label: "Executante / Mecânico", sub: "Nome e Matrícula" },
+                      { 
+                        label: "Executante / Mecânico", 
+                        sub: os.mecanicos?.length ? os.mecanicos.join(" / ") : "Nome e Matrícula",
+                        signature: os.assinatura_mecanico
+                      },
                       { label: "Encarregado / Supervisor", sub: "Visto e Matrícula" },
                       { label: "PCM / Planejamento", sub: "Data de Encerramento" },
                       { label: "Operador / Motorista", sub: "Recebimento" },
                     ].map((a, i) => (
                       <div
                         key={a.label}
-                        className={`px-3 py-3 ${
+                        className={`px-3 py-2 flex flex-col justify-between min-h-[95px] ${
                           i % 2 === 0 ? "border-r border-gray-900" : ""
                         } ${
                           i < 2 ? "border-b border-gray-900" : ""
                         } sm:border-b-0 sm:border-r ${i === 3 ? "sm:border-r-0" : ""} border-gray-900`}
                       >
-                        <p className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold mb-6">{a.label}</p>
-                        <div className="border-b border-gray-800 mt-2" />
-                        <p className="text-[9px] text-center text-gray-400 mt-1">{a.sub}</p>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold mb-1">{a.label}</p>
+                        <div className="flex-1 flex items-center justify-center min-h-[35px] max-w-full">
+                          {a.signature ? (
+                            <img src={a.signature} alt="Assinatura" className="h-9 object-contain max-w-full" />
+                          ) : (
+                            <div className="h-9" />
+                          )}
+                        </div>
+                        <div className="border-b border-gray-800 mt-1" />
+                        <p className="text-[8px] text-center text-gray-400 mt-1 truncate max-w-full" title={a.sub}>{a.sub}</p>
                       </div>
                     ))}
                   </div>
