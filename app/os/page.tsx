@@ -40,6 +40,7 @@ export default async function ControleOSPage() {
       horas_manutencao, descricao, horimetro, operacao_tipo, local, classe, 
       foi_enviado_reserva, motivo, sistema, sub_sistema, componente, 
       observacoes, horario_parada, equipamento_id, qual_reserva, horas_reserva_chegou,
+      mecanicos, assinatura_mecanico,
       equipamento:equipamento_id (placa, modulo)
     `)
     .not('equipamento_id', 'is', null)
