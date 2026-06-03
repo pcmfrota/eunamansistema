@@ -456,14 +456,9 @@ function FullscreenChartModal({
         </button>
       </div>
 
-      {/* Área rolável com o gráfico */}
-      <div
-        className="flex-1 overflow-auto bg-white dark:bg-zinc-950"
-        style={{ WebkitOverflowScrolling: 'touch' }}
-      >
-        <div className="p-3">
-          {children}
-        </div>
+      {/* Área do gráfico sem rolagem, ocupando toda a tela restante */}
+      <div className="flex-1 min-h-0 w-full p-4 relative bg-white dark:bg-[#0f1115]">
+        {children}
       </div>
     </div>,
     document.body
@@ -597,41 +592,37 @@ export function GraficoVeiculos({
           title={String(title).toUpperCase()}
           onClose={() => setFullscreen(false)}
         >
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ minWidth: Math.max(600, chartData.length * 80), width: '100%' }}>
-              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
-                <BarChart
-                  data={chartData}
-                  margin={{ top: 24, right: 16, left: -16, bottom: 60 }}
-                  barCategoryGap="18%"
-                  onClick={(data) => {
-                    if (data?.activePayload?.[0]?.payload?.nome) {
-                      const p = data.activePayload[0].payload.nome;
-                      const found = chartData.find(d => d.placa === p);
-                      if (found) { setSelected(found as any); setFullscreen(false); }
-                    }
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: tickColor, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: gridColor }} interval={0} angle={-45} textAnchor="end" dy={5} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
-                  <Bar dataKey="disp" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
-                    {chartData.map((entry, index) => {
-                      let color = '#3b82f6';
-                      if (tipoAvailability === 'DM') {
-                        color = mostrarIndisponibilidade ? (entry.disp > 0 ? '#ef4444' : '#e4e4e7') : getColorDisp(entry.dispDM);
-                      } else {
-                        color = mostrarIndisponibilidade ? (entry.disp > 0 ? '#ef4444' : '#e4e4e7') : getColorDisp(entry.dispDO);
-                      }
-                      return <Cell key={`fs-cell-${index}`} fill={color} />;
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{ top: 24, right: 16, left: -16, bottom: 60 }}
+              barCategoryGap="10%"
+              onClick={(data) => {
+                if (data?.activePayload?.[0]?.payload?.nome) {
+                  const p = data.activePayload[0].payload.nome;
+                  const found = chartData.find(d => d.placa === p);
+                  if (found) { setSelected(found as any); setFullscreen(false); }
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+              <XAxis dataKey="nome" tick={{ fontSize: chartData.length > 20 ? 8 : 10, fill: tickColor, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: gridColor }} interval={0} angle={-45} textAnchor="end" dy={5} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
+              <Bar dataKey="disp" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: chartData.length > 20 ? 8 : 10, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
+                {chartData.map((entry, index) => {
+                  let color = '#3b82f6';
+                  if (tipoAvailability === 'DM') {
+                    color = mostrarIndisponibilidade ? (entry.disp > 0 ? '#ef4444' : '#e4e4e7') : getColorDisp(entry.dispDM);
+                  } else {
+                    color = mostrarIndisponibilidade ? (entry.disp > 0 ? '#ef4444' : '#e4e4e7') : getColorDisp(entry.dispDO);
+                  }
+                  return <Cell key={`fs-cell-${index}`} fill={color} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </FullscreenChartModal>
       )}
 
@@ -826,20 +817,31 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
           title="STATUS DAS PREVENTIVAS POR PLACA"
           onClose={() => setFullscreen(false)}
         >
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ minWidth: Math.max(600, chartData.length * 80), width: '100%' }}>
-              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
-                <BarChart data={chartData} margin={{ top: 10, right: 16, left: -20, bottom: 60 }} barCategoryGap="12%">
-                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: tickColor, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: gridColor }} interval={0} angle={-45} textAnchor="end" dy={5} />
-                  <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: isDark ? '#1a1f2e' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e2e8f0', borderRadius: '8px', fontSize: '12px' }} formatter={(v: any, name: any, props: any) => [props.payload.text, 'Horas Restantes']} />
-                  <Bar dataKey="val" radius={[2, 2, 0, 0]} label={renderCustomBarLabel}>
-                    {chartData.map((entry, index) => (<Cell key={`fs-cell-${index}`} fill={getColorPrev(entry.status)} />))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 10, right: 16, left: -20, bottom: 60 }} barCategoryGap="8%">
+              <XAxis dataKey="nome" tick={{ fontSize: chartData.length > 20 ? 8 : 10, fill: tickColor, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: gridColor }} interval={0} angle={-45} textAnchor="end" dy={5} />
+              <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
+              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: isDark ? '#1a1f2e' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e2e8f0', borderRadius: '8px', fontSize: '12px' }} formatter={(v: any, name: any, props: any) => [props.payload.text, 'Horas Restantes']} />
+              <Bar dataKey="val" radius={[2, 2, 0, 0]} label={(props: any) => {
+                const { x, y, width, height, index } = props;
+                const text = chartData[index]?.text;
+                return (
+                  <text
+                    x={x + width / 2}
+                    y={y + height / 2 + 4}
+                    fill={isDark ? "#f8fafc" : "#0f172a"} 
+                    fontSize={chartData.length > 20 ? 8 : 10}
+                    textAnchor="middle"
+                    fontWeight={800}
+                  >
+                    {text}
+                  </text>
+                );
+              }}>
+                {chartData.map((entry, index) => (<Cell key={`fs-cell-${index}`} fill={getColorPrev(entry.status)} />))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </FullscreenChartModal>
       )}
 
@@ -1816,22 +1818,18 @@ export function GraficoDMModulo({
           title="DM% por Módulo"
           onClose={() => setFullscreen(false)}
         >
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ minWidth: Math.max(600, dados.length * 100), width: '100%' }}>
-              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
-                <BarChart data={dados} margin={{ top: 28, right: 20, left: -10, bottom: 10 }} barCategoryGap="22%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
-                  <XAxis dataKey="modulo" tick={{ fill: tickC, fontSize: 12, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
-                  <YAxis domain={[0, 100]} tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.07)' }} />
-                  <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="6 4" strokeWidth={1.5} label={{ value: 'Meta 95%', fill: '#22c55e', fontSize: 11, fontWeight: 700, position: 'insideTopRight' }} />
-                  <Bar dataKey="dm" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: labelC, fontSize: 12, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}>
-                    {dados.map((entry, i) => (<Cell key={`fs-mod-${i}`} fill={entry.dm >= 95 ? '#22c55e' : entry.dm >= 90 ? '#f59e0b' : '#ef4444'} />))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dados} margin={{ top: 28, right: 20, left: -10, bottom: 10 }} barCategoryGap="15%">
+              <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+              <XAxis dataKey="modulo" tick={{ fill: tickC, fontSize: dados.length > 20 ? 8 : 11, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
+              <YAxis domain={[0, 100]} tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.07)' }} />
+              <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="6 4" strokeWidth={1.5} label={{ value: 'Meta 95%', fill: '#22c55e', fontSize: 11, fontWeight: 700, position: 'insideTopRight' }} />
+              <Bar dataKey="dm" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: labelC, fontSize: dados.length > 20 ? 8 : 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}>
+                {dados.map((entry, i) => (<Cell key={`fs-mod-${i}`} fill={entry.dm >= 95 ? '#22c55e' : entry.dm >= 90 ? '#f59e0b' : '#ef4444'} />))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </FullscreenChartModal>
       )}
 
@@ -2006,7 +2004,7 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
           title="DM POR MÊS — DISPONIBILIDADE MECÂNICA"
           onClose={() => setFullscreen(false)}
         >
-          <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={dados} margin={{ top: 36, right: 24, left: -10, bottom: 10 }}>
               <defs>
                 <linearGradient id="gradDMFS" x1="0" y1="0" x2="0" y2="1">
