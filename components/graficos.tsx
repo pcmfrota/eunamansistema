@@ -1117,6 +1117,31 @@ export function GraficoParadasCategoria({ dados }: { dados: { categoria: string;
   );
 }
 
+function formatarTempoManut(horasDec: number): string {
+  if (horasDec <= 0) return "—";
+  
+  const totalMinutos = Math.round(horasDec * 60);
+  const dias = Math.floor(totalMinutos / (24 * 60));
+  const horas = Math.floor((totalMinutos % (24 * 60)) / 60);
+  const mins = totalMinutos % 60;
+  
+  const partes = [];
+  if (dias > 0) {
+    partes.push(dias === 1 ? "1 dia" : `${dias} dias`);
+  }
+  if (horas > 0) {
+    partes.push(`${horas}h`);
+  }
+  if (mins > 0) {
+    partes.push(`${mins}min`);
+  }
+  
+  if (partes.length === 3) {
+    return `${partes[0]}, ${partes[1]} e ${partes[2]}`;
+  }
+  return partes.join(" e ");
+}
+
 // ─── 14. Ranking de Falhas (Tabela) ──────────────────────────────────────────
 export function RankingFalhas({ dados }: { dados: { placa: string; falhas: number; mtbf: number; diasManut?: number }[] }) {
   return (
@@ -1130,7 +1155,7 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
             <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500">
               <th className="pb-3 px-2 font-medium">Equipamento</th>
               <th className="pb-3 px-2 font-medium">Nº Falhas</th>
-              <th className="pb-3 px-2 font-medium text-right">Dias Manut.</th>
+              <th className="pb-3 px-2 font-medium text-right">Tempo Manut.</th>
               <th className="pb-3 px-2 font-medium text-right">MTBF</th>
             </tr>
           </thead>
@@ -1150,8 +1175,8 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
                     {item.falhas}
                   </span>
                 </td>
-                <td className="py-3 px-2 text-right text-zinc-500">
-                  {item.diasManut != null ? `${item.diasManut} d` : "0 d"}
+                <td className="py-3 px-2 text-right text-zinc-500 font-medium whitespace-nowrap">
+                  {item.diasManut != null ? formatarTempoManut(item.diasManut) : "—"}
                 </td>
                 <td className="py-3 px-2 text-right text-zinc-500">
                   {item.mtbf > 0 ? `${item.mtbf} h` : "—"}

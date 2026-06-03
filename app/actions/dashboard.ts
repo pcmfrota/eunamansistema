@@ -694,7 +694,7 @@ export async function getDashboardData(filtros?: {
     totalEquipamentos: frotaFiltrada.length,
     totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
-    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasOperacional) / (v as any).falhas)*10)/10 : 0, diasManut: Math.round(((v.horasManutOS || 0) / 24) * 10) / 10 })),
+    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasOperacional) / (v as any).falhas)*10)/10 : 0, diasManut: v.horasManutOS || 0 })),
     paradasPorCategoria: Array.from(categoriasMap.entries()).map(([categoria, quantidade]) => ({ categoria, quantidade })),
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([tipo, quantidade]) => ({ tipo, quantidade })),
     dispPorTipo: Array.from(modelosMap.entries()).map(([tipo, data]) => ({ tipo, disponibilidade: Math.round((data.soma / data.count) * 10) / 10, total: data.count })),

@@ -32,6 +32,20 @@ interface DashboardDataLocal {
 function pct(v: number) { return `${v.toFixed(1)}%`; }
 function h(v: number | null | undefined) { return v != null ? `${v}h` : '—'; }
 
+function formatarTempoManut(horasDec: number): string {
+  if (horasDec <= 0) return "—";
+  const totalMinutos = Math.round(horasDec * 60);
+  const dias = Math.floor(totalMinutos / (24 * 60));
+  const horas = Math.floor((totalMinutos % (24 * 60)) / 60);
+  const mins = totalMinutos % 60;
+  const partes = [];
+  if (dias > 0) partes.push(dias === 1 ? "1 dia" : `${dias} dias`);
+  if (horas > 0) partes.push(`${horas}h`);
+  if (mins > 0) partes.push(`${mins}min`);
+  if (partes.length === 3) return `${partes[0]}, ${partes[1]} e ${partes[2]}`;
+  return partes.join(" e ");
+}
+
 
 function statusCor(val: number) {
   if (val >= 95) return '#22c55e';
@@ -278,7 +292,7 @@ export function gerarSlideHTML(data: DashboardDataLocal, periodo: string, catego
           <td style="font-weight:700;color:#f59e0b">#${i + 1}</td>
           <td style="font-weight:700;color:#f1f5f9">${f.placa ?? '—'}</td>
           <td style="text-align:center;font-weight:800;color:#ef4444">${f.falhas ?? '—'}</td>
-          <td style="text-align:center;color:#e2e8f0;font-weight:600">${f.diasManut != null ? `${f.diasManut}d` : '0d'}</td>
+          <td style="text-align:center;color:#e2e8f0;font-weight:600;white-space:nowrap">${f.diasManut != null ? formatarTempoManut(f.diasManut) : '—'}</td>
           <td style="text-align:center;color:#60a5fa;font-weight:600">${f.mtbf != null ? h(f.mtbf) : '—'}</td>
         </tr>`)
     .join('')
@@ -699,7 +713,7 @@ export function gerarSlideHTML(data: DashboardDataLocal, periodo: string, catego
   <div class="two-col">
     <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;overflow:hidden">
       <table>
-        <thead><tr><th>#</th><th>Placa</th><th style="text-align:center">Falhas</th><th style="text-align:center">Dias Manut.</th><th style="text-align:center">MTBF</th></tr></thead>
+        <thead><tr><th>#</th><th>Placa</th><th style="text-align:center">Falhas</th><th style="text-align:center">Tempo Manut.</th><th style="text-align:center">MTBF</th></tr></thead>
         <tbody>${rowsFalhas}</tbody>
       </table>
     </div>
