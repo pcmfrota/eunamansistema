@@ -9,7 +9,8 @@ import {
 } from "recharts";
 import {
   X, Truck, ClipboardList, CheckCircle2, Clock,
-  Wrench, TrendingUp, AlertTriangle, Loader2, FileText, Printer
+  Wrench, TrendingUp, AlertTriangle, Loader2, FileText, Printer,
+  Maximize2, Minimize2
 } from "lucide-react";
 import { getOSporCategoriaV3 } from "@/app/actions/os-categoria";
 import type { VeiculoDisp, PreventivaStatus } from "@/app/actions/dashboard";
@@ -403,6 +404,72 @@ function ModalDetalhe({
   );
 }
 
+// ─── FullscreenChartModal ────────────────────────────────────────────────────
+function FullscreenChartModal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    // Trava rolagem do body quando fullscreen está aberto
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col"
+      style={{
+        background: 'var(--bg-primary, #fff)',
+        backgroundColor: 'white',
+      }}
+    >
+      {/* Barra superior */}
+      <div
+        className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-zinc-200 dark:border-zinc-800"
+        style={{
+          background: 'linear-gradient(135deg, #1a5c1a, #2d8a2d)',
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <Maximize2 className="w-4 h-4 text-emerald-200" />
+          <span className="text-white font-bold text-sm uppercase tracking-wider truncate">
+            {title}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all"
+        >
+          <Minimize2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Fechar Tela Cheia</span>
+          <span className="sm:hidden">Fechar</span>
+        </button>
+      </div>
+
+      {/* Área rolável com o gráfico */}
+      <div
+        className="flex-1 overflow-auto bg-white dark:bg-zinc-950"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <div className="p-3">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─── Disponibilidade Operacional ─────────────────────────────────────────────
 interface GraficoVeiculosProps {
   dados?: VeiculoDisp[];
@@ -430,6 +497,7 @@ export function GraficoVeiculos({
   tipoAvailability = "DM"
 }: GraficoVeiculosProps) {
   const [selected, setSelected] = useState<VeiculoDetalhe | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const tickColor = isDark ? "#94a3b8" : "#64748b";
@@ -523,9 +591,54 @@ export function GraficoVeiculos({
         />
       )}
 
+      {/* Fullscreen modal */}
+      {fullscreen && (
+        <FullscreenChartModal
+          title={String(title).toUpperCase()}
+          onClose={() => setFullscreen(false)}
+        >
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: Math.max(600, chartData.length * 80), width: '100%' }}>
+              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 24, right: 16, left: -16, bottom: 60 }}
+                  barCategoryGap="18%"
+                  onClick={(data) => {
+                    if (data?.activePayload?.[0]?.payload?.nome) {
+                      const p = data.activePayload[0].payload.nome;
+                      const found = chartData.find(d => d.placa === p);
+                      if (found) { setSelected(found as any); setFullscreen(false); }
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: tickColor, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: gridColor }} interval={0} angle={-45} textAnchor="end" dy={5} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
+                  <Bar dataKey="disp" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v}%` }}>
+                    {chartData.map((entry, index) => {
+                      let color = '#3b82f6';
+                      if (tipoAvailability === 'DM') {
+                        color = mostrarIndisponibilidade ? (entry.disp > 0 ? '#ef4444' : '#e4e4e7') : getColorDisp(entry.dispDM);
+                      } else {
+                        color = mostrarIndisponibilidade ? (entry.disp > 0 ? '#ef4444' : '#e4e4e7') : getColorDisp(entry.dispDO);
+                      }
+                      return <Cell key={`fs-cell-${index}`} fill={color} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </FullscreenChartModal>
+      )}
+
     <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
         <div className="flex flex-col gap-2 mb-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 justify-between">
+            <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
               {String(title).toUpperCase()}
             </h3>
@@ -539,6 +652,14 @@ export function GraficoVeiculos({
                 ATU: {dataAtualizacao}
               </span>
             )}
+            </div>
+            <button
+              onClick={() => setFullscreen(true)}
+              title="Tela Cheia"
+              className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-zinc-500 dark:text-zinc-400 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-zinc-600 dark:text-zinc-500">
             {!mostrarIndisponibilidade ? (
@@ -666,6 +787,7 @@ const prevMock: PreventivaStatus[] = [
 ];
 
 export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
+  const [fullscreen, setFullscreen] = useState(false);
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const tickColor = isDark ? "#94a3b8" : "#64748b";
@@ -697,21 +819,54 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
   };
 
   return (
+    <>
+      {/* Fullscreen modal */}
+      {fullscreen && (
+        <FullscreenChartModal
+          title="STATUS DAS PREVENTIVAS POR PLACA"
+          onClose={() => setFullscreen(false)}
+        >
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: Math.max(600, chartData.length * 80), width: '100%' }}>
+              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
+                <BarChart data={chartData} margin={{ top: 10, right: 16, left: -20, bottom: 60 }} barCategoryGap="12%">
+                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: tickColor, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: gridColor }} interval={0} angle={-45} textAnchor="end" dy={5} />
+                  <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: isDark ? '#1a1f2e' : '#ffffff', borderColor: isDark ? '#3f3f46' : '#e2e8f0', borderRadius: '8px', fontSize: '12px' }} formatter={(v: any, name: any, props: any) => [props.payload.text, 'Horas Restantes']} />
+                  <Bar dataKey="val" radius={[2, 2, 0, 0]} label={renderCustomBarLabel}>
+                    {chartData.map((entry, index) => (<Cell key={`fs-cell-${index}`} fill={getColorPrev(entry.status)} />))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </FullscreenChartModal>
+      )}
+
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-2 mb-6">
         <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
           STATUS DAS PREVENTIVAS POR PLACA
         </h3>
-        <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-500">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> ATRASADO
+        <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-zinc-500">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> ATRASADO
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ATENÇÃO
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> NO PRAZO
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ATENÇÃO
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> NO PRAZO
-          </div>
+          <button
+            onClick={() => setFullscreen(true)}
+            title="Tela Cheia"
+            className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-zinc-500 hover:text-emerald-700 transition-all"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
       {/* Rolagem horizontal para muitas barras no mobile/Android */}
@@ -759,6 +914,7 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -1586,6 +1742,7 @@ export function GraficoDMModulo({
 }: {
   dados: { modulo: string; dm: number; doOp: number; hManut: number; hTotal: number; veiculos: number }[];
 }) {
+  const [fullscreen, setFullscreen] = useState(false);
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
@@ -1644,7 +1801,39 @@ export function GraficoDMModulo({
             </span>
           ))}
         </div>
+        <button
+          onClick={() => setFullscreen(true)}
+          title="Tela Cheia"
+          className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-zinc-500 hover:text-emerald-700 transition-all"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
       </div>
+
+      {/* Fullscreen modal */}
+      {fullscreen && (
+        <FullscreenChartModal
+          title="DM% por Módulo"
+          onClose={() => setFullscreen(false)}
+        >
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: Math.max(600, dados.length * 100), width: '100%' }}>
+              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
+                <BarChart data={dados} margin={{ top: 28, right: 20, left: -10, bottom: 10 }} barCategoryGap="22%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                  <XAxis dataKey="modulo" tick={{ fill: tickC, fontSize: 12, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
+                  <YAxis domain={[0, 100]} tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.07)' }} />
+                  <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="6 4" strokeWidth={1.5} label={{ value: 'Meta 95%', fill: '#22c55e', fontSize: 11, fontWeight: 700, position: 'insideTopRight' }} />
+                  <Bar dataKey="dm" radius={[6, 6, 0, 0]} label={{ position: 'top', fill: labelC, fontSize: 12, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}>
+                    {dados.map((entry, i) => (<Cell key={`fs-mod-${i}`} fill={entry.dm >= 95 ? '#22c55e' : entry.dm >= 90 ? '#f59e0b' : '#ef4444'} />))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </FullscreenChartModal>
+      )}
 
       {/* Gráfico — com rolagem horizontal para mobile/Android */}
       <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -1698,6 +1887,7 @@ interface GraficoDMMensalProps {
 }
 
 export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
+  const [fullscreen, setFullscreen] = useState(false);
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const tickC = isDark ? "#94a3b8" : "#64748b";
@@ -1724,14 +1914,23 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
 
   return (
     <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-      <div className="flex justify-between items-center mb-5">
+      <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
         <div>
           <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">DM POR MÊS</h3>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Disponibilidade Mecânica — últimos 6 meses</p>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-          DM Mecânica
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            DM Mecânica
+          </div>
+          <button
+            onClick={() => setFullscreen(true)}
+            title="Tela Cheia"
+            className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-zinc-500 hover:text-emerald-700 transition-all"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -1799,6 +1998,43 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
             />
           </AreaChart>
         </ResponsiveContainer>
+      )}
+
+      {/* Fullscreen modal DM Mensal */}
+      {fullscreen && (
+        <FullscreenChartModal
+          title="DM POR MÊS — DISPONIBILIDADE MECÂNICA"
+          onClose={() => setFullscreen(false)}
+        >
+          <ResponsiveContainer width="100%" height={typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 140) : 500}>
+            <AreaChart data={dados} margin={{ top: 36, right: 24, left: -10, bottom: 10 }}>
+              <defs>
+                <linearGradient id="gradDMFS" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={isDark ? 0.3 : 0.22} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+              <XAxis dataKey="mes" tick={{ fill: tickC, fontSize: 13, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: grid }} />
+              <YAxis domain={[60, 100]} tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 13 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: isDark ? '#334155' : '#cbd5e1', strokeWidth: 1.5 }} />
+              <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="6 4" strokeWidth={1.5} label={{ value: 'Meta 95%', fill: '#22c55e', fontSize: 11, fontWeight: 700, position: 'insideTopRight' }} />
+              <Area type="monotone" dataKey="dm" stroke="#22c55e" strokeWidth={3} fill="url(#gradDMFS)"
+                dot={{ fill: '#22c55e', r: 5, strokeWidth: 0 }}
+                activeDot={{ r: 7, fill: '#22c55e', strokeWidth: 0 }}
+                label={(props: any) => {
+                  const { x, y, value } = props;
+                  if (value == null) return null;
+                  return (
+                    <text x={x} y={y - 12} textAnchor="middle" fill={labelC} fontSize={12} fontWeight={800}>
+                      {`${Number(value).toFixed(1)}%`}
+                    </text>
+                  );
+                }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </FullscreenChartModal>
       )}
     </div>
   );
