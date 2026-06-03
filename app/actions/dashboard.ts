@@ -10,6 +10,7 @@ export type VeiculoDisp = {
   totalOS: number;
   osFechadas: number;
   horasManut: number;
+  horasManutOS?: number;
   horasOperacional: number;
   hTotalDM: number;
   hTotalDO: number;
@@ -495,8 +496,10 @@ export async function getDashboardData(filtros?: {
     });
     allOSProcessed.push(...osProcessed);
 
+    let totalHorasOS = 0;
     osDoVeiculo.forEach(os => {
       if (os.status === "Fechada" || os.status === "Concluída") fechadas++;
+      totalHorasOS += Number(os.horas_manutencao || 0);
     });
 
     veiculos.push({
@@ -506,6 +509,7 @@ export async function getDashboardData(filtros?: {
       totalOS: osDoVeiculo.length || 0,
       osFechadas: fechadas || 0,
       horasManut: Math.round(hIndispDM * 10) / 10,
+      horasManutOS: Math.round(totalHorasOS * 10) / 10,
       horasOperacional: Math.round(hIndispDO * 10) / 10,
       hTotalDM: hPlanejadasDM,
       hTotalDO: hPlanejadasDO_TotalMensal,
@@ -690,7 +694,7 @@ export async function getDashboardData(filtros?: {
     totalEquipamentos: frotaFiltrada.length,
     totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
-    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasOperacional) / (v as any).falhas)*10)/10 : 0, diasManut: Math.round((v.horasManut / 24) * 10) / 10 })),
+    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => ({ placa: v.placa, falhas: (v as any).falhas, mtbf: (v as any).falhas > 0 ? Math.round(((v.hTotalDO - v.horasOperacional) / (v as any).falhas)*10)/10 : 0, diasManut: Math.round(((v.horasManutOS || 0) / 24) * 10) / 10 })),
     paradasPorCategoria: Array.from(categoriasMap.entries()).map(([categoria, quantidade]) => ({ categoria, quantidade })),
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([tipo, quantidade]) => ({ tipo, quantidade })),
     dispPorTipo: Array.from(modelosMap.entries()).map(([tipo, data]) => ({ tipo, disponibilidade: Math.round((data.soma / data.count) * 10) / 10, total: data.count })),
