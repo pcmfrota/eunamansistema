@@ -25,6 +25,8 @@ android-apk/
 ├── gradle/wrapper/
 │   └── gradle-wrapper.properties
 ├── build.gradle                  ← Configurações raiz
+├── exportar_apk.ps1              ← Script de exportação rápida
+├── gradle.properties             ← Configurações do Gradle
 ├── gradlew.bat                   ← Gradle Wrapper (Windows)
 └── settings.gradle
 ```
@@ -42,6 +44,19 @@ android-apk/
 1. Menu **Build → Build Bundle(s) / APK(s) → Build APK(s)**
 2. O APK será gerado em: `app/build/outputs/apk/debug/app-debug.apk`
 3. Clique em **"locate"** no aviso que aparecer
+
+### Atalho: Exportar para pasta C:\eunaman-apk
+
+Para compilar e copiar automaticamente o APK para a pasta de distribuição, execute:
+
+```powershell
+.\exportar_apk.ps1
+```
+
+Isso irá:
+1. Compilar o APK de Debug.
+2. Copiar para `C:\eunaman-apk\eunaman-debug.apk`.
+3. Abrir a pasta no Explorer.
 
 ## Gerar APK Release (para distribuir)
 

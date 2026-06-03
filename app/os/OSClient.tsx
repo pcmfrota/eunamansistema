@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText } from "lucide-react";
+import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText, Printer } from "lucide-react";
 import {
   criarOrdemServico,
   atualizarStatusOS,
@@ -183,6 +183,8 @@ export default function ControleOSClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
+  const [selectedOSActions, setSelectedOSActions] = useState<OS | null>(null);
+  const [autoPrintFicha, setAutoPrintFicha] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { profile } = useAuth();
 
@@ -600,8 +602,24 @@ export default function ControleOSClient({
                     </td>
                   </tr>
                 ) : filtradas.map(os => (
-                  <tr key={os.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors group">
-                    <td className="px-4 py-3">
+                  <tr
+                    key={os.id}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (
+                        target.closest('button') || 
+                        target.closest('input') || 
+                        target.closest('a') || 
+                        target.closest('select') ||
+                        target.closest('.no-row-click')
+                      ) {
+                        return;
+                      }
+                      setSelectedOSActions(os);
+                    }}
+                    className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors group cursor-pointer"
+                  >
+                    <td className="px-4 py-3 no-row-click">
                       <input type="checkbox" checked={selectedIds.has(os.id)} onChange={() => toggleSelect(os.id)} className="rounded border-zinc-300" />
                     </td>
                     <td className="px-4 py-3 font-mono text-[12px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
@@ -741,8 +759,134 @@ export default function ControleOSClient({
       {fichaOS && (
         <OSFichaModal
           os={fichaOS}
-          onClose={() => setFichaOS(null)}
+          onClose={() => {
+            setFichaOS(null);
+            setAutoPrintFicha(false);
+          }}
+          autoPrint={autoPrintFicha}
         />
+      )}
+
+      {/* ── Modal de Ações da OS para Celular/Telas menores ── */}
+      {selectedOSActions && (
+        <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm transition-opacity">
+          {/* Backdrop close */}
+          <div className="absolute inset-0" onClick={() => setSelectedOSActions(null)} />
+
+          {/* Card */}
+          <div className="relative z-10 w-full max-w-sm bg-white dark:bg-zinc-950 rounded-t-2xl sm:rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+            {/* Drag handle decoration for mobile view */}
+            <div className="w-12 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto my-3 sm:hidden" />
+
+            <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
+                  Ações da OS
+                </h3>
+                <p className="text-xs text-zinc-500 font-mono mt-0.5">
+                  Nº {selectedOSActions.numero_os} • {selectedOSActions.placa || "Sem Placa"}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedOSActions(null)}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-500 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* List of actions */}
+            <div className="p-4 flex flex-col gap-2 bg-zinc-50/50 dark:bg-zinc-950/50">
+              {/* Option 1: Ver Ficha */}
+              <button
+                onClick={() => {
+                  setFichaOS(selectedOSActions as unknown as OSFichaData);
+                  setSelectedOSActions(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left"
+              >
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400">
+                  <FileText size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold">Ver Ficha</p>
+                  <p className="text-[11px] text-zinc-400 font-medium">Visualizar detalhes completos</p>
+                </div>
+              </button>
+
+              {/* Option 2: Editar */}
+              <button
+                onClick={() => {
+                  if (isVisitante) return;
+                  setEditingOS(selectedOSActions);
+                  setShowModal(true);
+                  setSelectedOSActions(null);
+                }}
+                disabled={isVisitante}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left",
+                  isVisitante && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400">
+                  <Pencil size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    Editar OS
+                    {isVisitante && <Lock size={12} className="text-zinc-400" />}
+                  </p>
+                  <p className="text-[11px] text-zinc-400 font-medium">
+                    {isVisitante ? "Apenas leitura para visitante" : "Modificar dados cadastrados"}
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: Exportar PDF */}
+              <button
+                onClick={() => {
+                  setAutoPrintFicha(true);
+                  setFichaOS(selectedOSActions as unknown as OSFichaData);
+                  setSelectedOSActions(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left"
+              >
+                <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400">
+                  <Printer size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold">Exportar PDF</p>
+                  <p className="text-[11px] text-zinc-400 font-medium">Gerar documento de impressão</p>
+                </div>
+              </button>
+
+              {/* Option 4: Apagar */}
+              <button
+                onClick={() => {
+                  if (isVisitante) return;
+                  setDeletingId(selectedOSActions.id);
+                  setSelectedOSActions(null);
+                }}
+                disabled={isVisitante}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200 font-semibold text-sm transition-all shadow-sm text-left",
+                  isVisitante && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400">
+                  <Trash2 size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                    Apagar OS
+                    {isVisitante && <Lock size={12} className="text-zinc-400" />}
+                  </p>
+                  <p className="text-[11px] text-zinc-400 font-medium">Excluir permanentemente da base</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

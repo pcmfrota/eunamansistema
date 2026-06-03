@@ -174,9 +174,10 @@ function EunamanLogo({ size = 64 }: { size?: number }) {
 interface OSFichaModalProps {
   os: OSFichaData;
   onClose: () => void;
+  autoPrint?: boolean;
 }
 
-export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
+export default function OSFichaModal({ os, onClose, autoPrint = false }: OSFichaModalProps) {
   const [minutosDO, setMinutosDO] = useState<number | null>(null);
 
   useEffect(() => {
@@ -198,7 +199,10 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
     async function fetchAndCalc() {
       try {
         const placaRaw = getPlaca(os);
-        if (placaRaw === "—") return;
+        if (placaRaw === "—") {
+          setMinutosDO(0);
+          return;
+        }
 
         const supabase = createClient();
         // Busca na tabela de escala_frota para pegar a escala correta
@@ -266,6 +270,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
         setMinutosDO(totalMin);
       } catch (err) {
         console.error("Erro ao calcular DO na ficha:", err);
+        setMinutosDO(0);
       }
     }
 
@@ -443,6 +448,13 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
+  useEffect(() => {
+    if (autoPrint && minutosDO !== null) {
+      handlePrint();
+      onClose();
+    }
+  }, [autoPrint, minutosDO]);
+
   if (!mounted) return null;
 
   return createPortal(
@@ -524,7 +536,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
                     Identificação do Equipamento
                   </div>
-                  <div className="grid grid-cols-4 px-2 py-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-3 py-2">
                     <FP label="Placa" value={placa} bold />
                     <FP
                       label="Módulo / Operação"
@@ -544,7 +556,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
                     Datas e Tempos
                   </div>
-                  <div className="grid grid-cols-4 px-2 py-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-3 py-2">
                     {os.horario_parada && (
                       <FP label="Horário Real da Parada" value={fmtDT(os.horario_parada)} />
                     )}
@@ -559,23 +571,23 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
                     Classificação da Manutenção
                   </div>
-                  <div className="grid grid-cols-4 px-2 py-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-3 py-2">
                     <FP label="Tipo" value={os.classe || "CORRETIVA"} bold />
                     <FP label="Sistema" value={os.sistema || "—"} />
                     <FP label="Sub-Sistema" value={os.sub_sistema || "—"} />
                     <FP label="Componente" value={os.componente || "—"} />
                   </div>
-                  <div className="grid grid-cols-2 px-2 pb-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-3 pb-2 flex-wrap">
                     <FP label="Motivo da Parada" value={os.motivo || "—"} />
-                    <div className="px-2 flex flex-col gap-1">
-                      <label className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <label className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold truncate">
                         Reserva Enviada?
                       </label>
                       <span className={`text-[12px] font-black border-b border-dotted border-gray-400 pb-0.5 ${os.foi_enviado_reserva ? "text-orange-700" : "text-gray-500"}`}>
                         {os.foi_enviado_reserva ? "✅ SIM" : "NÃO"}
                       </span>
                       {os.foi_enviado_reserva && os.qual_reserva && (
-                        <span className="text-[10px] text-orange-600 font-semibold">
+                        <span className="text-[10px] text-orange-600 font-semibold break-words">
                           Reserva: {os.qual_reserva}
                           {os.horas_reserva_chegou ? ` — Chegou: ${fmtDT(os.horas_reserva_chegou)}` : ""}
                         </span>
@@ -613,7 +625,7 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   <div className="bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 flex items-center gap-2">
                     <Clock size={12} /> Cálculo de Disponibilidade PCM
                   </div>
-                  <div className="px-3 py-3 grid grid-cols-2 gap-4 text-[10px] leading-relaxed">
+                  <div className="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[10px] leading-relaxed">
                     <div>
                       <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
                       <ul className="space-y-1 text-zinc-700">
@@ -653,14 +665,21 @@ export default function OSFichaModal({ os, onClose }: OSFichaModalProps) {
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
                     Controle e Assinaturas
                   </div>
-                  <div className="flex divide-x divide-gray-900">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-gray-900 text-black">
                     {[
                       { label: "Executante / Mecânico", sub: "Nome e Matrícula" },
                       { label: "Encarregado / Supervisor", sub: "Visto e Matrícula" },
                       { label: "PCM / Planejamento", sub: "Data de Encerramento" },
                       { label: "Operador / Motorista", sub: "Recebimento" },
-                    ].map((a) => (
-                      <div key={a.label} className="flex-1 px-3 py-3">
+                    ].map((a, i) => (
+                      <div
+                        key={a.label}
+                        className={`px-3 py-3 ${
+                          i % 2 === 0 ? "border-r border-gray-900" : ""
+                        } ${
+                          i < 2 ? "border-b border-gray-900" : ""
+                        } sm:border-b-0 sm:border-r ${i === 3 ? "sm:border-r-0" : ""} border-gray-900`}
+                      >
                         <p className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold mb-6">{a.label}</p>
                         <div className="border-b border-gray-800 mt-2" />
                         <p className="text-[9px] text-center text-gray-400 mt-1">{a.sub}</p>
@@ -705,12 +724,12 @@ function FP({
   highlight?: boolean;
 }) {
   return (
-    <div className="px-2 mb-2 flex flex-col gap-0.5">
-      <label className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <label className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold truncate">
         {label}
       </label>
       <span
-        className={`text-[12px] border-b border-dotted border-gray-400 pb-0.5 ${
+        className={`text-[12px] border-b border-dotted border-gray-400 pb-0.5 break-words ${
           bold ? "font-black" : "font-semibold"
         } ${highlight ? "text-[#1a5c1a]" : "text-gray-800"}`}
       >
