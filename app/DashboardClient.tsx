@@ -163,7 +163,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   }
 
   return (
-    <div className="p-5 md:p-8 flex flex-col gap-6 min-h-screen relative">
+    <div className="p-3 md:p-8 flex flex-col gap-6 min-h-screen relative">
       {/* Loading overlay */}
       {(isPending || isExporting) && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center backdrop-blur-sm">
@@ -183,7 +183,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
       {/* Cabeçalho */}
       <div
-        className="flex items-start justify-between mb-1 shrink-0 rounded-2xl px-5 py-4"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-1 shrink-0 rounded-2xl px-4 py-3"
         style={{
           background: 'rgba(255,255,255,0.88)',
           backdropFilter: 'blur(16px) saturate(180%)',
@@ -193,14 +193,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         }}
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-800 uppercase">DASHBOARD OPERACIONAL</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-sm text-zinc-500">
+          <h1 className="text-lg font-bold tracking-tight text-zinc-800 uppercase">DASHBOARD OPERACIONAL</h1>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <p className="text-xs text-zinc-500">
               Visão geral da manutenção e disponibilidade da frota
             </p>
             {data.dataAtualizacao && (
               <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
-                DADOS ATUALIZADOS ATÉ: {data.dataAtualizacao} (D+1)
+                ATÉ: {data.dataAtualizacao} (D+1)
               </span>
             )}
           </div>
@@ -208,7 +208,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         <button
           onClick={exportarRelatorio}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-white text-xs font-semibold shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
           style={{
             background: 'linear-gradient(135deg, #1a5c1a, #2d8a2d)',
             boxShadow: '0 4px 16px rgba(26,92,26,0.35)',
@@ -217,7 +217,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           {isExporting ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</>
           ) : (
-            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg> EXPORTAR RELATÓRIO PCM</>
+            <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg> <span className="hidden sm:inline">EXPORTAR RELATÓRIO PCM</span><span className="sm:hidden">EXPORTAR</span></>
           )}
         </button>
       </div>
@@ -260,17 +260,17 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       {/* Gráficos e tabelas */}
       <div className="flex flex-col gap-6 w-full">
         <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+            <div className="flex flex-wrap items-center gap-2">
                <button 
                  onClick={() => setAvailabilityType("DM")}
-                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all uppercase tracking-wider ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
+                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-wider ${availabilityType === "DM" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
                >
                  MECÂNICA (DM)
                </button>
                <button 
                  onClick={() => setAvailabilityType("DO")}
-                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all uppercase tracking-wider ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
+                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-wider ${availabilityType === "DO" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"}`}
                >
                  OPERACIONAL (DO)
                </button>
@@ -278,13 +278,13 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setMostrarIndisp(!mostrarIndisp)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tighter transition-colors border ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-tighter transition-colors border ${
                   mostrarIndisp
                     ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50"
                     : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800"
                 }`}
               >
-                {mostrarIndisp ? "VER DISPONIBILIDADE" : "VER INDISPONIBILIDADE"}
+                {mostrarIndisp ? "VER DISP." : "VER INDISP."}
               </button>
             </div>
           </div>

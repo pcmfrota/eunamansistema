@@ -524,8 +524,8 @@ export function GraficoVeiculos({
       )}
 
     <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
               {String(title).toUpperCase()}
             </h3>
@@ -536,11 +536,11 @@ export function GraficoVeiculos({
             )}
             {dataAtualizacao && (
               <span className="text-[10px] px-2 py-0.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase tracking-wider">
-                ATUALIZADO: {dataAtualizacao}
+                ATU: {dataAtualizacao}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4 text-[11px] font-medium text-zinc-600 dark:text-zinc-500">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-zinc-600 dark:text-zinc-500">
             {!mostrarIndisponibilidade ? (
               <>
                 <div className="flex items-center gap-1.5">
@@ -560,84 +560,89 @@ export function GraficoVeiculos({
                 </div>
               </>
             )}
-            <span className="text-zinc-500 dark:text-zinc-600 border-l border-zinc-300 dark:border-zinc-700 pl-3 ml-1">
-              Clique na barra para detalhes
+            <span className="text-zinc-400 dark:text-zinc-600 text-[10px] italic">
+              Toque na barra para detalhes
             </span>
           </div>
         </div>
 
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart
-            data={chartData}
-            margin={{ top: 20, right: 0, left: -20, bottom: 40 }}
-            barCategoryGap="18%"
-            onClick={(data) => {
-              if (data?.activePayload?.[0]?.payload?.nome) {
-                const p = data.activePayload[0].payload.nome;
-                const found = chartData.find(d => d.placa === p);
-                if (found) {
-                  setSelected(found as any);
-                }
-              }
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke={gridColor}
-            />
-            <XAxis
-              dataKey="nome"
-              tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }}
-              tickLine={false}
-              axisLine={{ stroke: gridColor }}
-              interval={0}
-              angle={-45}
-              textAnchor="end"
-              dy={5}
-            />
-            <YAxis
-              domain={[0, 100]}
-              tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v) => `${v}%`}
-            />
-            <Tooltip
-              content={<CustomTooltip />}
-              cursor={{ fill: "rgba(148,163,184,0.08)" }}
-            />
-            <Bar
-              dataKey="disp"
-              radius={[3, 3, 0, 0]}
-              label={{
-                position: "top",
-                fill: isDark ? "#f8fafc" : "#0f172a", 
-                fontSize: 10,
-                fontWeight: 800,
-                formatter: (v: number) => `${v}%`,
-              }}
-            >
-              {chartData.map((entry, index) => {
-                let color = "#3b82f6"; // default blue for DO
-                
-                if (tipoAvailability === "DM") {
-                  color = mostrarIndisponibilidade 
-                    ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
-                    : getColorDisp(entry.dispDM);
-                } else {
-                  // DO colors: Now using the same status palette as DM
-                  color = mostrarIndisponibilidade 
-                    ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
-                    : getColorDisp(entry.dispDO);
-                }
-                
-                return <Cell key={`cell-${index}`} fill={color} />;
-              })}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {/* Rolagem horizontal para muitas barras no mobile/Android */}
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ minWidth: Math.max(300, chartData.length * 52), width: "100%" }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart
+                data={chartData}
+                margin={{ top: 20, right: 10, left: -20, bottom: 50 }}
+                barCategoryGap="18%"
+                onClick={(data) => {
+                  if (data?.activePayload?.[0]?.payload?.nome) {
+                    const p = data.activePayload[0].payload.nome;
+                    const found = chartData.find(d => d.placa === p);
+                    if (found) {
+                      setSelected(found as any);
+                    }
+                  }
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke={gridColor}
+                />
+                <XAxis
+                  dataKey="nome"
+                  tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }}
+                  tickLine={false}
+                  axisLine={{ stroke: gridColor }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  dy={5}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <Tooltip
+                  content={<CustomTooltip />}
+                  cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                />
+                <Bar
+                  dataKey="disp"
+                  radius={[3, 3, 0, 0]}
+                  label={{
+                    position: "top",
+                    fill: isDark ? "#f8fafc" : "#0f172a", 
+                    fontSize: 10,
+                    fontWeight: 800,
+                    formatter: (v: number) => `${v}%`,
+                  }}
+                >
+                  {chartData.map((entry, index) => {
+                    let color = "#3b82f6"; // default blue for DO
+                    
+                    if (tipoAvailability === "DM") {
+                      color = mostrarIndisponibilidade 
+                        ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
+                        : getColorDisp(entry.dispDM);
+                    } else {
+                      // DO colors: Now using the same status palette as DM
+                      color = mostrarIndisponibilidade 
+                        ? (entry.disp > 0 ? "#ef4444" : "#e4e4e7") 
+                        : getColorDisp(entry.dispDO);
+                    }
+                    
+                    return <Cell key={`cell-${index}`} fill={color} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -709,45 +714,50 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
           </div>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart
-          data={chartData}
-          margin={{ top: 10, right: 0, left: -20, bottom: 40 }}
-          barCategoryGap="12%"
-        >
-          <XAxis
-            dataKey="nome"
-            tick={{ fontSize: 9, fill: tickColor, fontWeight: 600 }}
-            tickLine={false}
-            axisLine={{ stroke: gridColor }}
-            interval={0}
-            angle={-45}
-            textAnchor="end"
-            dy={5}
-          />
-          <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
-          <Tooltip
-            cursor={{ fill: "transparent" }}
-            contentStyle={{
-              backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
-              borderColor: isDark ? "#3f3f46" : "#e2e8f0",
-              borderRadius: "8px",
-              fontSize: "12px",
-              color: isDark ? "#f4f4f5" : "#18181b",
-            }}
-            itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
-            formatter={(v: any, name: any, props: any) => [
-              props.payload.text,
-              "Horas Restantes",
-            ]}
-          />
-          <Bar dataKey="val" radius={[2, 2, 0, 0]} label={renderCustomBarLabel}>
-            {chartData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={getColorPrev(entry.status)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      {/* Rolagem horizontal para muitas barras no mobile/Android */}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ minWidth: Math.max(300, chartData.length * 52), width: "100%" }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart
+              data={chartData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 50 }}
+              barCategoryGap="12%"
+            >
+              <XAxis
+                dataKey="nome"
+                tick={{ fontSize: 9, fill: tickColor, fontWeight: 600 }}
+                tickLine={false}
+                axisLine={{ stroke: gridColor }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                dy={5}
+              />
+              <YAxis domain={[0, 2]} tick={false} tickLine={false} axisLine={false} />
+              <Tooltip
+                cursor={{ fill: "transparent" }}
+                contentStyle={{
+                  backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+                  borderColor: isDark ? "#3f3f46" : "#e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  color: isDark ? "#f4f4f5" : "#18181b",
+                }}
+                itemStyle={{ color: isDark ? "#f4f4f5" : "#18181b" }}
+                formatter={(v: any, name: any, props: any) => [
+                  props.payload.text,
+                  "Horas Restantes",
+                ]}
+              />
+              <Bar dataKey="val" radius={[2, 2, 0, 0]} label={renderCustomBarLabel}>
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={getColorPrev(entry.status)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1458,39 +1468,44 @@ export function GraficoDispCategoria({
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={230}>
-        <BarChart 
-          data={source} 
-          margin={{ top: 22, right: 10, left: -20, bottom: 5 }} 
-          barCategoryGap="28%" 
-          barGap={4}
-          onClick={(data) => {
-            if (data && data.activePayload && data.activePayload.length > 0) {
-              const cat = data.activePayload[0].payload;
-              setSelecionado(cat);
-              setVerOS(true);
-            }
-          }}
-          style={{ cursor: 'pointer' }}
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-          <XAxis dataKey="categoria" tick={{ fontSize: 12, fill: tickColor, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: gridColor }} />
-          <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-          <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="4 3" strokeWidth={1.5}
-            label={{ value: 'Meta 95%', position: 'insideTopRight', fontSize: 8, fill: '#22c55e' }} />
-          <ReferenceLine y={90} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1}
-            label={{ value: '90%', position: 'insideTopRight', fontSize: 8, fill: '#f59e0b' }} />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
-          <Bar dataKey="dm" name="DM (Mecânica)" radius={[4, 4, 0, 0]}
-            label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}
-            fill="#22c55e"
-          />
-          <Bar dataKey="doOp" name="DO (Operacional)" radius={[4, 4, 0, 0]}
-            label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}
-            fill="#3b82f6"
-          />
-        </BarChart>
-      </ResponsiveContainer>
+      {/* Rolagem horizontal para mobile/Android */}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ minWidth: Math.max(300, source.length * 90), width: "100%" }}>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart 
+              data={source} 
+              margin={{ top: 22, right: 10, left: -20, bottom: 5 }} 
+              barCategoryGap="28%" 
+              barGap={4}
+              onClick={(data) => {
+                if (data && data.activePayload && data.activePayload.length > 0) {
+                  const cat = data.activePayload[0].payload;
+                  setSelecionado(cat);
+                  setVerOS(true);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+              <XAxis dataKey="categoria" tick={{ fontSize: 12, fill: tickColor, fontWeight: 700 }} tickLine={false} axisLine={{ stroke: gridColor }} />
+              <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: tickColor }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+              <ReferenceLine y={95} stroke="#22c55e" strokeDasharray="4 3" strokeWidth={1.5}
+                label={{ value: 'Meta 95%', position: 'insideTopRight', fontSize: 8, fill: '#22c55e' }} />
+              <ReferenceLine y={90} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1}
+                label={{ value: '90%', position: 'insideTopRight', fontSize: 8, fill: '#f59e0b' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
+              <Bar dataKey="dm" name="DM (Mecânica)" radius={[4, 4, 0, 0]}
+                label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}
+                fill="#22c55e"
+              />
+              <Bar dataKey="doOp" name="DO (Operacional)" radius={[4, 4, 0, 0]}
+                label={{ position: 'top', fill: isDark ? '#f8fafc' : '#0f172a', fontSize: 9, fontWeight: 800, formatter: (v: number) => `${v}%` }}
+                fill="#3b82f6"
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
       <div className="flex gap-2 mt-3 flex-wrap">
         {source.map((item) => (
@@ -1631,41 +1646,45 @@ export function GraficoDMModulo({
         </div>
       </div>
 
-      {/* Gráfico */}
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={dados} margin={{ top: 24, right: 16, left: -16, bottom: 8 }} barCategoryGap="22%">
-          <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
-          <XAxis
-            dataKey="modulo"
-            tick={{ fill: tickC, fontSize: 11, fontWeight: 700 }}
-            tickLine={false}
-            axisLine={{ stroke: grid }}
-            interval={0}
-          />
-          <YAxis
-            domain={[0, 100]}
-            tick={{ fill: isDark ? "#64748b" : "#94a3b8", fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) => `${v}%`}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.07)" }} />
-          <ReferenceLine
-            y={95}
-            stroke="#22c55e"
-            strokeDasharray="6 4"
-            strokeWidth={1.5}
-            label={{ value: "Meta 95%", fill: "#22c55e", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
-          />
-          <Bar dataKey="dm" radius={[5, 5, 0, 0]}
-            label={{ position: "top", fill: labelC, fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}
-          >
-            {dados.map((entry, i) => (
-              <Cell key={`mod-${i}`} fill={entry.dm >= 95 ? "#22c55e" : entry.dm >= 90 ? "#f59e0b" : "#ef4444"} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      {/* Gráfico — com rolagem horizontal para mobile/Android */}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ minWidth: Math.max(300, dados.length * 72), width: "100%" }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={dados} margin={{ top: 24, right: 16, left: -16, bottom: 8 }} barCategoryGap="22%">
+              <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+              <XAxis
+                dataKey="modulo"
+                tick={{ fill: tickC, fontSize: 11, fontWeight: 700 }}
+                tickLine={false}
+                axisLine={{ stroke: grid }}
+                interval={0}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fill: isDark ? "#64748b" : "#94a3b8", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.07)" }} />
+              <ReferenceLine
+                y={95}
+                stroke="#22c55e"
+                strokeDasharray="6 4"
+                strokeWidth={1.5}
+                label={{ value: "Meta 95%", fill: "#22c55e", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
+              />
+              <Bar dataKey="dm" radius={[5, 5, 0, 0]}
+                label={{ position: "top", fill: labelC, fontSize: 11, fontWeight: 800, formatter: (v: number) => `${v.toFixed(1)}%` }}
+              >
+                {dados.map((entry, i) => (
+                  <Cell key={`mod-${i}`} fill={entry.dm >= 95 ? "#22c55e" : entry.dm >= 90 ? "#f59e0b" : "#ef4444"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   );
 }
