@@ -49,6 +49,8 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
+  const [filterMecanico, setFilterMecanico] = useState('')
+
   // Map database status and criticidade to target dashboard schema
   const mappedItems = useMemo(() => {
     const placasMap = new Map(placas.map(p => [p.placa, p]));
@@ -120,19 +122,22 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
     const areas = new Set<string>()
     const modulos = new Set<string>()
     const anos = new Set<string>()
+    const mecanicos = new Set<string>()
 
     mappedItems.forEach(i => {
       if (i.fornecedor) fornecedores.add(i.fornecedor)
       if (i.mappedArea) areas.add(i.mappedArea)
       if (i.modulo) modulos.add(i.modulo)
       if (i.mappedYear) anos.add(i.mappedYear)
+      if (i.colaborador) mecanicos.add(i.colaborador)
     })
 
     return {
       fornecedores: Array.from(fornecedores).sort(),
       areas: Array.from(areas).sort(),
       modulos: Array.from(modulos).sort(),
-      anos: Array.from(anos).sort()
+      anos: Array.from(anos).sort(),
+      mecanicos: Array.from(mecanicos).sort()
     }
   }, [mappedItems])
 
@@ -157,7 +162,10 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
       // 6. Ano (Data)
       if (filterAno && item.mappedYear !== filterAno) return false
 
-      // 7. Search text
+      // 7. Mecanico
+      if (filterMecanico && item.colaborador !== filterMecanico) return false
+
+      // 8. Search text
       if (search) {
         const q = search.toLowerCase()
         const matchFrota = String(item.frota || '').toLowerCase().includes(q)
@@ -168,7 +176,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
 
       return true
     })
-  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, search])
+  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMecanico, search])
 
   // Reset pagination to first page on filter changes
   useEffect(() => {
@@ -265,6 +273,57 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
       value: map[name]
     }))
   }, [filtered])
+
+  // Aggregate statistics per mechanic/colaborador
+  const mechanicStats = useMemo(() => {
+    const statsMap: Record<string, {
+      name: string;
+      pendente: number;
+      programado: number;
+      encerrado: number;
+      total: number;
+      totalAging: number;
+      agingCount: number;
+    }> = {}
+
+    // Aggregate from the fully mapped items list
+    mappedItems.forEach(i => {
+      const name = i.colaborador || 'Sem Mecânico'
+      if (!statsMap[name]) {
+        statsMap[name] = {
+          name,
+          pendente: 0,
+          programado: 0,
+          encerrado: 0,
+          total: 0,
+          totalAging: 0,
+          agingCount: 0
+        }
+      }
+      
+      statsMap[name].total++
+      if (i.mappedStatus === 'PENDENTE') statsMap[name].pendente++
+      else if (i.mappedStatus === 'PROGRAMADO') statsMap[name].programado++
+      else if (i.mappedStatus === 'ENCERRADO') statsMap[name].encerrado++
+
+      if (i.diasAberto !== undefined && i.mappedStatus !== 'ENCERRADO') {
+        statsMap[name].totalAging += i.diasAberto
+        statsMap[name].agingCount++
+      }
+    })
+
+    return Object.values(statsMap)
+      .map(s => ({
+        ...s,
+        avgAging: s.agingCount > 0 ? Math.round(s.totalAging / s.agingCount) : 0
+      }))
+      .sort((a, b) => b.total - a.total) // most backlogs first
+  }, [mappedItems])
+
+  // Get top 8 mechanics for the chart
+  const topMechanicChartData = useMemo(() => {
+    return mechanicStats.slice(0, 8)
+  }, [mechanicStats])
 
   // Recharts Custom vertical bar label containing count and MoM percentage change pill
   const renderCustomBarLabel = (props: any) => {
@@ -504,7 +563,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
           </div>
 
           {/* Grid de Filtros */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             
             {/* Filtro Status Multi-select */}
             <div className="relative">
@@ -617,6 +676,21 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                 <option value="">Todos</option>
                 {filterOptions.anos.map(a => (
                   <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mecânico */}
+            <div>
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Mecânico</label>
+              <select
+                value={filterMecanico}
+                onChange={e => setFilterMecanico(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer font-bold"
+              >
+                <option value="">Todos</option>
+                {filterOptions.mecanicos.map(m => (
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
             </div>
@@ -736,6 +810,105 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                 />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── SEÇÃO: BACKLOG POR MECÂNICO ── */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-6">
+          <div className="border-l-4 border-indigo-600 pl-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                DISTRIBUIÇÃO DE ETIQUETAS POR MECÂNICO
+              </h3>
+              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                Visão de Pendentes, Programados e Encerrados
+              </p>
+            </div>
+            {filterMecanico && (
+              <button 
+                onClick={() => setFilterMecanico('')}
+                className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest border border-red-500/20 px-3 py-1 rounded-xl bg-red-500/5 transition-colors"
+              >
+                ✕ Limpar Filtro
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Gráfico Recharts de Barras Empilhadas */}
+            <div className="lg:col-span-2 h-[320px] bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl p-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={topMechanicChartData}
+                  margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null
+                      const data = payload[0].payload
+                      return (
+                        <div className="bg-zinc-950/95 text-white p-4 rounded-2xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider flex flex-col gap-1.5 shadow-2xl">
+                          <span className="text-indigo-400 border-b border-zinc-800 pb-1 mb-1 font-extrabold">{data.name}</span>
+                          <span className="flex items-center justify-between gap-4">Pendentes: <span className="text-yellow-400 font-extrabold">{data.pendente}</span></span>
+                          <span className="flex items-center justify-between gap-4">Programados: <span className="text-green-400 font-extrabold">{data.programado}</span></span>
+                          <span className="flex items-center justify-between gap-4">Encerrados: <span className="text-zinc-400 font-extrabold">{data.encerrado}</span></span>
+                          <span className="flex items-center justify-between gap-4 text-orange-400 border-t border-zinc-800 pt-1 mt-1 font-extrabold">Média Aging: <span>{data.avgAging} dias</span></span>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="top"
+                    height={36}
+                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }} 
+                  />
+                  <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#ca8a04" />
+                  <Bar dataKey="programado" name="Programado" stackId="a" fill="#16a34a" />
+                  <Bar dataKey="encerrado" name="Encerrado" stackId="a" fill="#475569" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Listagem de cards de mecânicos */}
+            <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Selecione para Filtrar</span>
+              {mechanicStats.map(s => {
+                const isSelected = filterMecanico === s.name;
+                return (
+                  <div
+                    key={s.name}
+                    onClick={() => setFilterMecanico(isSelected ? '' : s.name)}
+                    className={cn(
+                      "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between hover:scale-[1.02] shadow-sm select-none",
+                      isSelected
+                        ? "bg-indigo-600 border-indigo-500 text-white shadow-indigo-600/20"
+                        : "bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-150 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300"
+                    )}
+                  >
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-tight">{s.name}</p>
+                      <p className={cn("text-[8px] font-bold mt-0.5", isSelected ? "text-indigo-200" : "text-zinc-400")}>
+                        Média de Pendências: <span className="font-extrabold">{s.avgAging} dias em aberto</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", isSelected ? "bg-white/10 text-white" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500")}>
+                        Total: {s.total}
+                      </span>
+                      <div className="flex gap-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title={`Pendentes: ${s.pendente}`} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" title={`Programados: ${s.programado}`} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" title={`Encerrados: ${s.encerrado}`} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
