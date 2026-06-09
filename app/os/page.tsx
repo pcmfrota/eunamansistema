@@ -7,12 +7,12 @@ export default async function ControleOSPage() {
   // Equipamentos com último horímetro - Otimizado para buscar apenas campos necessários
   const { data: equipamentos } = await supabase
     .from('equipamentos')
-    .select('id, placa, modulo, area, horimetros(horimetro_final)')
+    .select('id, placa, modulo, area, tipo, horimetros(horimetro_final)')
     .order('placa')
     // Nota: O Supabase não permite .limit(1) dentro de sub-queries de forma trivial sem view, 
     // mas vamos filtrar o status para reduzir o volume inicial.
     .or("status.is.null,status.neq.Inativo,status.neq.INATIVO")
-
+ 
   const eqTransformados = equipamentos?.map(eq => {
     let lastH = 0;
     if (eq.horimetros && eq.horimetros.length > 0) {
@@ -27,6 +27,7 @@ export default async function ControleOSPage() {
       placa: eq.placa,
       modulo: eq.modulo,
       area: eq.area,
+      tipo: eq.tipo,
       ultimoHist: lastH > 0 ? lastH : undefined,
     };
   }) || [];

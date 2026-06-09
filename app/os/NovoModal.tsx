@@ -32,7 +32,7 @@ type OS = {
   assinatura_mecanico?: string | null;
 };
 
-type Equipamento = { id: string; placa: string; modulo?: string; ultimoHist?: number };
+type Equipamento = { id: string; placa: string; modulo?: string; tipo?: string; ultimoHist?: number };
 
 type CatalogoItem = {
   id: number;
@@ -67,6 +67,7 @@ export default function OSFormModal({
   const [loading, setLoading] = useState(false);
   const isSubmitting = useRef(false); // Guard contra duplo clique
   const [equip, setEquip] = useState<Equipamento | null>(null);
+  const [operacaoTipo, setOperacaoTipo] = useState(initialData?.operacao_tipo || "");
   const [foiReserva, setFoiReserva] = useState(initialData?.foi_enviado_reserva || false);
   const [sistema, setSistema] = useState(initialData?.sistema || "");
   const [subSistema, setSubSistema] = useState(initialData?.sub_sistema || "");
@@ -100,13 +101,20 @@ export default function OSFormModal({
 
   useEffect(() => {
     if (initialData?.equipamento_id) {
-      setEquip(equipamentos.find(e => e.id === initialData.equipamento_id) || null);
+      const eq = equipamentos.find(e => e.id === initialData.equipamento_id) || null;
+      setEquip(eq);
+      if (!initialData.operacao_tipo && eq) {
+        setOperacaoTipo(eq.tipo || "");
+      }
     }
   }, []);
 
   const handleEquipChange = (id: string) => {
     const eq = equipamentos.find(e => e.id === id) || null;
     setEquip(eq);
+    if (eq) {
+      setOperacaoTipo(eq.tipo || "");
+    }
   };
 
   // ─── Assinatura Digital Canvas Draw Logic ──────────────────────────────────
@@ -372,7 +380,7 @@ export default function OSFormModal({
             </Field>
             <Field label="Operação (Tipo)">
               <input name="operacao_tipo" type="text" list="lista-op"
-                defaultValue={initialData?.operacao_tipo || ""}
+                value={operacaoTipo} onChange={e => setOperacaoTipo(e.target.value)}
                 className={I} />
               <datalist id="lista-op">
                 {operacoesTipo.map(o => <option key={o} value={o} />)}
