@@ -146,11 +146,15 @@ export default function BacklogTable({
           </thead>
           <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
             {paginatedItems.map((item) => (
-              <tr key={item.id} className={cn(
-                "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-all group",
-                selectedIds.has(item.id) && "bg-indigo-50/50 dark:bg-indigo-900/10"
-              )}>
-                <td className="px-6 py-4">
+              <tr 
+                key={item.id} 
+                className={cn(
+                  "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-all group cursor-pointer",
+                  selectedIds.has(item.id) && "bg-indigo-50/50 dark:bg-indigo-900/10"
+                )}
+                onClick={() => onEdit(item)}
+              >
+                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                   <input 
                     type="checkbox" 
                     className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
@@ -253,7 +257,7 @@ export default function BacklogTable({
                 )}
 
                 {!isVisitante && (
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => onEdit(item)}
