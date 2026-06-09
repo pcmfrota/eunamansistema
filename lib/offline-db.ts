@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 2;
+  private dbVersion = 3;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
