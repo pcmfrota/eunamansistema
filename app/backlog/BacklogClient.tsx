@@ -56,13 +56,17 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
     if (placas && placas.length > 0) {
       setLocalPlacas(placas);
       if (isOnline) {
-        localDb.saveMany("equipamentos", placas);
+        localDb.saveMany("equipamentos", placas).catch(err => console.error("Erro ao salvar frotas localmente:", err));
       }
     } else {
       const loadPlacas = async () => {
-        const dbPlacas = await localDb.getAll<Placa>("equipamentos");
-        if (dbPlacas && dbPlacas.length > 0) {
-          setLocalPlacas(dbPlacas);
+        try {
+          const dbPlacas = await localDb.getAll<Placa>("equipamentos");
+          if (dbPlacas && dbPlacas.length > 0) {
+            setLocalPlacas(dbPlacas);
+          }
+        } catch (err) {
+          console.error("Erro ao carregar frotas locais:", err);
         }
       };
       loadPlacas();
@@ -73,13 +77,17 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
     if (colaboradores && colaboradores.length > 0) {
       setLocalColaboradores(colaboradores);
       if (isOnline) {
-        localDb.saveMany("colaboradores", colaboradores);
+        localDb.saveMany("colaboradores", colaboradores).catch(err => console.error("Erro ao salvar colaboradores localmente:", err));
       }
     } else {
       const loadColaboradores = async () => {
-        const dbColaboradores = await localDb.getAll<Colaborador>("colaboradores");
-        if (dbColaboradores && dbColaboradores.length > 0) {
-          setLocalColaboradores(dbColaboradores);
+        try {
+          const dbColaboradores = await localDb.getAll<Colaborador>("colaboradores");
+          if (dbColaboradores && dbColaboradores.length > 0) {
+            setLocalColaboradores(dbColaboradores);
+          }
+        } catch (err) {
+          console.error("Erro ao carregar colaboradores locais:", err);
         }
       };
       loadColaboradores();
@@ -88,7 +96,12 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
 
   const refreshData = async () => {
     // 1. Carrega dados locais do IndexedDB imediatamente
-    const dbData = await localDb.getAll("backlog");
+    let dbData: any[] = [];
+    try {
+      dbData = await localDb.getAll("backlog");
+    } catch (err) {
+      console.error("Erro ao ler backlog local do IndexedDB:", err);
+    }
     const hasCache = dbData && dbData.length > 0;
 
     if (!hasCache) {
@@ -109,12 +122,21 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
         if (!res.error) {
           const freshData = res.data || [];
           setItems(freshData);
-          await localDb.saveMany("backlog", freshData);
+          try {
+            await localDb.saveMany("backlog", freshData);
+          } catch (dbErr) {
+            console.error("Erro ao salvar backlog no IndexedDB:", dbErr);
+          }
         } else {
           console.error("Erro ao sincronizar backlog do Supabase:", res.error);
         }
       } else {
-        const data = await localDb.getAll("backlog");
+        let data: any[] = [];
+        try {
+          data = await localDb.getAll("backlog");
+        } catch (dbErr) {
+          console.error("Erro ao ler backlog local offline:", dbErr);
+        }
         data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
         setItems(data);
       }
@@ -133,14 +155,18 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
   useEffect(() => {
     let active = true;
     const loadFromDb = async () => {
-      const data = await localDb.getAll("backlog");
-      if (active) {
-        data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
-        setItems(data);
-        // Se temos dados locais carregados, garantimos que o loader de tela cheia suma
-        if (data.length > 0) {
-          setLoading(false);
+      try {
+        const data = await localDb.getAll("backlog");
+        if (active) {
+          data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
+          setItems(data);
+          // Se temos dados locais carregados, garantimos que o loader de tela cheia suma
+          if (data.length > 0) {
+            setLoading(false);
+          }
         }
+      } catch (err) {
+        console.error("Erro ao carregar dados do IndexedDB no boot:", err);
       }
     };
     loadFromDb();
