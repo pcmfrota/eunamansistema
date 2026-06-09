@@ -155,15 +155,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Função isolada para sincronização com o banco (Background ou Foreground)
   const syncWithDatabase = async (u: any, isMasterAdmin: boolean, currentProfile: Profile) => {
+    let profileData = null;
+    let allPerms = [];
+
     try {
-      // 2. Busca profile e permissões em PARALELO (Otimizado)
-      const [profileRes, permRes] = await Promise.all([
+      // Busca profile e permissões em PARALELO com Timeout de 5s para evitar travar na tela de "Carregando Acessos"
+      // caso o banco esteja em pausa (cold start) ou a rede do usuário esteja instável.
+      const dbPromise = Promise.all([
         supabase.from('profiles').select('id, full_name, role, avatar_url').eq('id', u.id).maybeSingle(),
         supabase.from('role_permissions').select('role, allowed_tabs')
       ]);
 
-      const profileData = profileRes.data;
-      const allPerms = permRes.data || [];
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout de 5 segundos ao conectar ao banco')), 5000)
+      );
+
+      const [profileRes, permRes] = await Promise.race([dbPromise, timeoutPromise]);
+
+      if (profileRes && !profileRes.error) profileData = profileRes.data;
+      if (permRes && !permRes.error) allPerms = permRes.data || [];
+    } catch (err) {
+      console.warn('[Auth] Erro ou Timeout na sincronização com o Supabase. Usando fallbacks locais:', err);
+    }
+
+    try {
 
       // 3. Determinação da Role (tabela de perfis do banco -> app_metadata do token -> user_metadata -> fallback)
       let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' = 

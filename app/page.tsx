@@ -129,6 +129,13 @@ export default function PortalPage() {
     else setGreeting("Boa noite");
   }, []);
 
+  // Redireciona para login se o carregamento terminar e não houver perfil ativo
+  useEffect(() => {
+    if (mounted && !authLoading && !profile) {
+      window.location.replace("/login");
+    }
+  }, [mounted, authLoading, profile]);
+
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
