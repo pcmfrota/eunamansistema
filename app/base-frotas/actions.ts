@@ -276,3 +276,51 @@ export async function importarEquipamentos(rows: any[]) {
     return { error: error.message };
   }
 }
+
+export async function buscarColaboradores() {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('colaboradores')
+      .select('*')
+      .order('nome', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (error: any) {
+    console.error('Erro ao buscar colaboradores:', error);
+    return [];
+  }
+}
+
+export async function criarColaborador(nome: string) {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('colaboradores')
+      .insert([{ nome: nome.trim() }])
+      .select()
+      .single();
+    if (error) throw error;
+    revalidatePath('/base-frotas');
+    revalidatePath('/backlog');
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+export async function excluirColaborador(id: string) {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('colaboradores')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    revalidatePath('/base-frotas');
+    revalidatePath('/backlog');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}

@@ -6,15 +6,15 @@ const MODULO_PERMISSOES: Record<string, string[]> = {
   '/admin':                    ['admin'],
   '/base-frotas':              ['admin', 'pcm', 'gestao'],
   '/pcm':                      ['admin', 'pcm'],
-  '/preventivas':              ['admin', 'pcm', 'gestao', 'visitante'],
-  '/programacao-preventiva':   ['admin', 'pcm', 'gestao'],
-  '/os':                       ['admin', 'pcm', 'gestao'],
-  '/pneus':                    ['admin', 'pcm', 'gestao'],
-  '/lavagens':                 ['admin', 'pcm', 'gestao'],
-  '/backlog':                  ['admin', 'pcm', 'gestao', 'visitante'],
+  '/preventivas':              ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
+  '/programacao-preventiva':   ['admin', 'pcm', 'gestao', 'mecanico'],
+  '/os':                       ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
+  '/pneus':                    ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
+  '/lavagens':                 ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
+  '/backlog':                  ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
   '/base-dados':               ['admin', 'pcm', 'gestao'],
-  '/calendario':               ['admin', 'pcm', 'gestao'],
-  '/perfil':                   ['admin', 'pcm', 'gestao', 'visitante'],
+  '/calendario':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
+  '/perfil':                   ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
@@ -55,12 +55,17 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const user = session?.user
 
-  // 1. Redireciona não-autenticados para login
+  // 1. Redireciona não-autenticados para login e limpa o cookie
   if (!user) {
-    if (pathname === '/login') return response
+    if (pathname === '/login') {
+      response.cookies.delete('x-user-role')
+      return response
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    redirectResponse.cookies.delete('x-user-role')
+    return redirectResponse
   }
 
   // 2. Autenticado tentando acessar login → redireciona para home
@@ -116,6 +121,17 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/'
       return NextResponse.redirect(url)
     }
+  }
+
+  // Sincroniza o cookie x-user-role para evitar cookies desatualizados/órfãos
+  const currentCookie = request.cookies.get('x-user-role')?.value;
+  if (currentCookie !== userRole) {
+    response.cookies.set('x-user-role', userRole, {
+      maxAge: 3600,
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+    })
   }
 
   return response

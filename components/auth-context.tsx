@@ -10,7 +10,7 @@ type Profile = {
   email: string
   full_name: string | null
   avatar_url: string | null
-  role: 'admin' | 'pcm' | 'gestao' | 'visitante'
+  role: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista'
 }
 
 type AuthContextType = {
@@ -100,13 +100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userEmailBase.includes('eunaman.sistema') ||
       userEmailBase.endsWith('@eunaman.com.br');
 
-    // Perfil inicial básico
+    // Perfil inicial básico (obtém o cargo diretamente do token/metadata se disponível)
+    const tokenRole = u.app_metadata?.role || u.user_metadata?.role;
     let currentProfile: Profile = {
       id: u.id,
       email: u.email || '',
-      full_name: userEmailBase.split('@')[0] || 'Usuário',
-      role: isMasterAdmin ? 'admin' : 'visitante',
-      avatar_url: null
+      full_name: u.user_metadata?.full_name || userEmailBase.split('@')[0] || 'Usuário',
+      role: (tokenRole as any) || (isMasterAdmin ? 'admin' : 'visitante'),
+      avatar_url: u.user_metadata?.avatar_url || null
     };
 
     let skipLoading = false;
@@ -164,9 +165,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profileData = profileRes.data;
       const allPerms = permRes.data || [];
 
-      // 3. Determinação da Role
-      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' = isMasterAdmin ? 'admin' : 'visitante';
-      if (profileData?.role) finalRole = profileData.role as any;
+      // 3. Determinação da Role (tabela de perfis do banco -> app_metadata do token -> user_metadata -> fallback)
+      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' = 
+        (profileData?.role as any) || 
+        (u.app_metadata?.role as any) || 
+        (u.user_metadata?.role as any) || 
+        (isMasterAdmin ? 'admin' : 'visitante');
 
       const finalProfile: Profile = {
         id: u.id,
@@ -186,6 +190,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         if (finalRole === 'admin') finalPerms = allTabs;
         else if (finalRole === 'visitante') finalPerms = ['/', '/preventivas', '/backlog', '/calendario'];
+        else if (finalRole === 'mecanico') finalPerms = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario'];
+        else if (finalRole === 'motorista') finalPerms = ['/', '/pneus', '/calendario', '/lavagens'];
         else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
       }
 
@@ -300,6 +306,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
+        // Remove cookie de papel do usuário
+        document.cookie = 'x-user-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
       }
       
       setUser(null);

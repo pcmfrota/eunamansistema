@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador';
   action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register';
   payload: any;
   timestamp: number;
@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 1;
+  private dbVersion = 2;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
@@ -64,6 +64,9 @@ export class OfflineDB {
         }
         if (!db.objectStoreNames.contains('aux_config')) {
           db.createObjectStore('aux_config', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('colaboradores')) {
+          db.createObjectStore('colaboradores', { keyPath: 'id' });
         }
 
         // Fila de Sincronização

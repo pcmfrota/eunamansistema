@@ -125,6 +125,23 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
         if (res && "error" in res) throw new Error(res.error);
       }
     }
+    
+    else if (entity === "colaborador") {
+      if (action === "create") {
+        const { createClient } = await import("@/utils/supabase/client");
+        const supabase = createClient();
+        const { error } = await supabase.from('colaboradores').insert({
+          id: payload.id.startsWith('temp_') ? undefined : payload.id,
+          nome: payload.nome
+        });
+        if (error) throw new Error(error.message);
+      } else if (action === "delete") {
+        const { createClient } = await import("@/utils/supabase/client");
+        const supabase = createClient();
+        const { error } = await supabase.from('colaboradores').delete().eq('id', payload.id);
+        if (error) throw new Error(error.message);
+      }
+    }
 
     return true;
   } catch (err: any) {

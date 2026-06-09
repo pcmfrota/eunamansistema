@@ -11,6 +11,7 @@ export interface BacklogItem {
   tipo?: string | null;
   descricao?: string | null;
   origem?: string | null;
+  colaborador?: string | null;
   criticidade?: string | null;
   tempo_execucao?: string | null;
   campo_base?: string | null;

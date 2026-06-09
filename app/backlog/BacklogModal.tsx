@@ -45,6 +45,7 @@ const initialValues = {
   criticidade: 'B',
   semana: '', mes: '', ano: '', modulo: '', regiao_programa: '',
   frota: '', tag: '', tipo: '', descricao: '', origem: '',
+  colaborador: '',
   tempo_execucao: '', campo_base: '', os: '', material: '',
   nr_rc: '', nr_ordem: '', fornecedor: '', detalhamento: '',
   data_rc: '', data_nec_material: '', previsao_material: '',
@@ -65,15 +66,19 @@ function Field({ label, children, span = 1 }: { label: string, children: React.R
 
 const inputCls = "w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-zinc-300 dark:placeholder:text-zinc-700"
 
+type Colaborador = { id: string; nome: string }
+
 export default function BacklogModal({ 
   isOpen, 
   onClose, 
   placas,
+  colaboradores,
   editData 
 }: { 
   isOpen: boolean; 
   onClose: () => void; 
   placas: Placa[];
+  colaboradores: Colaborador[];
   editData?: any;
 }) {
   const [step, setStep] = useState(1)
@@ -239,7 +244,13 @@ export default function BacklogModal({
                      <Field label="Tipo">
                         <input className={inputCls} placeholder="Ex: Corretiva" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} />
                      </Field>
-                     <Field label="Origem" span={2}>
+                     <Field label="Colaborador / Mecânico">
+                        <select className={inputCls} value={form.colaborador || ''} onChange={e => setForm({...form, colaborador: e.target.value})}>
+                           <option value="">Selecione...</option>
+                           {(colaboradores || []).map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                        </select>
+                     </Field>
+                     <Field label="Origem">
                         <input className={inputCls} placeholder="Ex: Operador / Inspeção" value={form.origem} onChange={e => setForm({...form, origem: e.target.value})} />
                      </Field>
                   </div>

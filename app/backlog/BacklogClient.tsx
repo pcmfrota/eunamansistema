@@ -28,8 +28,9 @@ import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 
 type Placa = { id: string; placa: string; modulo: string | null; area: string | null };
+type Colaborador = { id: string; nome: string };
 
-export default function BacklogClient({ placas }: { placas: Placa[] }) {
+export default function BacklogClient({ placas, colaboradores }: { placas: Placa[], colaboradores: Colaborador[] }) {
   const { profile } = useAuth();
   const isVisitante = profile?.role === 'visitante';
   const { isOnline } = useOffline();
@@ -48,6 +49,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
   const [search, setSearch] = useState("");
 
   const [localPlacas, setLocalPlacas] = useState<Placa[]>(placas || []);
+  const [localColaboradores, setLocalColaboradores] = useState<Colaborador[]>(colaboradores || []);
 
   useEffect(() => {
     if (placas && placas.length > 0) {
@@ -65,6 +67,23 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
       loadPlacas();
     }
   }, [placas, isOnline]);
+
+  useEffect(() => {
+    if (colaboradores && colaboradores.length > 0) {
+      setLocalColaboradores(colaboradores);
+      if (isOnline) {
+        localDb.saveMany("colaboradores", colaboradores);
+      }
+    } else {
+      const loadColaboradores = async () => {
+        const dbColaboradores = await localDb.getAll<Colaborador>("colaboradores");
+        if (dbColaboradores && dbColaboradores.length > 0) {
+          setLocalColaboradores(dbColaboradores);
+        }
+      };
+      loadColaboradores();
+    }
+  }, [colaboradores, isOnline]);
 
   const refreshData = async () => {
     setLoading(true);
@@ -478,6 +497,7 @@ export default function BacklogClient({ placas }: { placas: Placa[] }) {
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); refreshData(); }}
         placas={localPlacas}
+        colaboradores={localColaboradores}
         editData={editingItem}
       />
 

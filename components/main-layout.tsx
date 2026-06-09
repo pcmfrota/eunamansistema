@@ -251,7 +251,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 {authLoading ? 'Carregando...' : (
                   profile?.role === 'admin' ? 'Administrador' :
                   profile?.role === 'pcm' ? 'PCM' :
-                  profile?.role === 'gestao' ? 'Gestão' : 'Visitante'
+                  profile?.role === 'gestao' ? 'Gestão' : 
+                  profile?.role === 'mecanico' ? 'Mecânico' :
+                  profile?.role === 'motorista' ? 'Motorista' : 'Visitante'
                 )}
               </p>
             </div>

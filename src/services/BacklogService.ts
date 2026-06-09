@@ -43,6 +43,10 @@ export class BacklogService {
       Object.entries(item).map(([k, v]) => [k, v === '' ? null : v])
     );
 
+    if (sanitized.id && String(sanitized.id).startsWith('temp_')) {
+      delete sanitized.id;
+    }
+
     // Normalize status on save
     if (sanitized.status) {
       const st = String(sanitized.status).toUpperCase().trim();
@@ -115,6 +119,7 @@ export class BacklogService {
         tipo: s(r.tipo ?? r.Tipo),
         descricao: s(r.descricao ?? r["Descrição"] ?? r.Descricao),
         origem: s(r.origem ?? r.Origem),
+        colaborador: s(r.colaborador ?? r.Colaborador ?? r.Mecânico ?? r.Mecanico),
         criticidade,
         tempo_execucao: s(r.tempo_execucao ?? r["Tempo Exec."] ?? r["Tempo Execucao"]),
         campo_base: s(r.campo_base ?? r["Campo/Base"]),

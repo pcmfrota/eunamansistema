@@ -1,6 +1,6 @@
 -- Tabela para gerenciar quais abas cada cargo pode acessar
 CREATE TABLE IF NOT EXISTS public.role_permissions (
-  role TEXT PRIMARY KEY CHECK (role IN ('admin', 'pcm', 'gestao', 'visitante')),
+  role TEXT PRIMARY KEY CHECK (role IN ('admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista', 'gestor', 'tecnico')),
   allowed_tabs TEXT[] DEFAULT '{}',
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -27,5 +27,7 @@ INSERT INTO public.role_permissions (role, allowed_tabs) VALUES
 ('admin', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/admin/usuarios']),
 ('pcm', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens']),
 ('gestao', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens']),
-('visitante', ARRAY['/', '/preventivas', '/backlog'])
+('visitante', ARRAY['/', '/preventivas', '/backlog']),
+('mecanico', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario']),
+('motorista', ARRAY['/', '/pneus', '/calendario', '/lavagens'])
 ON CONFLICT (role) DO UPDATE SET allowed_tabs = EXCLUDED.allowed_tabs;

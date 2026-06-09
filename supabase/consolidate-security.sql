@@ -27,7 +27,7 @@ END $$;
 -- Garantir que a constraint de role esteja atualizada
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check 
-CHECK (role IN ('admin', 'gestor', 'tecnico', 'visitante'));
+CHECK (role IN ('admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista', 'gestor', 'tecnico'));
 
 -- ─── 3. Auditoria de RLS (Segurança Blueprint) ──────────────────────────────
 -- Ativar RLS em todas as tabelas críticas
