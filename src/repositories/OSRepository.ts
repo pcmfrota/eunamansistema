@@ -4,12 +4,12 @@ import { OSInsert, OSUpdate } from '../models/os';
 export class OSRepository {
   static async create(data: OSInsert | OSInsert[]) {
     const supabase = createClient();
-    return await supabase.from('ordens_servico').insert(data as any);
+    return await supabase.from('ordens_servico').insert(data as any).select();
   }
 
   static async update(id: string, data: OSUpdate) {
     const supabase = createClient();
-    return await supabase.from('ordens_servico').update(data).eq('id', id);
+    return await supabase.from('ordens_servico').update(data).eq('id', id).select();
   }
 
   static async delete(id: string) {

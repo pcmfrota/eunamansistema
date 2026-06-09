@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { X, CheckCircle2, AlertTriangle, ListChecks, Check } from "lucide-react";
 import { criarOrdemServico, atualizarOrdemServico } from "./actions";
+import { encerrarBacklogs } from "@/app/backlog/actions";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
 
@@ -30,9 +31,10 @@ type OS = {
   observacoes: string | null;
   equipamento_id: string;
   assinatura_mecanico?: string | null;
+  fotos?: string[] | null;
 };
 
-type Equipamento = { id: string; placa: string; modulo?: string; tipo?: string; ultimoHist?: number };
+type Equipamento = { id: string; placa: string; modulo?: string; tipo?: string; ultimoHist?: number; categoria?: string; status?: string; };
 
 type CatalogoItem = {
   id: number;
@@ -51,6 +53,8 @@ interface OSFormModalProps {
   operacoesTipo?: string[];
   motivos?: string[];
   catalogo?: CatalogoItem[];
+  backlogs?: any[];
+  colaboradores?: any[];
 }
 
 function getLocalDT() {
@@ -62,6 +66,8 @@ function getLocalDT() {
 export default function OSFormModal({
   equipamentos, initialData, onClose,
   operacoesTipo = [], motivos = [], catalogo = [],
+  backlogs = [],
+  colaboradores = [],
 }: OSFormModalProps) {
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
@@ -81,6 +87,30 @@ export default function OSFormModal({
   const [assinaturaDataUrl, setAssinaturaDataUrl] = useState(initialData?.assinatura_mecanico || "");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [resolvedBacklogs, setResolvedBacklogs] = useState<Set<string>>(new Set());
+  const [fotos, setFotos] = useState<string[]>(initialData?.fotos || []);
+
+  // Filter open backlogs for the selected vehicle (equip?.placa)
+  const openBacklogs = useMemo(() => {
+    if (!equip?.placa) return [];
+    return (backlogs || []).filter(item => {
+      const isSamePlate = item.frota && item.frota.toUpperCase() === equip.placa.toUpperCase();
+      const st = String(item.status || '').toUpperCase().trim();
+      const isNotClosed = st !== 'ENCERRADO' && st !== 'CONCLUIDO' && st !== 'CONCLUÍDO' && st !== 'ENCERRADA';
+      return isSamePlate && isNotClosed;
+    });
+  }, [backlogs, equip?.placa]);
+
+  // Filter heavy fleet & active equipments (categoria == 'PESADA' and status != 'INATIVO')
+  // We always include the currently selected equipment if editing to prevent UI issues
+  const filteredEquipamentos = useMemo(() => {
+    return equipamentos.filter(eq => {
+      if (initialData && eq.id === initialData.equipamento_id) return true;
+      const isHeavy = eq.categoria && eq.categoria.toUpperCase() === "PESADA";
+      const isActive = eq.status && eq.status.toUpperCase() !== "INATIVO";
+      return isHeavy && isActive;
+    });
+  }, [equipamentos, initialData]);
 
   // Catalogos em cascata
   const sistemasUnicos = Array.from(new Set(catalogo.map(c => c.sistema))).sort();
@@ -195,6 +225,30 @@ export default function OSFormModal({
     setShowSigPad(false);
   };
 
+  const handleFotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    
+    if (fotos.length + files.length > 5) {
+      alert("Você pode lançar no máximo 5 fotos.");
+      return;
+    }
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setFotos((prev) => [...prev, reader.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeFoto = (index: number) => {
+    setFotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -219,6 +273,11 @@ export default function OSFormModal({
         fd.set(`mecanico_${idx + 1}`, nome.trim());
       });
 
+      // Fotos do serviço: envia as fotos
+      fotos.forEach((foto) => {
+        fd.append("fotos", foto);
+      });
+
       if (isOnline) {
         const res = initialData
           ? await atualizarOrdemServico(initialData.id, fd)
@@ -228,6 +287,32 @@ export default function OSFormModal({
           // Erro real vindo do servidor
           alert("Erro ao salvar: " + res.error);
           return;
+        }
+
+        // Se houver backlogs selecionados para encerramento
+        if (resolvedBacklogs.size > 0 && res && typeof res === "object" && "numero_os" in res) {
+          const osNum = (res as any).numero_os;
+          const dataConclusao = (fd.get("data_fechamento") as string) || getLocalDT();
+          
+          // Chamar action de fechamento dos backlogs no Supabase
+          const encRes = await encerrarBacklogs(Array.from(resolvedBacklogs), osNum, dataConclusao);
+          if (encRes && "error" in encRes) {
+            console.error("Erro ao encerrar backlogs no servidor:", encRes.error);
+          }
+
+          // Atualizar localmente no IndexedDB
+          for (const backlogId of resolvedBacklogs) {
+            const backlog = backlogs.find(b => b.id === backlogId);
+            if (backlog) {
+              await localDb.put("backlog", {
+                ...backlog,
+                status: "ENCERRADO",
+                os: osNum,
+                data_conclusao: dataConclusao
+              });
+            }
+          }
+          window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
         }
 
         // Salvo com sucesso no Supabase — atualiza cache local sem bloquear
@@ -244,24 +329,72 @@ export default function OSFormModal({
         onClose();
       } else {
         // Cenário offline
+        const dataFechamentoVal = (fd.get("data_fechamento") as string) || null;
         if (initialData) {
           // Editar OS Offline
           const serialized = serializeFormData(fd);
+          const osNum = initialData.numero_os;
+          
+          // Se houver backlogs selecionados para encerramento
+          if (resolvedBacklogs.size > 0) {
+            const dataConclusao = dataFechamentoVal || getLocalDT();
+            for (const backlogId of resolvedBacklogs) {
+              const backlog = backlogs.find(b => b.id === backlogId);
+              if (backlog) {
+                const updatedBk = {
+                  ...backlog,
+                  status: "ENCERRADO",
+                  os: osNum,
+                  data_conclusao: dataConclusao,
+                  _isPendingSync: true
+                };
+                await localDb.put("backlog", updatedBk);
+                await localDb.addToQueue("backlog", "update", updatedBk);
+              }
+            }
+            window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+          }
+
           const updatedOS = {
             ...initialData,
             ...serialized,
             horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
             horas_manutencao: Number((diffMin/60).toFixed(2)),
             foi_enviado_reserva: fd.get("foi_enviado_reserva") === "on",
+            fotos: fotos,
             _isPendingSync: true
           };
           await localDb.put("ordens_servico", updatedOS);
           await localDb.addToQueue("os", "update", { id: initialData.id, ...serialized });
         } else {
           // Criar OS Offline
-          const serialized = serializeFormData(fd);
           const tempId = `temp_os_${Date.now()}`;
           const tempNum = `OS-OFF-${Math.floor(Math.random() * 9000) + 1000}`;
+          
+          // Adicionar o número temporário no FormData para ser salvo e enfileirado no sync
+          fd.set("temp_numero_os", tempNum);
+          const serialized = serializeFormData(fd);
+
+          // Se houver backlogs selecionados para encerramento
+          if (resolvedBacklogs.size > 0) {
+            const dataConclusao = dataFechamentoVal || getLocalDT();
+            for (const backlogId of resolvedBacklogs) {
+              const backlog = backlogs.find(b => b.id === backlogId);
+              if (backlog) {
+                const updatedBk = {
+                  ...backlog,
+                  status: "ENCERRADO",
+                  os: tempNum,
+                  data_conclusao: dataConclusao,
+                  _isPendingSync: true
+                };
+                await localDb.put("backlog", updatedBk);
+                await localDb.addToQueue("backlog", "update", updatedBk);
+              }
+            }
+            window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+          }
+
           const newOS = {
             id: tempId,
             numero_os: tempNum,
@@ -269,7 +402,7 @@ export default function OSFormModal({
             modulo: equip?.modulo || "",
             status: fd.get("status") as string || "Aberta",
             data_abertura: fd.get("data_abertura") as string,
-            data_fechamento: (fd.get("data_fechamento") as string) || null,
+            data_fechamento: dataFechamentoVal,
             horas_manutencao: Number((diffMin/60).toFixed(2)),
             descricao: fd.get("descricao") as string,
             horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
@@ -288,6 +421,7 @@ export default function OSFormModal({
             observacoes: fd.get("observacoes") as string,
             equipamento_id: fd.get("equipamento_id") as string,
             assinatura_mecanico: assinaturaDataUrl,
+            fotos: fotos,
             _isPendingSync: true
           };
           await localDb.put("ordens_servico", newOS);
@@ -357,7 +491,7 @@ export default function OSFormModal({
                 onChange={e => handleEquipChange(e.target.value)}
                 className={I}>
                 <option value="">Selecione a placa...</option>
-                {equipamentos.map(eq => (
+                {filteredEquipamentos.map(eq => (
                   <option key={eq.id} value={eq.id}>{eq.placa}</option>
                 ))}
               </select>
@@ -439,6 +573,96 @@ export default function OSFormModal({
             </div>
           )}
 
+          {/* Vínculo de Backlogs da Placa */}
+          {equip?.placa && (
+            <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="text-blue-500 dark:text-blue-400" size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    Backlogs Pendentes ({openBacklogs.length})
+                  </span>
+                </div>
+                {openBacklogs.length === 0 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={12} /> Sem pendências
+                  </span>
+                )}
+              </div>
+
+              {openBacklogs.length > 0 ? (
+                <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                    Selecione os backlogs que foram resolvidos nesta manutenção para encerrá-los automaticamente:
+                  </p>
+                  {openBacklogs.map((item) => {
+                    const isSelected = resolvedBacklogs.has(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setResolvedBacklogs(prev => {
+                            const next = new Set(prev);
+                            if (next.has(item.id)) next.delete(item.id);
+                            else next.add(item.id);
+                            return next;
+                          });
+                        }}
+                        className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-emerald-500/50 bg-emerald-50/20 dark:bg-emerald-950/10"
+                            : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900/40"
+                        }`}
+                      >
+                        <div className={`mt-0.5 w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all ${
+                          isSelected
+                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            : "border-zinc-300 dark:border-zinc-700 text-transparent"
+                        }`}>
+                          <Check size={12} className="stroke-[3]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-bold leading-relaxed ${isSelected ? "text-emerald-900 dark:text-emerald-400" : "text-zinc-800 dark:text-zinc-200"}`}>
+                            {item.descricao || "Sem descrição"}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {item.criticidade === 'A' ? (
+                              <span className="relative inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30">
+                                <span className="flex h-1.5 w-1.5 relative">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                                </span>
+                                Crítico A
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-500 border border-amber-200 dark:border-amber-900/20">
+                                Normal B
+                              </span>
+                            )}
+                            <span className="text-[10px] text-zinc-400 font-medium font-mono">
+                              Evidência: {item.data_evidencia ? new Date(item.data_evidencia).toLocaleDateString('pt-BR') : '-'}
+                            </span>
+                            {item.colaborador && (
+                              <span className="text-[10px] text-zinc-400 font-semibold uppercase">
+                                • {item.colaborador}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-4 bg-white dark:bg-zinc-900/20 border border-zinc-150 dark:border-zinc-800 rounded-xl">
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                    Nenhum backlog pendente ou programado encontrado para esta placa.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Descrição */}
           <Field label="Descrição da Atividade *">
             <textarea name="descricao" required rows={3}
@@ -482,17 +706,22 @@ export default function OSFormModal({
               {mecanicos.map((nome, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <span className="text-xs text-zinc-400 w-4 shrink-0">{idx + 1}.</span>
-                  <input
-                    type="text"
+                  <select
                     value={nome}
                     onChange={e => {
                       const copia = [...mecanicos];
                       copia[idx] = e.target.value;
                       setMecanicos(copia);
                     }}
-                    placeholder={`Nome do mecânico ${idx + 1}...`}
                     className={`${I} flex-1`}
-                  />
+                  >
+                    <option value="">Selecione o mecânico {idx + 1}...</option>
+                    {colaboradores.map(colab => (
+                      <option key={colab.id} value={colab.nome}>
+                        {colab.nome}
+                      </option>
+                    ))}
+                  </select>
                   {mecanicos.length > 1 && (
                     <button
                       type="button"
@@ -564,6 +793,54 @@ export default function OSFormModal({
               defaultValue={initialData?.observacoes || ""}
               className={`${I} resize-none`} />
           </Field>
+
+          {/* Fotos do Serviço */}
+          <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                  📸 Fotos do Serviço Feito ({fotos.length}/5)
+                </p>
+                <p className="text-[10px] text-zinc-400 mt-0.5">
+                  Adicione até 5 fotos para incluir na ordem de serviço
+                </p>
+              </div>
+              {fotos.length < 5 && (
+                <label className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors">
+                  <span className="text-base leading-none font-bold">+</span> Adicionar Fotos
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFotosChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
+            {fotos.length > 0 ? (
+              <div className="grid grid-cols-5 gap-2 mt-2">
+                {fotos.map((foto, idx) => (
+                  <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
+                    <img src={foto} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeFoto(idx)}
+                      className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors shadow"
+                      title="Remover Foto"
+                    >
+                      <X size={10} className="stroke-[3]" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 bg-white dark:bg-zinc-950/20 border border-zinc-200 dark:border-zinc-900 rounded-lg">
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">Nenhuma foto adicionada ainda.</p>
+              </div>
+            )}
+          </div>
 
           {/* Tempo total */}
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-300 font-medium">

@@ -28,6 +28,7 @@ const parseFormData = (formData: FormData): OSInsert => ({
   horas_reserva_chegou: (formData.get('horas_reserva_chegou') as string) || null,
   componente: (formData.get('componente') as string) || null,
   assinatura_mecanico: (formData.get('assinatura_mecanico') as string) || null,
+  fotos: formData.getAll('fotos') as string[],
   numero_os: '' // Generator will handle this if empty
 })
 
@@ -48,6 +49,9 @@ export async function criarOrdemServico(formData: FormData) {
     const result = await OSService.createOS(data)
     revalidatePath('/os')
     revalidatePath('/')
+    if (result.success && result.data) {
+      return result.data
+    }
     return result
   } catch (error: any) {
     return { error: error.message }
@@ -56,9 +60,12 @@ export async function criarOrdemServico(formData: FormData) {
 
 export async function atualizarStatusOS(id: string, novoStatus: string) {
   try {
-    await OSService.updateOS(id, { status: novoStatus } as OSUpdate)
+    const result = await OSService.updateOS(id, { status: novoStatus } as OSUpdate)
     revalidatePath('/os')
     revalidatePath('/')
+    if (result.success && result.data) {
+      return result.data
+    }
     return { success: true }
   } catch (error: any) {
     return { error: error.message }
@@ -72,6 +79,9 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
     const result = await OSService.updateOS(id, data as OSUpdate)
     revalidatePath('/os')
     revalidatePath('/')
+    if (result.success && result.data) {
+      return result.data
+    }
     return result
   } catch (error: any) {
     return { error: error.message }

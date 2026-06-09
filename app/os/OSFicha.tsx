@@ -33,6 +33,7 @@ export type OSFichaData = {
   horas_impacto_do?: number; // Novo campo
   mecanicos?: string[] | null;
   assinatura_mecanico?: string | null;
+  fotos?: string[] | null;
   // fallback fields from OrdemServicoResumo
   veiculo_placa?: string | null;
   equipamento?: { placa?: string | null } | null;
@@ -312,6 +313,19 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
     const secTitle = (t: string) =>
       `<div style="background:#1a5c1a;color:#fff;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;padding:4px 10px;">${t}</div>`;
 
+    const fotosHTML = os.fotos && os.fotos.length > 0
+      ? `<div style="border-bottom:1px solid #111;">
+          ${secTitle("Evidências / Fotos do Serviço")}
+          <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:8px;padding:8px 10px;">
+            ${os.fotos.map(foto => `
+              <div style="border:1px solid #e2e8f0;border-radius:4px;overflow:hidden;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#000;height:100px;">
+                <img src="${foto}" style="max-width:100%;max-height:100%;object-fit:cover;" />
+              </div>
+            `).join("")}
+          </div>
+         </div>`
+      : "";
+
     const win = window.open("", "_blank", "width=900,height=750");
     if (!win) return;
 
@@ -416,6 +430,8 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
             </div>
           </div>
         </div>
+
+        ${fotosHTML}
 
         <!-- Assinaturas -->
         <div>
@@ -758,6 +774,22 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                     </div>
                   </div>
                 </div>
+
+                {/* ── Bloco Fotos do Serviço ── */}
+                {os.fotos && os.fotos.length > 0 && (
+                  <div className="border-b border-gray-900 bg-white">
+                    <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
+                      Evidências / Fotos do Serviço
+                    </div>
+                    <div className="grid grid-cols-5 gap-2 px-3 py-2">
+                      {os.fotos.map((foto, idx) => (
+                        <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-gray-300 bg-black flex items-center justify-center h-[100px]">
+                          <img src={foto} alt={`Foto ${idx + 1}`} className="max-w-full max-h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Bloco 6 — Assinaturas ── */}
                 <div>

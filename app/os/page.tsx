@@ -7,10 +7,8 @@ export default async function ControleOSPage() {
   // Equipamentos com último horímetro - Otimizado para buscar apenas campos necessários
   const { data: equipamentos } = await supabase
     .from('equipamentos')
-    .select('id, placa, modulo, area, tipo, horimetros(horimetro_final)')
+    .select('id, placa, modulo, area, tipo, categoria, status, horimetros(horimetro_final)')
     .order('placa')
-    // Nota: O Supabase não permite .limit(1) dentro de sub-queries de forma trivial sem view, 
-    // mas vamos filtrar o status para reduzir o volume inicial.
     .or("status.is.null,status.neq.Inativo,status.neq.INATIVO")
  
   const eqTransformados = equipamentos?.map(eq => {
@@ -28,6 +26,8 @@ export default async function ControleOSPage() {
       modulo: eq.modulo,
       area: eq.area,
       tipo: eq.tipo,
+      categoria: eq.categoria,
+      status: eq.status,
       ultimoHist: lastH > 0 ? lastH : undefined,
     };
   }) || [];
@@ -41,18 +41,20 @@ export default async function ControleOSPage() {
       horas_manutencao, descricao, horimetro, operacao_tipo, local, classe, 
       foi_enviado_reserva, motivo, sistema, sub_sistema, componente, 
       observacoes, horario_parada, equipamento_id, qual_reserva, horas_reserva_chegou,
-      mecanicos, assinatura_mecanico,
+      mecanicos, assinatura_mecanico, fotos,
       equipamento:equipamento_id (placa, modulo)
     `)
     .not('equipamento_id', 'is', null)
     .order('data_abertura', { ascending: false })
     .limit(1000);
 
-  // Catálogo e Configurações - Paralelizados com os demais
-  const [catalogoRes, auxRes, calendarioRes] = await Promise.all([
+  // Catálogo, Configurações, Backlogs e Colaboradores - Paralelizados com os demais
+  const [catalogoRes, auxRes, calendarioRes, backlogRes, colaboradoresRes] = await Promise.all([
     supabase.from('catalogo_manutencao').select('*').order('sistema_codigo'),
     supabase.from('aux_config').select('*'),
-    supabase.from('calendario_suzano').select('*').order('ano', { ascending: true }).order('mes', { ascending: true })
+    supabase.from('calendario_suzano').select('*').order('ano', { ascending: true }).order('mes', { ascending: true }),
+    supabase.from('backlog').select('id, frota, status, descricao, data_evidencia, criticidade').order('created_at', { ascending: false }).limit(2000),
+    supabase.from('colaboradores').select('id, nome').order('nome')
   ]);
 
   const ordensData = ordens || [];
@@ -83,6 +85,8 @@ export default async function ControleOSPage() {
       motivos={motivos}
       catalogo={catalogoRes.data || []}
       periodos={calendario}
+      initialBacklogs={backlogRes.data || []}
+      initialColaboradores={colaboradoresRes.data || []}
     />
   )
 }

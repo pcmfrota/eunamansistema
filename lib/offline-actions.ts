@@ -32,6 +32,9 @@ import {
   importarBacklog 
 } from "@/app/backlog/actions";
 
+// Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
+const tempToRealOSMap: Record<string, string> = {};
+
 // --- 1. REPLAY ENGINE (Chamado pelo OfflineProvider) ---
 export async function replaySyncItem(item: SyncItem): Promise<boolean> {
   const { entity, action, payload } = item;
@@ -41,9 +44,19 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
 
     if (entity === "os") {
       if (action === "create") {
+        const tempNum = payload.temp_numero_os; // Recupera o número temporário, se houver
         const formData = deserializeToFormData(payload);
         const res = await criarOrdemServico(formData);
         if (res && "error" in res) throw new Error(res.error);
+        
+        // Mapeia o número temporário para o real retornado pelo Supabase
+        if (tempNum && res && (res as any).numero_os) {
+          const realNum = (res as any).numero_os;
+          tempToRealOSMap[tempNum] = realNum;
+          if (typeof window !== "undefined") {
+            localStorage.setItem(`sync_os_map_${tempNum}`, realNum);
+          }
+        }
       } else if (action === "update") {
         const { id, ...data } = payload;
         const formData = deserializeToFormData(data);
@@ -115,6 +128,14 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
     
     else if (entity === "backlog") {
       if (action === "create" || action === "update") {
+        // Se a OS associada for temporária, remapeia para o número real gerado no sync
+        const tempOS = payload.os;
+        if (tempOS && tempOS.startsWith("OS-OFF-")) {
+          const realOSNum = tempToRealOSMap[tempOS] || (typeof window !== "undefined" ? localStorage.getItem(`sync_os_map_${tempOS}`) : null);
+          if (realOSNum) {
+            payload.os = realOSNum;
+          }
+        }
         const res = await upsertBacklogItem(payload);
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {

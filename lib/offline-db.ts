@@ -236,9 +236,15 @@ export class OfflineDB {
 
 export function serializeFormData(formData: FormData): Record<string, any> {
   const obj: Record<string, any> = {};
-  formData.forEach((value, key) => {
-    // Se o valor for um arquivo, o IndexedDB suporta gravar File/Blob nativamente!
-    obj[key] = value;
+  // Usa as chaves para capturar múltiplos valores caso existam (ex: arrays no FormData)
+  const uniqueKeys = Array.from(new Set(formData.keys()));
+  uniqueKeys.forEach((key) => {
+    const allValues = formData.getAll(key);
+    if (allValues.length > 1) {
+      obj[key] = allValues;
+    } else {
+      obj[key] = allValues[0];
+    }
   });
   return obj;
 }
@@ -246,8 +252,16 @@ export function serializeFormData(formData: FormData): Record<string, any> {
 export function deserializeToFormData(obj: Record<string, any>): FormData {
   const formData = new FormData();
   Object.entries(obj).forEach(([key, value]) => {
-    if (value instanceof Blob) {
-      // Se for Blob/File recuperado do IndexedDB, anexa preservando metadados
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item instanceof Blob) {
+          const name = (item as any).name || 'file';
+          formData.append(key, item, name);
+        } else if (item != null) {
+          formData.append(key, String(item));
+        }
+      });
+    } else if (value instanceof Blob) {
       const name = (value as any).name || 'file';
       formData.append(key, value, name);
     } else if (value != null) {

@@ -45,6 +45,7 @@ type OS = {
   horario_parada: string | null;
   equipamento_id: string;
   assinatura_mecanico?: string | null;
+  fotos?: string[] | null;
 };
 
 type Equipamento = {
@@ -53,6 +54,8 @@ type Equipamento = {
   modulo?: string;
   area?: string;
   ultimoHist?: number;
+  categoria?: string;
+  status?: string;
 };
 
 type CatalogoItem = {
@@ -134,6 +137,8 @@ export default function ControleOSClient({
   motivos = [],
   catalogo = [],
   periodos = [],
+  initialBacklogs = [],
+  initialColaboradores = [],
 }: {
   ordens: OS[];
   equipamentos: Equipamento[];
@@ -141,9 +146,13 @@ export default function ControleOSClient({
   motivos?: string[];
   catalogo?: CatalogoItem[];
   periodos?: any[];
+  initialBacklogs?: any[];
+  initialColaboradores?: any[];
 }) {
   const { isOnline } = useOffline();
   const [ordens, setOrdens] = useState(initialOrdens);
+  const [backlogs, setBacklogs] = useState<any[]>(initialBacklogs);
+  const [colaboradores, setColaboradores] = useState<any[]>(initialColaboradores);
 
   // Sync cache with initialOrdens from server when online
   useEffect(() => {
@@ -151,6 +160,20 @@ export default function ControleOSClient({
       localDb.saveMany("ordens_servico", initialOrdens);
     }
   }, [isOnline, initialOrdens]);
+
+  // Sync backlog cache with initialBacklogs from server when online
+  useEffect(() => {
+    if (isOnline && initialBacklogs && initialBacklogs.length > 0) {
+      localDb.saveMany("backlog", initialBacklogs).catch(err => console.error("Erro ao salvar backlogs:", err));
+    }
+  }, [isOnline, initialBacklogs]);
+
+  // Sync colaboradores cache with initialColaboradores from server when online
+  useEffect(() => {
+    if (isOnline && initialColaboradores && initialColaboradores.length > 0) {
+      localDb.saveMany("colaboradores", initialColaboradores).catch(err => console.error("Erro ao salvar colaboradores:", err));
+    }
+  }, [isOnline, initialColaboradores]);
 
   // Load from local DB dynamically
   useEffect(() => {
@@ -172,6 +195,56 @@ export default function ControleOSClient({
       window.removeEventListener("offline-sync-completed", loadFromDb);
     };
   }, []);
+
+  // Load backlogs from local DB dynamically
+  useEffect(() => {
+    let active = true;
+    const loadBacklogs = async () => {
+      try {
+        const data = await localDb.getAll("backlog");
+        if (active) {
+          setBacklogs(data);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar backlogs locais:", err);
+      }
+    };
+    loadBacklogs();
+
+    window.addEventListener("offline-db-updated-backlog", loadBacklogs);
+    window.addEventListener("offline-sync-completed", loadBacklogs);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-db-updated-backlog", loadBacklogs);
+      window.removeEventListener("offline-sync-completed", loadBacklogs);
+    };
+  }, []);
+
+  // Load colaboradores from local DB dynamically
+  useEffect(() => {
+    let active = true;
+    const loadColaboradores = async () => {
+      try {
+        const data = await localDb.getAll("colaboradores");
+        if (active) {
+          data.sort((a, b) => a.nome.localeCompare(b.nome));
+          setColaboradores(data);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar colaboradores locais:", err);
+      }
+    };
+    loadColaboradores();
+
+    window.addEventListener("offline-db-updated-colaboradores", loadColaboradores);
+    window.addEventListener("offline-sync-completed", loadColaboradores);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-db-updated-colaboradores", loadColaboradores);
+      window.removeEventListener("offline-sync-completed", loadColaboradores);
+    };
+  }, []);
+
   const [activeTab, setActiveTab] = useState<"dashboard" | "lista">("lista");
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos Status");
@@ -789,6 +862,8 @@ export default function ControleOSClient({
           operacoesTipo={operacoesTipo}
           motivos={motivos}
           catalogo={catalogo}
+          backlogs={backlogs}
+          colaboradores={colaboradores}
         />
       )}
 

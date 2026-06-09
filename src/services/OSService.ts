@@ -33,6 +33,7 @@ const OSSchema = z.object({
   componente: z.string().optional().nullable(),
   mecanicos: z.array(z.string()).optional().nullable().default([]),
   assinatura_mecanico: z.string().optional().nullable(),
+  fotos: z.array(z.string()).optional().nullable().default([]),
 });
 
 export class OSService {
@@ -51,10 +52,12 @@ export class OSService {
 
     const validated = OSSchema.parse(data);
 
-    const { error } = await OSRepository.create(validated);
+    const { data: records, error } = await OSRepository.create(validated);
     if (error) throw new Error(error.message);
     
-    return { success: true };
+    return records && records.length > 0 
+      ? { success: true, data: records[0] } 
+      : { success: true };
   }
 
   static async updateOS(id: string, data: OSUpdate) {
@@ -74,10 +77,12 @@ export class OSService {
     const partialSchema = OSSchema.partial();
     const validated = partialSchema.parse(data);
 
-    const { error } = await OSRepository.update(id, validated);
+    const { data: records, error } = await OSRepository.update(id, validated);
     if (error) throw new Error(error.message);
 
-    return { success: true };
+    return records && records.length > 0 
+      ? { success: true, data: records[0] } 
+      : { success: true };
   }
 
   static async deleteOS(id: string) {
