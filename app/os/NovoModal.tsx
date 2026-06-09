@@ -458,7 +458,7 @@ export default function OSFormModal({
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
           {/* Datas */}
-          <div className="grid grid-cols-3 gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
             <Field label="Horário Real da Parada *">
               <input name="horario_parada" type="datetime-local" required
                 defaultValue={initialData?.horario_parada?.slice(0,16) || ""}
@@ -477,7 +477,7 @@ export default function OSFormModal({
           </div>
 
           {/* Status + Placa */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Status *">
               <select name="status" required defaultValue={initialData?.status || "Aberta"} className={I}>
                 <option>Aberta</option>
@@ -506,7 +506,7 @@ export default function OSFormModal({
           </Field>
 
           {/* Horímetro, Operação, Local */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Horímetro">
               <input name="horimetro" type="number" step="0.1"
                 defaultValue={initialData?.horimetro ?? equip?.ultimoHist ?? ""}
@@ -528,7 +528,7 @@ export default function OSFormModal({
           </div>
 
           {/* Tipo de Manutenção + Reserva */}
-          <div className="grid grid-cols-2 gap-3 items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
             <Field label="Tipo de Manutenção">
               <select name="classe" defaultValue={initialData?.classe || "CORRETIVA"} className={I}>
                 <option value="CORRETIVA">CORRETIVA</option>
@@ -554,7 +554,7 @@ export default function OSFormModal({
 
           {/* Reserva details */}
           {foiReserva && (
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
               <Field label="Qual o Caminhão Reserva?">
                 <select name="qual_reserva" required
                   defaultValue={initialData?.qual_reserva || ""}
@@ -765,7 +765,7 @@ export default function OSFormModal({
           {/* Sistema / Subsistema / Componente em cascata */}
           <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
             <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Sistema / Sub-Sistema / Componente</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Sistema">
                 <select value={sistema} onChange={e => { setSistema(e.target.value); setSubSistema(""); setComponente(""); }} className={I}>
                   <option value="">Selecione...</option>
@@ -806,16 +806,31 @@ export default function OSFormModal({
                 </p>
               </div>
               {fotos.length < 5 && (
-                <label className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors">
-                  <span className="text-base leading-none font-bold">+</span> Adicionar Fotos
+                <div className="flex items-center gap-2">
+                  <label htmlFor="fotos-galeria" className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors">
+                    <span className="text-base leading-none font-bold">+</span> Galeria
+                  </label>
                   <input
+                    id="fotos-galeria"
                     type="file"
                     multiple
                     accept="image/*"
                     onChange={handleFotosChange}
                     className="hidden"
                   />
-                </label>
+                  <span className="text-zinc-350 dark:text-zinc-650 text-xs">|</span>
+                  <label htmlFor="fotos-camera" className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors">
+                    📷 Tirar Foto
+                  </label>
+                  <input
+                    id="fotos-camera"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFotosChange}
+                    className="hidden"
+                  />
+                </div>
               )}
             </div>
 
