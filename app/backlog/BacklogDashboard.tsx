@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
-  ArrowRight, Search, Filter, X, ChevronRight, Edit3, Trash2, RefreshCw
+  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, Edit3, Trash2, RefreshCw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -45,8 +45,13 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [search, setSearch] = useState('')
 
+  // Pagination states for dashboard table
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
   // Map database status and criticidade to target dashboard schema
   const mappedItems = useMemo(() => {
+    const placasMap = new Map(placas.map(p => [p.placa, p]));
     return items.map(item => {
       // 1. Map Status
       let mappedStatus = 'PENDENTE'
@@ -67,7 +72,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
       }
 
       // 3. Find equipment area registered in "base de frotas"
-      const eq = placas.find(p => p.placa === item.frota)
+      const eq = placasMap.get(item.frota)
       const mappedArea = String(eq?.area || item.campo_base || 'REPOSIÇÃO').toUpperCase()
 
       // 4. Mapped month and year
@@ -164,6 +169,16 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
       return true
     })
   }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, search])
+
+  // Reset pagination to first page on filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filtered])
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
+  const paginatedFiltered = useMemo(() => {
+    return filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  }, [filtered, currentPage])
 
   // KPIs
   const kpiConcluidas = useMemo(() => filtered.filter(i => i.mappedStatus === 'ENCERRADO').length, [filtered])
@@ -756,7 +771,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((item) => {
+                  paginatedFiltered.map((item) => {
                     const prioColor = CRITICIDADE_COLORS[item.mappedCriticidade] || { bg: 'bg-zinc-100', text: 'text-zinc-500' }
                     const statColor = STATUS_COLORS[item.mappedStatus] || { bg: 'bg-zinc-100 border-zinc-200', text: 'text-zinc-500' }
 
@@ -831,6 +846,31 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {totalPages > 1 && (
+            <div className="p-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between bg-zinc-50/30 dark:bg-zinc-900/10">
+              <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                Página {currentPage} de {totalPages}
+              </p>
+              <div className="flex gap-1.5">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

@@ -225,6 +225,7 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
   const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
 
   const filteredItems = React.useMemo(() => {
+    const placasMap = new Map(localPlacas.map(p => [p.placa, p]));
     return items.filter(i => {
       const q = search.toLowerCase();
       const matchSearch = !q || 
@@ -235,7 +236,7 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
       
       let matchArea = true;
       if (filterArea) {
-        const pInfo = localPlacas.find(p => p.placa === i.frota);
+        const pInfo = placasMap.get(i.frota);
         matchArea = pInfo?.area === filterArea;
       }
 

@@ -1,8 +1,9 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
-  ChevronRight, 
+  ChevronRight,
+  ChevronLeft,
   Clock, 
   AlertTriangle, 
   CheckCircle2, 
@@ -84,6 +85,18 @@ export default function BacklogTable({
 }: BacklogTableProps) {
   const { profile } = useAuth();
   const isVisitante = profile?.role === 'visitante';
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [items]);
+
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const paginatedItems = React.useMemo(() => {
+    return items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [items, currentPage]);
   
   if (items.length === 0) {
     return (
@@ -132,7 +145,7 @@ export default function BacklogTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
-            {items.map((item) => (
+            {paginatedItems.map((item) => (
               <tr key={item.id} className={cn(
                 "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-all group",
                 selectedIds.has(item.id) && "bg-indigo-50/50 dark:bg-indigo-900/10"
@@ -265,6 +278,30 @@ export default function BacklogTable({
         </table>
       </div>
       
+      {totalPages > 1 && (
+        <div className="p-4 md:p-6 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/30">
+          <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+            Página {currentPage} de {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {items.length >= 5000 && (
          <div className="p-4 bg-zinc-50/50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-900 text-center">
             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center justify-center gap-2">
