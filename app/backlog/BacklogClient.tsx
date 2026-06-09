@@ -37,6 +37,7 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento'>('Dashboard');
   
@@ -86,19 +87,43 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
   }, [colaboradores, isOnline]);
 
   const refreshData = async () => {
-    setLoading(true);
-    if (isOnline) {
-      const res = await getBacklog(5000);
-      if (!res.error) {
-        setItems(res.data || []);
-        await localDb.saveMany("backlog", res.data || []);
-      }
+    // 1. Carrega dados locais do IndexedDB imediatamente
+    const dbData = await localDb.getAll("backlog");
+    const hasCache = dbData && dbData.length > 0;
+
+    if (!hasCache) {
+      // Sem cache: mostra o loader de tela cheia
+      setLoading(true);
     } else {
-      const data = await localDb.getAll("backlog");
-      data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
-      setItems(data);
+      // Com cache: exibe o cache instantaneamente e desativa o loader de tela cheia
+      dbData.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
+      setItems(dbData);
+      setLoading(false);
     }
-    setLoading(false);
+    
+    setIsRefreshing(true);
+
+    try {
+      if (isOnline) {
+        const res = await getBacklog(5000);
+        if (!res.error) {
+          const freshData = res.data || [];
+          setItems(freshData);
+          await localDb.saveMany("backlog", freshData);
+        } else {
+          console.error("Erro ao sincronizar backlog do Supabase:", res.error);
+        }
+      } else {
+        const data = await localDb.getAll("backlog");
+        data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
+        setItems(data);
+      }
+    } catch (err) {
+      console.error("Falha ao atualizar dados do backlog:", err);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -112,6 +137,10 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
       if (active) {
         data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
         setItems(data);
+        // Se temos dados locais carregados, garantimos que o loader de tela cheia suma
+        if (data.length > 0) {
+          setLoading(false);
+        }
       }
     };
     loadFromDb();
@@ -316,8 +345,9 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
             <button
               onClick={refreshData}
               className="p-3.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-400 hover:text-indigo-600 hover:border-indigo-500/30 transition-all shadow-sm active:rotate-180 duration-500"
+              disabled={loading || isRefreshing}
             >
-              <RefreshCcw size={20} className={loading ? "animate-spin" : ""} />
+              <RefreshCcw size={20} className={loading || isRefreshing ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
@@ -425,7 +455,11 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
         )}
       </div>
 
-      {view === 'Dashboard' ? (
+      {loading ? (
+        <div className="flex flex-col items-center justify-center min-h-[400px] py-20 bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800">
+          <PremiumLoader type="squares-sequential" text="Carregando Backlog" subtext="Calculando aging e criticidades..." />
+        </div>
+      ) : view === 'Dashboard' ? (
         /* Dashboard View */
         <BacklogDashboard items={items} placas={localPlacas} onEdit={handleEdit} onDelete={handleDelete} />
       ) : (
@@ -457,28 +491,22 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
 
           {/* Main Table Content */}
           <div className="flex-1 min-h-[400px]">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-full py-20 bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800">
-                <PremiumLoader type="squares-sequential" text="Carregando Backlog" subtext="Calculando aging e criticidades..." />
-              </div>
-            ) : (
-              <BacklogTable 
-                items={filteredItems}
-                selectedIds={selectedIds}
-                onToggleSelect={(id) => {
-                  const next = new Set(selectedIds);
-                  if (next.has(id)) next.delete(id); else next.add(id);
-                  setSelectedIds(next);
-                }}
-                onToggleSelectAll={() => {
-                  if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
-                  else setSelectedIds(new Set(filteredItems.map(i => i.id)));
-                }}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                view={view as 'Geral' | 'Detalhamento'}
-              />
-            )}
+            <BacklogTable 
+              items={filteredItems}
+              selectedIds={selectedIds}
+              onToggleSelect={(id) => {
+                const next = new Set(selectedIds);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                setSelectedIds(next);
+              }}
+              onToggleSelectAll={() => {
+                if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
+                else setSelectedIds(new Set(filteredItems.map(i => i.id)));
+              }}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              view={view as 'Geral' | 'Detalhamento'}
+            />
           </div>
         </>
       )}
