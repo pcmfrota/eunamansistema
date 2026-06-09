@@ -98,16 +98,21 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (!mounted) {
+  const isLoginPage = pathname?.startsWith("/login") || pathname === "/auth/callback";
+  const isPortalPage = pathname === "/";
+  const isDark = theme === 'dark';
+
+  // Unifica a exibição de loading para evitar discrepâncias entre o HTML do servidor (SSR)
+  // e o primeiro ciclo de render do cliente (Hydration).
+  const showLoader = !mounted || (!isLoginPage && !isPortalPage && (authLoading || (user && !profile)));
+
+  if (showLoader) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#040e04] text-zinc-100">
+      <div className={cn("min-h-screen flex items-center justify-center transition-colors duration-300", isDark ? "bg-[#040e04] text-zinc-100" : "bg-[#f9fafb] text-zinc-800")}>
         <PremiumLoader type="squares-sequential" text="Carregando Sistema" subtext="PCM • EUNAMAN SISTEMA" />
       </div>
     );
   }
-
-  const isLoginPage = pathname?.startsWith("/login") || pathname === "/auth/callback";
-  const isPortalPage = pathname === "/";
 
   // Se for página de login ou a página inicial do portal, renderiza apenas o conteúdo sem sidebar
   if (isLoginPage || isPortalPage) {
@@ -115,18 +120,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       <main className="flex min-h-screen flex-col items-center justify-center overflow-hidden bg-zinc-950 w-full h-full">
         {children}
       </main>
-    );
-  }
-
-  const isDark = theme === 'dark';
-
-  // Mantém o loader de tela cheia se estiver carregando a autenticação OU 
-  // se já temos o usuário mas o perfil detalhado ainda não chegou
-  if (authLoading || (user && !profile)) {
-    return (
-      <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-200", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
-        <PremiumLoader type="squares-sequential" text="Carregando Perfil" subtext="PCM • EUNAMAN SISTEMA" />
-      </div>
     );
   }
 

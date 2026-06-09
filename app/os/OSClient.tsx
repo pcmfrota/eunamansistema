@@ -192,9 +192,10 @@ export default function ControleOSClient({
 
   const isVisitante = profile?.role === "visitante";
 
-  // Abre OS direto via ?abrir=ID (vindo do dashboard)
+  // Abre OS direto via ?abrir=ID (vindo do dashboard) ou aplica filtros/modos vindos do portal
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    
     const abrirId = params.get("abrir");
     if (abrirId) {
       const os = initialOrdens.find(o => o.id === abrirId);
@@ -202,6 +203,33 @@ export default function ControleOSClient({
         setEditingOS(os);
         setShowModal(true);
       }
+    }
+
+    const isNew = params.get("new") === "true";
+    if (isNew) {
+      setEditingOS(null);
+      setShowModal(true);
+    }
+
+    const statusParam = params.get("status");
+    if (statusParam) {
+      if (statusParam.toLowerCase() === "aberta") {
+        setFiltroStatus("Aberta");
+        setActiveTab("lista");
+      } else if (statusParam.toLowerCase() === "andamento") {
+        setFiltroStatus("Em Andamento");
+        setActiveTab("lista");
+      } else if (statusParam.toLowerCase() === "fechada") {
+        setFiltroStatus("Fechada");
+        setActiveTab("lista");
+      }
+    }
+
+    const tabParam = params.get("tab");
+    if (tabParam === "dashboard") {
+      setActiveTab("dashboard");
+    } else if (tabParam === "lista") {
+      setActiveTab("lista");
     }
   }, [initialOrdens]);
 

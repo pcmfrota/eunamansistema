@@ -19,7 +19,10 @@ import {
   ArrowRight,
   Loader2,
   Sun,
-  Moon
+  Moon,
+  X,
+  BarChart2,
+  Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -114,6 +117,7 @@ export default function PortalPage() {
   const [greeting, setGreeting] = useState("Olá");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showOSMenuModal, setShowOSMenuModal] = useState(false);
 
   const isDark = theme === "dark";
 
@@ -274,25 +278,17 @@ export default function PortalPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-12 duration-1000">
           {allowedItems.map((item, idx) => {
             const Icon = item.icon;
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                style={{ animationDelay: `${idx * 40}ms` }}
-                className={cn(
-                  "group flex flex-col justify-between p-6 border rounded-[2.5rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden backdrop-blur-md",
-                  isDark 
-                    ? "bg-zinc-950/55 border-white/5 hover:border-indigo-500/40 hover:bg-zinc-950/75" 
-                    : "bg-white/60 border-zinc-200/80 hover:border-green-500/40 hover:bg-white/85"
-                )}
-              >
+            const isOS = item.path === "/os";
+
+            const cardContent = (
+              <>
                 {/* Visual hover background flare */}
                 <div className={cn(
                   "absolute inset-0 bg-gradient-to-tr opacity-0 group-hover:opacity-100 transition-opacity duration-500",
                   isDark ? "from-indigo-500/0 via-indigo-500/0 to-indigo-500/5" : "from-green-500/0 via-green-500/0 to-green-500/5"
                 )} />
                 
-                <div className="flex items-start justify-between gap-4 relative z-10">
+                <div className="flex items-start justify-between gap-4 relative z-10 w-full">
                   <div className={cn("p-4 rounded-[1.5rem] border shrink-0", item.color)}>
                     <Icon size={24} />
                   </div>
@@ -306,7 +302,7 @@ export default function PortalPage() {
                   </div>
                 </div>
 
-                <div className="mt-8 relative z-10">
+                <div className="mt-8 relative z-10 text-left w-full">
                   <h3 className={cn(
                     "text-lg font-black uppercase italic tracking-tight transition-colors",
                     isDark ? "text-white group-hover:text-indigo-400" : "text-green-950 group-hover:text-green-700"
@@ -320,6 +316,40 @@ export default function PortalPage() {
                     {item.desc}
                   </p>
                 </div>
+              </>
+            );
+
+            if (isOS) {
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => setShowOSMenuModal(true)}
+                  style={{ animationDelay: `${idx * 40}ms` }}
+                  className={cn(
+                    "group flex flex-col justify-between p-6 border rounded-[2.5rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden backdrop-blur-md w-full",
+                    isDark 
+                      ? "bg-zinc-950/55 border-white/5 hover:border-indigo-500/40 hover:bg-zinc-950/75" 
+                      : "bg-white/60 border-zinc-200/80 hover:border-green-500/40 hover:bg-white/85"
+                  )}
+                >
+                  {cardContent}
+                </button>
+              );
+            }
+
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                style={{ animationDelay: `${idx * 40}ms` }}
+                className={cn(
+                  "group flex flex-col justify-between p-6 border rounded-[2.5rem] shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden backdrop-blur-md",
+                  isDark 
+                    ? "bg-zinc-950/55 border-white/5 hover:border-indigo-500/40 hover:bg-zinc-950/75" 
+                    : "bg-white/60 border-zinc-200/80 hover:border-green-500/40 hover:bg-white/85"
+                )}
+              >
+                {cardContent}
               </Link>
             );
           })}
@@ -338,6 +368,164 @@ export default function PortalPage() {
           TODOS OS DIREITOS RESERVADOS © {new Date().getFullYear()}
         </span>
       </footer>
+
+      {/* OS Navigation Menu Modal */}
+      {showOSMenuModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          {/* Backdrop close */}
+          <div className="absolute inset-0" onClick={() => setShowOSMenuModal(false)} />
+          
+          <div 
+            className={cn(
+              "relative w-full max-w-md p-8 border rounded-[2.5rem] shadow-2xl overflow-hidden backdrop-blur-xl animate-in zoom-in-95 duration-200 z-10",
+              isDark 
+                ? "bg-zinc-950/85 border-white/10 text-white" 
+                : "bg-white/90 border-zinc-200/80 text-zinc-900"
+            )}
+          >
+            {/* Decorative blurs */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+
+            {/* Close button */}
+            <button 
+              onClick={() => setShowOSMenuModal(false)}
+              className={cn(
+                "absolute right-6 top-6 p-2 rounded-full transition-colors",
+                isDark ? "hover:bg-white/10 text-zinc-400 hover:text-white" : "hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900"
+              )}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header */}
+            <div className="mb-6 pr-6">
+              <span className={cn("text-[9px] font-black uppercase tracking-[0.2em] font-mono", isDark ? "text-amber-400" : "text-green-700")}>
+                Módulo
+              </span>
+              <h3 className={cn("text-2xl font-black uppercase italic tracking-tight mt-0.5", isDark ? "text-white" : "text-green-950")}>
+                Controle de OS
+              </h3>
+              <p className={cn("text-xs mt-1 leading-relaxed", isDark ? "text-zinc-400" : "text-zinc-650")}>
+                Selecione a ação ou filtro desejado para acessar a página correspondente:
+              </p>
+            </div>
+
+            {/* Options List */}
+            <div className="flex flex-col gap-3">
+              {/* Nova OS */}
+              <Link 
+                href="/os?new=true"
+                onClick={() => setShowOSMenuModal(false)}
+                className="group flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase tracking-wider text-xs shadow-lg hover:shadow-blue-500/20 active:scale-[0.98] transition-all duration-150"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-white/20">
+                    <Plus size={14} />
+                  </div>
+                  <span>Nova O.S</span>
+                </div>
+                <ArrowRight size={14} className="opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </Link>
+
+              {/* Grid 2x2 for Filters and Dashboard */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Aberta */}
+                <Link 
+                  href="/os?status=aberta"
+                  onClick={() => setShowOSMenuModal(false)}
+                  className={cn(
+                    "group flex flex-col justify-between p-4 border rounded-2xl transition-all duration-150 hover:border-blue-500/30 active:scale-[0.98]",
+                    isDark 
+                      ? "bg-zinc-900/60 border-white/5 hover:bg-zinc-900/80" 
+                      : "bg-white/60 border-zinc-200/80 hover:bg-white/95"
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50" />
+                    <div className={cn("p-1.5 rounded-lg border text-blue-500", isDark ? "bg-blue-500/10 border-blue-500/20" : "bg-blue-50 border-blue-100")}>
+                      <CircleDot size={12} />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider block", isDark ? "text-zinc-500" : "text-zinc-400")}>Filtrar</span>
+                    <span className={cn("text-[11px] font-black uppercase tracking-wide block mt-0.5", isDark ? "text-white" : "text-green-950")}>Aberta</span>
+                  </div>
+                </Link>
+
+                {/* Em Andamento */}
+                <Link 
+                  href="/os?status=andamento"
+                  onClick={() => setShowOSMenuModal(false)}
+                  className={cn(
+                    "group flex flex-col justify-between p-4 border rounded-2xl transition-all duration-150 hover:border-amber-500/30 active:scale-[0.98]",
+                    isDark 
+                      ? "bg-zinc-900/60 border-white/5 hover:bg-zinc-900/80" 
+                      : "bg-white/60 border-zinc-200/80 hover:bg-white/95"
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50" />
+                    <div className={cn("p-1.5 rounded-lg border text-amber-500", isDark ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-100")}>
+                      <CircleDot size={12} />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider block", isDark ? "text-zinc-500" : "text-zinc-400")}>Filtrar</span>
+                    <span className={cn("text-[11px] font-black uppercase tracking-wide block mt-0.5", isDark ? "text-white" : "text-green-950")}>Em Andamento</span>
+                  </div>
+                </Link>
+
+                {/* Fechada */}
+                <Link 
+                  href="/os?status=fechada"
+                  onClick={() => setShowOSMenuModal(false)}
+                  className={cn(
+                    "group flex flex-col justify-between p-4 border rounded-2xl transition-all duration-150 hover:border-emerald-500/30 active:scale-[0.98]",
+                    isDark 
+                      ? "bg-zinc-900/60 border-white/5 hover:bg-zinc-900/80" 
+                      : "bg-white/60 border-zinc-200/80 hover:bg-white/95"
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
+                    <div className={cn("p-1.5 rounded-lg border text-emerald-500", isDark ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-50 border-emerald-100")}>
+                      <CircleDot size={12} />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider block", isDark ? "text-zinc-500" : "text-zinc-400")}>Filtrar</span>
+                    <span className={cn("text-[11px] font-black uppercase tracking-wide block mt-0.5", isDark ? "text-white" : "text-green-950")}>Fechada</span>
+                  </div>
+                </Link>
+
+                {/* Dashboard */}
+                <Link 
+                  href="/os?tab=dashboard"
+                  onClick={() => setShowOSMenuModal(false)}
+                  className={cn(
+                    "group flex flex-col justify-between p-4 border rounded-2xl transition-all duration-150 hover:border-indigo-500/30 active:scale-[0.98]",
+                    isDark 
+                      ? "bg-zinc-900/60 border-white/5 hover:bg-zinc-900/80" 
+                      : "bg-white/60 border-zinc-200/80 hover:bg-white/95"
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50" />
+                    <div className={cn("p-1.5 rounded-lg border text-indigo-500", isDark ? "bg-indigo-500/10 border-indigo-500/20" : "bg-indigo-50 border-indigo-100")}>
+                      <BarChart2 size={12} />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider block", isDark ? "text-zinc-500" : "text-zinc-400")}>Acessar</span>
+                    <span className={cn("text-[11px] font-black uppercase tracking-wide block mt-0.5", isDark ? "text-white" : "text-green-950")}>Dashboard</span>
+                  </div>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
