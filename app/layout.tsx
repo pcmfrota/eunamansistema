@@ -35,12 +35,12 @@ export default function RootLayout({
 }) {
   return (
     // "dark" aplicado por padrão no servidor para evitar flash sem estilo
-    <html lang="pt-BR" className="dark" suppressHydrationWarning>
+    <html lang="pt-BR" className="light" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className={inter.className}>
-        <ThemeProvider defaultTheme="dark" storageKey="eunaman-theme">
+        <ThemeProvider defaultTheme="light" storageKey="eunaman-theme">
           <AuthProvider>
             <OfflineProvider>
               <MainLayout>

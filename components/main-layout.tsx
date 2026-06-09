@@ -33,16 +33,16 @@ import { PremiumLoader } from './premium-loader';
 import AlterarSenhaModal from './AlterarSenhaModal';
 
 const navigation = [
-  { name: 'Dashboard',                path: '/',                       icon: LayoutDashboard },
+  { name: 'Dashboard',                path: '/dashboard',              icon: LayoutDashboard },
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
   { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
   { name: 'Boletim de Pneus',         path: '/pneus',                  icon: CircleDot },
   { name: 'Backlog',                  path: '/backlog',                icon: FileText },
   { name: 'Prog. Preventiva',         path: '/programacao-preventiva', icon: Settings2 },
-  { name: 'Base de Frotas',           path: '/base-frotas',            icon: Truck },
+  { name: 'Base de Frota',            path: '/base-frotas',            icon: Truck },
   { name: 'Base de Dados',            path: '/base-dados',             icon: Database },
   { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
-  { name: 'CONTROLE DE LAVAGENS',      path: '/lavagens',               icon: Droplets },
+  { name: 'Controle de Lavagens',     path: '/lavagens',               icon: Droplets },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {
@@ -52,7 +52,7 @@ function getFilteredNavigation(permissions: string[], role?: string) {
   // Segurança: Visitante sempre vê as 4 abas obrigatórias (Dashboard, Horímetros, Backlog, Calendário)
   if (role === 'visitante') {
     return navigation.filter(item => 
-      ['/', '/preventivas', '/backlog', '/calendario'].includes(item.path)
+      ['/dashboard', '/preventivas', '/backlog', '/calendario'].includes(item.path)
     );
   }
 
@@ -98,12 +98,21 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const isLoginPage = pathname?.startsWith("/login") || pathname === "/auth/callback";
-
-  // Se for página de login, renderiza apenas o conteúdo sem sidebar
-  if (isLoginPage) {
+  if (!mounted) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center overflow-hidden bg-zinc-950">
+      <div className="min-h-screen flex items-center justify-center bg-[#040e04] text-zinc-100">
+        <PremiumLoader type="squares-sequential" text="Carregando Sistema" subtext="PCM • EUNAMAN SISTEMA" />
+      </div>
+    );
+  }
+
+  const isLoginPage = pathname?.startsWith("/login") || pathname === "/auth/callback";
+  const isPortalPage = pathname === "/";
+
+  // Se for página de login ou a página inicial do portal, renderiza apenas o conteúdo sem sidebar
+  if (isLoginPage || isPortalPage) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center overflow-hidden bg-zinc-950 w-full h-full">
         {children}
       </main>
     );
@@ -112,9 +121,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const isDark = theme === 'dark';
 
   // Mantém o loader de tela cheia se estiver carregando a autenticação OU 
-  // se já temos o usuário mas o perfil detalhado ainda não chegou OU
-  // se o componente ainda não foi montado (para evitar erro de hidratação)
-  if (!mounted || authLoading || (user && !profile)) {
+  // se já temos o usuário mas o perfil detalhado ainda não chegou
+  if (authLoading || (user && !profile)) {
     return (
       <div className={cn("min-h-screen flex items-center justify-center animate-in fade-in duration-200", isDark ? "bg-[#040e04]" : "bg-[#f9fafb]")}>
         <PremiumLoader type="squares-sequential" text="Carregando Perfil" subtext="PCM • EUNAMAN SISTEMA" />
@@ -181,14 +189,17 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
           }}
         >
-          <div className="w-full py-4 px-2 flex items-center justify-center rounded-2xl mb-2 bg-white/90 dark:bg-white shadow-sm border border-white/20">
+          <Link 
+            href="/" 
+            className="w-full py-4 px-2 flex items-center justify-center rounded-2xl mb-2 bg-white/90 dark:bg-white shadow-sm border border-white/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+          >
             <img
               src="/logo-eunaman-full.png"
               alt="EUNAMAN"
               className="w-full h-auto object-contain brightness-110 contrast-110"
               style={{ maxHeight: '60px' }}
             />
-          </div>
+          </Link>
 
           {/* Close mobile — posição absoluta para não competir com o logo */}
           <button
@@ -463,7 +474,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               >
                 <Menu className={isDark ? "w-5 h-5 text-green-300" : "w-5 h-5 text-green-700"} />
               </button>
-              <div className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2 transition-all hover:opacity-85 active:scale-95 cursor-pointer">
                 <img
                   src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/693aa6d5db2859afdc9fa993/3c0451f21_04-EPNG.png"
                   alt="Eunaman Logo"
@@ -473,7 +484,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   className="font-black tracking-wider text-sm"
                   style={{ color: isDark ? '#ffffff' : '#111827' }}
                 >EUNAMAN</span>
-              </div>
+              </Link>
             </div>
 
             <Link href="/perfil" className="lg:hidden">

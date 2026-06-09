@@ -59,8 +59,11 @@ export class OfflineDB {
         if (!db.objectStoreNames.contains('catalogo_manutencao')) {
           db.createObjectStore('catalogo_manutencao', { keyPath: 'id' });
         }
+        if (db.objectStoreNames.contains('id')) {
+          db.deleteObjectStore('id');
+        }
         if (!db.objectStoreNames.contains('calendario_suzano')) {
-          db.createObjectStore('id' as any || 'mes_ano' as any || 'mes'); // Will resolve below safely
+          db.createObjectStore('calendario_suzano', { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains('aux_config')) {
           db.createObjectStore('aux_config', { keyPath: 'id' });

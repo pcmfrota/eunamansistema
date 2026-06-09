@@ -35,11 +35,11 @@ const routes = [
   { name: "Boletim de Pneus",         path: "/pneus",                   icon: Disc },
   { name: "Backlog",                  path: "/backlog",                 icon: Wrench },
   { name: "Prog. Preventiva",         path: "/programacao-preventiva",  icon: Settings2 },
-  { name: "Base de Frotas",           path: "/base-frotas",             icon: LayoutDashboard },
+  { name: "Base de Frota",            path: "/base-frotas",             icon: LayoutDashboard },
   { name: "Base de Dados",            path: "/base-dados",              icon: LayoutDashboard },
   { name: "Calendário Suzano",        path: "/calendario",              icon: Calendar },
-  { name: "CONTROLE DE LAVAGENS",      path: "/lavagens",                icon: Droplets },
-  { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: Users },
+  { name: "Controle de Lavagens",     path: "/lavagens",                icon: Droplets },
+  { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: User },
 ];
 
 
