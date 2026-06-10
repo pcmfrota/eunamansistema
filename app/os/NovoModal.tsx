@@ -991,9 +991,19 @@ export default function OSFormModal({
                     <span className="text-base leading-none font-bold">+</span> Galeria
                   </label>
                   <span className="text-zinc-350 dark:text-zinc-650 text-xs">|</span>
+                  {/* 
+                    No APK: chama a ponte nativa (sem sair da página).
+                    No browser: aciona o input de arquivo normalmente.
+                  */}
                   <label
-                    htmlFor="fotos-camera"
-                    onClick={saveDraft}
+                    htmlFor={(typeof window !== "undefined" && (window as any).EunamanCamera) ? undefined : "fotos-camera"}
+                    onClick={(e) => {
+                      saveDraft();
+                      if (typeof window !== "undefined" && (window as any).EunamanCamera) {
+                        e.preventDefault();
+                        (window as any).EunamanCamera.openCamera();
+                      }
+                    }}
                     className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors"
                   >
                     📷 Tirar Foto

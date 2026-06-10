@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider paths para o EUNAMAN PCM.
+    Permite ao app compartilhar o arquivo de foto com a câmera do Android
+    de forma segura (sem URI de arquivo direto, que é bloqueado no Android 7+).
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fotos tiradas pela câmera ficam em getExternalFilesDir(PICTURES) -->
+    <external-files-path
+        name="eunaman_photos"
+        path="Pictures/" />
+</paths>

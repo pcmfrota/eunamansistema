@@ -1,13 +1,14 @@
 <resources>
     <string name="app_name">EUNAMAN PCM</string>
-    <string name="launch_url">https://eunamansistema.vercel.app/</string>
-    <string name="asset_host">eunamansistema.vercel.app</string>
+    <string name="launch_url">https://pcmfrota.eunaman.com.br/</string>
+    <string name="asset_host">pcmfrota.eunaman.com.br</string>
     <string name="asset_statements">
         [{
             \"relation\": [\"delegate_permission/common.handle_all_urls\"],
             \"target\": {
-                \"namespace\": \"web\",
-                \"site\": \"https://eunamansistema.vercel.app\"
+                \"namespace\": \"android_app\",
+                \"package_name\": \"com.eunaman.pcm\",
+                \"sha256_cert_fingerprints\": [\"C2:5E:64:88:94:05:44:A2:38:91:D5:8C:97:75:A0:0B:65:28:CF:74:44:03:99:99:02:44:E0:04:4F:9E:26:A6\"]
             }
         }]
     </string>

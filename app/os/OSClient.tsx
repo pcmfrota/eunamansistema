@@ -436,6 +436,76 @@ export default function ControleOSClient({
     }
   };
 
+  // ── Adiciona uma foto como dataUrl (usada tanto pelo file input quanto pela ponte nativa) ──
+  const addPhotoDataUrl = (dataUrl: string) => {
+    setModalFotos((prev) => {
+      if (prev.length >= 5) {
+        alert("Você pode lançar no máximo 5 fotos.");
+        return prev;
+      }
+      if (prev.includes(dataUrl)) return prev;
+      const updated = [...prev, dataUrl];
+
+      // Grava no rascunho ativo no IndexedDB
+      const activeDraftKey = localStorage.getItem("eunaman_active_os_draft_key");
+      if (activeDraftKey) {
+        localDb.get<{ id: string; draftData: any }>("aux_config", activeDraftKey).then(draft => {
+          if (draft && draft.draftData) {
+            draft.draftData.fotos = updated;
+            localDb.put("aux_config", draft);
+          } else {
+            localDb.put("aux_config", { id: activeDraftKey, draftData: { fotos: updated } });
+          }
+        }).catch(() => {});
+      }
+      return updated;
+    });
+  };
+
+  // ── Registra o callback da ponte nativa do APK (EunamanCamera) ──
+  // Quando a Activity Java tira uma foto, ela chama window.onEunamanCameraResult com o Base64.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    (window as any).onEunamanCameraResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        if (result.success && result.dataUrl) {
+          // Comprime via canvas antes de adicionar (mesmo fluxo do file input)
+          const img = new Image();
+          img.src = result.dataUrl;
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const MAX = 1280;
+            let w = img.width;
+            let h = img.height;
+            if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+            else        { if (h > MAX) { w *= MAX / h; h = MAX; } }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h);
+              addPhotoDataUrl(canvas.toDataURL("image/jpeg", 0.75));
+            } else {
+              addPhotoDataUrl(result.dataUrl);
+            }
+          };
+          img.onerror = () => addPhotoDataUrl(result.dataUrl);
+        } else if (!result.success) {
+          console.warn("[EunamanCamera] Erro na ponte nativa:", result.error);
+        }
+      } catch (e) {
+        console.error("[EunamanCamera] Erro ao processar resultado:", e);
+      }
+    };
+
+    return () => {
+      delete (window as any).onEunamanCameraResult;
+    };
+  }, []);
+
+
   // Abre OS direto via ?abrir=ID (vindo do dashboard) ou aplica filtros/modos vindos do portal
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1266,7 +1336,7 @@ export default function ControleOSClient({
         </div>
       )}
 
-      {/* Inputs ocultos para fotos (devem ficar no pai para persistir no recarregamento) */}
+      {/* Inputs ocultos para fotos (persistem no DOM do pai para sobreviver a recarregamentos) */}
       <input
         id="fotos-galeria"
         type="file"
@@ -1275,6 +1345,12 @@ export default function ControleOSClient({
         className="hidden"
         onChange={handleFotosChange}
       />
+      {/*
+        Input de câmera:
+        - No APK (EunamanCamera disponível): o clique no label chama a ponte nativa
+          via NovoModal (onClick={saveDraft} + EunamanCamera.openCamera()).
+        - No browser comum: abre o seletor de arquivo/câmera normal do Chrome.
+      */}
       <input
         id="fotos-camera"
         type="file"
@@ -1283,6 +1359,7 @@ export default function ControleOSClient({
         className="hidden"
         onChange={handleFotosChange}
       />
+
     </div>
   );
 }
