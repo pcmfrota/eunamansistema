@@ -90,6 +90,190 @@ export default function OSFormModal({
   const [resolvedBacklogs, setResolvedBacklogs] = useState<Set<string>>(new Set());
   const [fotos, setFotos] = useState<string[]>(initialData?.fotos || []);
 
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const draftKey = initialData ? `os_draft_edit_${initialData.id}` : "os_draft_new";
+
+  const clearDraft = async () => {
+    try {
+      await localDb.delete("aux_config", draftKey);
+      localStorage.removeItem("eunaman_active_os_draft_key");
+    } catch (err) {
+      console.warn("Erro ao limpar rascunho:", err);
+    }
+  };
+
+  const handleCancel = async () => {
+    await clearDraft();
+    onClose();
+  };
+
+  const saveDraft = () => {
+    if (typeof window === "undefined" || !formRef.current) return;
+    const fd = new FormData(formRef.current);
+    const draftData = {
+      horario_parada: fd.get("horario_parada") as string,
+      status: fd.get("status") as string,
+      horimetro: fd.get("horimetro") as string,
+      local: fd.get("local") as string,
+      classe: fd.get("classe") as string,
+      qual_reserva: fd.get("qual_reserva") as string,
+      horas_reserva_chegou: fd.get("horas_reserva_chegou") as string,
+      descricao: fd.get("descricao") as string,
+      motivo: fd.get("motivo") as string,
+      observacoes: fd.get("observacoes") as string,
+      
+      equipamento_id: equip?.id || "",
+      operacaoTipo,
+      foiReserva,
+      sistema,
+      subSistema,
+      componente,
+      dataAbertura,
+      dataFechamento,
+      mecanicos,
+      assinaturaDataUrl,
+      resolvedBacklogs: Array.from(resolvedBacklogs),
+      fotos,
+    };
+    localDb.put("aux_config", { id: draftKey, draftData }).catch(err => {
+      console.warn("Falha ao salvar rascunho no IndexedDB:", err);
+    });
+  };
+
+  const saveDraftDebounced = () => {
+    if (!isInitialized) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      saveDraft();
+    }, 500);
+  };
+
+  useEffect(() => {
+    const initializeForm = async () => {
+      if (typeof window === "undefined") return;
+
+      try {
+        localStorage.setItem("eunaman_active_os_draft_key", draftKey);
+      } catch (err) {
+        console.warn("Erro ao definir active draft key no localStorage:", err);
+      }
+
+      try {
+        const draft = await localDb.get<{ id: string; draftData: any }>("aux_config", draftKey);
+        if (draft && draft.draftData) {
+          const d = draft.draftData;
+          if (d.equipamento_id) {
+            const eq = equipamentos.find(e => e.id === d.equipamento_id) || null;
+            setEquip(eq);
+          }
+          if (d.operacaoTipo !== undefined) setOperacaoTipo(d.operacaoTipo);
+          if (d.foiReserva !== undefined) setFoiReserva(d.foiReserva);
+          if (d.sistema !== undefined) setSistema(d.sistema);
+          if (d.subSistema !== undefined) setSubSistema(d.subSistema);
+          if (d.componente !== undefined) setComponente(d.componente);
+          if (d.dataAbertura !== undefined) setDataAbertura(d.dataAbertura);
+          if (d.dataFechamento !== undefined) setDataFechamento(d.dataFechamento);
+          if (d.mecanicos !== undefined) setMecanicos(d.mecanicos);
+          if (d.assinaturaDataUrl !== undefined) setAssinaturaDataUrl(d.assinaturaDataUrl);
+          if (d.resolvedBacklogs !== undefined) setResolvedBacklogs(new Set(d.resolvedBacklogs));
+          if (d.fotos !== undefined) setFotos(d.fotos);
+
+          setTimeout(() => {
+            if (formRef.current) {
+              const form = formRef.current;
+              if (d.horario_parada !== undefined) {
+                const el = form.querySelector('[name="horario_parada"]') as HTMLInputElement;
+                if (el) el.value = d.horario_parada;
+              }
+              if (d.status !== undefined) {
+                const el = form.querySelector('[name="status"]') as HTMLSelectElement;
+                if (el) el.value = d.status;
+              }
+              if (d.horimetro !== undefined) {
+                const el = form.querySelector('[name="horimetro"]') as HTMLInputElement;
+                if (el) el.value = d.horimetro;
+              }
+              if (d.local !== undefined) {
+                const el = form.querySelector('[name="local"]') as HTMLInputElement;
+                if (el) el.value = d.local;
+              }
+              if (d.classe !== undefined) {
+                const el = form.querySelector('[name="classe"]') as HTMLSelectElement;
+                if (el) el.value = d.classe;
+              }
+              if (d.qual_reserva !== undefined) {
+                const el = form.querySelector('[name="qual_reserva"]') as HTMLSelectElement;
+                if (el) el.value = d.qual_reserva;
+              }
+              if (d.horas_reserva_chegou !== undefined) {
+                const el = form.querySelector('[name="horas_reserva_chegou"]') as HTMLInputElement;
+                if (el) el.value = d.horas_reserva_chegou;
+              }
+              if (d.descricao !== undefined) {
+                const el = form.querySelector('[name="descricao"]') as HTMLTextAreaElement;
+                if (el) el.value = d.descricao;
+              }
+              if (d.motivo !== undefined) {
+                const el = form.querySelector('[name="motivo"]') as HTMLSelectElement;
+                if (el) el.value = d.motivo;
+              }
+              if (d.observacoes !== undefined) {
+                const el = form.querySelector('[name="observacoes"]') as HTMLTextAreaElement;
+                if (el) el.value = d.observacoes;
+              }
+            }
+          }, 50);
+          return;
+        }
+      } catch (err) {
+        console.error("Erro ao carregar rascunho:", err);
+      }
+
+      if (initialData?.equipamento_id) {
+        const eq = equipamentos.find(e => e.id === initialData.equipamento_id) || null;
+        setEquip(eq);
+        if (!initialData.operacao_tipo && eq) {
+          setOperacaoTipo(eq.tipo || "");
+        }
+      }
+    };
+
+    initializeForm().then(() => {
+      setIsInitialized(true);
+    });
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isInitialized) {
+      saveDraftDebounced();
+    }
+  }, [
+    isInitialized,
+    equip,
+    operacaoTipo,
+    foiReserva,
+    sistema,
+    subSistema,
+    componente,
+    dataAbertura,
+    dataFechamento,
+    mecanicos,
+    assinaturaDataUrl,
+    resolvedBacklogs,
+    fotos
+  ]);
+
   // Filter open backlogs for the selected vehicle (equip?.placa)
   const openBacklogs = useMemo(() => {
     if (!equip?.placa) return [];
@@ -128,16 +312,6 @@ export default function OSFormModal({
     return d > 0 ? d : 0;
   })();
   const tempoFmt = `${String(Math.floor(diffMin/60)).padStart(2,"0")}:${String(diffMin%60).padStart(2,"0")}`;
-
-  useEffect(() => {
-    if (initialData?.equipamento_id) {
-      const eq = equipamentos.find(e => e.id === initialData.equipamento_id) || null;
-      setEquip(eq);
-      if (!initialData.operacao_tipo && eq) {
-        setOperacaoTipo(eq.tipo || "");
-      }
-    }
-  }, []);
 
   const handleEquipChange = (id: string) => {
     const eq = equipamentos.find(e => e.id === id) || null;
@@ -326,6 +500,7 @@ export default function OSFormModal({
         }
 
         window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
+        await clearDraft();
         onClose();
       } else {
         // Cenário offline
@@ -431,6 +606,7 @@ export default function OSFormModal({
         // Notifica as tabelas e fecha o modal
         window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
         window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
+        await clearDraft();
         onClose();
       }
     } catch (error: any) {
@@ -450,12 +626,12 @@ export default function OSFormModal({
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {initialData ? "Editar OS" : "Nova OS"}
           </h2>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+          <button type="button" onClick={handleCancel} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form ref={formRef} onSubmit={handleSubmit} onChange={saveDraftDebounced} onInput={saveDraftDebounced} className="flex flex-col gap-4">
 
           {/* Datas */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
@@ -864,7 +1040,7 @@ export default function OSFormModal({
 
           {/* Botões */}
           <div className="flex justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-            <button type="button" onClick={onClose}
+            <button type="button" onClick={handleCancel}
               className="px-4 py-2 text-sm rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
               Cancelar
             </button>

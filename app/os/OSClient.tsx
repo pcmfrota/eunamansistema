@@ -265,6 +265,48 @@ export default function ControleOSClient({
 
   const isVisitante = profile?.role === "visitante";
 
+  const hasCheckedActiveDraft = React.useRef(false);
+
+  // Restaurar modal ativo após recarregamento (ex: ao usar a câmera)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hasCheckedActiveDraft.current) return;
+
+    const activeDraftKey = localStorage.getItem("eunaman_active_os_draft_key");
+    if (!activeDraftKey) {
+      hasCheckedActiveDraft.current = true;
+      return;
+    }
+
+    if (activeDraftKey === "os_draft_new") {
+      hasCheckedActiveDraft.current = true;
+      setEditingOS(null);
+      setShowModal(true);
+    } else if (activeDraftKey.startsWith("os_draft_edit_")) {
+      hasCheckedActiveDraft.current = true;
+      const id = activeDraftKey.replace("os_draft_edit_", "");
+      localDb.get<OS>("ordens_servico", id).then(dbOS => {
+        if (dbOS) {
+          setEditingOS(dbOS);
+          setShowModal(true);
+        } else {
+          const osObj = initialOrdens.find(o => o.id === id);
+          if (osObj) {
+            setEditingOS(osObj);
+            setShowModal(true);
+          }
+        }
+      }).catch(err => {
+        console.error("Erro ao recuperar OS do IndexedDB para rascunho:", err);
+        const osObj = initialOrdens.find(o => o.id === id);
+        if (osObj) {
+          setEditingOS(osObj);
+          setShowModal(true);
+        }
+      });
+    }
+  }, [initialOrdens]);
+
   // Abre OS direto via ?abrir=ID (vindo do dashboard) ou aplica filtros/modos vindos do portal
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
