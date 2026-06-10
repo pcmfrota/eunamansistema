@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { createClient } from '@/utils/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
+import { logout as serverLogout } from '@/app/login/actions'
 
 type Profile = {
   id: string
@@ -335,16 +336,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setUser(null);
       setProfile(null);
+      setPermissions([]);
 
-      // Tenta deslogar no Supabase, mas não espera se demorar (timeout de 1s)
-      await Promise.race([
-        supabase.auth.signOut(),
-        new Promise(resolve => setTimeout(resolve, 1000))
-      ]);
-
-      if (typeof window !== 'undefined') {
-        window.location.replace('/login');
+      // Tenta deslogar no Supabase client-side
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn('[Auth] Erro ao deslogar no cliente:', e);
       }
+
+      // Chama a Server Action de logout para limpar os cookies no servidor (HttpOnly) e redirecionar
+      await serverLogout();
     } catch (err) {
       console.error('[Auth] Erro no signOut, forçando redirecionamento:', err);
       if (typeof window !== 'undefined') {
