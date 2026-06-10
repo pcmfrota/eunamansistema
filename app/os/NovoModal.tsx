@@ -1,6 +1,153 @@
 "use client";
-import { useState, useEffect, useRef, useMemo } from "react";
-import { X, CheckCircle2, AlertTriangle, ListChecks, Check } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { X, CheckCircle2, AlertTriangle, ListChecks, Check, FlipHorizontal } from "lucide-react";
+
+// ─── Componente de Câmera In-Page ────────────────────────────────────────────
+// Usa getUserMedia para tirar foto sem sair da página (evita reload no mobile)
+function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [captured, setCaptured] = useState<string | null>(null);
+
+  const startCamera = useCallback(async (mode: "environment" | "user") => {
+    setReady(false);
+    setError(null);
+    // Para stream anterior
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play();
+          setReady(true);
+        };
+      }
+    } catch (err: any) {
+      setError("Não foi possível acessar a câmera. Verifique as permissões.");
+    }
+  }, []);
+
+  useEffect(() => {
+    startCamera(facingMode);
+    return () => {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, [facingMode, startCamera]);
+
+  const handleCapture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const MAX = 1280;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+    else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    setCaptured(dataUrl);
+    // Para o stream enquanto mostra preview
+    streamRef.current?.getTracks().forEach(t => t.stop());
+  };
+
+  const handleConfirm = () => {
+    if (captured) onCapture(captured);
+    onClose();
+  };
+
+  const handleRetake = () => {
+    setCaptured(null);
+    startCamera(facingMode);
+  };
+
+  const toggleCamera = () => {
+    setFacingMode(prev => prev === "environment" ? "user" : "environment");
+    setCaptured(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+      <div className="relative w-full max-w-md flex flex-col gap-3 p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <span className="text-white font-semibold text-sm">📷 Tirar Foto</span>
+          <button type="button" onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); onClose(); }}
+            className="text-white/70 hover:text-white transition-colors p-1">
+            <X size={22} />
+          </button>
+        </div>
+
+        {error ? (
+          <div className="text-center py-12">
+            <p className="text-red-400 text-sm mb-4">{error}</p>
+            <button type="button" onClick={() => startCamera(facingMode)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Tentar novamente</button>
+          </div>
+        ) : captured ? (
+          // Preview da foto capturada
+          <>
+            <div className="rounded-xl overflow-hidden bg-black aspect-[4/3] w-full">
+              <img src={captured} alt="Preview" className="w-full h-full object-contain" />
+            </div>
+            <div className="flex gap-3 justify-center">
+              <button type="button" onClick={handleRetake}
+                className="flex-1 py-3 rounded-xl bg-zinc-700 text-white font-semibold text-sm hover:bg-zinc-600 transition-colors">
+                🔄 Nova Foto
+              </button>
+              <button type="button" onClick={handleConfirm}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-500 transition-colors">
+                ✅ Usar Esta
+              </button>
+            </div>
+          </>
+        ) : (
+          // Viewfinder da câmera
+          <>
+            <div className="rounded-xl overflow-hidden bg-black aspect-[4/3] w-full relative">
+              <video ref={videoRef} autoPlay playsInline muted
+                className="w-full h-full object-cover" />
+              {!ready && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 items-center justify-center">
+              <button type="button" onClick={toggleCamera}
+                className="p-3 rounded-full bg-zinc-700/80 text-white hover:bg-zinc-600 transition-colors" title="Virar câmera">
+                <FlipHorizontal size={20} />
+              </button>
+              <button type="button" onClick={handleCapture} disabled={!ready}
+                className="w-16 h-16 rounded-full bg-white border-4 border-zinc-300 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50">
+                <div className="w-11 h-11 rounded-full bg-zinc-900" />
+              </button>
+              <div className="w-12" />{/* Spacer */}
+            </div>
+          </>
+        )}
+
+        {/* Canvas oculto para captura */}
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+    </div>
+  );
+}
 import { criarOrdemServico, atualizarOrdemServico } from "./actions";
 import { encerrarBacklogs } from "@/app/backlog/actions";
 import { useOffline } from "@/components/offline-provider";
@@ -92,6 +239,7 @@ export default function OSFormModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [resolvedBacklogs, setResolvedBacklogs] = useState<Set<string>>(new Set());
+  const [showCameraModal, setShowCameraModal] = useState(false);
 
   const formRef = useRef<HTMLFormElement | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -993,21 +1141,24 @@ export default function OSFormModal({
                   <span className="text-zinc-350 dark:text-zinc-650 text-xs">|</span>
                   {/* 
                     No APK: chama a ponte nativa (sem sair da página).
-                    No browser: aciona o input de arquivo normalmente.
+                    No browser: abre câmera in-page com getUserMedia (sem reload).
                   */}
-                  <label
-                    htmlFor={(typeof window !== "undefined" && (window as any).EunamanCamera) ? undefined : "fotos-camera"}
-                    onClick={(e) => {
+                  <button
+                    type="button"
+                    onClick={() => {
                       saveDraft();
                       if (typeof window !== "undefined" && (window as any).EunamanCamera) {
-                        e.preventDefault();
+                        // APK: usa ponte nativa Java
                         (window as any).EunamanCamera.openCamera();
+                      } else {
+                        // Browser: abre câmera in-page (sem sair da página)
+                        setShowCameraModal(true);
                       }
                     }}
-                    className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                    className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors bg-transparent border-0 p-0"
                   >
                     📷 Tirar Foto
-                  </label>
+                  </button>
                 </div>
               )}
             </div>
@@ -1053,6 +1204,23 @@ export default function OSFormModal({
           </div>
         </form>
       </div>
+
+      {/* ── Modal de Câmera In-Page ── */}
+      {showCameraModal && (
+        <CameraModal
+          onCapture={(dataUrl) => {
+            if (fotos.length >= 5) {
+              alert("Você pode lançar no máximo 5 fotos.");
+              return;
+            }
+            setFotos((prev) => {
+              if (prev.includes(dataUrl)) return prev;
+              return [...prev, dataUrl];
+            });
+          }}
+          onClose={() => setShowCameraModal(false)}
+        />
+      )}
 
       {/* ── Modal de Assinatura Digital (Signature Pad) ── */}
       {showSigPad && (
