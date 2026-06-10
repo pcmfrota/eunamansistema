@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
-  const fetchProfile = useCallback(async (u: any, force = false, ignoreCache = false) => {
+  const fetchProfile = useCallback(async (u: any, force = false, ignoreCache = false, silentBackground = false) => {
     if (!u?.id) return;
     
     // Atualiza o ID do último usuário para o próximo carregamento instantâneo
@@ -149,7 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    if (!skipLoading) setLoading(true);
+    // silentBackground = true: nunca mostrar o loader (ex: TOKEN_REFRESHED do câmera)
+    if (!skipLoading && !silentBackground) setLoading(true);
     await syncWithDatabase(u, isMasterAdmin, currentProfile);
   }, [supabase, router]);
 
@@ -299,9 +300,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_IN') {
           console.log('[Auth] Novo login detectado, buscando perfil fresco...');
+          // Só exibe loader em SIGNED_IN (login real), não em renovações de token
           setLoading(true); // Trava a UI para evitar dados antigos
           fetchProfile(currentUser, false, true); // ignoreCache = true
-        } else if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Renovação automática do token (ex: câmera no celular, volta ao foco)
+          // NÃO ativar o loading aqui — causaria o PremiumLoader destruir o modal de OS aberto
+          setUser(currentUser);
+          // fetchProfile em background sem afetar o estado de loading (silentBackground=true)
+          fetchProfile(currentUser, false, false, true);
+        } else if (event === 'INITIAL_SESSION') {
           setUser(currentUser);
           fetchProfile(currentUser, false);
         }
