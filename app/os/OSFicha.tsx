@@ -184,13 +184,27 @@ interface OSFichaModalProps {
 export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaModalProps) {
   const [minutosDO, setMinutosDO] = useState<number | null>(null);
 
-  // Desserializa assinaturas: suporta JSON array (novo) ou string simples (antigo)
-  const assinaturas: string[] = (() => {
+  // Desserializa assinaturas: suporta JSON estruturado (novo), JSON array ou string simples
+  const { assinaturas, sigCargos } = (() => {
     const raw = os.assinatura_mecanico || "";
-    if (!raw) return [];
-    try { const p = JSON.parse(raw); if (Array.isArray(p)) return p; } catch {}
-    return [raw]; // string simples antiga
+    if (!raw) return { assinaturas: [] as string[], sigCargos: {} as Record<string, string> };
+    try {
+      const p = JSON.parse(raw);
+      if (p && typeof p === 'object' && !Array.isArray(p) && 'mecanicos' in p) {
+        return { assinaturas: p.mecanicos || [], sigCargos: p.cargos || {} };
+      }
+      if (Array.isArray(p)) return { assinaturas: p, sigCargos: {} };
+    } catch {}
+    return { assinaturas: [raw], sigCargos: {} }; // string simples antiga
   })();
+
+  const CARGOS_LABELS: Record<string, string> = {
+    encarregado: "Encarregado / Supervisor",
+    pcm: "PCM / Planejamento",
+    operador: "Operador / Motorista",
+    supervisor_suzano: "Supervisor / Autorizador / Suzano",
+  };
+
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -463,19 +477,24 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
               }).join("")}
             </div>
           </div>
-          <!-- Demais campos de assinatura -->
-          <div style="display:flex;border-bottom:1px solid #333;">
-            ${[
-              { l: "Encarregado / Supervisor", s: "Visto e Matrícula" },
-              { l: "PCM / Planejamento", s: "Data de Encerramento" },
-              { l: "Operador / Motorista", s: "Recebimento" },
-            ].map((a, i) => `
-              <div style="flex:1;padding:6px;min-height:85px;display:flex;flex-direction:column;justify-content:space-between;${i < 2 ? 'border-right:1px solid #333;' : ''}">
+          <!-- Cargos de aprovação com assinaturas -->
+          <div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #333;">
+            ${([
+              { key: 'encarregado', l: "Encarregado / Supervisor", s: "Visto e Matrícula" },
+              { key: 'pcm', l: "PCM / Planejamento", s: "Data de Encerramento" },
+              { key: 'operador', l: "Operador / Motorista", s: "Recebimento" },
+              { key: 'supervisor_suzano', l: "Supervisor / Autorizador / Suzano", s: "Autorização" },
+            ]).map((a, i, arr) => {
+              const sig = sigCargos[a.key] || "";
+              return `<div style="flex:1;min-width:120px;padding:6px;min-height:90px;display:flex;flex-direction:column;justify-content:space-between;${i < arr.length - 1 ? 'border-right:1px solid #333;' : ''}">
                 <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin:0 0 4px 0;">${a.l}</p>
-                <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;"></div>
+                <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;">
+                  ${sig ? `<img src="${sig}" style="height:32px;object-fit:contain;" />` : ''}
+                </div>
                 <div style="border-bottom:1px solid #111;margin-top:2px;"></div>
                 <p style="font-size:8px;text-align:center;color:#9ca3af;margin:3px 0 0 0;">${a.s}</p>
-              </div>`).join("")}
+              </div>`;
+            }).join("")}
           </div>
           <div style="display:flex;justify-content:space-between;padding:5px 10px;background:#f9fafb;border-top:1px solid #d1d5db;">
             <p style="font-size:9px;color:#9ca3af;">Gerado em: ${new Date().toLocaleString("pt-BR")} | Regra D+1 (PCM Suzano)</p>
@@ -861,28 +880,36 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                     </div>
                   </div>
 
-                  {/* Demais campos fixos */}
-                  <div className="grid grid-cols-3 border-t border-gray-900 text-black">
+                  {/* Cargos de aprovação com assinaturas digitais */}
+                  <div className="flex flex-wrap border-t border-gray-900 text-black">
                     {[
-                      { label: "Encarregado / Supervisor", sub: "Visto e Matrícula" },
-                      { label: "PCM / Planejamento", sub: "Data de Encerramento" },
-                      { label: "Operador / Motorista", sub: "Recebimento" },
-                    ].map((a, i) => (
-                      <div
-                        key={a.label}
-                        className={`px-3 py-2 flex flex-col justify-between min-h-[90px] ${
-                          i < 2 ? "border-r border-gray-900" : ""
-                        }`}
-                      >
-                        <p className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold mb-1">{a.label}</p>
-                        <div className="flex-1 flex items-center justify-center min-h-[35px]">
-                          <div className="h-9" />
+                      { key: "encarregado", label: "Encarregado / Supervisor", sub: "Visto e Matrícula" },
+                      { key: "pcm", label: "PCM / Planejamento", sub: "Data de Encerramento" },
+                      { key: "operador", label: "Operador / Motorista", sub: "Recebimento" },
+                      { key: "supervisor_suzano", label: "Supervisor / Autorizador / Suzano", sub: "Autorização" },
+                    ].map((a, i, arr) => {
+                      const sig = sigCargos[a.key] || "";
+                      return (
+                        <div
+                          key={a.key}
+                          className={`flex-1 min-w-[120px] px-3 py-2 flex flex-col justify-between min-h-[90px] ${
+                            i < arr.length - 1 ? "border-r border-gray-900" : ""
+                          }`}
+                        >
+                          <p className="text-[8px] text-gray-500 uppercase tracking-wider font-semibold mb-1">{a.label}</p>
+                          <div className="flex-1 flex items-center justify-center min-h-[35px]">
+                            {sig
+                              ? <img src={sig} alt={`Assinatura ${a.label}`} className="h-9 object-contain max-w-full" />
+                              : <div className="h-9" />
+                            }
+                          </div>
+                          <div className="border-b border-gray-800 mt-1" />
+                          <p className="text-[8px] text-center text-gray-400 mt-1">{a.sub}</p>
                         </div>
-                        <div className="border-b border-gray-800 mt-1" />
-                        <p className="text-[8px] text-center text-gray-400 mt-1">{a.sub}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+
 
                   {/* Rodapé */}
                   <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-t border-gray-300">
