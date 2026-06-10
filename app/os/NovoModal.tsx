@@ -55,6 +55,8 @@ interface OSFormModalProps {
   catalogo?: CatalogoItem[];
   backlogs?: any[];
   colaboradores?: any[];
+  fotos: string[];
+  setFotos: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 function getLocalDT() {
@@ -68,6 +70,8 @@ export default function OSFormModal({
   operacoesTipo = [], motivos = [], catalogo = [],
   backlogs = [],
   colaboradores = [],
+  fotos,
+  setFotos,
 }: OSFormModalProps) {
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
@@ -88,7 +92,6 @@ export default function OSFormModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [resolvedBacklogs, setResolvedBacklogs] = useState<Set<string>>(new Set());
-  const [fotos, setFotos] = useState<string[]>(initialData?.fotos || []);
 
   const formRef = useRef<HTMLFormElement | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -237,6 +240,7 @@ export default function OSFormModal({
                 if (el) el.value = d.observacoes;
               }
             }
+            setIsInitialized(true);
           }, 50);
           return;
         }
@@ -251,11 +255,10 @@ export default function OSFormModal({
           setOperacaoTipo(eq.tipo || "");
         }
       }
+      setIsInitialized(true);
     };
 
-    initializeForm().then(() => {
-      setIsInitialized(true);
-    });
+    initializeForm();
 
     return () => {
       if (debounceTimerRef.current) {
@@ -415,25 +418,6 @@ export default function OSFormModal({
     setShowSigPad(false);
   };
 
-  const handleFotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    
-    if (fotos.length + files.length > 5) {
-      alert("Você pode lançar no máximo 5 fotos.");
-      return;
-    }
-
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === "string") {
-          setFotos((prev) => [...prev, reader.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  };
 
   const removeFoto = (index: number) => {
     setFotos((prev) => prev.filter((_, i) => i !== index));
@@ -1002,26 +986,10 @@ export default function OSFormModal({
                   <label htmlFor="fotos-galeria" className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors">
                     <span className="text-base leading-none font-bold">+</span> Galeria
                   </label>
-                  <input
-                    id="fotos-galeria"
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFotosChange}
-                    className="hidden"
-                  />
                   <span className="text-zinc-350 dark:text-zinc-650 text-xs">|</span>
                   <label htmlFor="fotos-camera" className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors">
                     📷 Tirar Foto
                   </label>
-                  <input
-                    id="fotos-camera"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFotosChange}
-                    className="hidden"
-                  />
                 </div>
               )}
             </div>

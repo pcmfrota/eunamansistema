@@ -254,6 +254,7 @@ export default function ControleOSClient({
   const [filtroOrdem, setFiltroOrdem] = useState("Mais Recente");
   const [showModal, setShowModal] = useState(false);
   const [editingOS, setEditingOS] = useState<OS | null>(null);
+  const [modalFotos, setModalFotos] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
@@ -278,12 +279,33 @@ export default function ControleOSClient({
       return;
     }
 
+    const restorePhotos = async () => {
+      try {
+        const draft = await localDb.get<{ id: string; draftData: any }>("aux_config", activeDraftKey);
+        if (draft && draft.draftData && draft.draftData.fotos) {
+          setModalFotos((prev) => {
+            const uniquePhotos = [...draft.draftData.fotos];
+            prev.forEach((photo) => {
+              if (!uniquePhotos.includes(photo)) {
+                uniquePhotos.push(photo);
+              }
+            });
+            return uniquePhotos;
+          });
+        }
+      } catch (err) {
+        console.warn("Erro ao recuperar fotos do rascunho:", err);
+      }
+    };
+
     if (activeDraftKey === "os_draft_new") {
       hasCheckedActiveDraft.current = true;
       setEditingOS(null);
       setShowModal(true);
+      restorePhotos();
     } else if (activeDraftKey.startsWith("os_draft_edit_")) {
       hasCheckedActiveDraft.current = true;
+      restorePhotos();
       const id = activeDraftKey.replace("os_draft_edit_", "");
       localDb.get<OS>("ordens_servico", id).then(dbOS => {
         if (dbOS) {
@@ -307,6 +329,113 @@ export default function ControleOSClient({
     }
   }, [initialOrdens]);
 
+  const handleFotosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    
+    if (modalFotos.length + files.length > 5) {
+      alert("Você pode lançar no máximo 5 fotos.");
+      return;
+    }
+
+    for (const file of files) {
+      try {
+        const compressedBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const MAX_WIDTH = 1280;
+              const MAX_HEIGHT = 1280;
+              let width = img.width;
+              let height = img.height;
+
+              if (width > height) {
+                if (width > MAX_WIDTH) {
+                  height *= MAX_WIDTH / width;
+                  width = MAX_WIDTH;
+                }
+              } else {
+                if (height > MAX_HEIGHT) {
+                  width *= MAX_HEIGHT / height;
+                  height = MAX_HEIGHT;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                resolve(event.target?.result as string);
+                return;
+              }
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL("image/jpeg", 0.75));
+            };
+            img.onerror = (err) => reject(err);
+          };
+          reader.onerror = (err) => reject(err);
+        });
+
+        setModalFotos((prev) => {
+          if (prev.includes(compressedBase64)) return prev;
+          const updated = [...prev, compressedBase64];
+          
+          // Grava diretamente no rascunho ativo no IndexedDB
+          const activeDraftKey = localStorage.getItem("eunaman_active_os_draft_key");
+          if (activeDraftKey) {
+            localDb.get<{ id: string; draftData: any }>("aux_config", activeDraftKey).then(draft => {
+              if (draft && draft.draftData) {
+                draft.draftData.fotos = updated;
+                localDb.put("aux_config", draft);
+              } else {
+                localDb.put("aux_config", {
+                  id: activeDraftKey,
+                  draftData: { fotos: updated }
+                });
+              }
+            }).catch(err => {
+              console.warn("Erro ao salvar foto no rascunho:", err);
+            });
+          }
+          return updated;
+        });
+      } catch (err) {
+        console.error("Erro ao comprimir imagem:", err);
+        // Fallback para arquivo original caso dê erro na imagem (ex: formato não suportado por Image)
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === "string") {
+            const rawPhoto = reader.result;
+            setModalFotos((prev) => {
+              if (prev.includes(rawPhoto)) return prev;
+              const updated = [...prev, rawPhoto];
+              const activeDraftKey = localStorage.getItem("eunaman_active_os_draft_key");
+              if (activeDraftKey) {
+                localDb.get<{ id: string; draftData: any }>("aux_config", activeDraftKey).then(draft => {
+                  if (draft && draft.draftData) {
+                    draft.draftData.fotos = updated;
+                    localDb.put("aux_config", draft);
+                  } else {
+                    localDb.put("aux_config", {
+                      id: activeDraftKey,
+                      draftData: { fotos: updated }
+                    });
+                  }
+                });
+              }
+              return updated;
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
   // Abre OS direto via ?abrir=ID (vindo do dashboard) ou aplica filtros/modos vindos do portal
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -316,6 +445,7 @@ export default function ControleOSClient({
       const os = initialOrdens.find(o => o.id === abrirId);
       if (os) {
         setEditingOS(os);
+        setModalFotos(os.fotos || []);
         setShowModal(true);
       }
     }
@@ -323,6 +453,7 @@ export default function ControleOSClient({
     const isNew = params.get("new") === "true";
     if (isNew) {
       setEditingOS(null);
+      setModalFotos([]);
       setShowModal(true);
     }
 
@@ -645,7 +776,7 @@ export default function ControleOSClient({
                 <Download size={15} /> Exportar Excel
               </button>
               {!isVisitante ? (
-                <button onClick={() => { setEditingOS(null); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+                <button onClick={() => { setEditingOS(null); setModalFotos([]); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
                   <Plus size={15} /> Nova OS
                 </button>
               ) : (
@@ -824,7 +955,7 @@ export default function ControleOSClient({
                                 <Check size={14} />
                               </button>
                             )}
-                            <button title="Editar" onClick={() => { setEditingOS(os); setShowModal(true); }} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                            <button title="Editar" onClick={() => { setEditingOS(os); setModalFotos(os.fotos || []); setShowModal(true); }} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                               <Pencil size={14} />
                             </button>
                             <button title="Excluir" onClick={() => setDeletingId(os.id)} className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
@@ -900,12 +1031,18 @@ export default function ControleOSClient({
         <OSFormModal
           equipamentos={equipamentos}
           initialData={editingOS}
-          onClose={() => { setShowModal(false); setEditingOS(null); }}
+          onClose={() => { 
+            setShowModal(false); 
+            setEditingOS(null); 
+            setModalFotos([]);
+          }}
           operacoesTipo={operacoesTipo}
           motivos={motivos}
           catalogo={catalogo}
           backlogs={backlogs}
           colaboradores={colaboradores}
+          fotos={modalFotos}
+          setFotos={setModalFotos}
         />
       )}
 
@@ -1059,6 +1196,7 @@ export default function ControleOSClient({
                 onClick={() => {
                   if (isVisitante) return;
                   setEditingOS(selectedOSActions);
+                  setModalFotos(selectedOSActions?.fotos || []);
                   setShowModal(true);
                   setSelectedOSActions(null);
                 }}
@@ -1127,6 +1265,24 @@ export default function ControleOSClient({
           </div>
         </div>
       )}
+
+      {/* Inputs ocultos para fotos (devem ficar no pai para persistir no recarregamento) */}
+      <input
+        id="fotos-galeria"
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleFotosChange}
+      />
+      <input
+        id="fotos-camera"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFotosChange}
+      />
     </div>
   );
 }
