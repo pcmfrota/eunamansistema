@@ -983,11 +983,19 @@ export default function OSFormModal({
               </div>
               {fotos.length < 5 && (
                 <div className="flex items-center gap-2">
-                  <label htmlFor="fotos-galeria" className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors">
+                  <label
+                    htmlFor="fotos-galeria"
+                    onClick={saveDraft}
+                    className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors"
+                  >
                     <span className="text-base leading-none font-bold">+</span> Galeria
                   </label>
                   <span className="text-zinc-350 dark:text-zinc-650 text-xs">|</span>
-                  <label htmlFor="fotos-camera" className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors">
+                  <label
+                    htmlFor="fotos-camera"
+                    onClick={saveDraft}
+                    className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                  >
                     📷 Tirar Foto
                   </label>
                 </div>
