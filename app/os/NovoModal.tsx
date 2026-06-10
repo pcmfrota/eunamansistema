@@ -181,7 +181,17 @@ export default function OSFormModal({
           if (d.mecanicos !== undefined) setMecanicos(d.mecanicos);
           if (d.assinaturaDataUrl !== undefined) setAssinaturaDataUrl(d.assinaturaDataUrl);
           if (d.resolvedBacklogs !== undefined) setResolvedBacklogs(new Set(d.resolvedBacklogs));
-          if (d.fotos !== undefined) setFotos(d.fotos);
+          if (d.fotos !== undefined) {
+            setFotos((prev) => {
+              const uniquePhotos = [...d.fotos];
+              prev.forEach((photo) => {
+                if (!uniquePhotos.includes(photo)) {
+                  uniquePhotos.push(photo);
+                }
+              });
+              return uniquePhotos;
+            });
+          }
 
           setTimeout(() => {
             if (formRef.current) {
@@ -254,6 +264,7 @@ export default function OSFormModal({
     };
   }, []);
 
+  // Auto-salvamento com debounce para inputs de texto e seleções rápidas
   useEffect(() => {
     if (isInitialized) {
       saveDraftDebounced();
@@ -269,10 +280,15 @@ export default function OSFormModal({
     dataAbertura,
     dataFechamento,
     mecanicos,
-    assinaturaDataUrl,
-    resolvedBacklogs,
-    fotos
+    resolvedBacklogs
   ]);
+
+  // Auto-salvamento imediato para fotos e assinaturas (operações de arquivos)
+  useEffect(() => {
+    if (isInitialized) {
+      saveDraft();
+    }
+  }, [isInitialized, fotos, assinaturaDataUrl]);
 
   // Filter open backlogs for the selected vehicle (equip?.placa)
   const openBacklogs = useMemo(() => {
