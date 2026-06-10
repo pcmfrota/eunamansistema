@@ -234,8 +234,16 @@ export default function OSFormModal({
   const [mecanicos, setMecanicos] = useState<string[]>(
     (initialData as any)?.mecanicos?.length ? (initialData as any).mecanicos : [""]
   );
-  const [showSigPad, setShowSigPad] = useState(false);
-  const [assinaturaDataUrl, setAssinaturaDataUrl] = useState(initialData?.assinatura_mecanico || "");
+  // showSigPad guarda o índice do mecânico sendo assinado, ou false se fechado
+  const [showSigPad, setShowSigPad] = useState<number | false>(false);
+  // Array de assinaturas indexado pelo mecânico
+  const parseInitialSigs = (): string[] => {
+    const raw = initialData?.assinatura_mecanico || "";
+    if (!raw) return [];
+    try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return parsed; } catch {}
+    return [raw]; // compatibilidade com assinatura antiga (string simples)
+  };
+  const [assinaturas, setAssinaturas] = useState<string[]>(parseInitialSigs);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [resolvedBacklogs, setResolvedBacklogs] = useState<Set<string>>(new Set());
@@ -285,7 +293,7 @@ export default function OSFormModal({
       dataAbertura,
       dataFechamento,
       mecanicos,
-      assinaturaDataUrl,
+      assinaturas,
       resolvedBacklogs: Array.from(resolvedBacklogs),
       fotos,
     };
@@ -330,7 +338,9 @@ export default function OSFormModal({
           if (d.dataAbertura !== undefined) setDataAbertura(d.dataAbertura);
           if (d.dataFechamento !== undefined) setDataFechamento(d.dataFechamento);
           if (d.mecanicos !== undefined) setMecanicos(d.mecanicos);
-          if (d.assinaturaDataUrl !== undefined) setAssinaturaDataUrl(d.assinaturaDataUrl);
+          if (d.assinaturas !== undefined) setAssinaturas(d.assinaturas);
+          // compatibilidade com rascunho antigo que tinha campo único
+          else if (d.assinaturaDataUrl !== undefined) setAssinaturas(d.assinaturaDataUrl ? [d.assinaturaDataUrl] : []);
           if (d.resolvedBacklogs !== undefined) setResolvedBacklogs(new Set(d.resolvedBacklogs));
           if (d.fotos !== undefined) {
             setFotos((prev) => {
@@ -439,7 +449,7 @@ export default function OSFormModal({
     if (isInitialized) {
       saveDraft();
     }
-  }, [isInitialized, fotos, assinaturaDataUrl]);
+  }, [isInitialized, fotos, assinaturas]);
 
   // Filter open backlogs for the selected vehicle (equip?.placa)
   const openBacklogs = useMemo(() => {
@@ -552,6 +562,7 @@ export default function OSFormModal({
   const saveSignature = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (showSigPad === false) return;
     
     // Validar se o canvas não está em branco
     const blank = document.createElement('canvas');
@@ -562,7 +573,12 @@ export default function OSFormModal({
       return;
     }
 
-    setAssinaturaDataUrl(canvas.toDataURL());
+    const idx = showSigPad;
+    setAssinaturas(prev => {
+      const next = [...prev];
+      next[idx] = canvas.toDataURL();
+      return next;
+    });
     setShowSigPad(false);
   };
 
@@ -588,7 +604,8 @@ export default function OSFormModal({
       fd.set("sistema", sistema);
       fd.set("sub_sistema", subSistema);
       fd.set("componente", componente);
-      fd.set("assinatura_mecanico", assinaturaDataUrl);
+      // Serializa assinaturas como JSON para manter compatibilidade com o campo único no banco
+      fd.set("assinatura_mecanico", JSON.stringify(assinaturas));
 
       // Mecânicos: envia cada nome individualmente
       mecanicos.forEach((nome, idx) => {
@@ -743,7 +760,7 @@ export default function OSFormModal({
             horas_reserva_chegou: (fd.get("horas_reserva_chegou") as string) || null,
             observacoes: fd.get("observacoes") as string,
             equipamento_id: fd.get("equipamento_id") as string,
-            assinatura_mecanico: assinaturaDataUrl,
+            assinatura_mecanico: JSON.stringify(assinaturas),
             fotos: fotos,
             _isPendingSync: true
           };
@@ -1060,30 +1077,62 @@ export default function OSFormModal({
               ))}
             </div>
 
+            {/* Assinaturas individuais por mecânico */}
             {mecanicos.some(m => m.trim() !== "") && (
-              <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800/40 flex flex-col xs:flex-row xs:items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wide">
-                    Assinatura Digital do Mecânico
-                  </p>
-                  {assinaturaDataUrl ? (
-                    <div className="mt-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg max-w-[200px] shadow-sm flex items-center justify-center">
-                      <img src={assinaturaDataUrl} alt="Assinatura" className="h-10 object-contain max-w-full" />
+              <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800/40 flex flex-col gap-3">
+                <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wide">
+                  ✍️ Assinaturas Digitais
+                </p>
+                {mecanicos.map((nome, idx) => {
+                  if (!nome.trim()) return null;
+                  const sig = assinaturas[idx] || "";
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-3 p-3 bg-white dark:bg-zinc-900/50 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 truncate">
+                          🔧 {nome}
+                        </p>
+                        {sig ? (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <div className="p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm">
+                              <img src={sig} alt={`Assinatura ${nome}`} className="h-9 object-contain max-w-[140px]" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssinaturas(prev => { const next = [...prev]; next[idx] = ""; return next; });
+                              }}
+                              className="text-red-400 hover:text-red-600 text-lg leading-none px-1 transition-colors"
+                              title="Remover assinatura"
+                            >×</button>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-zinc-400 mt-0.5">Sem assinatura</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Limpa o canvas antes de abrir
+                          setTimeout(() => {
+                            const canvas = canvasRef.current;
+                            if (canvas) {
+                              const ctx = canvas.getContext('2d');
+                              ctx?.clearRect(0, 0, canvas.width, canvas.height);
+                            }
+                          }, 50);
+                          setShowSigPad(idx);
+                        }}
+                        className="shrink-0 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
+                      >
+                        {sig ? "Alterar" : "Assinar"}
+                      </button>
                     </div>
-                  ) : (
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Nenhuma assinatura registrada para esta OS</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSigPad(true)}
-                  className="shrink-0 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm self-start xs:self-center"
-                >
-                  {assinaturaDataUrl ? "Alterar Assinatura" : "Assinar Digitalmente"}
-                </button>
+                  );
+                })}
               </div>
             )}
-            <input type="hidden" name="assinatura_mecanico" value={assinaturaDataUrl} />
+            <input type="hidden" name="assinatura_mecanico" value={JSON.stringify(assinaturas)} />
           </div>
 
           {/* Sistema / Subsistema / Componente em cascata */}
@@ -1223,7 +1272,7 @@ export default function OSFormModal({
       )}
 
       {/* ── Modal de Assinatura Digital (Signature Pad) ── */}
-      {showSigPad && (
+      {showSigPad !== false && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-zinc-950/75 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
             <div>
@@ -1256,6 +1305,11 @@ export default function OSFormModal({
             </div>
 
             {/* Actions */}
+            {showSigPad !== false && (
+              <p className="text-[11px] text-center text-emerald-700 dark:text-emerald-400 font-semibold -mt-1">
+                🔧 {mecanicos[showSigPad] || `Mecânico ${showSigPad + 1}`}
+              </p>
+            )}
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
