@@ -25,6 +25,7 @@ export interface OS {
   mecanicos?: string[] | null;
   assinatura_mecanico?: string | null;
   fotos?: string[] | null;
+  aprovado?: boolean;
   created_at?: string;
 }
 

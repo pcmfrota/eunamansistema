@@ -8,7 +8,8 @@ import {
   atualizarOrdemServico,
   excluirOrdemServico,
   excluirOrdensMassivo,
-  importarOrdensServico
+  importarOrdensServico,
+  aprovarOrdemServico
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
@@ -127,6 +128,18 @@ function calcularHorasNoPeriodo(o: OS, inicioPeriodo: Date, fimPeriodo: Date) {
   
   const ms = interFim.getTime() - interInicio.getTime();
   return ms > 0 ? Math.round((ms / 3600000) * 10) / 10 : 0;
+}
+
+function temAssinaturaSuzano(o: OS): boolean {
+  const raw = o.assinatura_mecanico || "";
+  if (!raw) return false;
+  try {
+    const p = JSON.parse(raw);
+    if (p && typeof p === 'object' && !Array.isArray(p) && 'cargos' in p) {
+      return !!p.cargos?.supervisor_suzano;
+    }
+  } catch {}
+  return false;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -252,6 +265,8 @@ export default function ControleOSClient({
   const [filtroArea, setFiltroArea] = useState("Todas as Áreas");
   const [filtroPeriodo, setFiltroPeriodo] = useState("Todos Períodos");
   const [filtroOrdem, setFiltroOrdem] = useState("Mais Recente");
+  const [filtroAprovacao, setFiltroAprovacao] = useState("Todos Lançamentos");
+  const [filtroSuzano, setFiltroSuzano] = useState("Todas Assinaturas");
   const [showModal, setShowModal] = useState(false);
   const [editingOS, setEditingOS] = useState<OS | null>(null);
   const [modalFotos, setModalFotos] = useState<string[]>([]);
@@ -601,14 +616,28 @@ export default function ControleOSClient({
           }
         }
 
-        return matchBusca && matchStatus && matchModulo && matchArea && matchPeriodo;
+        let matchAprovacao = true;
+        if (filtroAprovacao === "Pendentes de Aprovação") {
+          matchAprovacao = o.aprovado === false;
+        } else if (filtroAprovacao === "Aprovados") {
+          matchAprovacao = o.aprovado !== false;
+        }
+
+        let matchSuzano = true;
+        if (filtroSuzano === "Assinadas por Suzano") {
+          matchSuzano = temAssinaturaSuzano(o);
+        } else if (filtroSuzano === "Sem Assinatura Suzano") {
+          matchSuzano = !temAssinaturaSuzano(o);
+        }
+
+        return matchBusca && matchStatus && matchModulo && matchArea && matchPeriodo && matchAprovacao && matchSuzano;
       })
       .sort((a, b) => {
         if (filtroOrdem === "Mais Recente") return new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime();
         if (filtroOrdem === "Mais Antiga") return new Date(a.data_abertura).getTime() - new Date(b.data_abertura).getTime();
         return 0;
       });
-  }, [ordens, busca, filtroStatus, filtroModulo, filtroArea, filtroPeriodo, filtroOrdem, periodos, equipamentos]);
+  }, [ordens, busca, filtroStatus, filtroModulo, filtroArea, filtroPeriodo, filtroAprovacao, filtroSuzano, filtroOrdem, periodos, equipamentos]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filtradas.length) {
@@ -670,6 +699,32 @@ export default function ControleOSClient({
           const updated = { ...os, status: novoStatus, _isPendingSync: true };
           await localDb.put('ordens_servico', updated);
           await localDb.addToQueue('os', 'update_status', { id, status: novoStatus });
+          window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+        }
+      }
+    });
+  };
+
+  const handleApproveOS = (id: string) => {
+    startTransition(async () => {
+      if (isOnline) {
+        const res = await aprovarOrdemServico(id);
+        if (res && 'error' in res) {
+          alert(res.error);
+        } else {
+          const os = ordens.find(o => o.id === id);
+          if (os) {
+            await localDb.put('ordens_servico', { ...os, aprovado: true });
+            window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+          }
+        }
+      } else {
+        const os = ordens.find(o => o.id === id);
+        if (os) {
+          const updated = { ...os, aprovado: true, _isPendingSync: true };
+          await localDb.put('ordens_servico', updated);
+          await localDb.addToQueue('os', 'approve', { id });
           window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
           window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
         }
@@ -881,7 +936,7 @@ export default function ControleOSClient({
                   className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all font-bold"
                 />
               </div>
-              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos" || filtroArea !== "Todas as Áreas" || filtroPeriodo !== "Todos Períodos") && (
+              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos" || filtroArea !== "Todas as Áreas" || filtroPeriodo !== "Todos Períodos" || filtroAprovacao !== "Todos Lançamentos" || filtroSuzano !== "Todas Assinaturas") && (
                 <button
                   onClick={() => { 
                     setBusca(""); 
@@ -889,6 +944,8 @@ export default function ControleOSClient({
                     setFiltroModulo("Todos Módulos"); 
                     setFiltroArea("Todas as Áreas");
                     setFiltroPeriodo("Todos Períodos");
+                    setFiltroAprovacao("Todos Lançamentos");
+                    setFiltroSuzano("Todas Assinaturas");
                   }}
                   className="px-3 py-2 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"
                 >
@@ -909,6 +966,16 @@ export default function ControleOSClient({
                     </option>
                   );
                 })}
+              </select>
+              <select value={filtroAprovacao} onChange={e => setFiltroAprovacao(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-amber-700 dark:text-amber-400 font-bold outline-none focus:ring-2 focus:ring-blue-500/30">
+                <option>Todos Lançamentos</option>
+                <option>Pendentes de Aprovação</option>
+                <option>Aprovados</option>
+              </select>
+              <select value={filtroSuzano} onChange={e => setFiltroSuzano(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-emerald-700 dark:text-emerald-400 font-bold outline-none focus:ring-2 focus:ring-blue-500/30">
+                <option>Todas Assinaturas</option>
+                <option>Assinadas por Suzano</option>
+                <option>Sem Assinatura Suzano</option>
               </select>
               <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
                 <option>Todos Status</option>
@@ -976,13 +1043,29 @@ export default function ControleOSClient({
                       <input type="checkbox" checked={selectedIds.has(os.id)} onChange={() => toggleSelect(os.id)} className="rounded border-zinc-300" />
                     </td>
                     <td className="px-4 py-3 font-mono text-[12px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
-                      {os.numero_os}
-                      {(os as any)._isPendingSync && (
-                        <span className="ml-2 inline-flex items-center text-[10px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão para subir">
-                          <RefreshCw size={10} className="animate-spin mr-1 text-amber-500" />
-                          (Offline)
-                        </span>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold">{os.numero_os}</span>
+                          {(os as any)._isPendingSync && (
+                            <span className="inline-flex items-center text-[10px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão para subir">
+                              <RefreshCw size={10} className="animate-spin mr-1 text-amber-500" />
+                              (Offline)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-0.5">
+                          {os.aprovado === false && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30 whitespace-nowrap">
+                              Pendente ⚠️
+                            </span>
+                          )}
+                          {temAssinaturaSuzano(os) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30 whitespace-nowrap">
+                              Suzano ✅
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">{os.placa || "-"}</td>
                     <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{os.modulo || "-"}</td>
@@ -1015,6 +1098,16 @@ export default function ControleOSClient({
                         )}
                         {!isVisitante && (
                           <>
+                            {os.aprovado === false && profile?.role !== 'mecanico' && (
+                              <button 
+                                title="Aprovar Lançamento" 
+                                onClick={() => handleApproveOS(os.id)} 
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800 transition-all shadow-sm"
+                              >
+                                <Check size={13} />
+                                Aprovar
+                              </button>
+                            )}
                             {os.status === "Aberta" && (
                               <button title="Iniciar OS" onClick={() => handleStatusUpdate(os.id, "Em Andamento")} className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
                                 <Check size={14} />
@@ -1244,6 +1337,24 @@ export default function ControleOSClient({
 
             {/* List of actions */}
             <div className="p-4 flex flex-col gap-2 bg-zinc-50/50 dark:bg-zinc-950/50">
+              {/* Option: Aprovar */}
+              {selectedOSActions.aprovado === false && profile?.role !== 'mecanico' && (
+                <button
+                  onClick={() => {
+                    handleApproveOS(selectedOSActions.id);
+                    setSelectedOSActions(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-semibold text-sm transition-all shadow-sm text-left"
+                >
+                  <div className="p-2 rounded-lg bg-amber-500 text-white">
+                    <Check size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold">Aprovar OS</p>
+                    <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 font-medium">Validar lançamento do mecânico</p>
+                  </div>
+                </button>
+              )}
               {/* Option 1: Ver Ficha */}
               <button
                 onClick={() => {

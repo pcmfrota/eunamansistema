@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { OSService } from '@/src/services/OSService'
 import { OSInsert, OSUpdate } from '@/src/models/os'
+import { createClient } from '@/utils/supabase/server'
 
 const parseFormData = (formData: FormData): OSInsert => ({
   equipamento_id: formData.get('equipamento_id') as string,
@@ -46,6 +47,23 @@ export async function criarOrdemServico(formData: FormData) {
   try {
     const data = parseFormData(formData)
     data.mecanicos = extractMecanicos(formData)
+    
+    // Determina o cargo do usuário autenticado no servidor
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    let userRole = 'visitante';
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (profile) userRole = profile.role;
+    }
+    
+    // Se criado por mecânico, inicia como pendente de aprovação (aprovado = false)
+    data.aprovado = userRole !== 'mecanico';
+
     const result = await OSService.createOS(data)
     revalidatePath('/os')
     revalidatePath('/')
@@ -76,6 +94,24 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
   try {
     const data = parseFormData(formData)
     data.mecanicos = extractMecanicos(formData)
+    
+    // Se editado por mecânico, volta a requerer aprovação (aprovado = false)
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    let userRole = 'visitante';
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (profile) userRole = profile.role;
+    }
+    
+    if (userRole === 'mecanico') {
+      data.aprovado = false;
+    }
+
     const result = await OSService.updateOS(id, data as OSUpdate)
     revalidatePath('/os')
     revalidatePath('/')
@@ -83,6 +119,36 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
       return result.data
     }
     return result
+  } catch (error: any) {
+    return { error: error.message }
+  }
+}
+
+export async function aprovarOrdemServico(id: string) {
+  try {
+    const supabase = createClient();
+    
+    // Verifica se quem está tentando atualizar é admin/pcm/gestao
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Não autenticado" };
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+      
+    if (!profile || profile.role === 'mecanico' || profile.role === 'visitante') {
+      return { error: "Apenas administradores, PCM ou gestores podem aprovar ordens de serviço." };
+    }
+    
+    const result = await OSService.updateOS(id, { aprovado: true } as any)
+    revalidatePath('/os')
+    revalidatePath('/')
+    if (result.success && result.data) {
+      return result.data
+    }
+    return { success: true }
   } catch (error: any) {
     return { error: error.message }
   }

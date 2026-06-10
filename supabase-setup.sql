@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS public.ordens_servico (
     sub_sistema TEXT,
     horas_manutencao NUMERIC,
     observacoes TEXT,
+    aprovado BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

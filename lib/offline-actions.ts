@@ -10,7 +10,8 @@ import {
   atualizarOrdemServico, 
   excluirOrdemServico, 
   excluirOrdensMassivo, 
-  importarOrdensServico 
+  importarOrdensServico,
+  aprovarOrdemServico
 } from "@/app/os/actions";
 import { 
   criarPreventiva, 
@@ -65,6 +66,10 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
       } else if (action === "update_status") {
         const { id, status } = payload;
         const res = await atualizarStatusOS(id, status);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "approve") {
+        const { id } = payload;
+        const res = await aprovarOrdemServico(id);
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirOrdemServico(payload);
