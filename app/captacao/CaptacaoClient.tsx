@@ -1145,7 +1145,7 @@ export default function CaptacaoClient({
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950 text-white overflow-hidden font-sans">
+    <div className="flex flex-col h-[calc(100vh-56px)] lg:h-screen bg-zinc-950 text-white overflow-hidden font-sans">
       {isExporting && (
         <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white select-none">
           <div className="flex flex-col items-center gap-4">
@@ -1164,27 +1164,27 @@ export default function CaptacaoClient({
       )}
 
       {/* Screen layout */}
-      <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0 select-none print:hidden">
-        <div className="flex items-center gap-3">
+      <header className="p-4 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between bg-zinc-950 shrink-0 gap-3 select-none print:hidden">
+        <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
           <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
             <span className="p-2 bg-blue-600 rounded-lg"><Droplets size={18} /></span>
             CAPTAÇÃO DE ÁGUA
           </h1>
           <span className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5">
             <Clock size={12} />
-            Mês Suzano: <span className="text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
+            Mês: <span className="text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative group">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="relative flex-1 md:flex-initial">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-500 transition-colors" size={14} />
             <input 
               type="text" 
-              placeholder="Buscar motorista/placa..." 
+              placeholder="Buscar..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-44"
+              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full md:w-44"
             />
           </div>
 
@@ -1210,10 +1210,13 @@ export default function CaptacaoClient({
       </header>
 
       {/* Main Grid View */}
-      <main className="flex-1 overflow-hidden p-4 flex gap-4 print:hidden">
+      <main className="flex-1 overflow-hidden p-3 md:p-4 flex gap-4 print:hidden">
         
         {/* Left Side: Sheets list */}
-        <section className="w-1/3 flex flex-col gap-3 h-full overflow-hidden select-none border-r border-zinc-900 pr-2 shrink-0">
+        <section className={cn(
+          "w-full md:w-1/3 flex flex-col gap-3 h-full overflow-hidden select-none md:border-r border-zinc-900 pr-2 shrink-0",
+          selectedFicha ? "hidden md:flex" : "flex"
+        )}>
           <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-2 mb-1">
             Fichas Operacionais ({filteredFichas.length})
           </p>
@@ -1274,18 +1277,23 @@ export default function CaptacaoClient({
             ) : (
               <div className="text-center py-12 bg-zinc-900/20 border border-zinc-850 rounded-2xl">
                 <p className="text-xs text-zinc-500">Nenhuma ficha encontrada.</p>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* Right Side: Selected Sheet Details & Launches */}
-        <section className="flex-1 flex flex-col h-full bg-zinc-900/30 border border-zinc-850 rounded-3xl overflow-hidden relative shadow-2xl">
+        <section className={cn(
+          "flex-1 flex flex-col h-full bg-zinc-900/30 md:border border-zinc-850 md:rounded-3xl overflow-hidden relative shadow-2xl",
+          selectedFicha ? "flex" : "hidden md:flex"
+        )}>
           {selectedFicha ? (
             <>
               {/* Toolbar */}
-              <div className="p-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/50 shrink-0">
+              <div className="p-4 border-b border-zinc-850 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-zinc-900/50 shrink-0">
                 <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setSelectedFicha(null)}
+                    className="md:hidden p-2.5 bg-zinc-950 hover:bg-zinc-850 border border-zinc-850 rounded-xl text-zinc-400 hover:text-white transition-all flex items-center justify-center shrink-0"
+                    title="Voltar para a lista"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
                   <div>
                     <h2 className="text-md font-black text-white leading-none">
                       FICHA: {selectedFicha.placa}
@@ -1296,8 +1304,8 @@ export default function CaptacaoClient({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex bg-zinc-950 rounded-xl p-1 border border-zinc-850 mr-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex bg-zinc-950 rounded-xl p-1 border border-zinc-850">
                     <button 
                       onClick={() => setViewMode('suzano')}
                       className={cn("px-4 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5", 
@@ -1401,10 +1409,13 @@ export default function CaptacaoClient({
               </div>
 
               {/* View area */}
-              <div className="flex-1 overflow-auto p-6 custom-scrollbar bg-zinc-950/20">
+              <div className="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
                   /* High Fidelity Paper Sheet Replica (Horizontal Layout scrollable) */
-                  <div className="w-full overflow-x-auto p-4 flex justify-start bg-zinc-950/40 rounded-3xl custom-scrollbar">
+                  <div 
+                    className="w-full overflow-x-auto p-4 bg-zinc-950/40 rounded-3xl custom-scrollbar touch-pan-x overscroll-x-contain"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                  >
                     <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
                       {renderPaperFicha(selectedFicha)}
                     </div>
