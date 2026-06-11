@@ -41,6 +41,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
+  // Ignorar completamente em ambiente de desenvolvimento local (localhost / 127.0.0.1)
+  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+    return;
+  }
+
   // 1. Ignorar requisições não-GET e chamadas do Supabase / API internas
   if (
     event.request.method !== "GET" || 

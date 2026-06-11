@@ -43,6 +43,7 @@ const navigation = [
   { name: 'Base de Dados',            path: '/base-dados',             icon: Database },
   { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
   { name: 'Controle de Lavagens',     path: '/lavagens',               icon: Droplets },
+  { name: 'Captação de Água',         path: '/captacao',               icon: Droplets },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {

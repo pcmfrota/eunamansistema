@@ -39,6 +39,7 @@ const routes = [
   { name: "Base de Dados",            path: "/base-dados",              icon: LayoutDashboard },
   { name: "Calendário Suzano",        path: "/calendario",              icon: Calendar },
   { name: "Controle de Lavagens",     path: "/lavagens",                icon: Droplets },
+  { name: "Captação de Água",         path: "/captacao",                icon: Droplets },
   { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: User },
 ];
 

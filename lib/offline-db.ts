@@ -5,15 +5,15 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador';
-  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao';
+  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento';
   payload: any;
   timestamp: number;
 }
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 3;
+  private dbVersion = 4;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
@@ -75,6 +75,14 @@ export class OfflineDB {
         // Fila de Sincronização
         if (!db.objectStoreNames.contains('sync_queue')) {
           db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
+        }
+
+        // Captação de Água
+        if (!db.objectStoreNames.contains('fichas_captacao')) {
+          db.createObjectStore('fichas_captacao', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('lancamentos_captacao')) {
+          db.createObjectStore('lancamentos_captacao', { keyPath: 'id' });
         }
       };
     });

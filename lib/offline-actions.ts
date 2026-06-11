@@ -3,7 +3,7 @@
  * Orchestrates online/offline decision making and replays enqueued operations.
  */
 
-import { SyncItem, deserializeToFormData, serializeFormData } from "./offline-db";
+import { SyncItem, deserializeToFormData } from "./offline-db";
 import { 
   criarOrdemServico, 
   atualizarStatusOS, 
@@ -13,13 +13,15 @@ import {
   importarOrdensServico,
   aprovarOrdemServico
 } from "@/app/os/actions";
+
 import { 
   criarPreventiva, 
   excluirPreventiva, 
   atualizarPreventiva, 
-  registrarHorimetro,
-  importarPreventivas
+  importarPreventivas,
+  registrarHorimetro
 } from "@/app/preventivas/actions";
+
 import { 
   registrarInspecaoCompleta, 
   atualizarInspecao, 
@@ -27,11 +29,21 @@ import {
   excluirInspecoesMassivo, 
   importarInspecoesPneus 
 } from "@/app/pneus/actions";
+
 import { 
   upsertBacklogItem, 
   deleteBacklogItems, 
   importarBacklog 
 } from "@/app/backlog/actions";
+
+import {
+  criarFicha,
+  fecharFicha,
+  excluirFicha,
+  adicionarLancamento,
+  excluirLancamento,
+  atualizarFicha
+} from "@/app/captacao/actions";
 
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
@@ -166,6 +178,29 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
         const supabase = createClient();
         const { error } = await supabase.from('colaboradores').delete().eq('id', payload.id);
         if (error) throw new Error(error.message);
+      }
+    }
+    
+    else if (entity === "captacao") {
+      if (action === "create") {
+        const res = await criarFicha(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...updates } = payload;
+        const res = await atualizarFicha(id, updates);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "close") {
+        const res = await fecharFicha(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirFicha(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "add_lancamento") {
+        const res = await adicionarLancamento(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete_lancamento") {
+        const res = await excluirLancamento(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
       }
     }
 

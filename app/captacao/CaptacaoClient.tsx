@@ -1,0 +1,1956 @@
+'use client'
+
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { 
+  Plus, 
+  X, 
+  Search, 
+  FileText, 
+  Calendar, 
+  Camera, 
+  Clock, 
+  Droplets, 
+  Trash2, 
+  Printer, 
+  Check, 
+  ArrowLeft, 
+  RefreshCw, 
+  FlipHorizontal,
+  Lock,
+  Unlock,
+  ChevronRight,
+  Eye,
+  Wifi,
+  WifiOff,
+  FileSpreadsheet,
+  Download
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/components/auth-context';
+import { useOffline } from '@/components/offline-provider';
+import { localDb } from '@/lib/offline-db';
+import { 
+  criarFicha, 
+  fecharFicha, 
+  excluirFicha, 
+  adicionarLancamento, 
+  excluirLancamento,
+  atualizarFicha
+} from './actions';
+
+// Camera Modal Component
+function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [captured, setCaptured] = useState<string | null>(null);
+
+  const startCamera = useCallback(async (mode: 'environment' | 'user') => {
+    setReady(false);
+    setError(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play();
+          setReady(true);
+        };
+      }
+    } catch (err: any) {
+      setError('Não foi possível acessar a câmera. Verifique as permissões.');
+    }
+  }, []);
+
+  useEffect(() => {
+    startCamera(facingMode);
+    return () => {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, [facingMode, startCamera]);
+
+  const handleCapture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    
+    const MAX = 1000; // Compress ideal size
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (w > h) {
+      if (w > MAX) {
+        h = Math.round((h * MAX) / w);
+        w = MAX;
+      }
+    } else {
+      if (h > MAX) {
+        w = Math.round((w * MAX) / h);
+        h = MAX;
+      }
+    }
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    setCaptured(dataUrl);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+  };
+
+  const handleConfirm = () => {
+    if (captured) onCapture(captured);
+    onClose();
+  };
+
+  const handleRetake = () => {
+    setCaptured(null);
+    startCamera(facingMode);
+  };
+
+  const toggleCamera = () => {
+    setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
+    setCaptured(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-md flex flex-col gap-4 bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <span className="text-white font-black text-sm tracking-widest uppercase">📷 Capturar Ponto</span>
+          <button type="button" onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); onClose(); }}
+            className="text-zinc-400 hover:text-white transition-colors p-1 bg-zinc-900 rounded-full hover:bg-zinc-800">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error ? (
+          <div className="text-center py-12">
+            <p className="text-red-400 text-xs font-bold mb-4">{error}</p>
+            <button type="button" onClick={() => startCamera(facingMode)}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black">Tentar novamente</button>
+          </div>
+        ) : captured ? (
+          <>
+            <div className="rounded-2xl overflow-hidden bg-black aspect-[4/3] w-full border border-zinc-800">
+              <img src={captured} alt="Preview" className="w-full h-full object-contain" />
+            </div>
+            <div className="flex gap-3 justify-center">
+              <button type="button" onClick={handleRetake}
+                className="flex-1 py-3 rounded-xl bg-zinc-800 text-white font-bold text-xs hover:bg-zinc-700 transition-colors uppercase">
+                🔄 Nova Foto
+              </button>
+              <button type="button" onClick={handleConfirm}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-500 transition-colors uppercase">
+                ✅ Confirmar
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="rounded-2xl overflow-hidden bg-black aspect-[4/3] w-full relative border border-zinc-800">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              {!ready && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-4 items-center justify-center">
+              <button type="button" onClick={toggleCamera}
+                className="p-3.5 rounded-full bg-zinc-900 text-white hover:bg-zinc-800 transition-colors" title="Virar câmera">
+                <FlipHorizontal size={18} />
+              </button>
+              <button type="button" onClick={handleCapture} disabled={!ready}
+                className="w-16 h-16 rounded-full bg-white border-4 border-zinc-300 shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50">
+                <div className="w-10 h-10 rounded-full bg-zinc-900" />
+              </button>
+              <div className="w-11" />
+            </div>
+          </>
+        )}
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+    </div>
+  );
+}
+
+// Upload Box Helper for base64 file selection
+function UploadBox({ label, url, onCapture, onFileSelect, showCameraOption }: { 
+  label: string; 
+  url?: string; 
+  onCapture: () => void; 
+  onFileSelect: (base64: string) => void;
+  showCameraOption: boolean;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      onFileSelect(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="p-4 bg-zinc-900/50 border border-zinc-850 rounded-2xl flex flex-col items-center justify-center relative min-h-[140px] group overflow-hidden">
+      {url ? (
+        <div className="absolute inset-0">
+          <img src={url} alt="Capturado" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-all">
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg uppercase tracking-wide transition-all"
+            >
+              Galeria
+            </button>
+            {showCameraOption && (
+              <button 
+                type="button" 
+                onClick={onCapture}
+                className="p-2 bg-emerald-600 hover:bg-emerald-750 text-white text-[10px] font-bold rounded-lg uppercase tracking-wide transition-all"
+              >
+                Câmera
+              </button>
+            )}
+            <button 
+              type="button" 
+              onClick={() => onFileSelect('')}
+              className="p-2 bg-red-650 hover:bg-red-750 text-white text-[10px] font-bold rounded-lg uppercase tracking-wide transition-all"
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-3">
+          <div className="w-12 h-12 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center text-zinc-500">
+            <Camera size={20} />
+          </div>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">{label}</p>
+          <div className="flex gap-2">
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[9px] font-black rounded-lg border border-zinc-800 uppercase tracking-wider transition-colors"
+            >
+              + Galeria
+            </button>
+            {showCameraOption && (
+              <button 
+                type="button" 
+                onClick={onCapture}
+                className="px-3 py-1.5 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 text-[9px] font-black rounded-lg border border-emerald-800/30 uppercase tracking-wider transition-colors"
+              >
+                📷 Tirar Foto
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <input 
+        type="file" 
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden" 
+      />
+    </div>
+  );
+}
+
+interface CaptacaoClientProps {
+  initialFichas: any[];
+  equipamentos: any[];
+  colaboradores: any[];
+  calendario: any[];
+}
+
+export default function CaptacaoClient({ 
+  initialFichas, 
+  equipamentos, 
+  colaboradores, 
+  calendario 
+}: CaptacaoClientProps) {
+  const { isOnline } = useOffline();
+  const { profile } = useAuth();
+  
+  // State
+  const [fichas, setFichas] = useState<any[]>(initialFichas);
+  const [selectedFicha, setSelectedFicha] = useState<any | null>(null);
+  
+  const [isFichaModalOpen, setIsFichaModalOpen] = useState(false);
+  const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
+  const [activePhoto, setActivePhoto] = useState<string | null>(null);
+
+  // New Ficha form state
+  const [newFichaData, setNewFichaData] = useState({
+    placa: '',
+    placaCustom: '',
+    motorista: '',
+    motoristaCustom: '',
+    processo: 'Colheita',
+    nucleo: 'Suzano',
+    supervisor_suzano: '',
+    codigo: 'CO-PR-005',
+    revisao: '03'
+  });
+
+  // New Lancamento form state
+  const [newLancamentoData, setNewLancamentoData] = useState({
+    data: new Date().toISOString().split('T')[0],
+    id_ponto: '',
+    hora_inicial: '',
+    hora_final: '',
+    volume_captado: '',
+    fazenda_captada: '',
+    up_captacao: '',
+    atividade: 'Lavagem',
+    fazenda_atividade: '',
+    up_atividade: '',
+    foto_ponto: ''
+  });
+
+  const [showCamera, setShowCamera] = useState(false);
+
+  // Search and status filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'Todas' | 'Aberta' | 'Fechada'>('Todas');
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Signature Pad States & Logic
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawingSig, setIsDrawingSig] = useState(false);
+
+  const startDrawingSig = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.strokeStyle = '#1e3a8a'; // Caneta azul escura
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    setIsDrawingSig(true);
+  };
+
+  const drawSig = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawingSig) return;
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    if ('touches' in e) {
+      if (e.cancelable) e.preventDefault();
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const stopDrawingSig = () => {
+    setIsDrawingSig(false);
+  };
+
+  const clearSigCanvas = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handleSaveSignature = async () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !selectedFicha) return;
+
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) {
+      alert("Por favor, faça a assinatura antes de salvar.");
+      return;
+    }
+
+    const base64Signature = canvas.toDataURL('image/png');
+
+    if (isOnline) {
+      const res = await atualizarFicha(selectedFicha.id, { assinatura_supervisor: base64Signature });
+      if (res.success && res.data) {
+        setFichas(prev => prev.map(f => f.id === selectedFicha.id ? { ...f, assinatura_supervisor: base64Signature } : f));
+        setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: base64Signature }));
+      } else {
+        alert("Erro ao salvar assinatura: " + res.error);
+      }
+    } else {
+      const dbFicha = await localDb.get('fichas_captacao', selectedFicha.id);
+      if (dbFicha) {
+        const updated = { ...dbFicha, assinatura_supervisor: base64Signature };
+        await localDb.put('fichas_captacao', updated);
+        await localDb.addToQueue('captacao', 'update', { id: selectedFicha.id, assinatura_supervisor: base64Signature });
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+        
+        setFichas(prev => prev.map(f => f.id === selectedFicha.id ? updated : f));
+        setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: base64Signature }));
+      }
+    }
+
+    setShowSignaturePad(false);
+  };
+
+  const handleRemoveSignature = async () => {
+    if (!selectedFicha) return;
+    if (!confirm("Tem certeza de que deseja remover a assinatura do supervisor?")) return;
+
+    if (isOnline) {
+      const res = await atualizarFicha(selectedFicha.id, { assinatura_supervisor: null });
+      if (res.success && res.data) {
+        setFichas(prev => prev.map(f => f.id === selectedFicha.id ? { ...f, assinatura_supervisor: null } : f));
+        setSelectedFicha(prev => ({ ...prev, ...res.data, assinatura_supervisor: null }));
+      } else if (res.error) {
+        alert("Erro ao remover assinatura: " + res.error);
+      }
+    } else {
+      const dbFicha = await localDb.get('fichas_captacao', selectedFicha.id);
+      if (dbFicha) {
+        const updated = { ...dbFicha, assinatura_supervisor: null };
+        await localDb.put('fichas_captacao', updated);
+        await localDb.addToQueue('captacao', 'update', { id: selectedFicha.id, assinatura_supervisor: null });
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+        
+        setFichas(prev => prev.map(f => f.id === selectedFicha.id ? updated : f));
+        setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: null }));
+      }
+    }
+  };
+
+  const handleExportExcel = () => {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("Biblioteca Excel ainda carregando...");
+      return;
+    }
+
+    if (!selectedFicha) return;
+
+    // Build array of arrays (AOA) for the sheet
+    const aoa = [
+      ["SUZANO", "CONTROLE DE CAPTAÇÃO DE ÁGUA", "", "", "", "", "", "", "Código:", selectedFicha.codigo || "CO-PR-005"],
+      ["", "", "", "", "", "", "", "", "Revisão:", selectedFicha.revisao || "03"],
+      [],
+      ["Empresa:", "Eunaman", "", "Processo:", selectedFicha.processo || "", "", "Núcleo:", selectedFicha.nucleo || ""],
+      ["Placa Caminhão:", selectedFicha.placa || "", "", "Motorista:", selectedFicha.motorista || "", "", "Supervisor Suzano:", selectedFicha.supervisor_suzano || ""],
+      [],
+      [
+        "Data", 
+        "ID Ponto", 
+        "Hora Inicial", 
+        "Hora Final", 
+        "Volume Captado (Litros)", 
+        "Fazenda Captada", 
+        "UP Captação", 
+        "Atividade", 
+        "Fazenda da Atividade", 
+        "UP da Atividade"
+      ]
+    ];
+
+    // Add launches
+    if (selectedFicha.lancamentos && selectedFicha.lancamentos.length > 0) {
+      const sortedLancamentos = [...selectedFicha.lancamentos].sort((a: any, b: any) => a.data.localeCompare(b.data) || a.hora_inicial.localeCompare(b.hora_inicial));
+      
+      sortedLancamentos.forEach((row: any) => {
+        aoa.push([
+          format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy'),
+          row.id_ponto || "",
+          row.hora_inicial || "",
+          row.hora_final || "",
+          Number(row.volume_captado) || 0,
+          row.fazenda_captada || "",
+          row.up_captacao || "",
+          row.atividade || "",
+          row.fazenda_atividade || "",
+          row.up_atividade || ""
+        ]);
+      });
+    }
+
+    // Add total volume row
+    const total = selectedFicha.lancamentos ? selectedFicha.lancamentos.reduce((acc: number, val: any) => acc + Number(val.volume_captado || 0), 0) : 0;
+    aoa.push([]);
+    aoa.push(["", "", "", "Volume Total (L):", total]);
+
+    // Create worksheet
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Apply column widths
+    const wscols = [
+      { wch: 12 }, // Data
+      { wch: 12 }, // ID Ponto
+      { wch: 12 }, // Hora Inicial
+      { wch: 12 }, // Hora Final
+      { wch: 22 }, // Volume
+      { wch: 20 }, // Fazenda Captada
+      { wch: 15 }, // UP Captação
+      { wch: 15 }, // Atividade
+      { wch: 20 }, // Fazenda Atividade
+      { wch: 15 }  // UP Atividade
+    ];
+    worksheet["!cols"] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Controle Captação");
+    XLSX.writeFile(workbook, `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.xlsx`);
+  };
+
+  const handleExportPDF = () => {
+    const html2pdf = (window as any).html2pdf;
+    if (!html2pdf) {
+      alert("Biblioteca PDF ainda carregando...");
+      return;
+    }
+    
+    setIsExporting(true);
+    
+    const element = document.getElementById("ficha-captacao-print");
+    if (!element) {
+      alert("Erro ao localizar elemento da ficha.");
+      setIsExporting(false);
+      return;
+    }
+    
+    const opt = {
+      margin:       [5, 5, 5, 5],
+      filename:     `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+    
+    // Use rAF to let the UI update and show the loading overlay
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          html2pdf()
+            .set(opt)
+            .from(element)
+            .save()
+            .then(() => {
+              setIsExporting(false);
+            })
+            .catch((err: any) => {
+              console.error("Erro ao gerar PDF:", err);
+              setIsExporting(false);
+            });
+        }, 50);
+      });
+    });
+  };
+
+  // Load IndexedDB cache on init or sync complete
+  const loadLocalCache = async () => {
+    try {
+      const localFichas = await localDb.getAll('fichas_captacao');
+      const localLancamientos = await localDb.getAll('lancamentos_captacao');
+      
+      // Merge Fichas and Lancamentos
+      const merged = localFichas.map(f => {
+        const rows = localLancamientos.filter(l => l.ficha_id === f.id);
+        return { ...f, lancamentos: rows };
+      });
+      
+      if (merged.length > 0) {
+        setFichas(merged);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados do cache IndexedDB:", err);
+    }
+  };
+
+  // Sync Supabase to IndexedDB when online
+  const cacheToLocalDB = async () => {
+    if (!isOnline) return;
+    try {
+      // Clean up first to avoid deleted ghost records
+      await localDb.clearStore('fichas_captacao');
+      await localDb.clearStore('lancamentos_captacao');
+
+      await localDb.saveMany('fichas_captacao', initialFichas.map(({ lancamentos, ...f }) => f));
+      
+      const allLancamientos = initialFichas.flatMap(f => f.lancamentos || []);
+      if (allLancamientos.length > 0) {
+        await localDb.saveMany('lancamentos_captacao', allLancamientos);
+      }
+    } catch (err) {
+      console.warn("Erro ao fazer cache dos dados no IndexedDB:", err);
+    }
+  };
+
+  useEffect(() => {
+    cacheToLocalDB();
+  }, [initialFichas, isOnline]);
+
+  useEffect(() => {
+    if (!isOnline) {
+      loadLocalCache();
+    } else {
+      setFichas(initialFichas);
+    }
+  }, [initialFichas, isOnline]);
+
+  // Listener to sync completed
+  useEffect(() => {
+    const handleSyncComplete = () => {
+      window.location.reload();
+    };
+    window.addEventListener('offline-sync-completed', handleSyncComplete);
+    return () => window.removeEventListener('offline-sync-completed', handleSyncComplete);
+  }, []);
+
+  // Load sheetjs and html2pdf scripts dynamically
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (!(window as any).XLSX) {
+        const script = document.createElement("script");
+        script.src = "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js";
+        document.body.appendChild(script);
+      }
+      if (!(window as any).html2pdf) {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        document.body.appendChild(script);
+      }
+    }
+  }, []);
+
+  // Determine current active Suzano operational period
+  const currentPeriod = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const period = calendario.find(p => p.data_inicio <= today && p.data_fim >= today);
+    if (period) return period;
+    
+    // Fallback if no matching dates: use current month/year
+    const now = new Date();
+    return {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1,
+      data_inicio: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+      data_fim: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+    };
+  }, [calendario]);
+
+  // Determine if a Ficha is expired (belongs to a past operational month)
+  const isFichaLocked = useCallback((ficha: any) => {
+    if (ficha.status === 'Fechada') return true;
+    
+    // If the Ficha belongs to a past year or past month, it is automatically closed
+    if (ficha.ano < currentPeriod.ano) return true;
+    if (ficha.ano === currentPeriod.ano && ficha.mes < currentPeriod.mes) return true;
+    
+    return false;
+  }, [currentPeriod]);
+
+  // Filtered Fichas list
+  const filteredFichas = useMemo(() => {
+    return fichas.filter(f => {
+      const motoristaName = f.motorista?.toLowerCase() || '';
+      const placaStr = f.placa?.toLowerCase() || '';
+      const matchesSearch = motoristaName.includes(searchTerm.toLowerCase()) || placaStr.includes(searchTerm.toLowerCase());
+      
+      const locked = isFichaLocked(f);
+      const computedStatus = locked ? 'Fechada' : 'Aberta';
+      const matchesStatus = filterStatus === 'Todas' || computedStatus === filterStatus;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [fichas, searchTerm, filterStatus, isFichaLocked]);
+
+  // Handle Creating a new Ficha
+  const handleCreateFicha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const finalPlaca = newFichaData.placa === 'custom' ? newFichaData.placaCustom.toUpperCase().trim() : newFichaData.placa;
+    const finalMotorista = newFichaData.motorista === 'custom' ? newFichaData.motoristaCustom.trim() : newFichaData.motorista;
+
+    if (!finalPlaca || !finalMotorista) {
+      alert('Placa e Motorista são obrigatórios!');
+      return;
+    }
+
+    const payload = {
+      ano: currentPeriod.ano,
+      mes: currentPeriod.mes,
+      placa: finalPlaca,
+      motorista: finalMotorista,
+      processo: newFichaData.processo,
+      nucleo: newFichaData.nucleo,
+      supervisor_suzano: newFichaData.supervisor_suzano,
+      codigo: newFichaData.codigo,
+      revisao: newFichaData.revisao
+    };
+
+    if (isOnline) {
+      const res = await criarFicha(payload);
+      if (res.success && res.data) {
+        setFichas(prev => [res.data, ...prev]);
+        setSelectedFicha({ ...res.data, lancamentos: [] });
+      } else {
+        alert('Erro ao criar ficha: ' + res.error);
+      }
+    } else {
+      // Offline implementation
+      const tempId = crypto.randomUUID();
+      const offlineFicha = {
+        id: tempId,
+        status: 'Aberta' as const,
+        criado_por: null,
+        created_at: new Date().toISOString().split('.')[0],
+        ...payload
+      };
+
+      await localDb.put('fichas_captacao', offlineFicha);
+      await localDb.addToQueue('captacao', 'create', payload);
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => [offlineFicha, ...prev]);
+      setSelectedFicha({ ...offlineFicha, lancamentos: [] });
+    }
+
+    setIsFichaModalOpen(false);
+    // Reset form
+    setNewFichaData({
+      placa: '',
+      placaCustom: '',
+      motorista: '',
+      motoristaCustom: '',
+      processo: 'Colheita',
+      nucleo: 'Suzano',
+      supervisor_suzano: '',
+      codigo: 'CO-PR-005',
+      revisao: '03'
+    });
+  };
+
+  // Handle Closing a Ficha manually
+  const handleCloseFicha = async (id: string) => {
+    if (!confirm('Deseja realmente fechar esta ficha operacional? Ela se tornará somente leitura.')) return;
+
+    if (isOnline) {
+      const res = await fecharFicha(id);
+      if (res.success) {
+        setFichas(prev => prev.map(f => f.id === id ? { ...f, status: 'Fechada' } : f));
+        if (selectedFicha?.id === id) {
+          setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
+        }
+      } else {
+        alert('Erro ao fechar ficha: ' + res.error);
+      }
+    } else {
+      // Offline close
+      const dbFicha = await localDb.get('fichas_captacao', id);
+      if (dbFicha) {
+        const updated = { ...dbFicha, status: 'Fechada' as const };
+        await localDb.put('fichas_captacao', updated);
+        await localDb.addToQueue('captacao', 'close', { id });
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+        
+        setFichas(prev => prev.map(f => f.id === id ? updated : f));
+        if (selectedFicha?.id === id) {
+          setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
+        }
+      }
+    }
+  };
+
+  // Handle Deleting a Ficha
+  const handleDeleteFicha = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta ficha e todos os seus lançamentos de captação? Esta ação é irreversível.')) return;
+
+    if (isOnline) {
+      const res = await excluirFicha(id);
+      if (res.success) {
+        setFichas(prev => prev.filter(f => f.id !== id));
+        if (selectedFicha?.id === id) {
+          setSelectedFicha(null);
+        }
+      } else {
+        alert('Erro ao excluir: ' + res.error);
+      }
+    } else {
+      await localDb.delete('fichas_captacao', id);
+      // Clean up launches of this ficha locally
+      const localLancamientos = await localDb.getAll('lancamentos_captacao');
+      const keysToDelete = localLancamientos.filter(l => l.ficha_id === id).map(l => l.id);
+      if (keysToDelete.length > 0) {
+        await localDb.deleteMany('lancamentos_captacao', keysToDelete);
+      }
+      
+      await localDb.addToQueue('captacao', 'delete', { id });
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => prev.filter(f => f.id !== id));
+      if (selectedFicha?.id === id) {
+        setSelectedFicha(null);
+      }
+    }
+  };
+
+  // Handle Adding a Launch row
+  const handleAddLancamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFicha) return;
+
+    const volumeNum = parseFloat(newLancamentoData.volume_captado);
+    if (isNaN(volumeNum) || volumeNum <= 0) {
+      alert('Volume captado deve ser um número válido maior que 0.');
+      return;
+    }
+
+    const payload = {
+      ficha_id: selectedFicha.id,
+      data: newLancamentoData.data,
+      id_ponto: newLancamentoData.id_ponto.trim(),
+      hora_inicial: newLancamentoData.hora_inicial.trim(),
+      hora_final: newLancamentoData.hora_final.trim(),
+      volume_captado: volumeNum,
+      fazenda_captada: newLancamentoData.fazenda_captada.trim(),
+      up_captacao: newLancamentoData.up_captacao.trim(),
+      atividade: newLancamentoData.atividade.trim(),
+      fazenda_atividade: newLancamentoData.fazenda_atividade.trim(),
+      up_atividade: newLancamentoData.up_atividade.trim(),
+      foto_ponto: newLancamentoData.foto_ponto // base64 representation
+    };
+
+    if (isOnline) {
+      const res = await adicionarLancamento(payload);
+      if (res.success && res.data) {
+        const added = res.data;
+        setFichas(prev => prev.map(f => {
+          if (f.id === selectedFicha.id) {
+            return { ...f, lancamentos: [...(f.lancamentos || []), added] };
+          }
+          return f;
+        }));
+        setSelectedFicha(prev => ({
+          ...prev,
+          lancamentos: [...(prev.lancamentos || []), added]
+        }));
+      } else {
+        alert('Erro ao adicionar lançamento: ' + res.error);
+      }
+    } else {
+      // Offline launch
+      const tempId = crypto.randomUUID();
+      const offlineRow = {
+        id: tempId,
+        created_at: new Date().toISOString().split('.')[0],
+        ...payload
+      };
+
+      await localDb.put('lancamentos_captacao', offlineRow);
+      await localDb.addToQueue('captacao', 'add_lancamento', payload);
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => prev.map(f => {
+        if (f.id === selectedFicha.id) {
+          return { ...f, lancamentos: [...(f.lancamentos || []), offlineRow] };
+        }
+        return f;
+      }));
+      setSelectedFicha(prev => ({
+        ...prev,
+        lancamentos: [...(prev.lancamentos || []), offlineRow]
+      }));
+    }
+
+    setIsLancamentoModalOpen(false);
+    // Reset launch form
+    setNewLancamentoData({
+      data: new Date().toISOString().split('T')[0],
+      id_ponto: '',
+      hora_inicial: '',
+      hora_final: '',
+      volume_captado: '',
+      fazenda_captada: '',
+      up_captacao: '',
+      atividade: 'Lavagem',
+      fazenda_atividade: '',
+      up_atividade: '',
+      foto_ponto: ''
+    });
+  };
+
+  // Handle Deleting a Launch row
+  const handleDeleteLancamento = async (id: string) => {
+    if (!confirm('Deseja realmente remover este lançamento da ficha?')) return;
+
+    if (isOnline) {
+      const res = await excluirLancamento(id);
+      if (res.success) {
+        setFichas(prev => prev.map(f => {
+          if (f.id === selectedFicha.id) {
+            return { ...f, lancamentos: f.lancamentos.filter((l: any) => l.id !== id) };
+          }
+          return f;
+        }));
+        setSelectedFicha(prev => ({
+          ...prev,
+          lancamentos: prev.lancamentos.filter((l: any) => l.id !== id)
+        }));
+      } else {
+        alert('Erro ao excluir: ' + res.error);
+      }
+    } else {
+      // Offline delete
+      await localDb.delete('lancamentos_captacao', id);
+      await localDb.addToQueue('captacao', 'delete_lancamento', { id });
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => prev.map(f => {
+        if (f.id === selectedFicha.id) {
+          return { ...f, lancamentos: f.lancamentos.filter((l: any) => l.id !== id) };
+        }
+        return f;
+      }));
+      setSelectedFicha(prev => ({
+        ...prev,
+        lancamentos: prev.lancamentos.filter((l: any) => l.id !== id)
+      }));
+    }
+  };
+
+  // Calculate sum of volumes
+  const totalVolume = useMemo(() => {
+    if (!selectedFicha || !selectedFicha.lancamentos) return 0;
+    return selectedFicha.lancamentos.reduce((acc: number, val: any) => acc + Number(val.volume_captado || 0), 0);
+  }, [selectedFicha]);
+
+  // Format month name
+  const getMonthName = (m: number) => {
+    const dates = new Date(2026, m - 1, 15);
+    return format(dates, 'MMMM', { locale: ptBR }).toUpperCase();
+  };
+
+  const renderPaperFicha = (ficha: any) => {
+    return (
+      <div className="w-[1080px] bg-white text-zinc-950 p-5 font-sans mx-auto text-[10px] leading-normal border border-black select-none shadow-xl print:shadow-none print:border-0 print:p-0">
+        
+        {/* Enforce landscape style tag */}
+        <style dangerouslySetInnerHTML={{__html: `
+          @media print {
+            @page { size: landscape; margin: 8mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        `}} />
+
+        {/* Header with official Suzano logo/bar */}
+        <div className="w-full bg-[#002f87] h-[52px] relative flex items-center px-4 overflow-hidden border border-black border-b-0">
+          {/* Geometric decoration */}
+          <svg className="absolute inset-y-0 right-0 w-2/3 h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,0 L35,0 L15,100 L-20,100 Z" fill="#007bc4" />
+            <path d="M30,0 L100,0 L85,100 L10,100 Z" fill="#00b050" />
+            <path d="M65,0 L100,0 L95,100 L60,100 Z" fill="#8dc63f" opacity="0.35" />
+          </svg>
+          
+          {/* Suzano logo */}
+          <div className="relative z-10 flex items-center gap-2">
+            <svg viewBox="0 0 200 50" width="160" height="40" className="h-8 w-[160px]" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g fillRule="evenodd">
+                {/* Left Leaf */}
+                <path d="M16.8 32.5c-.8-5.3 1.2-11.4 5.3-15.6 3-3.1 7.2-5.1 11-5.1.7 0 .9.3.6.8-2 3.8-6.1 10-5.8 17.5.1 2.2-.6 4-1.9 5.3-2.6 2.7-7 1-9.2-2.9z" fill="#00B159"/>
+                {/* Right Leaf */}
+                <path d="M29.5 35c-.6-4 1-8.5 4-11.7 2.2-2.3 5.4-3.8 8.2-3.8.5 0 .7.2.4.6-1.5 2.8-4.6 7.5-4.4 13.1 0 1.6-.5 3-1.4 4-2 2-5.3.7-6.8-2.2z" fill="#8DC63F"/>
+              </g>
+              <text x="52" y="32" fill="#ffffff" fontFamily="'Inter', sans-serif" fontWeight="800" fontSize="21" letterSpacing="-0.5">suzano</text>
+            </svg>
+          </div>
+        </div>
+
+        {/* Title & Doc Info Block */}
+        <table className="w-full border-collapse border border-black text-center text-xs">
+          <tbody>
+            <tr>
+              <td className="p-3 font-black text-sm uppercase tracking-wider border-r border-black w-[80%] text-center font-sans">
+                Controle de Captação de Água
+              </td>
+              <td className="p-0 text-[9px] w-[20%] text-left align-top">
+                <div className="border-b border-black p-1.5 flex justify-between items-center">
+                  <span className="font-bold">Código:</span>
+                  <span className="font-mono pr-2">{ficha.codigo || "CO-PR-005"}</span>
+                </div>
+                <div className="p-1.5 flex justify-between items-center">
+                  <span className="font-bold">Revisão:</span>
+                  <span className="font-mono pr-2">{ficha.revisao || "03"}</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Metadata Table */}
+        <table className="w-full border-collapse border border-black border-t-0 text-[10px] text-zinc-900">
+          <tbody>
+            {/* Row 1 */}
+            <tr className="border-b border-black">
+              <td className="p-2 border-r border-black w-1/3">
+                <span className="font-bold">Empresa:</span> EUNAMAN
+              </td>
+              <td className="p-2 border-r border-black w-[45%]">
+                <span className="font-bold">Processo:</span>{' '}
+                <span className="font-mono">{ficha.processo === 'Colheita' ? '(X)' : '( )'}</span> Colheita{' '}
+                <span className="font-mono">{ficha.processo === 'Silvicultura' ? '(X)' : '( )'}</span> Silvicultura{' '}
+                <span className="font-mono">{ficha.processo === 'Logística' ? '(X)' : '( )'}</span> Logística{' '}
+                <span className="font-mono">( )</span> _________
+              </td>
+              <td className="p-2 w-[22%]">
+                <span className="font-bold">Núcleo:</span> {ficha.nucleo}
+              </td>
+            </tr>
+            {/* Row 2 */}
+            <tr>
+              <td className="p-2 border-r border-black w-1/3">
+                <span className="font-bold">Placa Caminhão:</span> <span className="font-bold font-mono">{ficha.placa}</span>
+              </td>
+              <td className="p-2 border-r border-black w-[45%]">
+                <span className="font-bold">Motorista:</span> <span className="font-bold">{ficha.motorista}</span>
+              </td>
+              <td className="p-2 w-[22%] relative">
+                <div className="flex flex-col gap-0.5 justify-center min-h-[22px]">
+                  <div><span className="font-bold">Supervisor Suzano:</span> <span className="font-bold">{ficha.supervisor_suzano}</span></div>
+                  {ficha.assinatura_supervisor && (
+                    <div className="absolute right-2 bottom-1 h-[26px] w-[110px] pointer-events-none">
+                      <img src={ficha.assinatura_supervisor} className="max-h-full max-w-full object-contain mx-auto" alt="Assinatura Supervisor" />
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Main Table */}
+        <table className="w-full border-collapse border border-black border-t-0 text-[9px] text-zinc-900">
+          <thead>
+            <tr className="bg-zinc-100 text-zinc-800 font-bold border-b border-black">
+              <th className="border border-black p-2 w-[90px] text-center">Data</th>
+              <th className="border border-black p-2 w-[110px] text-center">ID Ponto*</th>
+              <th className="border border-black p-2 text-center w-[80px]">Hora Inicial<br/>(HH:MM)</th>
+              <th className="border border-black p-2 text-center w-[80px]">Hora Final<br/>(HH:MM)</th>
+              <th className="border border-black p-2 text-center w-[120px]">Volume Captado<br/>(Litros)</th>
+              <th className="border border-black p-2 text-center">Fazenda Captada</th>
+              <th className="border border-black p-2 text-center w-[100px]">UP da Captação</th>
+              <th className="border border-black p-2 text-center">Atividade</th>
+              <th className="border border-black p-2 text-center">Fazenda da Atividade</th>
+              <th className="border border-black p-2 text-center font-bold">UP da Atividade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ficha.lancamentos && ficha.lancamentos.length > 0 ? (
+              ficha.lancamentos.map((row: any, index: number) => (
+                <tr key={index} className="text-center text-zinc-950 font-semibold border-b border-black">
+                  <td className="border border-black p-1.5">{format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.id_ponto}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.hora_inicial}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.hora_final}</td>
+                  <td className="border border-black p-1.5 font-mono font-bold">
+                    {Number(row.volume_captado).toLocaleString('pt-BR')} L
+                  </td>
+                  <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_captada}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.up_captacao}</td>
+                  <td className="border border-black p-1.5">{row.atividade}</td>
+                  <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_atividade}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.up_atividade}</td>
+                </tr>
+              ))
+            ) : (
+              <tr className="border-b border-black">
+                <td colSpan={10} className="border border-black p-6 text-center text-zinc-400 italic">
+                  Nenhum lançamento registrado nesta ficha operacional.
+                </td>
+              </tr>
+            )}
+            {/* Blank rows to fill space */}
+            {Array.from({ length: Math.max(0, 14 - (ficha.lancamentos?.length || 0)) }).map((_, idx) => (
+              <tr key={`blank-${idx}`} className="border-b border-black">
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+                <td className="border border-black p-3"></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Footer notes */}
+        <div className="flex justify-between items-end mt-2 text-[7px] text-zinc-650 leading-tight">
+          <div>
+            <p className="font-bold">* Preencher com o código do ponto ou número da outorga / certidão de dispensa</p>
+            <p className="font-bold">** Em atividades de silvicultura preencher UP e talhão trabalhado</p>
+          </div>
+          <div className="text-right font-mono">
+            <p>Código do formulário e revisão</p>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-zinc-950 text-white overflow-hidden font-sans">
+      {isExporting && (
+        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white select-none">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <h3 className="font-bold text-lg tracking-wide">Gerando PDF da Ficha...</h3>
+            <p className="text-sm text-zinc-400">Preparando o arquivo para download</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Printable Sheet View - ONLY VISIBLE ON PRINT */}
+      {selectedFicha && (
+        <div className="hidden print:block">
+          {renderPaperFicha(selectedFicha)}
+        </div>
+      )}
+
+      {/* Screen layout */}
+      <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0 select-none print:hidden">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
+            <span className="p-2 bg-blue-600 rounded-lg"><Droplets size={18} /></span>
+            CAPTAÇÃO DE ÁGUA
+          </h1>
+          <span className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5">
+            <Clock size={12} />
+            Mês Suzano: <span className="text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-500 transition-colors" size={14} />
+            <input 
+              type="text" 
+              placeholder="Buscar motorista/placa..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-44"
+            />
+          </div>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as any)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-400"
+          >
+            <option value="Todas">TODAS AS FICHAS</option>
+            <option value="Aberta">ABERTAS</option>
+            <option value="Fechada">FECHADAS / EXPIRADAS</option>
+          </select>
+
+          {profile?.role !== 'visitante' && (
+            <button 
+              onClick={() => setIsFichaModalOpen(true)}
+              className="px-4 py-2 bg-blue-650 hover:bg-blue-750 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 flex items-center gap-1.5 active:scale-95 transition-all"
+            >
+              <Plus size={14} /> NOVA FICHA
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Main Grid View */}
+      <main className="flex-1 overflow-hidden p-4 flex gap-4 print:hidden">
+        
+        {/* Left Side: Sheets list */}
+        <section className="w-1/3 flex flex-col gap-3 h-full overflow-hidden select-none border-r border-zinc-900 pr-2 shrink-0">
+          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-2 mb-1">
+            Fichas Operacionais ({filteredFichas.length})
+          </p>
+          <div className="flex-1 overflow-y-auto space-y-2.5 pr-2 custom-scrollbar">
+            {filteredFichas.length > 0 ? (
+              filteredFichas.map(f => {
+                const isSelected = selectedFicha?.id === f.id;
+                const locked = isFichaLocked(f);
+                const launchesCount = f.lancamentos?.length || 0;
+
+                return (
+                  <div
+                    key={f.id}
+                    onClick={() => { setSelectedFicha(f); setViewMode('suzano'); }}
+                    className={cn(
+                      "p-4 rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col gap-3 shadow-md relative overflow-hidden group",
+                      isSelected 
+                        ? "bg-zinc-900 border-blue-500 shadow-blue-500/5" 
+                        : "bg-zinc-900/40 border-zinc-850 hover:border-zinc-800"
+                    )}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-extrabold text-white text-md tracking-tight leading-none group-hover:text-blue-400 transition-colors">
+                          {f.placa}
+                        </h3>
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1.5 flex items-center gap-1">
+                          👤 {f.motorista}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className={cn(
+                          "px-2 py-1 text-[8px] font-black uppercase rounded-md shadow-sm border",
+                          locked 
+                            ? "bg-zinc-900 border-zinc-800 text-zinc-500" 
+                            : "bg-emerald-950/20 border-emerald-900/30 text-emerald-400"
+                        )}>
+                          {locked ? 'Fechada' : 'Aberta'}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-850">
+                          {getMonthName(f.mes)} {f.ano}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-400">
+                      <span>{f.processo}</span>
+                      <span className="font-bold text-zinc-300">{launchesCount} captações</span>
+                    </div>
+
+                    {/* Left overlay highlight */}
+                    {isSelected && (
+                      <div className="absolute left-0 inset-y-0 w-1 bg-blue-500" />
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-12 bg-zinc-900/20 border border-zinc-850 rounded-2xl">
+                <p className="text-xs text-zinc-500">Nenhuma ficha encontrada.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Right Side: Selected Sheet Details & Launches */}
+        <section className="flex-1 flex flex-col h-full bg-zinc-900/30 border border-zinc-850 rounded-3xl overflow-hidden relative shadow-2xl">
+          {selectedFicha ? (
+            <>
+              {/* Toolbar */}
+              <div className="p-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/50 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <h2 className="text-md font-black text-white leading-none">
+                      FICHA: {selectedFicha.placa}
+                    </h2>
+                    <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wide">
+                      Motorista: {selectedFicha.motorista} | Processo: {selectedFicha.processo} | Núcleo: {selectedFicha.nucleo}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-zinc-950 rounded-xl p-1 border border-zinc-850 mr-2">
+                    <button 
+                      onClick={() => setViewMode('suzano')}
+                      className={cn("px-4 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5", 
+                        viewMode === 'suzano' ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-white")}
+                    >
+                      📋 Ficha Suzano
+                    </button>
+                    <button 
+                      onClick={() => setViewMode('sistema')}
+                      className={cn("px-4 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5", 
+                        viewMode === 'sistema' ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-white")}
+                    >
+                      📸 Ficha com Fotos
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => window.print()}
+                    className="p-2.5 bg-zinc-950 hover:bg-zinc-800 rounded-xl border border-zinc-850 text-zinc-400 hover:text-white transition-all"
+                    title="Imprimir Ficha"
+                  >
+                    <Printer size={16} />
+                  </button>
+
+                  <button
+                    onClick={handleExportExcel}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 rounded-xl border border-zinc-850 text-emerald-550 hover:text-emerald-400 transition-all font-bold text-xs"
+                    title="Exportar para Excel"
+                  >
+                    <FileSpreadsheet size={15} />
+                    Excel
+                  </button>
+
+                  <button
+                    onClick={handleExportPDF}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 rounded-xl border border-zinc-850 text-blue-550 hover:text-blue-400 transition-all font-bold text-xs"
+                    title="Exportar e baixar em PDF"
+                  >
+                    <Download size={15} />
+                    PDF
+                  </button>
+
+                  {profile?.role !== 'visitante' && (
+                    selectedFicha.assinatura_supervisor ? (
+                      <button
+                        onClick={handleRemoveSignature}
+                        className="px-3.5 py-2 bg-zinc-950 hover:bg-red-950/25 hover:text-red-400 rounded-xl border border-zinc-850 text-zinc-450 text-xs font-bold transition-all flex items-center gap-1.5"
+                        title="Remover Assinatura do Supervisor"
+                      >
+                        ❌ REMOVER ASSINATURA
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setShowSignaturePad(true);
+                          setTimeout(() => {
+                            const canvas = sigCanvasRef.current;
+                            if (canvas) {
+                              const ctx = canvas.getContext('2d');
+                              ctx?.clearRect(0, 0, canvas.width, canvas.height);
+                            }
+                          }, 50);
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-600/10 active:scale-95 transition-all"
+                        title="Assinar Digitalmente como Supervisor"
+                      >
+                        ✍️ ASSINAR SUPERVISOR
+                      </button>
+                    )
+                  )}
+
+                  {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+                    <>
+                      <button
+                        onClick={() => setIsLancamentoModalOpen(true)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-750 text-white text-xs font-black rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/10 active:scale-95 transition-all"
+                      >
+                        <Plus size={14} /> ADICIONAR LINHA
+                      </button>
+                      
+                      <button
+                        onClick={() => handleCloseFicha(selectedFicha.id)}
+                        className="px-3.5 py-2 bg-zinc-950 hover:bg-red-950/20 hover:text-red-400 rounded-xl border border-zinc-850 text-zinc-400 text-xs font-bold transition-all flex items-center gap-1.5"
+                        title="Fechar Ficha"
+                      >
+                        <Lock size={12} /> FECHAR MÊS
+                      </button>
+                    </>
+                  )}
+
+                  {profile?.role === 'admin' && (
+                    <button
+                      onClick={() => handleDeleteFicha(selectedFicha.id)}
+                      className="p-2.5 bg-zinc-950 hover:bg-red-950 text-zinc-400 hover:text-red-500 border border-zinc-850 hover:border-red-900 rounded-xl transition-all"
+                      title="Excluir Ficha"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* View area */}
+              <div className="flex-1 overflow-auto p-6 custom-scrollbar bg-zinc-950/20">
+                {viewMode === 'suzano' ? (
+                  /* High Fidelity Paper Sheet Replica (Horizontal Layout scrollable) */
+                  <div className="w-full overflow-x-auto p-4 flex justify-start bg-zinc-950/40 rounded-3xl custom-scrollbar">
+                    <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
+                      {renderPaperFicha(selectedFicha)}
+                    </div>
+                  </div>
+                ) : (
+                  /* Digital view displaying Launches with Evidences Photos */
+                  <div className="space-y-6 max-w-5xl mx-auto">
+                    
+                    {/* Header metrics card */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-zinc-900 border border-zinc-850 p-5 rounded-2xl">
+                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">CAPTAÇÕES</p>
+                        <p className="text-2xl font-black text-white">{selectedFicha.lancamentos?.length || 0}</p>
+                      </div>
+                      <div className="bg-zinc-900 border border-zinc-850 p-5 rounded-2xl col-span-2">
+                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">VOLUME TOTAL CAPTADO</p>
+                        <p className="text-2xl font-black text-blue-500">
+                          {totalVolume.toLocaleString('pt-BR')} <span className="text-sm text-zinc-400 font-bold">LITROS</span>
+                        </p>
+                      </div>
+                      <div className="bg-zinc-900 border border-zinc-850 p-5 rounded-2xl">
+                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">MÊS OPERACIONAL</p>
+                        <p className="text-lg font-black text-white uppercase mt-0.5">{getMonthName(selectedFicha.mes)} {selectedFicha.ano}</p>
+                      </div>
+                    </div>
+
+                    {/* Detailed list rows */}
+                    <div className="space-y-4">
+                      {selectedFicha.lancamentos && selectedFicha.lancamentos.length > 0 ? (
+                        [...selectedFicha.lancamentos].sort((a: any, b: any) => b.data.localeCompare(a.data) || b.created_at?.localeCompare(a.created_at)).map((row: any) => (
+                          <div 
+                            key={row.id}
+                            className="bg-zinc-900/40 border border-zinc-850 rounded-2xl p-5 flex flex-col md:flex-row gap-5 justify-between items-start md:items-center hover:border-zinc-800 transition-all shadow-lg"
+                          >
+                            <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-y-4 gap-x-6 text-xs">
+                              
+                              {/* Group 1: Time */}
+                              <div>
+                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
+                                <span className="font-extrabold text-white text-sm">
+                                  {format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}
+                                </span>
+                                <span className="block text-zinc-400 font-bold mt-1 tracking-tight">
+                                  ⏱️ {row.hora_inicial} - {row.hora_final}
+                                </span>
+                              </div>
+
+                              {/* Group 2: Point & Volume */}
+                              <div>
+                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
+                                <span className="font-mono text-zinc-300 font-bold">{row.id_ponto}</span>
+                                <span className="block text-blue-400 font-black text-sm mt-1">
+                                  💧 {Number(row.volume_captado).toLocaleString('pt-BR')} Litros
+                                </span>
+                              </div>
+
+                              {/* Group 3: Capture Location */}
+                              <div>
+                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">FAZENDA / UP CAPTAÇÃO</span>
+                                <span className="font-bold text-white uppercase leading-none">{row.fazenda_captada}</span>
+                                <span className="block text-zinc-400 mt-1.5 font-bold font-mono">UP: {row.up_captacao}</span>
+                              </div>
+
+                              {/* Group 4: Activity Location */}
+                              <div>
+                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">ATIVIDADE / DESTINO</span>
+                                <span className="font-bold text-white leading-none">{row.atividade}</span>
+                                <span className="block text-zinc-400 mt-1.5 font-bold font-mono">
+                                  {row.fazenda_atividade} / UP {row.up_atividade}
+                                </span>
+                              </div>
+
+                              {/* Group 5: Creator metadata */}
+                              <div>
+                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">METADADOS</span>
+                                <span className="block text-zinc-500 font-bold font-mono text-[9px] leading-tight">
+                                  Ref: {row.id.substring(0, 8)}
+                                </span>
+                                <span className="block text-zinc-500 text-[9px] font-bold mt-1">
+                                  Registrado em: {row.created_at ? format(new Date(row.created_at.replace(' ', 'T')), 'dd/MM HH:mm') : '-'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Evidence Photo / Image Thumbnail */}
+                            <div className="flex items-center gap-3 shrink-0">
+                              {row.foto_ponto ? (
+                                <div 
+                                  onClick={() => setActivePhoto(row.foto_ponto)}
+                                  className="w-16 h-16 rounded-xl border border-zinc-800 overflow-hidden relative cursor-zoom-in group shadow-md"
+                                >
+                                  <img src={row.foto_ponto} className="w-full h-full object-cover transition-transform group-hover:scale-115" alt="Ponto" />
+                                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                                    <Eye size={12} className="text-white animate-pulse" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="w-16 h-16 rounded-xl border border-zinc-850/50 bg-zinc-950/40 flex flex-col items-center justify-center text-zinc-650">
+                                  <Camera size={18} strokeWidth={1.5} />
+                                  <span className="text-[8px] font-black tracking-tighter uppercase mt-1">Sem Foto</span>
+                                </div>
+                              )}
+
+                              {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+                                <button
+                                  onClick={() => handleDeleteLancamento(row.id)}
+                                  className="p-2.5 bg-zinc-950 hover:bg-red-950 text-zinc-500 hover:text-red-400 border border-zinc-850 hover:border-red-900 rounded-xl transition-all"
+                                  title="Remover Registro"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-16 bg-zinc-900/10 border border-zinc-850 rounded-2xl">
+                          <p className="text-xs text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Selected Ficha placeholder */
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 select-none">
+              <div className="p-4 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-2xl mb-4">
+                <Droplets size={36} className="text-zinc-600 animate-pulse" />
+              </div>
+              <h2 className="text-md font-extrabold text-zinc-300 uppercase tracking-widest">Nenhuma Ficha Selecionada</h2>
+              <p className="text-xs text-zinc-500 mt-2 max-w-xs leading-relaxed">
+                Selecione uma ficha operacional de captação na lista lateral ou crie uma nova para lançar e gerenciar captações.
+              </p>
+            </div>
+          )}
+        </section>
+      </main>
+
+      {/* ─── MODAL: NOVA FICHA OPERACIONAL ─── */}
+      {isFichaModalOpen && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setIsFichaModalOpen(false)} />
+          <div className="relative bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <form onSubmit={handleCreateFicha}>
+              <div className="p-6 border-b border-zinc-850 flex justify-between items-center bg-zinc-900/40">
+                <div>
+                  <h2 className="text-md font-black text-white tracking-widest uppercase flex items-center gap-2">
+                    <span className="p-1 bg-blue-600 rounded"><Plus size={14} /></span>
+                    Nova Ficha de Captação
+                  </h2>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
+                    Suzano Mês Operacional: {getMonthName(currentPeriod.mes)} {currentPeriod.ano}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="p-2 hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                
+                {/* Truck Plate Select / Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Caminhão / Placa</label>
+                  <select
+                    required
+                    value={newFichaData.placa}
+                    onChange={e => setNewFichaData({ ...newFichaData, placa: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-200 font-bold"
+                  >
+                    <option value="">Selecione a Placa...</option>
+                    {equipamentos.map(eq => (
+                      <option key={eq.id} value={eq.placa}>{eq.placa}</option>
+                    ))}
+                    <option value="custom">Outra Placa (Digitar)...</option>
+                  </select>
+
+                  {newFichaData.placa === 'custom' && (
+                    <input 
+                      type="text"
+                      required
+                      value={newFichaData.placaCustom}
+                      onChange={e => setNewFichaData({ ...newFichaData, placaCustom: e.target.value })}
+                      placeholder="Digitar placa do caminhão..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mt-2 text-white font-mono uppercase"
+                    />
+                  )}
+                </div>
+
+                {/* Driver Select / Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Motorista</label>
+                  <select
+                    required
+                    value={newFichaData.motorista}
+                    onChange={e => setNewFichaData({ ...newFichaData, motorista: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-200 font-bold"
+                  >
+                    <option value="">Selecione o Motorista...</option>
+                    {colaboradores.map(c => (
+                      <option key={c.id} value={c.nome}>{c.nome}</option>
+                    ))}
+                    <option value="custom">Outro Motorista (Digitar)...</option>
+                  </select>
+
+                  {newFichaData.motorista === 'custom' && (
+                    <input 
+                      type="text"
+                      required
+                      value={newFichaData.motoristaCustom}
+                      onChange={e => setNewFichaData({ ...newFichaData, motoristaCustom: e.target.value })}
+                      placeholder="Nome completo do motorista..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mt-2 text-white"
+                    />
+                  )}
+                </div>
+
+                {/* Process select */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Processo</label>
+                  <select
+                    value={newFichaData.processo}
+                    onChange={e => setNewFichaData({ ...newFichaData, processo: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-200 font-bold"
+                  >
+                    <option value="Colheita">Colheita</option>
+                    <option value="Silvicultura">Silvicultura</option>
+                    <option value="Logística">Logística</option>
+                  </select>
+                </div>
+
+                {/* Supervisor Suzano */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Supervisor Suzano</label>
+                  <input 
+                    type="text"
+                    value={newFichaData.supervisor_suzano}
+                    onChange={e => setNewFichaData({ ...newFichaData, supervisor_suzano: e.target.value })}
+                    placeholder="Nome do supervisor Suzano..."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-semibold"
+                  />
+                </div>
+
+                {/* Document details */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Código Doc.</label>
+                    <input 
+                      type="text"
+                      value={newFichaData.codigo}
+                      onChange={e => setNewFichaData({ ...newFichaData, codigo: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-400 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Revisão Doc.</label>
+                    <input 
+                      type="text"
+                      value={newFichaData.revisao}
+                      onChange={e => setNewFichaData({ ...newFichaData, revisao: e.target.value })}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-400 font-mono"
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="p-6 border-t border-zinc-850 bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
+                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+                  CANCELAR
+                </button>
+                <button type="submit" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 active:scale-95 transition-all">
+                  CRIAR FICHA
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: ADICIONAR LANÇAMENTO (LINHA) ─── */}
+      {isLancamentoModalOpen && selectedFicha && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setIsLancamentoModalOpen(false)} />
+          <div className="relative bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <form onSubmit={handleAddLancamento}>
+              <div className="p-6 border-b border-zinc-850 flex justify-between items-center bg-zinc-900/40">
+                <div>
+                  <h2 className="text-md font-black text-white tracking-widest uppercase flex items-center gap-2">
+                    <span className="p-1 bg-emerald-600 rounded"><Plus size={14} /></span>
+                    Adicionar Lançamento
+                  </h2>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
+                    Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="p-2 hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar grid grid-cols-2 gap-x-4">
+                
+                {/* Data */}
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Data do Lançamento</label>
+                  <input 
+                    type="date"
+                    required
+                    value={newLancamentoData.data}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, data: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                  />
+                </div>
+
+                {/* ID Ponto */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">ID Ponto / Outorga*</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newLancamentoData.id_ponto}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, id_ponto: e.target.value })}
+                    placeholder="Código do ponto..."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                  />
+                </div>
+
+                {/* Volume Captado */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Volume Captado (Litros)</label>
+                  <input 
+                    type="number"
+                    required
+                    value={newLancamentoData.volume_captado}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, volume_captado: e.target.value })}
+                    placeholder="Ex: 10000"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono font-bold"
+                  />
+                </div>
+
+                {/* Hora Inicial */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Hora Inicial (HH:MM)</label>
+                  <input 
+                    type="time"
+                    required
+                    value={newLancamentoData.hora_inicial}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, hora_inicial: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                  />
+                </div>
+
+                {/* Hora Final */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Hora Final (HH:MM)</label>
+                  <input 
+                    type="time"
+                    required
+                    value={newLancamentoData.hora_final}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, hora_final: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                  />
+                </div>
+
+                {/* Fazenda Captada */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Fazenda Captada</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newLancamentoData.fazenda_captada}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, fazenda_captada: e.target.value })}
+                    placeholder="Ex: Flores 74"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white"
+                  />
+                </div>
+
+                {/* UP Captação */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">UP da Captação</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newLancamentoData.up_captacao}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, up_captacao: e.target.value })}
+                    placeholder="Ex: 15Bx17"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                  />
+                </div>
+
+                {/* Atividade */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Atividade</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newLancamentoData.atividade}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, atividade: e.target.value })}
+                    placeholder="Ex: Lavagem"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white"
+                  />
+                </div>
+
+                {/* Fazenda Atividade */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Fazenda da Atividade</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newLancamentoData.fazenda_atividade}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, fazenda_atividade: e.target.value })}
+                    placeholder="Ex: Flores 77"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white"
+                  />
+                </div>
+
+                {/* UP Atividade */}
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">UP da Atividade</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newLancamentoData.up_atividade}
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, up_atividade: e.target.value })}
+                    placeholder="Ex: 15Bx18"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                  />
+                </div>
+
+                {/* Photo Upload Box */}
+                <div className="col-span-2 pt-3 border-t border-zinc-900 space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">📸 Foto do Ponto de Captação</label>
+                  <UploadBox 
+                    label="Tirar Foto do Ponto"
+                    url={newLancamentoData.foto_ponto}
+                    onCapture={() => setShowCamera(true)}
+                    onFileSelect={(base64) => setNewLancamentoData({ ...newLancamentoData, foto_ponto: base64 })}
+                    showCameraOption={true}
+                  />
+                </div>
+
+              </div>
+
+              <div className="p-6 border-t border-zinc-850 bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
+                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+                  CANCELAR
+                </button>
+                <button type="submit" className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-600/10 active:scale-95 transition-all">
+                  SALVAR CAPTAÇÃO
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL DE DETALHE FOTO EVIDÊNCIA ─── */}
+      {activePhoto && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <button 
+            onClick={() => setActivePhoto(null)} 
+            className="absolute top-6 right-6 p-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-colors z-10 border border-zinc-800"
+          >
+            <X size={20} />
+          </button>
+          <div className="relative max-w-4xl max-h-[85vh] w-full flex items-center justify-center">
+            <img src={activePhoto} className="max-w-full max-h-full object-contain rounded-2xl border border-zinc-850 shadow-2xl" alt="Ponto de Captação Evidência" />
+          </div>
+        </div>
+      )}
+
+      {/* Camera modal interface */}
+      {showCamera && (
+        <CameraModal 
+          onCapture={(dataUrl) => setNewLancamentoData({ ...newLancamentoData, foto_ponto: dataUrl })}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
+      {/* ─── MODAL DE ASSINATURA DIGITAL (SUPERVISOR SUZANO) ─── */}
+      {showSignaturePad && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="font-black text-white text-lg tracking-wider uppercase">
+                Assinatura do Supervisor
+              </h3>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide mt-1">
+                Assine com o dedo ou mouse no quadro abaixo
+              </p>
+            </div>
+
+            {/* Canvas Area */}
+            <div className="relative border border-dashed border-zinc-800 bg-zinc-900/50 rounded-2xl overflow-hidden h-[180px] flex items-center justify-center">
+              <canvas
+                ref={sigCanvasRef}
+                width={340}
+                height={176}
+                onMouseDown={startDrawingSig}
+                onMouseMove={drawSig}
+                onMouseUp={stopDrawingSig}
+                onMouseLeave={stopDrawingSig}
+                onTouchStart={startDrawingSig}
+                onTouchMove={(e) => {
+                  if (e.cancelable) e.preventDefault();
+                  drawSig(e);
+                }}
+                onTouchEnd={stopDrawingSig}
+                className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSignaturePad(false);
+                  setIsDrawingSig(false);
+                }}
+                className="px-4 py-2.5 text-xs font-bold rounded-xl text-zinc-400 hover:text-white transition-colors"
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                onClick={clearSigCanvas}
+                className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-950 text-red-500 hover:bg-red-950/20 transition-all uppercase"
+              >
+                LIMPAR
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSignature}
+                className="px-5 py-2.5 text-xs font-black rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-lg shadow-blue-600/10 uppercase"
+              >
+                CONFIRMAR
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
