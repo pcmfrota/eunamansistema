@@ -1609,20 +1609,9 @@ export default function CaptacaoClient({
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            /* Selected Ficha placeholder */
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 select-none">
-              <div className="p-4 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-2xl mb-4">
-                <Droplets size={36} className="text-zinc-600 animate-pulse" />
-              </div>
-              <h2 className="text-md font-extrabold text-zinc-300 uppercase tracking-widest">Nenhuma Ficha Selecionada</h2>
-              <p className="text-xs text-zinc-500 mt-2 max-w-xs leading-relaxed">
-                Selecione uma ficha operacional de captação na lista lateral ou crie uma nova para lançar e gerenciar captações.
-              </p>
             </div>
-          )}
-        </section>
+          </div>
+        )}
       </main>
 
       {/* ─── MODAL: NOVA FICHA OPERACIONAL ─── */}

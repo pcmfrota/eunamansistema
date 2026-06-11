@@ -98,6 +98,13 @@ const portalItems = [
     desc: "Registros diários e histórico de lavagens de veículos.", 
     icon: Droplets, 
     color: "from-cyan-400 to-teal-500 bg-cyan-400/10 text-cyan-300 border-cyan-400/20" 
+  },
+  { 
+    name: "Captação de Água", 
+    path: "/captacao", 
+    desc: "Controle de captação e lançamentos operacionais de água.", 
+    icon: Droplets, 
+    color: "from-blue-400 to-sky-500 bg-blue-400/10 text-blue-300 border-blue-400/20" 
   }
 ];
 
