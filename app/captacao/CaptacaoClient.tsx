@@ -297,6 +297,7 @@ export default function CaptacaoClient({
   const [fichas, setFichas] = useState<any[]>(initialFichas);
   const [selectedFicha, setSelectedFicha] = useState<any | null>(null);
   
+  const [activeScreen, setActiveScreen] = useState<'home' | 'list' | 'details'>('home');
   const [isFichaModalOpen, setIsFichaModalOpen] = useState(false);
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
@@ -736,6 +737,8 @@ export default function CaptacaoClient({
       if (res.success && res.data) {
         setFichas(prev => [res.data, ...prev]);
         setSelectedFicha({ ...res.data, lancamentos: [] });
+        setViewMode('suzano');
+        setActiveScreen('details');
       } else {
         alert('Erro ao criar ficha: ' + res.error);
       }
@@ -756,6 +759,8 @@ export default function CaptacaoClient({
 
       setFichas(prev => [offlineFicha, ...prev]);
       setSelectedFicha({ ...offlineFicha, lancamentos: [] });
+      setViewMode('suzano');
+      setActiveScreen('details');
     }
 
     setIsFichaModalOpen(false);
@@ -1164,196 +1169,255 @@ export default function CaptacaoClient({
       )}
 
       {/* Screen layout */}
-      <header className="p-4 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between bg-zinc-950 shrink-0 gap-3 select-none print:hidden">
-        <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
+      <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0 select-none print:hidden">
+        <div className="flex items-center gap-3">
           <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
-            <span className="p-2 bg-blue-600 rounded-lg"><Droplets size={18} /></span>
+            <span className="p-2 bg-blue-600 rounded-lg shadow-inner shadow-blue-500/20"><Droplets size={18} /></span>
             CAPTAÇÃO DE ÁGUA
           </h1>
-          <span className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5">
+          <span className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
             <Clock size={12} />
             Mês: <span className="text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
           </span>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          <div className="relative flex-1 md:flex-initial">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-500 transition-colors" size={14} />
-            <input 
-              type="text" 
-              placeholder="Buscar..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full md:w-44"
-            />
-          </div>
-
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-400"
-          >
-            <option value="Todas">TODAS AS FICHAS</option>
-            <option value="Aberta">ABERTAS</option>
-            <option value="Fechada">FECHADAS / EXPIRADAS</option>
-          </select>
-
-          {profile?.role !== 'visitante' && (
-            <button 
-              onClick={() => setIsFichaModalOpen(true)}
-              className="px-4 py-2 bg-blue-650 hover:bg-blue-750 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 flex items-center gap-1.5 active:scale-95 transition-all"
-            >
-              <Plus size={14} /> NOVA FICHA
-            </button>
-          )}
-        </div>
       </header>
 
-      {/* Main Grid View */}
-      <main className="flex-1 overflow-hidden p-3 md:p-4 flex gap-4 print:hidden">
+      {/* Main Content Area: Flow Wizard steps */}
+      <main className="flex-1 overflow-hidden print:hidden flex flex-col relative">
         
-        {/* Left Side: Sheets list */}
-        <section className={cn(
-          "w-full md:w-1/3 flex flex-col gap-3 h-full overflow-hidden select-none md:border-r border-zinc-900 pr-2 shrink-0",
-          selectedFicha ? "hidden md:flex" : "flex"
-        )}>
-          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-2 mb-1">
-            Fichas Operacionais ({filteredFichas.length})
-          </p>
-          <div className="flex-1 overflow-y-auto space-y-2.5 pr-2 custom-scrollbar">
-            {filteredFichas.length > 0 ? (
-              filteredFichas.map(f => {
-                const isSelected = selectedFicha?.id === f.id;
-                const locked = isFichaLocked(f);
-                const launchesCount = f.lancamentos?.length || 0;
+        {/* STEP 1: HOME */}
+        {activeScreen === 'home' && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-4xl mx-auto w-full select-none animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="text-center mb-10">
+              <div className="inline-flex p-4 bg-blue-600/10 border border-blue-500/20 rounded-3xl text-blue-500 mb-4 shadow-inner">
+                <Droplets size={48} className="animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-black tracking-tight text-white uppercase">Captação de Água</h2>
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mt-2">
+                Selecione uma etapa do processo para iniciar
+              </p>
+            </div>
 
-                return (
-                  <div
-                    key={f.id}
-                    onClick={() => { setSelectedFicha(f); setViewMode('suzano'); }}
-                    className={cn(
-                      "p-4 rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col gap-3 shadow-md relative overflow-hidden group",
-                      isSelected 
-                        ? "bg-zinc-900 border-blue-500 shadow-blue-500/5" 
-                        : "bg-zinc-900/40 border-zinc-850 hover:border-zinc-800"
-                    )}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-extrabold text-white text-md tracking-tight leading-none group-hover:text-blue-400 transition-colors">
-                          {f.placa}
-                        </h3>
-                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1.5 flex items-center gap-1">
-                          👤 {f.motorista}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span className={cn(
-                          "px-2 py-1 text-[8px] font-black uppercase rounded-md shadow-sm border",
-                          locked 
-                            ? "bg-zinc-900 border-zinc-800 text-zinc-500" 
-                            : "bg-emerald-950/20 border-emerald-900/30 text-emerald-400"
-                        )}>
-                          {locked ? 'Fechada' : 'Aberta'}
-                        </span>
-                        <span className="text-[9px] text-zinc-500 font-bold uppercase bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-850">
-                          {getMonthName(f.mes)} {f.ano}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-400">
-                      <span>{f.processo}</span>
-                      <span className="font-bold text-zinc-300">{launchesCount} captações</span>
-                    </div>
-
-                    {/* Left overlay highlight */}
-                    {isSelected && (
-                      <div className="absolute left-0 inset-y-0 w-1 bg-blue-500" />
-                    )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+              {/* Card 1: Nova Ficha */}
+              {profile?.role !== 'visitante' && (
+                <div 
+                  onClick={() => setIsFichaModalOpen(true)}
+                  className="bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300"
+                >
+                  <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Plus size={24} />
                   </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-12 bg-zinc-900/20 border border-zinc-850 rounded-2xl">
-                <p className="text-xs text-zinc-500">Nenhuma ficha encontrada.</p>
-        {/* Right Side: Selected Sheet Details & Launches */}
-        <section className={cn(
-          "flex-1 flex flex-col h-full bg-zinc-900/30 md:border border-zinc-850 md:rounded-3xl overflow-hidden relative shadow-2xl",
-          selectedFicha ? "flex" : "hidden md:flex"
-        )}>
-          {selectedFicha ? (
-            <>
-              {/* Toolbar */}
+                  <h3 className="font-extrabold text-white text-md uppercase tracking-wider group-hover:text-blue-400 transition-colors">Nova Ficha</h3>
+                  <p className="text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
+                    Criar nova ficha de controle de captação de água para o período ativo
+                  </p>
+                </div>
+              )}
+
+              {/* Card 2: Fichas Operacionais */}
+              <div 
+                onClick={() => setActiveScreen('list')}
+                className={cn(
+                  "bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300",
+                  profile?.role === 'visitante' ? "col-span-2 max-w-md mx-auto w-full" : ""
+                )}
+              >
+                <div className="w-14 h-14 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <FileText size={24} />
+                </div>
+                <h3 className="font-extrabold text-white text-md uppercase tracking-wider group-hover:text-emerald-400 transition-colors">
+                  Fichas Operacionais <span className="ml-1 group-hover:translate-x-1 inline-block transition-transform">➔</span>
+                </h3>
+                <p className="text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
+                  Visualizar e lançar dados nas fichas existentes ({fichas.length} ativas)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: LIST OF FICHAS */}
+        {activeScreen === 'list' && (
+          <div className="flex-1 flex flex-col p-4 overflow-hidden animate-in fade-in duration-200">
+            <div className="mb-4 flex items-center justify-between">
+              <button 
+                onClick={() => setActiveScreen('home')} 
+                className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-850 px-3.5 py-2 rounded-xl border border-zinc-850"
+              >
+                <ArrowLeft size={14} /> Voltar para o Início
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full space-y-4 pr-1 custom-scrollbar">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-850 pb-4">
+                <h2 className="text-md font-black text-white uppercase tracking-widest flex items-center gap-2">
+                  📋 Fichas Operacionais ({filteredFichas.length})
+                </h2>
+                
+                {/* Search & Filters */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+                    <input 
+                      type="text" 
+                      placeholder="Buscar motorista/placa..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full sm:w-44 text-white font-mono"
+                    />
+                  </div>
+
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-400"
+                  >
+                    <option value="Todas">TODAS AS FICHAS</option>
+                    <option value="Aberta">ABERTAS</option>
+                    <option value="Fechada">FECHADAS</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {filteredFichas.length > 0 ? (
+                  filteredFichas.map(f => {
+                    const locked = isFichaLocked(f);
+                    const launchesCount = f.lancamentos?.length || 0;
+
+                    return (
+                      <div
+                        key={f.id}
+                        onClick={() => { setSelectedFicha(f); setActiveScreen('details'); setViewMode('suzano'); }}
+                        className="p-5 bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-2xl transition-all duration-300 cursor-pointer flex flex-col gap-4 shadow-lg group relative overflow-hidden"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-extrabold text-white text-md tracking-tight leading-none group-hover:text-blue-400 transition-colors">
+                              {f.placa}
+                            </h3>
+                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-2.5 flex items-center gap-1">
+                              👤 {f.motorista}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <span className={cn(
+                              "px-2 py-1 text-[8px] font-black uppercase rounded-md shadow-sm border",
+                              locked 
+                                ? "bg-zinc-900 border-zinc-800 text-zinc-500" 
+                                : "bg-emerald-950/20 border-emerald-900/30 text-emerald-400"
+                            )}>
+                              {locked ? 'Fechada' : 'Aberta'}
+                            </span>
+                            <span className="text-[9px] text-zinc-500 font-bold uppercase bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-850">
+                              {getMonthName(f.mes)} {f.ano}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-zinc-900/60 flex justify-between items-center text-[10px] text-zinc-450">
+                          <span>{f.processo}</span>
+                          <span className="font-bold text-zinc-300">{launchesCount} captações</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-2 text-center py-16 bg-zinc-900/20 border border-zinc-850 rounded-2xl">
+                    <p className="text-xs text-zinc-500 italic">Nenhuma ficha operacional encontrada.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: FICHA DETAILS */}
+        {activeScreen === 'details' && selectedFicha && (
+          <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
+            <div className="p-4 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between gap-4 shrink-0">
+              <button 
+                onClick={() => { setSelectedFicha(null); setActiveScreen('list'); }} 
+                className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-850 px-3.5 py-2 rounded-xl border border-zinc-850 shadow-sm"
+              >
+                <ArrowLeft size={14} /> Voltar para as Fichas
+              </button>
+            </div>
+
+            <div className="flex-1 flex flex-col overflow-hidden bg-zinc-900/10">
+              {/* Toolbar matching second image exactly */}
               <div className="p-4 border-b border-zinc-850 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-zinc-900/50 shrink-0">
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setSelectedFicha(null)}
-                    className="md:hidden p-2.5 bg-zinc-950 hover:bg-zinc-850 border border-zinc-850 rounded-xl text-zinc-400 hover:text-white transition-all flex items-center justify-center shrink-0"
-                    title="Voltar para a lista"
-                  >
-                    <ArrowLeft size={16} />
-                  </button>
-                  <div>
-                    <h2 className="text-md font-black text-white leading-none">
-                      FICHA: {selectedFicha.placa}
-                    </h2>
-                    <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wide">
-                      Motorista: {selectedFicha.motorista} | Processo: {selectedFicha.processo} | Núcleo: {selectedFicha.nucleo}
-                    </p>
-                  </div>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-md font-black text-white leading-none uppercase tracking-wide">
+                    FICHA: {selectedFicha.placa}
+                  </h2>
+                  <p className="text-[9px] text-zinc-500 mt-1.5 uppercase font-bold tracking-widest leading-none">
+                    MOTORISTA: {selectedFicha.motorista} | PROCESSO: {selectedFicha.processo} | NÚCLEO: {selectedFicha.nucleo}
+                  </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex bg-zinc-950 rounded-xl p-1 border border-zinc-850">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Ficha Suzano / Ficha com Fotos Toggle */}
+                  <div className="flex bg-zinc-950 rounded-2xl p-1 border border-zinc-850 shadow-inner">
                     <button 
                       onClick={() => setViewMode('suzano')}
-                      className={cn("px-4 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5", 
-                        viewMode === 'suzano' ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-white")}
+                      className={cn(
+                        "flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all w-24 text-[8px] font-black uppercase tracking-wider",
+                        viewMode === 'suzano' ? "bg-zinc-900 border border-zinc-800 text-white shadow" : "text-zinc-500 hover:text-zinc-350"
+                      )}
                     >
-                      📋 Ficha Suzano
+                      <span className="text-sm mb-1">📋</span>
+                      <span>FICHA SUZANO</span>
                     </button>
                     <button 
                       onClick={() => setViewMode('sistema')}
-                      className={cn("px-4 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5", 
-                        viewMode === 'sistema' ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-white")}
+                      className={cn(
+                        "flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all w-24 text-[8px] font-black uppercase tracking-wider",
+                        viewMode === 'sistema' ? "bg-zinc-900 border border-zinc-800 text-white shadow" : "text-zinc-500 hover:text-zinc-350"
+                      )}
                     >
-                      📸 Ficha com Fotos
+                      <span className="text-sm mb-1">📸</span>
+                      <span>FICHA COM FOTOS</span>
                     </button>
                   </div>
 
+                  {/* Print Button */}
                   <button
                     onClick={() => window.print()}
-                    className="p-2.5 bg-zinc-950 hover:bg-zinc-800 rounded-xl border border-zinc-850 text-zinc-400 hover:text-white transition-all"
+                    className="p-3 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-400 hover:text-white transition-all flex items-center justify-center shadow"
                     title="Imprimir Ficha"
                   >
                     <Printer size={16} />
                   </button>
 
+                  {/* Excel Button */}
                   <button
                     onClick={handleExportExcel}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 rounded-xl border border-zinc-850 text-emerald-550 hover:text-emerald-400 transition-all font-bold text-xs"
+                    className="flex items-center gap-2 px-4 py-3 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow"
                     title="Exportar para Excel"
                   >
-                    <FileSpreadsheet size={15} />
-                    Excel
+                    <FileSpreadsheet size={15} className="text-emerald-500" />
+                    <span>Excel</span>
                   </button>
 
+                  {/* PDF Button */}
                   <button
                     onClick={handleExportPDF}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 rounded-xl border border-zinc-850 text-blue-550 hover:text-blue-400 transition-all font-bold text-xs"
+                    className="flex items-center gap-2 px-4 py-3 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow"
                     title="Exportar e baixar em PDF"
                   >
-                    <Download size={15} />
-                    PDF
+                    <Download size={15} className="text-blue-500" />
+                    <span>PDF</span>
                   </button>
 
+                  {/* Signature Button */}
                   {profile?.role !== 'visitante' && (
                     selectedFicha.assinatura_supervisor ? (
                       <button
                         onClick={handleRemoveSignature}
-                        className="px-3.5 py-2 bg-zinc-950 hover:bg-red-950/25 hover:text-red-400 rounded-xl border border-zinc-850 text-zinc-450 text-xs font-bold transition-all flex items-center gap-1.5"
-                        title="Remover Assinatura do Supervisor"
+                        className="px-4 py-3 bg-zinc-950 hover:bg-red-950/25 border border-zinc-850 rounded-2xl text-red-400 text-xs font-black transition-all flex items-center gap-1.5 shadow"
+                        title="Remover Assinatura"
                       >
                         ❌ REMOVER ASSINATURA
                       </button>
@@ -1369,37 +1433,43 @@ export default function CaptacaoClient({
                             }
                           }, 50);
                         }}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-600/10 active:scale-95 transition-all"
+                        className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all"
                         title="Assinar Digitalmente como Supervisor"
                       >
-                        ✍️ ASSINAR SUPERVISOR
+                        <span>✍️</span>
+                        <span>ASSINAR SUPERVISOR</span>
                       </button>
                     )
                   )}
 
+                  {/* Add Line Button */}
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
-                    <>
-                      <button
-                        onClick={() => setIsLancamentoModalOpen(true)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-750 text-white text-xs font-black rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-600/10 active:scale-95 transition-all"
-                      >
-                        <Plus size={14} /> ADICIONAR LINHA
-                      </button>
-                      
-                      <button
-                        onClick={() => handleCloseFicha(selectedFicha.id)}
-                        className="px-3.5 py-2 bg-zinc-950 hover:bg-red-950/20 hover:text-red-400 rounded-xl border border-zinc-850 text-zinc-400 text-xs font-bold transition-all flex items-center gap-1.5"
-                        title="Fechar Ficha"
-                      >
-                        <Lock size={12} /> FECHAR MÊS
-                      </button>
-                    </>
+                    <button
+                      onClick={() => setIsLancamentoModalOpen(true)}
+                      className="px-5 py-3 bg-emerald-700 hover:bg-emerald-850 text-white text-xs font-black rounded-2xl flex items-center gap-2 shadow-lg shadow-emerald-750/10 active:scale-95 transition-all animate-pulse"
+                    >
+                      <span>+</span>
+                      <span>ADICIONAR LINHA</span>
+                    </button>
                   )}
 
+                  {/* Close Month Button */}
+                  {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+                    <button
+                      onClick={() => handleCloseFicha(selectedFicha.id)}
+                      className="px-4 py-3 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-2xl text-zinc-400 hover:text-white text-xs font-black transition-all flex items-center gap-2 shadow"
+                      title="Fechar Ficha"
+                    >
+                      <Lock size={12} />
+                      <span>FECHAR MÊS</span>
+                    </button>
+                  )}
+
+                  {/* Delete Button */}
                   {profile?.role === 'admin' && (
                     <button
                       onClick={() => handleDeleteFicha(selectedFicha.id)}
-                      className="p-2.5 bg-zinc-950 hover:bg-red-950 text-zinc-400 hover:text-red-500 border border-zinc-850 hover:border-red-900 rounded-xl transition-all"
+                      className="p-3 bg-zinc-950 hover:bg-red-950/20 border border-zinc-850 hover:border-red-900 rounded-2xl text-zinc-500 hover:text-red-500 transition-all shadow"
                       title="Excluir Ficha"
                     >
                       <Trash2 size={16} />
@@ -1411,9 +1481,9 @@ export default function CaptacaoClient({
               {/* View area */}
               <div className="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
-                  /* High Fidelity Paper Sheet Replica (Horizontal Layout scrollable) */
+                  /* High Fidelity Paper Replica */
                   <div 
-                    className="w-full overflow-x-auto p-4 bg-zinc-950/40 rounded-3xl custom-scrollbar touch-pan-x overscroll-x-contain"
+                    className="w-full overflow-x-auto p-4 bg-zinc-950/40 rounded-3xl custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
                     style={{ WebkitOverflowScrolling: 'touch' }}
                   >
                     <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
@@ -1421,7 +1491,6 @@ export default function CaptacaoClient({
                     </div>
                   </div>
                 ) : (
-                  /* Digital view displaying Launches with Evidences Photos */
                   <div className="space-y-6 max-w-5xl mx-auto">
                     
                     {/* Header metrics card */}
