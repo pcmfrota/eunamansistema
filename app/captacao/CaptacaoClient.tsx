@@ -337,6 +337,8 @@ export default function CaptacaoClient({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'Todas' | 'Aberta' | 'Fechada'>('Todas');
   const [isExporting, setIsExporting] = useState(false);
+  const [isFichaExpanded, setIsFichaExpanded] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
 
   // Signature Pad States & Logic
   const [showSignaturePad, setShowSignaturePad] = useState(false);
@@ -1169,7 +1171,7 @@ export default function CaptacaoClient({
       )}
 
       {/* Screen layout */}
-      <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0 select-none print:hidden">
+      <header className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0 select-none print:hidden">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
             <span className="p-2 bg-blue-600 rounded-lg shadow-inner shadow-blue-500/20"><Droplets size={18} /></span>
@@ -1336,7 +1338,7 @@ export default function CaptacaoClient({
         {/* STEP 3: FICHA DETAILS */}
         {activeScreen === 'details' && selectedFicha && (
           <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
-            <div className="p-4 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between gap-4 shrink-0">
+            <div className="p-4 landscape:py-2.5 landscape:px-4 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between gap-4 shrink-0">
               <button 
                 onClick={() => { setSelectedFicha(null); setActiveScreen('list'); }} 
                 className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-850 px-3.5 py-2 rounded-xl border border-zinc-850 shadow-sm"
@@ -1347,7 +1349,7 @@ export default function CaptacaoClient({
 
             <div className="flex-1 flex flex-col overflow-hidden bg-zinc-900/10">
               {/* Toolbar matching second image exactly */}
-              <div className="p-4 border-b border-zinc-850 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-zinc-900/50 shrink-0">
+              <div className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-850 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-zinc-900/50 shrink-0">
                 <div className="flex flex-col gap-1">
                   <h2 className="text-md font-black text-white leading-none uppercase tracking-wide">
                     FICHA: {selectedFicha.placa}
@@ -1357,13 +1359,13 @@ export default function CaptacaoClient({
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="w-full xl:w-auto flex flex-col portrait:flex-col landscape:flex-row landscape:flex-wrap sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5">
                   {/* Ficha Suzano / Ficha com Fotos Toggle */}
-                  <div className="flex bg-zinc-950 rounded-2xl p-1 border border-zinc-850 shadow-inner">
+                  <div className="flex bg-zinc-950 rounded-2xl p-1 border border-zinc-850 shadow-inner w-full portrait:w-full landscape:w-auto sm:w-auto">
                     <button 
                       onClick={() => setViewMode('suzano')}
                       className={cn(
-                        "flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all w-24 text-[8px] font-black uppercase tracking-wider",
+                        "flex-1 sm:flex-initial flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
                         viewMode === 'suzano' ? "bg-zinc-900 border border-zinc-800 text-white shadow" : "text-zinc-500 hover:text-zinc-350"
                       )}
                     >
@@ -1373,7 +1375,7 @@ export default function CaptacaoClient({
                     <button 
                       onClick={() => setViewMode('sistema')}
                       className={cn(
-                        "flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all w-24 text-[8px] font-black uppercase tracking-wider",
+                        "flex-1 sm:flex-initial flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
                         viewMode === 'sistema' ? "bg-zinc-900 border border-zinc-800 text-white shadow" : "text-zinc-500 hover:text-zinc-350"
                       )}
                     >
@@ -1382,29 +1384,40 @@ export default function CaptacaoClient({
                     </button>
                   </div>
 
+                  {/* Expand Ficha Button */}
+                  <button
+                    onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
+                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg hover:shadow-blue-600/10 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto text-xs uppercase tracking-wider"
+                    title="Visualizar a Ficha Operacional em Tela Cheia com Zoom e Rolagem"
+                  >
+                    <span>🔍</span>
+                    <span>EXPANDIR FICHA</span>
+                  </button>
+
                   {/* Print Button */}
                   <button
                     onClick={() => window.print()}
-                    className="p-3 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-400 hover:text-white transition-all flex items-center justify-center shadow"
+                    className="p-3.5 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto text-xs font-extrabold"
                     title="Imprimir Ficha"
                   >
                     <Printer size={16} />
+                    <span className="portrait:inline landscape:hidden sm:hidden uppercase">Imprimir</span>
                   </button>
 
                   {/* Excel Button */}
                   <button
                     onClick={handleExportExcel}
-                    className="flex items-center gap-2 px-4 py-3 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow"
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                     title="Exportar para Excel"
                   >
                     <FileSpreadsheet size={15} className="text-emerald-500" />
-                    <span>Excel</span>
+                    <span>EXCEL</span>
                   </button>
 
                   {/* PDF Button */}
                   <button
                     onClick={handleExportPDF}
-                    className="flex items-center gap-2 px-4 py-3 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow"
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                     title="Exportar e baixar em PDF"
                   >
                     <Download size={15} className="text-blue-500" />
@@ -1416,7 +1429,7 @@ export default function CaptacaoClient({
                     selectedFicha.assinatura_supervisor ? (
                       <button
                         onClick={handleRemoveSignature}
-                        className="px-4 py-3 bg-zinc-950 hover:bg-red-950/25 border border-zinc-850 rounded-2xl text-red-400 text-xs font-black transition-all flex items-center gap-1.5 shadow"
+                        className="px-4 py-3.5 bg-zinc-950 hover:bg-red-950/25 border border-zinc-850 rounded-2xl text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                         title="Remover Assinatura"
                       >
                         ❌ REMOVER ASSINATURA
@@ -1433,7 +1446,7 @@ export default function CaptacaoClient({
                             }
                           }, 50);
                         }}
-                        className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all"
+                        className="px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto"
                         title="Assinar Digitalmente como Supervisor"
                       >
                         <span>✍️</span>
@@ -1446,7 +1459,7 @@ export default function CaptacaoClient({
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
                       onClick={() => setIsLancamentoModalOpen(true)}
-                      className="px-5 py-3 bg-emerald-700 hover:bg-emerald-850 text-white text-xs font-black rounded-2xl flex items-center gap-2 shadow-lg shadow-emerald-750/10 active:scale-95 transition-all animate-pulse"
+                      className="px-5 py-3.5 bg-emerald-700 hover:bg-emerald-850 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-750/10 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto animate-pulse"
                     >
                       <span>+</span>
                       <span>ADICIONAR LINHA</span>
@@ -1457,7 +1470,7 @@ export default function CaptacaoClient({
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
                       onClick={() => handleCloseFicha(selectedFicha.id)}
-                      className="px-4 py-3 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-2xl text-zinc-400 hover:text-white text-xs font-black transition-all flex items-center gap-2 shadow"
+                      className="px-4 py-3.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-2xl text-zinc-400 hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                       title="Fechar Ficha"
                     >
                       <Lock size={12} />
@@ -1469,10 +1482,11 @@ export default function CaptacaoClient({
                   {profile?.role === 'admin' && (
                     <button
                       onClick={() => handleDeleteFicha(selectedFicha.id)}
-                      className="p-3 bg-zinc-950 hover:bg-red-950/20 border border-zinc-850 hover:border-red-900 rounded-2xl text-zinc-500 hover:text-red-500 transition-all shadow"
+                      className="p-3.5 bg-zinc-950 hover:bg-red-950/20 border border-zinc-850 hover:border-red-900 rounded-2xl text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                       title="Excluir Ficha"
                     >
                       <Trash2 size={16} />
+                      <span className="portrait:inline landscape:hidden sm:hidden text-xs font-black uppercase">Excluir</span>
                     </button>
                   )}
                 </div>
@@ -1481,13 +1495,27 @@ export default function CaptacaoClient({
               {/* View area */}
               <div className="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
-                  /* High Fidelity Paper Replica */
-                  <div 
-                    className="w-full overflow-x-auto p-4 bg-zinc-950/40 rounded-3xl custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
-                    style={{ WebkitOverflowScrolling: 'touch' }}
-                  >
-                    <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
-                      {renderPaperFicha(selectedFicha)}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-850">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider text-center sm:text-left">
+                        ℹ️ Arraste para o lado para rolar a ficha, ou expanda para tela cheia
+                      </span>
+                      <button 
+                        onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
+                        className="w-full sm:w-auto px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow"
+                      >
+                        <span>🔍</span>
+                        <span>TELA CHEIA / ZOOM</span>
+                      </button>
+                    </div>
+
+                    <div 
+                      className="w-full overflow-x-auto p-4 bg-zinc-950/40 rounded-3xl custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    >
+                      <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
+                        {renderPaperFicha(selectedFicha)}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2015,6 +2043,85 @@ export default function CaptacaoClient({
               >
                 CONFIRMAR
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── FULLSCREEN EXPANDED FICHA VIEW ─── */}
+      {isFichaExpanded && selectedFicha && (
+        <div className="fixed inset-0 z-[1500] bg-zinc-950 flex flex-col animate-in fade-in duration-200 select-none print:hidden">
+          {/* Header of fullscreen view */}
+          <header className="p-3 border-b border-zinc-850 flex flex-col sm:flex-row gap-2 items-center justify-between bg-zinc-900/90 backdrop-blur-md sticky top-0 z-10">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-blue-600 rounded-lg text-white"><Droplets size={14} /></span>
+              <h3 className="font-extrabold text-white text-xs uppercase tracking-wide">
+                Ficha: {selectedFicha.placa} ({getMonthName(selectedFicha.mes)} {selectedFicha.ano})
+              </h3>
+            </div>
+            
+            {/* Zoom controls & Close */}
+            <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
+              <div className="flex items-center bg-zinc-950 rounded-xl p-0.5 border border-zinc-800">
+                <button 
+                  onClick={() => setZoomScale(z => Math.max(0.3, Number((z - 0.1).toFixed(1))))} 
+                  className="px-2.5 py-1.5 hover:bg-zinc-900 rounded-lg text-xs font-black text-zinc-400 hover:text-white transition-colors"
+                  title="Diminuir Zoom"
+                >
+                  A-
+                </button>
+                <span className="text-[10px] font-mono text-zinc-400 font-bold px-3 py-1 bg-zinc-900 border border-zinc-850/30 rounded-md">
+                  {Math.round(zoomScale * 100)}%
+                </span>
+                <button 
+                  onClick={() => setZoomScale(z => Math.min(2.0, Number((z + 0.1).toFixed(1))))} 
+                  className="px-2.5 py-1.5 hover:bg-zinc-900 rounded-lg text-xs font-black text-zinc-400 hover:text-white transition-colors"
+                  title="Aumentar Zoom"
+                >
+                  A+
+                </button>
+              </div>
+
+              <button 
+                onClick={() => setZoomScale(0.35)} 
+                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-[10px] font-black text-zinc-400 hover:text-white transition-colors"
+                title="Ajustar ao Celular"
+              >
+                Ajustar
+              </button>
+
+              <button 
+                onClick={() => setZoomScale(1.0)} 
+                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-[10px] font-black text-zinc-400 hover:text-white transition-colors mr-2"
+                title="Resetar Zoom"
+              >
+                100%
+              </button>
+              
+              <button 
+                onClick={() => setIsFichaExpanded(false)} 
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
+              >
+                <X size={12} />
+                <span>FECHAR</span>
+              </button>
+            </div>
+          </header>
+          
+          {/* Body of fullscreen view with zoom and scroll support */}
+          <div className="flex-1 overflow-auto p-4 md:p-8 flex items-start justify-start bg-zinc-950 custom-scrollbar touch-pan-x touch-pan-y">
+            <div 
+              className="origin-top-left"
+              style={{ 
+                transform: `scale(${zoomScale})`, 
+                width: `${1080 * zoomScale}px`, 
+                height: `auto`,
+                transformOrigin: 'top left'
+              }}
+            >
+              <div className="w-[1080px] shrink-0 bg-white p-4 rounded-xl shadow-2xl text-zinc-950">
+                {renderPaperFicha(selectedFicha)}
+              </div>
             </div>
           </div>
         </div>
