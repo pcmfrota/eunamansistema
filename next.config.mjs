@@ -1,3 +1,21 @@
+import fs from 'fs';
+import path from 'path';
+
+try {
+  const filePath = path.join(process.cwd(), 'app', 'captacao', 'CaptacaoClient.tsx');
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    // If the file contains typical Mojibake characters, decode it
+    if (content.includes('Ã£') || content.includes('Ã§') || content.includes('Ã¡') || content.includes('ðŸ')) {
+      const fixedContent = Buffer.from(content, 'latin1').toString('utf8');
+      fs.writeFileSync(filePath, fixedContent, 'utf8');
+      console.log('✅ [Mojibake Fixer] CaptacaoClient.tsx spelling restored to Portuguese successfully!');
+    }
+  }
+} catch (err) {
+  console.error('❌ [Mojibake Fixer] Error fixing spelling:', err);
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,

@@ -165,26 +165,26 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
   const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950 text-white overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-transparent text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
       {/* Header */}
-      <header className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0">
+      <header className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-black tracking-tighter flex items-center gap-2">
-            <span className="p-2 bg-blue-600 rounded-lg"><Clock size={20} /></span>
+          <h1 className="text-xl font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
+            <span className="p-2 bg-blue-600 rounded-lg text-white"><Clock size={20} /></span>
             CONTROLE DE LAVAGENS
           </h1>
-          <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800 ml-4">
+          <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-lg p-1 border border-zinc-200 dark:border-zinc-800 ml-4">
             <button 
               onClick={() => setView('calendar')}
               className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2", 
-                view === 'calendar' ? "bg-zinc-800 text-white shadow-lg" : "text-zinc-500 hover:text-white")}
+                view === 'calendar' ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-white")}
             >
               <CalendarIcon size={14} /> CALENDÁRIO
             </button>
             <button 
               onClick={() => setView('gallery')}
               className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2", 
-                view === 'gallery' ? "bg-zinc-800 text-white shadow-lg" : "text-zinc-500 hover:text-white")}
+                view === 'gallery' ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-white")}
             >
               <Grid size={14} /> GALERIA
             </button>
@@ -199,30 +199,30 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               placeholder="Filtrar por placa..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-48"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-48 text-zinc-900 dark:text-white"
             />
           </div>
 
           <select
             value={filterArea}
             onChange={(e) => setFilterArea(e.target.value)}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer appearance-none min-w-[120px] font-bold text-zinc-400"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer min-w-[120px] font-bold text-zinc-700 dark:text-zinc-400"
           >
             {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
           </select>
           
           <button 
             onClick={() => setActiveDate(subMonths(activeDate, 1))}
-            className="p-2 hover:bg-zinc-900 rounded-lg border border-zinc-800 transition-colors"
+            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors"
           >
             <ChevronLeft size={18} />
           </button>
-          <div className="text-sm font-bold min-w-[140px] text-center uppercase tracking-widest bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-800">
+          <div className="text-sm font-bold min-w-[140px] text-center uppercase tracking-widest bg-white/80 dark:bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800">
             {format(activeDate, 'MMMM yyyy', { locale: ptBR })}
           </div>
           <button 
             onClick={() => setActiveDate(addMonths(activeDate, 1))}
-            className="p-2 hover:bg-zinc-900 rounded-lg border border-zinc-800 transition-colors"
+            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors"
           >
             <ChevronRight size={18} />
           </button>
@@ -232,18 +232,18 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
       {/* Main Content */}
       <main className="flex-1 overflow-auto p-4 custom-scrollbar">
         {view === 'calendar' ? (
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="bg-white/80 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
               <table className="w-full border-collapse">
                 <thead className="sticky top-0 z-20">
-                  <tr className="bg-zinc-900/90 backdrop-blur-md">
-                    <th className="p-3 text-left text-[10px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-800 border-r min-w-[120px] sticky left-0 z-30 bg-zinc-900">
+                  <tr className="bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-md">
+                    <th className="p-3 text-left text-[10px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[120px] sticky left-0 z-30 bg-zinc-100 dark:bg-zinc-900">
                       PLACAS
                     </th>
                     {days.map(day => (
-                      <th key={day.toString()} className="p-2 text-center border-b border-zinc-800 border-r min-w-[50px]">
-                        <div className="text-[10px] font-bold text-zinc-500">{dayNames[getDay(day)]}</div>
-                        <div className="text-sm font-black text-white">{format(day, 'dd')}</div>
+                      <th key={day.toString()} className="p-2 text-center border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[50px]">
+                        <div className="text-[10px] font-bold text-zinc-600 dark:text-zinc-500">{dayNames[getDay(day)]}</div>
+                        <div className="text-sm font-black text-zinc-900 dark:text-white">{format(day, 'dd')}</div>
                       </th>
                     ))}
                   </tr>
@@ -254,8 +254,8 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     const matchesArea = filterArea === 'Todas' || e.area === filterArea
                     return matchesSearch && matchesArea
                   }).map(eq => (
-                    <tr key={eq.placa} className="hover:bg-zinc-800/30 transition-colors group">
-                      <td className="p-3 border-b border-r border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-zinc-950 group-hover:bg-zinc-900 transition-colors">
+                    <tr key={eq.placa} className="hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors group">
+                      <td className="p-3 border-b border-r border-zinc-200 dark:border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 text-zinc-800 dark:text-zinc-300 transition-colors">
                         <div className="flex flex-col">
                           <span className="text-blue-500">{eq.placa}</span>
                           <span className="text-[10px] text-zinc-500 font-normal">{eq.modulo}</span>
@@ -266,7 +266,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                         return (
                           <td 
                             key={day.toString()} 
-                            className="p-1 border-b border-r border-zinc-800 text-center cursor-pointer group/cell"
+                            className="p-1 border-b border-r border-zinc-200 dark:border-zinc-800 text-center cursor-pointer group/cell"
                             onClick={() => handleOpenModal(eq.placa, day)}
                           >
                             <div className={cn(
@@ -291,14 +291,14 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
             {filteredLavagens.map(l => (
               <div 
                 key={l.id} 
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer group shadow-lg"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer group shadow-lg"
                 onClick={() => { setSelectedLavagem(l); setIsPanelOpen(true); }}
               >
-                <div className="aspect-video bg-zinc-800 relative overflow-hidden">
+                <div className="aspect-video bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
                   {l.imagem_1_url ? (
                     <img src={l.imagem_1_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600">
+                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800">
                       <Camera size={32} strokeWidth={1} />
                       <span className="text-[10px] uppercase font-bold mt-2">Sem Evidência</span>
                     </div>
@@ -317,15 +317,15 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                 <div className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-black text-lg text-white leading-none">{l.placa}</h3>
+                      <h3 className="font-black text-lg text-zinc-900 dark:text-white leading-none">{l.placa}</h3>
                       <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 tracking-wider">{format(new Date(l.data + 'T12:00:00'), "dd 'de' MMMM", { locale: ptBR })}</p>
                     </div>
-                    <button className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500">
+                    <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500">
                       <MoreVertical size={16} />
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-400 bg-zinc-950/50 p-2 rounded-lg border border-zinc-800/50">
-                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 p-2 rounded-lg border border-zinc-100 dark:border-zinc-800/50">
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold">
                       {l.colaborador?.charAt(0) || '?'}
                     </div>
                     <span className="truncate flex-1">{l.colaborador || 'Colaborador não informado'}</span>
@@ -341,9 +341,9 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
-          <div className="relative bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
             <form onSubmit={handleSave}>
-              <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
+              <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
                 <div>
                   <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
                     <span className="p-1.5 bg-emerald-600 rounded-md"><Check size={16} /></span>
@@ -365,7 +365,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     value={modalData.colaborador}
                     onChange={e => setModalData({...modalData, colaborador: e.target.value})}
                     placeholder="Nome completo..."
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white" 
                   />
                 </div>
 
@@ -376,7 +376,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     step="0.1"
                     value={modalData.horimetro}
                     onChange={e => setModalData({...modalData, horimetro: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white" 
                   />
                 </div>
 
@@ -386,24 +386,24 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     type="number" 
                     value={modalData.km}
                     onChange={e => setModalData({...modalData, km: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white" 
                   />
                 </div>
 
                 <div className="col-span-2 flex items-center gap-4 py-2">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Lavagem Realizada?</span>
-                  <div className="flex bg-zinc-900 rounded-xl p-1 border border-zinc-800">
+                  <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-xl p-1 border border-zinc-200 dark:border-zinc-800">
                     <button 
                       type="button"
                       onClick={() => setModalData({...modalData, lavagem_realizada: true})}
-                      className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", modalData.lavagem_realizada ? "bg-emerald-600 text-white" : "text-zinc-500")}
+                      className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", modalData.lavagem_realizada ? "bg-emerald-600 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300")}
                     >
                       SIM
                     </button>
                     <button 
                       type="button"
                       onClick={() => setModalData({...modalData, lavagem_realizada: false})}
-                      className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", !modalData.lavagem_realizada ? "bg-red-600 text-white" : "text-zinc-500")}
+                      className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", !modalData.lavagem_realizada ? "bg-red-600 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300")}
                     >
                       NÃO
                     </button>
@@ -416,7 +416,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     rows={2}
                     value={modalData.observacoes}
                     onChange={e => setModalData({...modalData, observacoes: e.target.value})}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none resize-none" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-zinc-900 dark:text-white" 
                   />
                 </div>
 
@@ -429,8 +429,8 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                 </div>
               </div>
 
-              <div className="p-6 border-t border-zinc-800 bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-zinc-400 hover:text-white transition-colors">
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   CANCELAR
                 </button>
                 <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-600/20 transition-all active:scale-95">
@@ -444,13 +444,13 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
 
       {/* Side Panel Detalhes */}
       {isPanelOpen && selectedLavagem && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col animate-slide-in-right">
-          <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/30">
-            <h2 className="text-xl font-black text-white flex items-center gap-2">
-              <span className="p-1.5 bg-blue-600 rounded-md"><FileText size={16} /></span>
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-slide-in-right">
+          <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/30">
+            <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
+              <span className="p-1.5 bg-blue-600 rounded-md text-white"><FileText size={16} /></span>
               DETALHES
             </h2>
-            <button onClick={() => setIsPanelOpen(false)} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-500">
+            <button onClick={() => setIsPanelOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-500">
               <X size={20} />
             </button>
           </div>
@@ -458,41 +458,41 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
           <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
             <section className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800">
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                   <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">PLACA</p>
-                  <p className="text-xl font-black text-blue-500">{selectedLavagem.placa}</p>
+                  <p className="text-xl font-black text-blue-600 dark:text-blue-500">{selectedLavagem.placa}</p>
                 </div>
-                <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800">
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                   <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">DATA</p>
-                  <p className="text-lg font-black text-white">{format(new Date(selectedLavagem.data + 'T12:00:00'), 'dd/MM/yyyy')}</p>
+                  <p className="text-lg font-black text-zinc-900 dark:text-white">{format(new Date(selectedLavagem.data + 'T12:00:00'), 'dd/MM/yyyy')}</p>
                 </div>
               </div>
 
-              <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-4">
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-4">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">COLABORADOR</p>
-                    <p className="text-sm font-bold text-white">{selectedLavagem.colaborador || 'Não informado'}</p>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{selectedLavagem.colaborador || 'Não informado'}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-black text-blue-500">
+                  <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center font-black text-blue-600 dark:text-blue-500">
                     {selectedLavagem.colaborador?.charAt(0) || '?'}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-800/50">
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-200 dark:border-zinc-800/50">
                   <div>
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">HORÍMETRO</p>
-                    <p className="text-md font-bold text-zinc-200">{selectedLavagem.horimetro || '0.0'} h</p>
+                    <p className="text-md font-bold text-zinc-800 dark:text-zinc-200">{selectedLavagem.horimetro || '0.0'} h</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">KM</p>
-                    <p className="text-md font-bold text-zinc-200">{selectedLavagem.km || '0'} km</p>
+                    <p className="text-md font-bold text-zinc-800 dark:text-zinc-200">{selectedLavagem.km || '0'} km</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800">
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                 <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">OBSERVAÇÕES</p>
-                <p className="text-sm text-zinc-400 italic">"{selectedLavagem.observacoes || 'Nenhuma observação informada.'}"</p>
+                <p className="text-sm text-zinc-700 dark:text-zinc-400 italic">"{selectedLavagem.observacoes || 'Nenhuma observação informada.'}"</p>
               </div>
             </section>
 
@@ -509,7 +509,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
             </section>
           </div>
 
-          <div className="p-6 border-t border-zinc-800 bg-zinc-900/50 space-y-3">
+          <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
             {!selectedLavagem.validated_at && (
               <button 
                 onClick={async () => {
@@ -524,7 +524,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               </button>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <button className="py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-700 transition-all">
+              <button className="py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-700 transition-all">
                 <Download size={14} /> PDF
               </button>
               <button 
@@ -534,7 +534,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     window.location.reload()
                   }
                 }}
-                className="py-2.5 bg-zinc-900 hover:bg-red-950 text-red-500 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-red-900/30 transition-all"
+                className="py-2.5 bg-zinc-100 hover:bg-red-50 dark:bg-zinc-900 dark:hover:bg-red-950 text-red-600 dark:text-red-500 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-red-900/30 transition-all"
               >
                 <Trash2 size={14} /> EXCLUIR
               </button>
@@ -548,11 +548,11 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
 
 function UploadBox({ label, field, url, onChange }: any) {
   return (
-    <div className="relative aspect-square rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden group">
+    <div className="relative aspect-square rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden group">
       {url ? (
         <img src={url} className="w-full h-full object-cover" />
       ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700 group-hover:text-zinc-500 transition-colors">
+        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-700 group-hover:text-zinc-700 dark:group-hover:text-zinc-500 transition-colors">
           <Camera size={24} />
           <span className="text-[8px] font-black uppercase mt-1">{label}</span>
         </div>

@@ -21,7 +21,7 @@ export default async function LavagensPage({
   ]);
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-transparent">
       <LavagensClient 
         initialLavagens={lavagens} 
         equipamentos={equipamentos}

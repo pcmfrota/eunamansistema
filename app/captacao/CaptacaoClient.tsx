@@ -210,7 +210,7 @@ function UploadBox({ label, url, onCapture, onFileSelect, showCameraOption }: {
   };
 
   return (
-    <div className="p-4 bg-zinc-900/50 border border-zinc-850 rounded-2xl flex flex-col items-center justify-center relative min-h-[140px] group overflow-hidden">
+    <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl flex flex-col items-center justify-center relative min-h-[140px] group overflow-hidden">
       {url ? (
         <div className="absolute inset-0">
           <img src={url} alt="Capturado" className="w-full h-full object-cover" />
@@ -277,6 +277,179 @@ function UploadBox({ label, url, onCapture, onFileSelect, showCameraOption }: {
   );
 }
 
+// Format month name
+const getMonthName = (m: number) => {
+  const dates = new Date(2026, m - 1, 15);
+  return format(dates, 'MMMM', { locale: ptBR }).toUpperCase();
+};
+
+// Standalone Printable Sheet View component/helper function
+const renderPaperFicha = (ficha: any) => {
+  return (
+    <div className="w-[1080px] bg-white text-zinc-950 p-5 font-sans mx-auto text-[10px] leading-normal border border-black select-none shadow-xl print:shadow-none print:border-0 print:p-0">
+      
+      {/* Enforce landscape style tag */}
+      <style dangerouslySetInnerHTML={{__html: "@media print { @page { size: landscape; margin: 8mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }"}} />
+
+      {/* Header with official Suzano logo/bar */}
+      <div className="w-full bg-[#002f87] h-[52px] relative flex items-center px-4 overflow-hidden border border-black border-b-0">
+        {/* Geometric decoration */}
+        <svg className="absolute inset-y-0 right-0 w-2/3 h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0,0 L35,0 L15,100 L-20,100 Z" fill="#007bc4" />
+          <path d="M30,0 L100,0 L85,100 L10,100 Z" fill="#00b050" />
+          <path d="M65,0 L100,0 L95,100 L60,100 Z" fill="#8dc63f" opacity="0.35" />
+        </svg>
+        
+        {/* Suzano logo */}
+        <div className="relative z-10 flex items-center gap-2">
+          <svg viewBox="0 0 200 50" width="160" height="40" className="h-8 w-[160px]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g fillRule="evenodd">
+              {/* Left Leaf */}
+              <path d="M16.8 32.5c-.8-5.3 1.2-11.4 5.3-15.6 3-3.1 7.2-5.1 11-5.1.7 0 .9.3.6.8-2 3.8-6.1 10-5.8 17.5.1 2.2-.6 4-1.9 5.3-2.6 2.7-7 1-9.2-2.9z" fill="#00B159"/>
+              {/* Right Leaf */}
+              <path d="M29.5 35c-.6-4 1-8.5 4-11.7 2.2-2.3 5.4-3.8 8.2-3.8.5 0 .7.2.4.6-1.5 2.8-4.6 7.5-4.4 13.1 0 1.6-.5 3-1.4 4-2 2-5.3.7-6.8-2.2z" fill="#8DC63F"/>
+            </g>
+            <text x="52" y="32" fill="#ffffff" fontFamily="'Inter', sans-serif" fontWeight="800" fontSize="21" letterSpacing="-0.5">suzano</text>
+          </svg>
+        </div>
+      </div>
+
+      {/* Title & Doc Info Block */}
+      <table className="w-full border-collapse border border-black text-center text-xs">
+        <tbody>
+          <tr>
+            <td className="p-3 font-black text-sm uppercase tracking-wider border-r border-black w-[80%] text-center font-sans">
+              Controle de Captação de Água
+            </td>
+            <td className="p-0 text-[9px] w-[20%] text-left align-top">
+              <div className="border-b border-black p-1.5 flex justify-between items-center">
+                <span className="font-bold">Código:</span>
+                <span className="font-mono pr-2">{ficha.codigo || "CO-PR-005"}</span>
+              </div>
+              <div className="p-1.5 flex justify-between items-center">
+                <span className="font-bold">Revisão:</span>
+                <span className="font-mono pr-2">{ficha.revisao || "03"}</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Metadata Table */}
+      <table className="w-full border-collapse border border-black border-t-0 text-[10px] text-zinc-900">
+        <tbody>
+          {/* Row 1 */}
+          <tr className="border-b border-black">
+            <td className="p-2 border-r border-black w-1/3">
+              <span className="font-bold">Empresa:</span> EUNAMAN
+            </td>
+            <td className="p-2 border-r border-black w-[45%]">
+              <span className="font-bold">Processo:</span>{' '}
+              <span className="font-mono">{ficha.processo === 'Colheita' ? '(X)' : '( )'}</span> Colheita{' '}
+              <span className="font-mono">{ficha.processo === 'Silvicultura' ? '(X)' : '( )'}</span> Silvicultura{' '}
+              <span className="font-mono">{ficha.processo === 'Logística' ? '(X)' : '( )'}</span> Logística{' '}
+              <span className="font-mono">( )</span> _________
+            </td>
+            <td className="p-2 w-[22%]">
+              <span className="font-bold">Núcleo:</span> {ficha.nucleo}
+            </td>
+          </tr>
+          {/* Row 2 */}
+          <tr>
+            <td className="p-2 border-r border-black w-1/3">
+              <span className="font-bold">Placa Caminhão:</span> <span className="font-bold font-mono">{ficha.placa}</span>
+            </td>
+            <td className="p-2 border-r border-black w-[45%]">
+              <span className="font-bold">Motorista:</span> <span className="font-bold">{ficha.motorista}</span>
+            </td>
+            <td className="p-2 w-[22%] relative">
+              <div className="flex flex-col gap-0.5 justify-center min-h-[22px]">
+                <div><span className="font-bold">Supervisor Suzano:</span> <span className="font-bold">{ficha.supervisor_suzano}</span></div>
+                {ficha.assinatura_supervisor && (
+                  <div className="absolute right-2 bottom-1 h-[26px] w-[110px] pointer-events-none">
+                    <img src={ficha.assinatura_supervisor} className="max-h-full max-w-full object-contain mx-auto" alt="Assinatura Supervisor" />
+                  </div>
+                )}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Main Table */}
+      <table className="w-full border-collapse border border-black border-t-0 text-[9px] text-zinc-900">
+        <thead>
+          <tr className="bg-zinc-100 text-zinc-800 font-bold border-b border-black">
+            <th className="border border-black p-2 w-[90px] text-center">Data</th>
+            <th className="border border-black p-2 w-[110px] text-center">ID Ponto*</th>
+            <th className="border border-black p-2 text-center w-[80px]">Hora Inicial<br/>(HH:MM)</th>
+            <th className="border border-black p-2 text-center w-[80px]">Hora Final<br/>(HH:MM)</th>
+            <th className="border border-black p-2 text-center w-[120px]">Volume Captado<br/>(Litros)</th>
+            <th className="border border-black p-2 text-center">Fazenda Captada</th>
+            <th className="border border-black p-2 text-center w-[100px]">UP da Captação</th>
+            <th className="border border-black p-2 text-center">Atividade</th>
+            <th className="border border-black p-2 text-center">Fazenda da Atividade</th>
+            <th className="border border-black p-2 text-center font-bold">UP da Atividade</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ficha.lancamentos && ficha.lancamentos.length > 0 ? (
+            ficha.lancamentos.map((row: any, index: number) => (
+              <tr key={index} className="text-center text-zinc-955 font-semibold border-b border-black">
+                <td className="border border-black p-1.5">{format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                <td className="border border-black p-1.5 font-mono">{row.id_ponto}</td>
+                <td className="border border-black p-1.5 font-mono">{row.hora_inicial}</td>
+                <td className="border border-black p-1.5 font-mono">{row.hora_final}</td>
+                <td className="border border-black p-1.5 font-mono font-bold">
+                  {Number(row.volume_captado).toLocaleString('pt-BR')} L
+                </td>
+                <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_captada}</td>
+                <td className="border border-black p-1.5 font-mono">{row.up_captacao}</td>
+                <td className="border border-black p-1.5">{row.atividade}</td>
+                <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_atividade}</td>
+                <td className="border border-black p-1.5 font-mono">{row.up_atividade}</td>
+              </tr>
+            ))
+          ) : (
+            <tr className="border-b border-black">
+              <td colSpan={10} className="border border-black p-6 text-center text-zinc-400 italic">
+                Nenhum lançamento registrado nesta ficha operacional.
+              </td>
+            </tr>
+          )}
+          {/* Blank rows to fill space */}
+          {Array.from({ length: Math.max(0, 14 - (ficha.lancamentos?.length || 0)) }).map((_, idx) => (
+            <tr key={`blank-${idx}`} className="border-b border-black">
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+              <td className="border border-black p-3"></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Footer notes */}
+      <div className="flex justify-between items-end mt-2 text-[7px] text-zinc-500 leading-tight">
+        <div>
+          <p className="font-bold">* Preencher com o código do ponto ou número da outorga / certidão de dispensa</p>
+          <p className="font-bold">** Em atividades de silvicultura preencher UP e talhão trabalhado</p>
+        </div>
+        <div className="text-right font-mono">
+          <p>Código do formulário e revisão</p>
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
 interface CaptacaoClientProps {
   initialFichas: any[];
   equipamentos: any[];
@@ -296,6 +469,7 @@ export default function CaptacaoClient({
   // State
   const [fichas, setFichas] = useState<any[]>(initialFichas);
   const [selectedFicha, setSelectedFicha] = useState<any | null>(null);
+  const [showFichaPaper, setShowFichaPaper] = useState(false);
   
   const [activeScreen, setActiveScreen] = useState<'home' | 'list' | 'details'>('home');
   const [isFichaModalOpen, setIsFichaModalOpen] = useState(false);
@@ -739,6 +913,7 @@ export default function CaptacaoClient({
       if (res.success && res.data) {
         setFichas(prev => [res.data, ...prev]);
         setSelectedFicha({ ...res.data, lancamentos: [] });
+        setShowFichaPaper(false);
         setViewMode('suzano');
         setActiveScreen('details');
       } else {
@@ -761,6 +936,7 @@ export default function CaptacaoClient({
 
       setFichas(prev => [offlineFicha, ...prev]);
       setSelectedFicha({ ...offlineFicha, lancamentos: [] });
+      setShowFichaPaper(false);
       setViewMode('suzano');
       setActiveScreen('details');
     }
@@ -822,6 +998,8 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(null);
         }
+        alert("ficha excluida");
+        window.location.reload();
       } else {
         alert('Erro ao excluir: ' + res.error);
       }
@@ -841,6 +1019,8 @@ export default function CaptacaoClient({
       if (selectedFicha?.id === id) {
         setSelectedFicha(null);
       }
+      alert("ficha excluida");
+      window.location.reload();
     }
   };
 
@@ -974,191 +1154,14 @@ export default function CaptacaoClient({
     return selectedFicha.lancamentos.reduce((acc: number, val: any) => acc + Number(val.volume_captado || 0), 0);
   }, [selectedFicha]);
 
-  // Format month name
-  const getMonthName = (m: number) => {
-    const dates = new Date(2026, m - 1, 15);
-    return format(dates, 'MMMM', { locale: ptBR }).toUpperCase();
-  };
-
-  const renderPaperFicha = (ficha: any) => {
-    return (
-      <div className="w-[1080px] bg-white text-zinc-950 p-5 font-sans mx-auto text-[10px] leading-normal border border-black select-none shadow-xl print:shadow-none print:border-0 print:p-0">
-        
-        {/* Enforce landscape style tag */}
-        <style dangerouslySetInnerHTML={{__html: `
-          @media print {
-            @page { size: landscape; margin: 8mm; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          }
-        `}} />
-
-        {/* Header with official Suzano logo/bar */}
-        <div className="w-full bg-[#002f87] h-[52px] relative flex items-center px-4 overflow-hidden border border-black border-b-0">
-          {/* Geometric decoration */}
-          <svg className="absolute inset-y-0 right-0 w-2/3 h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,0 L35,0 L15,100 L-20,100 Z" fill="#007bc4" />
-            <path d="M30,0 L100,0 L85,100 L10,100 Z" fill="#00b050" />
-            <path d="M65,0 L100,0 L95,100 L60,100 Z" fill="#8dc63f" opacity="0.35" />
-          </svg>
-          
-          {/* Suzano logo */}
-          <div className="relative z-10 flex items-center gap-2">
-            <svg viewBox="0 0 200 50" width="160" height="40" className="h-8 w-[160px]" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <g fillRule="evenodd">
-                {/* Left Leaf */}
-                <path d="M16.8 32.5c-.8-5.3 1.2-11.4 5.3-15.6 3-3.1 7.2-5.1 11-5.1.7 0 .9.3.6.8-2 3.8-6.1 10-5.8 17.5.1 2.2-.6 4-1.9 5.3-2.6 2.7-7 1-9.2-2.9z" fill="#00B159"/>
-                {/* Right Leaf */}
-                <path d="M29.5 35c-.6-4 1-8.5 4-11.7 2.2-2.3 5.4-3.8 8.2-3.8.5 0 .7.2.4.6-1.5 2.8-4.6 7.5-4.4 13.1 0 1.6-.5 3-1.4 4-2 2-5.3.7-6.8-2.2z" fill="#8DC63F"/>
-              </g>
-              <text x="52" y="32" fill="#ffffff" fontFamily="'Inter', sans-serif" fontWeight="800" fontSize="21" letterSpacing="-0.5">suzano</text>
-            </svg>
-          </div>
-        </div>
-
-        {/* Title & Doc Info Block */}
-        <table className="w-full border-collapse border border-black text-center text-xs">
-          <tbody>
-            <tr>
-              <td className="p-3 font-black text-sm uppercase tracking-wider border-r border-black w-[80%] text-center font-sans">
-                Controle de Captação de Água
-              </td>
-              <td className="p-0 text-[9px] w-[20%] text-left align-top">
-                <div className="border-b border-black p-1.5 flex justify-between items-center">
-                  <span className="font-bold">Código:</span>
-                  <span className="font-mono pr-2">{ficha.codigo || "CO-PR-005"}</span>
-                </div>
-                <div className="p-1.5 flex justify-between items-center">
-                  <span className="font-bold">Revisão:</span>
-                  <span className="font-mono pr-2">{ficha.revisao || "03"}</span>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Metadata Table */}
-        <table className="w-full border-collapse border border-black border-t-0 text-[10px] text-zinc-900">
-          <tbody>
-            {/* Row 1 */}
-            <tr className="border-b border-black">
-              <td className="p-2 border-r border-black w-1/3">
-                <span className="font-bold">Empresa:</span> EUNAMAN
-              </td>
-              <td className="p-2 border-r border-black w-[45%]">
-                <span className="font-bold">Processo:</span>{' '}
-                <span className="font-mono">{ficha.processo === 'Colheita' ? '(X)' : '( )'}</span> Colheita{' '}
-                <span className="font-mono">{ficha.processo === 'Silvicultura' ? '(X)' : '( )'}</span> Silvicultura{' '}
-                <span className="font-mono">{ficha.processo === 'Logística' ? '(X)' : '( )'}</span> Logística{' '}
-                <span className="font-mono">( )</span> _________
-              </td>
-              <td className="p-2 w-[22%]">
-                <span className="font-bold">Núcleo:</span> {ficha.nucleo}
-              </td>
-            </tr>
-            {/* Row 2 */}
-            <tr>
-              <td className="p-2 border-r border-black w-1/3">
-                <span className="font-bold">Placa Caminhão:</span> <span className="font-bold font-mono">{ficha.placa}</span>
-              </td>
-              <td className="p-2 border-r border-black w-[45%]">
-                <span className="font-bold">Motorista:</span> <span className="font-bold">{ficha.motorista}</span>
-              </td>
-              <td className="p-2 w-[22%] relative">
-                <div className="flex flex-col gap-0.5 justify-center min-h-[22px]">
-                  <div><span className="font-bold">Supervisor Suzano:</span> <span className="font-bold">{ficha.supervisor_suzano}</span></div>
-                  {ficha.assinatura_supervisor && (
-                    <div className="absolute right-2 bottom-1 h-[26px] w-[110px] pointer-events-none">
-                      <img src={ficha.assinatura_supervisor} className="max-h-full max-w-full object-contain mx-auto" alt="Assinatura Supervisor" />
-                    </div>
-                  )}
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Main Table */}
-        <table className="w-full border-collapse border border-black border-t-0 text-[9px] text-zinc-900">
-          <thead>
-            <tr className="bg-zinc-100 text-zinc-800 font-bold border-b border-black">
-              <th className="border border-black p-2 w-[90px] text-center">Data</th>
-              <th className="border border-black p-2 w-[110px] text-center">ID Ponto*</th>
-              <th className="border border-black p-2 text-center w-[80px]">Hora Inicial<br/>(HH:MM)</th>
-              <th className="border border-black p-2 text-center w-[80px]">Hora Final<br/>(HH:MM)</th>
-              <th className="border border-black p-2 text-center w-[120px]">Volume Captado<br/>(Litros)</th>
-              <th className="border border-black p-2 text-center">Fazenda Captada</th>
-              <th className="border border-black p-2 text-center w-[100px]">UP da Captação</th>
-              <th className="border border-black p-2 text-center">Atividade</th>
-              <th className="border border-black p-2 text-center">Fazenda da Atividade</th>
-              <th className="border border-black p-2 text-center font-bold">UP da Atividade</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ficha.lancamentos && ficha.lancamentos.length > 0 ? (
-              ficha.lancamentos.map((row: any, index: number) => (
-                <tr key={index} className="text-center text-zinc-950 font-semibold border-b border-black">
-                  <td className="border border-black p-1.5">{format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                  <td className="border border-black p-1.5 font-mono">{row.id_ponto}</td>
-                  <td className="border border-black p-1.5 font-mono">{row.hora_inicial}</td>
-                  <td className="border border-black p-1.5 font-mono">{row.hora_final}</td>
-                  <td className="border border-black p-1.5 font-mono font-bold">
-                    {Number(row.volume_captado).toLocaleString('pt-BR')} L
-                  </td>
-                  <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_captada}</td>
-                  <td className="border border-black p-1.5 font-mono">{row.up_captacao}</td>
-                  <td className="border border-black p-1.5">{row.atividade}</td>
-                  <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_atividade}</td>
-                  <td className="border border-black p-1.5 font-mono">{row.up_atividade}</td>
-                </tr>
-              ))
-            ) : (
-              <tr className="border-b border-black">
-                <td colSpan={10} className="border border-black p-6 text-center text-zinc-400 italic">
-                  Nenhum lançamento registrado nesta ficha operacional.
-                </td>
-              </tr>
-            )}
-            {/* Blank rows to fill space */}
-            {Array.from({ length: Math.max(0, 14 - (ficha.lancamentos?.length || 0)) }).map((_, idx) => (
-              <tr key={`blank-${idx}`} className="border-b border-black">
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-                <td className="border border-black p-3"></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Footer notes */}
-        <div className="flex justify-between items-end mt-2 text-[7px] text-zinc-650 leading-tight">
-          <div>
-            <p className="font-bold">* Preencher com o código do ponto ou número da outorga / certidão de dispensa</p>
-            <p className="font-bold">** Em atividades de silvicultura preencher UP e talhão trabalhado</p>
-          </div>
-          <div className="text-right font-mono">
-            <p>Código do formulário e revisão</p>
-          </div>
-        </div>
-
-      </div>
-    );
-  };
-
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)] lg:h-screen bg-zinc-950 text-white overflow-hidden font-sans">
+    <div className="flex flex-col h-[calc(100vh-56px)] lg:h-screen bg-transparent text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
       {isExporting && (
-        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white select-none">
+        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md text-zinc-900 dark:text-white select-none">
           <div className="flex flex-col items-center gap-4">
             <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <h3 className="font-bold text-lg tracking-wide">Gerando PDF da Ficha...</h3>
-            <p className="text-sm text-zinc-400">Preparando o arquivo para download</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Preparando o arquivo para download</p>
           </div>
         </div>
       )}
@@ -1171,15 +1174,15 @@ export default function CaptacaoClient({
       )}
 
       {/* Screen layout */}
-      <header className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0 select-none print:hidden">
+      <header className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0 select-none print:hidden">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-black tracking-tighter flex items-center gap-2">
-            <span className="p-2 bg-blue-600 rounded-lg shadow-inner shadow-blue-500/20"><Droplets size={18} /></span>
+          <h1 className="text-lg font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
+            <span className="p-2 bg-blue-600 rounded-lg shadow-inner shadow-blue-500/20 text-white"><Droplets size={18} /></span>
             CAPTAÇÃO DE ÁGUA
           </h1>
-          <span className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
+          <span className="bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
             <Clock size={12} />
-            Mês: <span className="text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
+            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
           </span>
         </div>
       </header>
@@ -1205,17 +1208,17 @@ export default function CaptacaoClient({
               <div 
                 onClick={() => setActiveScreen('list')}
                 className={cn(
-                  "bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300",
+                  "bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-white/95 dark:hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300",
                   profile?.role === 'visitante' ? "col-span-2 max-w-md mx-auto w-full" : ""
                 )}
               >
-                <div className="w-14 h-14 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <div className="w-14 h-14 bg-emerald-600/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <FileText size={24} />
                 </div>
-                <h3 className="font-extrabold text-white text-md uppercase tracking-wider group-hover:text-emerald-400 transition-colors">
+                <h3 className="font-extrabold text-zinc-900 dark:text-white text-md uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                   Fichas Operacionais <span className="ml-1 group-hover:translate-x-1 inline-block transition-transform">➔</span>
                 </h3>
-                <p className="text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
+                <p className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
                   Visualizar e lançar dados nas fichas existentes ({fichas.length} ativas)
                 </p>
               </div>
@@ -1224,13 +1227,13 @@ export default function CaptacaoClient({
               {profile?.role !== 'visitante' && (
                 <div 
                   onClick={() => setIsFichaModalOpen(true)}
-                  className="bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300"
+                  className="bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-white/95 dark:hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300"
                 >
-                  <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <Plus size={24} />
                   </div>
-                  <h3 className="font-extrabold text-white text-md uppercase tracking-wider group-hover:text-blue-400 transition-colors">Nova Ficha</h3>
-                  <p className="text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
+                  <h3 className="font-extrabold text-zinc-900 dark:text-white text-md uppercase tracking-wider group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Nova Ficha</h3>
+                  <p className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
                     Criar nova ficha de controle de captação de água para o período ativo
                   </p>
                 </div>
@@ -1242,18 +1245,18 @@ export default function CaptacaoClient({
         {/* STEP 2: LIST OF FICHAS */}
         {activeScreen === 'list' && (
           <div className="flex-1 flex flex-col p-4 overflow-hidden animate-in fade-in duration-200">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4">
               <button 
                 onClick={() => setActiveScreen('home')} 
-                className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-850 px-3.5 py-2 rounded-xl border border-zinc-850"
+                className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors bg-white/80 hover:bg-white dark:bg-zinc-900 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800"
               >
                 <ArrowLeft size={14} /> Voltar para o Início
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full space-y-4 pr-1 custom-scrollbar">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-850 pb-4">
-                <h2 className="text-md font-black text-white uppercase tracking-widest flex items-center gap-2">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
+                <h2 className="text-md font-black text-zinc-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                   📋 Fichas Operacionais ({filteredFichas.length})
                 </h2>
                 
@@ -1266,14 +1269,14 @@ export default function CaptacaoClient({
                       placeholder="Buscar motorista/placa..." 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="bg-zinc-900 border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full sm:w-44 text-white font-mono"
+                      className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full sm:w-44 text-zinc-900 dark:text-white font-mono"
                     />
                   </div>
-
+ 
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-400"
+                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
                   >
                     <option value="Todas">TODAS AS FICHAS</option>
                     <option value="Aberta">ABERTAS</option>
@@ -1281,25 +1284,25 @@ export default function CaptacaoClient({
                   </select>
                 </div>
               </div>
-
+ 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 {filteredFichas.length > 0 ? (
                   filteredFichas.map(f => {
                     const locked = isFichaLocked(f);
                     const launchesCount = f.lancamentos?.length || 0;
-
+ 
                     return (
                       <div
                         key={f.id}
-                        onClick={() => { setSelectedFicha(f); setActiveScreen('details'); setViewMode('suzano'); }}
-                        className="p-5 bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-2xl transition-all duration-300 cursor-pointer flex flex-col gap-4 shadow-lg group relative overflow-hidden"
+                        onClick={() => { setSelectedFicha(f); setActiveScreen('details'); setViewMode('suzano'); setShowFichaPaper(false); }}
+                        className="p-5 bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-2xl transition-all duration-300 cursor-pointer flex flex-col gap-4 shadow-lg group relative overflow-hidden"
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-extrabold text-white text-md tracking-tight leading-none group-hover:text-blue-400 transition-colors">
+                            <h3 className="font-extrabold text-zinc-900 dark:text-white text-md tracking-tight leading-none group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
                               {f.placa}
                             </h3>
-                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-2.5 flex items-center gap-1">
+                            <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mt-2.5 flex items-center gap-1">
                               👤 {f.motorista}
                             </p>
                           </div>
@@ -1307,26 +1310,26 @@ export default function CaptacaoClient({
                             <span className={cn(
                               "px-2 py-1 text-[8px] font-black uppercase rounded-md shadow-sm border",
                               locked 
-                                ? "bg-zinc-900 border-zinc-800 text-zinc-500" 
-                                : "bg-emerald-950/20 border-emerald-900/30 text-emerald-400"
+                                ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500" 
+                                : "bg-emerald-500/20 border-emerald-900/30 text-emerald-450 dark:text-emerald-400"
                             )}>
                               {locked ? 'Fechada' : 'Aberta'}
                             </span>
-                            <span className="text-[9px] text-zinc-500 font-bold uppercase bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-850">
+                            <span className="text-[9px] text-zinc-500 dark:text-zinc-500 font-bold uppercase bg-zinc-50 dark:bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800">
                               {getMonthName(f.mes)} {f.ano}
                             </span>
                           </div>
                         </div>
-
-                        <div className="pt-3 border-t border-zinc-900/60 flex justify-between items-center text-[10px] text-zinc-450">
+ 
+                        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex justify-between items-center text-[10px] text-zinc-650 dark:text-zinc-400">
                           <span>{f.processo}</span>
-                          <span className="font-bold text-zinc-300">{launchesCount} captações</span>
+                          <span className="font-bold text-zinc-800 dark:text-zinc-300">{launchesCount} captações</span>
                         </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="col-span-2 text-center py-16 bg-zinc-900/20 border border-zinc-850 rounded-2xl">
+                  <div className="col-span-2 text-center py-16 bg-white/40 dark:bg-zinc-900/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
                     <p className="text-xs text-zinc-500 italic">Nenhuma ficha operacional encontrada.</p>
                   </div>
                 )}
@@ -1338,10 +1341,10 @@ export default function CaptacaoClient({
         {/* STEP 3: FICHA DETAILS */}
         {activeScreen === 'details' && selectedFicha && (
           <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden animate-in fade-in duration-200">
-            <div className="p-4 landscape:py-2.5 landscape:px-4 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between gap-4 shrink-0">
+            <div className="p-4 landscape:py-2.5 landscape:px-4 bg-white/50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-900 flex items-center justify-between gap-4 shrink-0">
               <button 
                 onClick={() => { setSelectedFicha(null); setActiveScreen('list'); }} 
-                className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors bg-zinc-900 hover:bg-zinc-850 px-3.5 py-2 rounded-xl border border-zinc-850 shadow-sm"
+                className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors bg-white hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
               >
                 <ArrowLeft size={14} /> Voltar para as Fichas
               </button>
@@ -1349,24 +1352,24 @@ export default function CaptacaoClient({
 
             <div className="flex-1 flex flex-col overflow-visible lg:overflow-hidden bg-zinc-900/10">
               {/* Toolbar matching second image exactly */}
-              <div className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-850 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-zinc-900/50 shrink-0">
+              <div className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-white/70 dark:bg-zinc-900/50 shrink-0">
                 <div className="flex flex-col gap-1">
-                  <h2 className="text-md font-black text-white leading-none uppercase tracking-wide">
+                  <h2 className="text-md font-black text-zinc-900 dark:text-white leading-none uppercase tracking-wide">
                     FICHA: {selectedFicha.placa}
                   </h2>
-                  <p className="text-[9px] text-zinc-500 mt-1.5 uppercase font-bold tracking-widest leading-none">
+                  <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-1.5 uppercase font-bold tracking-widest leading-none">
                     MOTORISTA: {selectedFicha.motorista} | PROCESSO: {selectedFicha.processo} | NÚCLEO: {selectedFicha.nucleo}
                   </p>
                 </div>
 
                 <div className="w-full xl:w-auto flex flex-col portrait:flex-col landscape:flex-row landscape:flex-wrap sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5">
                   {/* Ficha Suzano / Ficha com Fotos Toggle */}
-                  <div className="flex bg-zinc-950 rounded-2xl p-1 border border-zinc-850 shadow-inner w-full portrait:w-full landscape:w-auto sm:w-auto">
+                  <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded-2xl p-1 border border-zinc-200 dark:border-zinc-800 shadow-inner w-full portrait:w-full landscape:w-auto sm:w-auto">
                     <button 
                       onClick={() => setViewMode('suzano')}
                       className={cn(
                         "flex-1 sm:flex-initial flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
-                        viewMode === 'suzano' ? "bg-zinc-900 border border-zinc-800 text-white shadow" : "text-zinc-500 hover:text-zinc-350"
+                        viewMode === 'suzano' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
                       )}
                     >
                       <span className="text-sm mb-1">📋</span>
@@ -1376,7 +1379,7 @@ export default function CaptacaoClient({
                       onClick={() => setViewMode('sistema')}
                       className={cn(
                         "flex-1 sm:flex-initial flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
-                        viewMode === 'sistema' ? "bg-zinc-900 border border-zinc-800 text-white shadow" : "text-zinc-500 hover:text-zinc-350"
+                        viewMode === 'sistema' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
                       )}
                     >
                       <span className="text-sm mb-1">📸</span>
@@ -1397,7 +1400,7 @@ export default function CaptacaoClient({
                   {/* Print Button */}
                   <button
                     onClick={() => window.print()}
-                    className="p-3.5 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto text-xs font-extrabold"
+                    className="p-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto text-xs font-extrabold"
                     title="Imprimir Ficha"
                   >
                     <Printer size={16} />
@@ -1407,7 +1410,7 @@ export default function CaptacaoClient({
                   {/* Excel Button */}
                   <button
                     onClick={handleExportExcel}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                     title="Exportar para Excel"
                   >
                     <FileSpreadsheet size={15} className="text-emerald-500" />
@@ -1417,7 +1420,7 @@ export default function CaptacaoClient({
                   {/* PDF Button */}
                   <button
                     onClick={handleExportPDF}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-zinc-950 hover:bg-zinc-900 rounded-2xl border border-zinc-850 text-zinc-300 hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                     title="Exportar e baixar em PDF"
                   >
                     <Download size={15} className="text-blue-500" />
@@ -1429,7 +1432,7 @@ export default function CaptacaoClient({
                     selectedFicha.assinatura_supervisor ? (
                       <button
                         onClick={handleRemoveSignature}
-                        className="px-4 py-3.5 bg-zinc-950 hover:bg-red-950/25 border border-zinc-850 rounded-2xl text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                        className="px-4 py-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-red-500 dark:text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                         title="Remover Assinatura"
                       >
                         ❌ REMOVER ASSINATURA
@@ -1459,7 +1462,7 @@ export default function CaptacaoClient({
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
                       onClick={() => setIsLancamentoModalOpen(true)}
-                      className="px-5 py-3.5 bg-emerald-400 hover:bg-emerald-500 text-zinc-950 text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-400/20 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto animate-pulse"
+                      className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto animate-pulse"
                     >
                       <span>+</span>
                       <span>ADICIONAR LINHA</span>
@@ -1470,7 +1473,7 @@ export default function CaptacaoClient({
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
                       onClick={() => handleCloseFicha(selectedFicha.id)}
-                      className="px-4 py-3.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-2xl text-zinc-400 hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                      className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                       title="Fechar Ficha"
                     >
                       <Lock size={12} />
@@ -1482,7 +1485,7 @@ export default function CaptacaoClient({
                   {profile?.role === 'admin' && (
                     <button
                       onClick={() => handleDeleteFicha(selectedFicha.id)}
-                      className="p-3.5 bg-zinc-950 hover:bg-red-950/20 border border-zinc-850 hover:border-red-900 rounded-2xl text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                      className="p-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-900 rounded-2xl text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
                       title="Excluir Ficha"
                     >
                       <Trash2 size={16} />
@@ -1491,51 +1494,83 @@ export default function CaptacaoClient({
                   )}
                 </div>
               </div>
-
+              
               {/* View area */}
-              <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-950/20">
+              <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-100/10 dark:bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
                   <div className="flex flex-col gap-3">
-                    <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-850">
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider text-center sm:text-left">
-                        ℹ️ Arraste para o lado para rolar a ficha, ou expanda para tela cheia
-                      </span>
-                      <button 
-                        onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
-                        className="w-full sm:w-auto px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow"
-                      >
-                        <span>🔍</span>
-                        <span>TELA CHEIA / ZOOM</span>
-                      </button>
-                    </div>
-
-                    <div 
-                      className="w-full overflow-x-auto p-4 bg-zinc-950/40 rounded-3xl custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
-                      style={{ WebkitOverflowScrolling: 'touch' }}
-                    >
-                      <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
-                        {renderPaperFicha(selectedFicha)}
+                    {!showFichaPaper ? (
+                      <div className="flex flex-col items-center justify-center p-8 bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-3xl gap-4 max-w-md mx-auto w-full shadow-lg">
+                        <span className="text-4xl">📋</span>
+                        <div className="text-center space-y-1">
+                          <h3 className="font-extrabold text-zinc-900 dark:text-white text-sm uppercase">Ficha Oculta</h3>
+                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">
+                            A visualização em papel está oculta para facilitar a rolagem da tela.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowFichaPaper(true)}
+                          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl uppercase tracking-wider transition-all shadow-md active:scale-95"
+                        >
+                          Visualizar Ficha
+                        </button>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-white/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-center sm:text-left">
+                            ℹ️ Arraste para o lado para rolar a ficha, ou expanda para tela cheia
+                          </span>
+                          <div className="flex gap-2 w-full sm:w-auto">
+                            <button 
+                              type="button"
+                              onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
+                              className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow"
+                            >
+                              <span>🔍</span>
+                              <span>TELA CHEIA</span>
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setShowFichaPaper(false)}
+                              className="flex-1 sm:flex-initial px-4 py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                            >
+                              <span>👁️‍🗨️</span>
+                              <span>Ocultar Ficha</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div 
+                          className="w-full overflow-x-auto p-4 bg-white/40 dark:bg-zinc-950/40 rounded-3xl border border-zinc-200 dark:border-transparent custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
+                          style={{ WebkitOverflowScrolling: 'touch' }}
+                        >
+                          <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
+                            {renderPaperFicha(selectedFicha)}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-6 max-w-5xl mx-auto">
                     
                     {/* Header metrics card */}
                     <div className="grid grid-cols-4 gap-4">
-                      <div className="bg-zinc-900 border border-zinc-850 p-5 rounded-2xl">
-                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">CAPTAÇÕES</p>
-                        <p className="text-2xl font-black text-white">{selectedFicha.lancamentos?.length || 0}</p>
+                      <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+                        <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">CAPTAÇÕES</p>
+                        <p className="text-2xl font-black text-zinc-900 dark:text-white">{selectedFicha.lancamentos?.length || 0}</p>
                       </div>
-                      <div className="bg-zinc-900 border border-zinc-850 p-5 rounded-2xl col-span-2">
-                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">VOLUME TOTAL CAPTADO</p>
-                        <p className="text-2xl font-black text-blue-500">
-                          {totalVolume.toLocaleString('pt-BR')} <span className="text-sm text-zinc-400 font-bold">LITROS</span>
+                      <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl col-span-2 shadow-sm">
+                        <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">VOLUME TOTAL CAPTADO</p>
+                        <p className="text-2xl font-black text-blue-600 dark:text-blue-500">
+                          {totalVolume.toLocaleString('pt-BR')} <span className="text-sm text-zinc-500 dark:text-zinc-400 font-bold">LITROS</span>
                         </p>
                       </div>
-                      <div className="bg-zinc-900 border border-zinc-850 p-5 rounded-2xl">
-                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">MÊS OPERACIONAL</p>
-                        <p className="text-lg font-black text-white uppercase mt-0.5">{getMonthName(selectedFicha.mes)} {selectedFicha.ano}</p>
+                      <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+                        <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">MÊS OPERACIONAL</p>
+                        <p className="text-lg font-black text-zinc-900 dark:text-white uppercase mt-0.5">{getMonthName(selectedFicha.mes)} {selectedFicha.ano}</p>
                       </div>
                     </div>
 
@@ -1545,49 +1580,49 @@ export default function CaptacaoClient({
                         [...selectedFicha.lancamentos].sort((a: any, b: any) => b.data.localeCompare(a.data) || b.created_at?.localeCompare(a.created_at)).map((row: any) => (
                           <div 
                             key={row.id}
-                            className="bg-zinc-900/40 border border-zinc-850 rounded-2xl p-5 flex flex-col md:flex-row gap-5 justify-between items-start md:items-center hover:border-zinc-800 transition-all shadow-lg"
+                            className="bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row gap-5 justify-between items-start md:items-center hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-lg"
                           >
-                            <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-y-4 gap-x-6 text-xs">
+                            <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-y-4 gap-x-6 text-xs text-zinc-700 dark:text-zinc-300">
                               
                               {/* Group 1: Time */}
                               <div>
-                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
-                                <span className="font-extrabold text-white text-sm">
+                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
+                                <span className="font-extrabold text-zinc-900 dark:text-white text-sm">
                                   {format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}
                                 </span>
-                                <span className="block text-zinc-400 font-bold mt-1 tracking-tight">
+                                <span className="block text-zinc-550 dark:text-zinc-400 font-bold mt-1 tracking-tight">
                                   ⏱️ {row.hora_inicial} - {row.hora_final}
                                 </span>
                               </div>
 
                               {/* Group 2: Point & Volume */}
                               <div>
-                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
-                                <span className="font-mono text-zinc-300 font-bold">{row.id_ponto}</span>
-                                <span className="block text-blue-400 font-black text-sm mt-1">
+                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
+                                <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{row.id_ponto}</span>
+                                <span className="block text-blue-600 dark:text-blue-400 font-black text-sm mt-1">
                                   💧 {Number(row.volume_captado).toLocaleString('pt-BR')} Litros
                                 </span>
                               </div>
 
                               {/* Group 3: Capture Location */}
                               <div>
-                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">FAZENDA / UP CAPTAÇÃO</span>
-                                <span className="font-bold text-white uppercase leading-none">{row.fazenda_captada}</span>
-                                <span className="block text-zinc-400 mt-1.5 font-bold font-mono">UP: {row.up_captacao}</span>
+                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">FAZENDA / UP CAPTAÇÃO</span>
+                                <span className="font-bold text-zinc-900 dark:text-white uppercase leading-none">{row.fazenda_captada}</span>
+                                <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">UP: {row.up_captacao}</span>
                               </div>
 
                               {/* Group 4: Activity Location */}
                               <div>
-                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">ATIVIDADE / DESTINO</span>
-                                <span className="font-bold text-white leading-none">{row.atividade}</span>
-                                <span className="block text-zinc-400 mt-1.5 font-bold font-mono">
+                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">ATIVIDADE / DESTINO</span>
+                                <span className="font-bold text-zinc-900 dark:text-white leading-none">{row.atividade}</span>
+                                <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">
                                   {row.fazenda_atividade} / UP {row.up_atividade}
                                 </span>
                               </div>
 
                               {/* Group 5: Creator metadata */}
                               <div>
-                                <span className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">METADADOS</span>
+                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">METADADOS</span>
                                 <span className="block text-zinc-500 font-bold font-mono text-[9px] leading-tight">
                                   Ref: {row.id.substring(0, 8)}
                                 </span>
@@ -1602,7 +1637,7 @@ export default function CaptacaoClient({
                               {row.foto_ponto ? (
                                 <div 
                                   onClick={() => setActivePhoto(row.foto_ponto)}
-                                  className="w-16 h-16 rounded-xl border border-zinc-800 overflow-hidden relative cursor-zoom-in group shadow-md"
+                                  className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden relative cursor-zoom-in group shadow-md"
                                 >
                                   <img src={row.foto_ponto} className="w-full h-full object-cover transition-transform group-hover:scale-115" alt="Ponto" />
                                   <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
@@ -1610,7 +1645,7 @@ export default function CaptacaoClient({
                                   </div>
                                 </div>
                               ) : (
-                                <div className="w-16 h-16 rounded-xl border border-zinc-850/50 bg-zinc-950/40 flex flex-col items-center justify-center text-zinc-650">
+                                <div className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-850/50 bg-zinc-100 dark:bg-zinc-950/40 flex flex-col items-center justify-center text-zinc-655 dark:text-zinc-650">
                                   <Camera size={18} strokeWidth={1.5} />
                                   <span className="text-[8px] font-black tracking-tighter uppercase mt-1">Sem Foto</span>
                                 </div>
@@ -1618,8 +1653,8 @@ export default function CaptacaoClient({
 
                               {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                                 <button
-                                  onClick={() => handleDeleteLancamento(row.id)}
-                                  className="p-2.5 bg-zinc-950 hover:bg-red-950 text-zinc-500 hover:text-red-400 border border-zinc-850 hover:border-red-900 rounded-xl transition-all"
+                                  onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
+                                  className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-950 text-zinc-600 dark:text-zinc-500 hover:text-red-650 dark:hover:text-red-400 border border-zinc-200 dark:border-zinc-850 hover:border-red-350 dark:hover:border-red-900 rounded-xl transition-all"
                                   title="Remover Registro"
                                 >
                                   <Trash2 size={14} />
@@ -1629,8 +1664,8 @@ export default function CaptacaoClient({
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-16 bg-zinc-900/10 border border-zinc-850 rounded-2xl">
-                          <p className="text-xs text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
+                        <div className="text-center py-16 bg-white/40 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-850 rounded-2xl">
+                          <p className="text-xs text-zinc-550 dark:text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
                         </div>
                       )}
                     </div>
@@ -1646,19 +1681,19 @@ export default function CaptacaoClient({
       {isFichaModalOpen && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setIsFichaModalOpen(false)} />
-          <div className="relative bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <form onSubmit={handleCreateFicha}>
-              <div className="p-6 border-b border-zinc-850 flex justify-between items-center bg-zinc-900/40">
+              <div className="p-6 border-b border-zinc-200 dark:border-zinc-850 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/40">
                 <div>
-                  <h2 className="text-md font-black text-white tracking-widest uppercase flex items-center gap-2">
-                    <span className="p-1 bg-blue-600 rounded"><Plus size={14} /></span>
+                  <h2 className="text-md font-black text-zinc-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
+                    <span className="p-1 bg-blue-600 rounded text-white"><Plus size={14} /></span>
                     Nova Ficha de Captação
                   </h2>
                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
                     Suzano Mês Operacional: {getMonthName(currentPeriod.mes)} {currentPeriod.ano}
                   </p>
                 </div>
-                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="p-2 hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
+                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
                   <X size={16} />
                 </button>
               </div>
@@ -1672,7 +1707,7 @@ export default function CaptacaoClient({
                     required
                     value={newFichaData.placa}
                     onChange={e => setNewFichaData({ ...newFichaData, placa: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-200 font-bold"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-zinc-200 font-bold"
                   >
                     <option value="">Selecione a Placa...</option>
                     {equipamentos.map(eq => (
@@ -1688,19 +1723,19 @@ export default function CaptacaoClient({
                       value={newFichaData.placaCustom}
                       onChange={e => setNewFichaData({ ...newFichaData, placaCustom: e.target.value })}
                       placeholder="Digitar placa do caminhão..."
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mt-2 text-white font-mono uppercase"
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mt-2 text-zinc-900 dark:text-white font-mono uppercase"
                     />
                   )}
                 </div>
 
                 {/* Driver Select / Input */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Motorista</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Motorista</label>
                   <select
                     required
                     value={newFichaData.motorista}
                     onChange={e => setNewFichaData({ ...newFichaData, motorista: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-200 font-bold"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-zinc-200 font-bold"
                   >
                     <option value="">Selecione o Motorista...</option>
                     {colaboradores.map(c => (
@@ -1716,18 +1751,18 @@ export default function CaptacaoClient({
                       value={newFichaData.motoristaCustom}
                       onChange={e => setNewFichaData({ ...newFichaData, motoristaCustom: e.target.value })}
                       placeholder="Nome completo do motorista..."
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mt-2 text-white"
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mt-2 text-zinc-900 dark:text-white"
                     />
                   )}
                 </div>
 
                 {/* Process select */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Processo</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Processo</label>
                   <select
                     value={newFichaData.processo}
                     onChange={e => setNewFichaData({ ...newFichaData, processo: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-200 font-bold"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-zinc-200 font-bold"
                   >
                     <option value="Colheita">Colheita</option>
                     <option value="Silvicultura">Silvicultura</option>
@@ -1737,42 +1772,42 @@ export default function CaptacaoClient({
 
                 {/* Supervisor Suzano */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Supervisor Suzano</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Supervisor Suzano</label>
                   <input 
                     type="text"
                     value={newFichaData.supervisor_suzano}
                     onChange={e => setNewFichaData({ ...newFichaData, supervisor_suzano: e.target.value })}
                     placeholder="Nome do supervisor Suzano..."
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-semibold"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-semibold"
                   />
                 </div>
 
                 {/* Document details */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Código Doc.</label>
+                    <label className="text-[10px] font-black text-zinc-555 dark:text-zinc-500 uppercase tracking-wider">Código Doc.</label>
                     <input 
                       type="text"
                       value={newFichaData.codigo}
                       onChange={e => setNewFichaData({ ...newFichaData, codigo: e.target.value })}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-400 font-mono"
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-500 dark:text-zinc-400 font-mono"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Revisão Doc.</label>
+                    <label className="text-[10px] font-black text-zinc-555 dark:text-zinc-500 uppercase tracking-wider">Revisão Doc.</label>
                     <input 
                       type="text"
                       value={newFichaData.revisao}
                       onChange={e => setNewFichaData({ ...newFichaData, revisao: e.target.value })}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-400 font-mono"
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-500 dark:text-zinc-400 font-mono"
                     />
                   </div>
                 </div>
 
               </div>
 
-              <div className="p-6 border-t border-zinc-850 bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-855 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
+                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   CANCELAR
                 </button>
                 <button type="submit" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 active:scale-95 transition-all">
@@ -1788,19 +1823,19 @@ export default function CaptacaoClient({
       {isLancamentoModalOpen && selectedFicha && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setIsLancamentoModalOpen(false)} />
-          <div className="relative bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="relative bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <form onSubmit={handleAddLancamento}>
-              <div className="p-6 border-b border-zinc-850 flex justify-between items-center bg-zinc-900/40">
+              <div className="p-6 border-b border-zinc-200 dark:border-zinc-855 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/40">
                 <div>
-                  <h2 className="text-md font-black text-white tracking-widest uppercase flex items-center gap-2">
-                    <span className="p-1 bg-emerald-600 rounded"><Plus size={14} /></span>
+                  <h2 className="text-md font-black text-zinc-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
+                    <span className="p-1 bg-emerald-600 rounded text-white"><Plus size={14} /></span>
                     Adicionar Lançamento
                   </h2>
                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
                     Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
                   </p>
                 </div>
-                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="p-2 hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
+                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
                   <X size={16} />
                 </button>
               </div>
@@ -1809,134 +1844,134 @@ export default function CaptacaoClient({
                 
                 {/* Data */}
                 <div className="space-y-1.5 col-span-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Data do Lançamento</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Data do Lançamento</label>
                   <input 
                     type="date"
                     required
                     value={newLancamentoData.data}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, data: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
                 </div>
 
                 {/* ID Ponto */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">ID Ponto / Outorga*</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">ID Ponto / Outorga*</label>
                   <input 
                     type="text"
                     required
                     value={newLancamentoData.id_ponto}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, id_ponto: e.target.value })}
                     placeholder="Código do ponto..."
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
                 </div>
 
                 {/* Volume Captado */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Volume Captado (Litros)</label>
+                  <label className="text-[10px] font-black text-zinc-555 dark:text-zinc-500 uppercase tracking-wider">Volume Captado (Litros)</label>
                   <input 
                     type="number"
                     required
                     value={newLancamentoData.volume_captado}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, volume_captado: e.target.value })}
                     placeholder="Ex: 10000"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono font-bold"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono font-bold"
                   />
                 </div>
 
                 {/* Hora Inicial */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Hora Inicial (HH:MM)</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Hora Inicial (HH:MM)</label>
                   <input 
                     type="time"
                     required
                     value={newLancamentoData.hora_inicial}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, hora_inicial: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
                 </div>
 
                 {/* Hora Final */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Hora Final (HH:MM)</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Hora Final (HH:MM)</label>
                   <input 
                     type="time"
                     required
                     value={newLancamentoData.hora_final}
-                    onChange={e => setNewLancamentoData({ ...newLancamentoData, hora_final: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                    onChange={e => setNewLancamentoData({ ...newLancamentoData, data_final: undefined, hora_final: e.target.value })}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
                 </div>
 
                 {/* Fazenda Captada */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Fazenda Captada</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Fazenda Captada</label>
                   <input 
                     type="text"
                     required
                     value={newLancamentoData.fazenda_captada}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, fazenda_captada: e.target.value })}
                     placeholder="Ex: Flores 74"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 {/* UP Captação */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">UP da Captação</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">UP da Captação</label>
                   <input 
                     type="text"
                     required
                     value={newLancamentoData.up_captacao}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, up_captacao: e.target.value })}
                     placeholder="Ex: 15Bx17"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
                 </div>
 
                 {/* Atividade */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Atividade</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Atividade</label>
                   <input 
                     type="text"
                     required
                     value={newLancamentoData.atividade}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, atividade: e.target.value })}
                     placeholder="Ex: Lavagem"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 {/* Fazenda Atividade */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Fazenda da Atividade</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Fazenda da Atividade</label>
                   <input 
                     type="text"
                     required
                     value={newLancamentoData.fazenda_atividade}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, fazenda_atividade: e.target.value })}
                     placeholder="Ex: Flores 77"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 {/* UP Atividade */}
                 <div className="space-y-1.5 col-span-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">UP da Atividade</label>
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">UP da Atividade</label>
                   <input 
                     type="text"
                     required
                     value={newLancamentoData.up_atividade}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, up_atividade: e.target.value })}
                     placeholder="Ex: 15Bx18"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-white font-mono"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
                 </div>
 
                 {/* Photo Upload Box */}
-                <div className="col-span-2 pt-3 border-t border-zinc-900 space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">📸 Foto do Ponto de Captação</label>
+                <div className="col-span-2 pt-3 border-t border-zinc-200 dark:border-zinc-900 space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">📸 Foto do Ponto de Captação</label>
                   <UploadBox 
                     label="Tirar Foto do Ponto"
                     url={newLancamentoData.foto_ponto}
@@ -1948,8 +1983,8 @@ export default function CaptacaoClient({
 
               </div>
 
-              <div className="p-6 border-t border-zinc-850 bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-850 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
+                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   CANCELAR
                 </button>
                 <button type="submit" className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-600/10 active:scale-95 transition-all">
@@ -1979,7 +2014,7 @@ export default function CaptacaoClient({
       {/* Camera modal interface */}
       {showCamera && (
         <CameraModal 
-          onCapture={(dataUrl) => setNewLancamentoData({ ...newLancamentoData, foto_ponto: dataUrl })}
+          onCapture={(base64) => { setNewLancamentoData({ ...newLancamentoData, foto_ponto: base64 }); setShowCamera(false); }}
           onClose={() => setShowCamera(false)}
         />
       )}
@@ -1987,18 +2022,18 @@ export default function CaptacaoClient({
       {/* ─── MODAL DE ASSINATURA DIGITAL (SUPERVISOR SUZANO) ─── */}
       {showSignaturePad && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5 animate-in zoom-in-95 duration-200">
             <div>
-              <h3 className="font-black text-white text-lg tracking-wider uppercase">
+              <h3 className="font-black text-zinc-900 dark:text-white text-lg tracking-wider uppercase">
                 Assinatura do Supervisor
               </h3>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide mt-1">
+              <p className="text-[10px] text-zinc-550 dark:text-zinc-500 font-bold uppercase tracking-wide mt-1">
                 Assine com o dedo ou mouse no quadro abaixo
               </p>
             </div>
 
             {/* Canvas Area */}
-            <div className="relative border border-dashed border-zinc-800 bg-zinc-900/50 rounded-2xl overflow-hidden h-[180px] flex items-center justify-center">
+            <div className="relative border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl overflow-hidden h-[180px] flex items-center justify-center">
               <canvas
                 ref={sigCanvasRef}
                 width={340}
@@ -2025,14 +2060,14 @@ export default function CaptacaoClient({
                   setShowSignaturePad(false);
                   setIsDrawingSig(false);
                 }}
-                className="px-4 py-2.5 text-xs font-bold rounded-xl text-zinc-400 hover:text-white transition-colors"
+                className="px-4 py-2.5 text-xs font-bold rounded-xl text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
                 CANCELAR
               </button>
               <button
                 type="button"
                 onClick={clearSigCanvas}
-                className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-950 text-red-500 hover:bg-red-950/20 transition-all uppercase"
+                className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-955 text-red-650 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 transition-all uppercase"
               >
                 LIMPAR
               </button>
@@ -2050,32 +2085,32 @@ export default function CaptacaoClient({
 
       {/* ─── FULLSCREEN EXPANDED FICHA VIEW ─── */}
       {isFichaExpanded && selectedFicha && (
-        <div className="fixed inset-0 z-[1500] bg-zinc-950 flex flex-col animate-in fade-in duration-200 select-none print:hidden">
+        <div className="fixed inset-0 z-[1500] bg-white dark:bg-zinc-950 flex flex-col animate-in fade-in duration-200 select-none print:hidden">
           {/* Header of fullscreen view */}
-          <header className="p-3 border-b border-zinc-850 flex flex-col sm:flex-row gap-2 items-center justify-between bg-zinc-900/90 backdrop-blur-md sticky top-0 z-10">
+          <header className="p-3 border-b border-zinc-200 dark:border-zinc-855 flex flex-col sm:flex-row gap-2 items-center justify-between bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-md sticky top-0 z-10">
             <div className="flex items-center gap-2">
               <span className="p-1.5 bg-blue-600 rounded-lg text-white"><Droplets size={14} /></span>
-              <h3 className="font-extrabold text-white text-xs uppercase tracking-wide">
+              <h3 className="font-extrabold text-zinc-900 dark:text-white text-xs uppercase tracking-wide">
                 Ficha: {selectedFicha.placa} ({getMonthName(selectedFicha.mes)} {selectedFicha.ano})
               </h3>
             </div>
             
             {/* Zoom controls & Close */}
             <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
-              <div className="flex items-center bg-zinc-950 rounded-xl p-0.5 border border-zinc-800">
+              <div className="flex items-center bg-zinc-105 dark:bg-zinc-955 rounded-xl p-0.5 border border-zinc-200 dark:border-zinc-800">
                 <button 
                   onClick={() => setZoomScale(z => Math.max(0.3, Number((z - 0.1).toFixed(1))))} 
-                  className="px-2.5 py-1.5 hover:bg-zinc-900 rounded-lg text-xs font-black text-zinc-400 hover:text-white transition-colors"
+                  className="px-2.5 py-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-900 rounded-lg text-xs font-black text-zinc-550 dark:text-zinc-450 hover:text-zinc-800 dark:hover:text-white transition-colors"
                   title="Diminuir Zoom"
                 >
                   A-
                 </button>
-                <span className="text-[10px] font-mono text-zinc-400 font-bold px-3 py-1 bg-zinc-900 border border-zinc-850/30 rounded-md">
+                <span className="text-[10px] font-mono text-zinc-700 dark:text-zinc-400 font-bold px-3 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850/30 rounded-md">
                   {Math.round(zoomScale * 100)}%
                 </span>
                 <button 
                   onClick={() => setZoomScale(z => Math.min(2.0, Number((z + 0.1).toFixed(1))))} 
-                  className="px-2.5 py-1.5 hover:bg-zinc-900 rounded-lg text-xs font-black text-zinc-400 hover:text-white transition-colors"
+                  className="px-2.5 py-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-900 rounded-lg text-xs font-black text-zinc-550 dark:text-zinc-450 hover:text-zinc-800 dark:hover:text-white transition-colors"
                   title="Aumentar Zoom"
                 >
                   A+
@@ -2084,7 +2119,7 @@ export default function CaptacaoClient({
 
               <button 
                 onClick={() => setZoomScale(0.35)} 
-                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-[10px] font-black text-zinc-400 hover:text-white transition-colors"
+                className="px-3 py-1.5 bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black text-zinc-650 dark:text-zinc-455 hover:text-zinc-800 dark:hover:text-white transition-colors"
                 title="Ajustar ao Celular"
               >
                 Ajustar
@@ -2092,7 +2127,7 @@ export default function CaptacaoClient({
 
               <button 
                 onClick={() => setZoomScale(1.0)} 
-                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-[10px] font-black text-zinc-400 hover:text-white transition-colors mr-2"
+                className="px-3 py-1.5 bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black text-zinc-650 dark:text-zinc-455 hover:text-zinc-800 dark:hover:text-white transition-colors mr-2"
                 title="Resetar Zoom"
               >
                 100%
@@ -2109,7 +2144,7 @@ export default function CaptacaoClient({
           </header>
           
           {/* Body of fullscreen view with zoom and scroll support */}
-          <div className="flex-1 overflow-auto p-4 md:p-8 flex items-start justify-start bg-zinc-950 custom-scrollbar touch-pan-x touch-pan-y">
+          <div className="flex-1 overflow-auto p-4 md:p-8 flex items-start justify-start bg-zinc-100 dark:bg-zinc-955 custom-scrollbar touch-pan-x touch-pan-y">
             <div 
               className="origin-top-left"
               style={{ 
@@ -2119,7 +2154,7 @@ export default function CaptacaoClient({
                 transformOrigin: 'top left'
               }}
             >
-              <div className="w-[1080px] shrink-0 bg-white p-4 rounded-xl shadow-2xl text-zinc-950">
+              <div className="w-[1080px] shrink-0 bg-white p-4 rounded-xl shadow-2xl text-zinc-955">
                 {renderPaperFicha(selectedFicha)}
               </div>
             </div>
