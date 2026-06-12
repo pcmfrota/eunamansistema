@@ -1201,23 +1201,7 @@ export default function CaptacaoClient({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
-              {/* Card 1: Nova Ficha */}
-              {profile?.role !== 'visitante' && (
-                <div 
-                  onClick={() => setIsFichaModalOpen(true)}
-                  className="bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300"
-                >
-                  <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <Plus size={24} />
-                  </div>
-                  <h3 className="font-extrabold text-white text-md uppercase tracking-wider group-hover:text-blue-400 transition-colors">Nova Ficha</h3>
-                  <p className="text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
-                    Criar nova ficha de controle de captação de água para o período ativo
-                  </p>
-                </div>
-              )}
-
-              {/* Card 2: Fichas Operacionais */}
+              {/* Card 1: Fichas Operacionais */}
               <div 
                 onClick={() => setActiveScreen('list')}
                 className={cn(
@@ -1235,6 +1219,22 @@ export default function CaptacaoClient({
                   Visualizar e lançar dados nas fichas existentes ({fichas.length} ativas)
                 </p>
               </div>
+
+              {/* Card 2: Nova Ficha */}
+              {profile?.role !== 'visitante' && (
+                <div 
+                  onClick={() => setIsFichaModalOpen(true)}
+                  className="bg-zinc-900/40 border border-zinc-850 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300"
+                >
+                  <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Plus size={24} />
+                  </div>
+                  <h3 className="font-extrabold text-white text-md uppercase tracking-wider group-hover:text-blue-400 transition-colors">Nova Ficha</h3>
+                  <p className="text-[10px] text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
+                    Criar nova ficha de controle de captação de água para o período ativo
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1337,7 +1337,7 @@ export default function CaptacaoClient({
 
         {/* STEP 3: FICHA DETAILS */}
         {activeScreen === 'details' && selectedFicha && (
-          <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
+          <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden animate-in fade-in duration-200">
             <div className="p-4 landscape:py-2.5 landscape:px-4 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between gap-4 shrink-0">
               <button 
                 onClick={() => { setSelectedFicha(null); setActiveScreen('list'); }} 
@@ -1347,7 +1347,7 @@ export default function CaptacaoClient({
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col overflow-hidden bg-zinc-900/10">
+            <div className="flex-1 flex flex-col overflow-visible lg:overflow-hidden bg-zinc-900/10">
               {/* Toolbar matching second image exactly */}
               <div className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-850 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-zinc-900/50 shrink-0">
                 <div className="flex flex-col gap-1">
@@ -1459,7 +1459,7 @@ export default function CaptacaoClient({
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
                       onClick={() => setIsLancamentoModalOpen(true)}
-                      className="px-5 py-3.5 bg-emerald-700 hover:bg-emerald-850 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-750/10 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto animate-pulse"
+                      className="px-5 py-3.5 bg-emerald-400 hover:bg-emerald-500 text-zinc-950 text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-400/20 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto animate-pulse"
                     >
                       <span>+</span>
                       <span>ADICIONAR LINHA</span>
@@ -1493,7 +1493,7 @@ export default function CaptacaoClient({
               </div>
 
               {/* View area */}
-              <div className="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-950/20">
+              <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
                   <div className="flex flex-col gap-3">
                     <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-850">
