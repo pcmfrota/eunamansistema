@@ -285,7 +285,7 @@ const getMonthName = (m: number) => {
 };
 
 // Standalone Printable Sheet View component/helper function
-const renderPaperFicha = (ficha: any) => {
+const renderPaperFicha = (ficha: any, onPhotoClick?: (url: string) => void) => {
   return (
     <div className="w-[1080px] bg-white text-zinc-950 p-5 font-sans mx-auto text-[10px] leading-normal border border-black select-none shadow-xl print:shadow-none print:border-0 print:p-0">
       
@@ -406,7 +406,22 @@ const renderPaperFicha = (ficha: any) => {
             ficha.lancamentos.map((row: any, index: number) => (
               <tr key={index} className="text-center text-zinc-955 font-semibold border-b border-black">
                 <td className="border border-black p-1.5">{format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                <td className="border border-black p-1.5 font-mono">{row.id_ponto}</td>
+                <td className="border border-black p-1.5 font-mono">
+                  {row.foto_ponto && onPhotoClick ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onPhotoClick(row.foto_ponto)}
+                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md font-bold text-[9px] tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 mx-auto hover:scale-105 active:scale-95 print:hidden"
+                      >
+                        📷 {row.id_ponto}
+                      </button>
+                      <span className="hidden print:inline">{row.id_ponto}</span>
+                    </>
+                  ) : (
+                    row.id_ponto
+                  )}
+                </td>
                 <td className="border border-black p-1.5 font-mono">{row.hora_inicial}</td>
                 <td className="border border-black p-1.5 font-mono">{row.hora_final}</td>
                 <td className="border border-black p-1.5 font-mono font-bold">
@@ -1220,7 +1235,7 @@ export default function CaptacaoClient({
       {/* Printable Sheet View - ONLY VISIBLE ON PRINT */}
       {selectedFicha && (
         <div className="hidden print:block">
-          {renderPaperFicha(selectedFicha)}
+          {renderPaperFicha(selectedFicha, setActivePhoto)}
         </div>
       )}
 
@@ -1603,7 +1618,7 @@ export default function CaptacaoClient({
                       style={{ WebkitOverflowScrolling: 'touch' }}
                     >
                       <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
-                        {renderPaperFicha(selectedFicha)}
+                        {renderPaperFicha(selectedFicha, setActivePhoto)}
                       </div>
                     </div>
                   </div>
@@ -1652,7 +1667,17 @@ export default function CaptacaoClient({
                               {/* Group 2: Point & Volume */}
                               <div>
                                 <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
-                                <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{row.id_ponto}</span>
+                                {row.foto_ponto ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActivePhoto(row.foto_ponto)}
+                                    className="px-2 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-lg font-mono font-bold text-xs tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 hover:scale-105 active:scale-95"
+                                  >
+                                    📷 {row.id_ponto}
+                                  </button>
+                                ) : (
+                                  <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{row.id_ponto}</span>
+                                )}
                                 <span className="block text-blue-600 dark:text-blue-400 font-black text-sm mt-1">
                                   💧 {Number(row.volume_captado).toLocaleString('pt-BR')} Litros
                                 </span>
@@ -2209,7 +2234,7 @@ export default function CaptacaoClient({
               }}
             >
               <div className="w-[1080px] shrink-0 bg-white p-4 rounded-xl shadow-2xl text-zinc-955">
-                {renderPaperFicha(selectedFicha)}
+                {renderPaperFicha(selectedFicha, setActivePhoto)}
               </div>
             </div>
           </div>
