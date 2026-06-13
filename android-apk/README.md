@@ -93,7 +93,7 @@ Ou use o **Image Asset Studio** do Android Studio:
 | Package Name | `com.eunaman.pcm` |
 | Min SDK | Android 5.0 (API 21) |
 | Target SDK | Android 14 (API 34) |
-| URL do App | `https://eunaman-pcm.vercel.app/` |
+| URL do App | `https://eunamansistema.vercel.app/` |
 | Versão | 1.0.0 (versionCode: 1) |
 
 ## Atualizar a URL do App
@@ -110,7 +110,7 @@ Edite o arquivo `app/src/main/res/values/strings.xml`:
 Para que o TWA funcione sem barra do Chrome, adicione o arquivo em:
 
 ```
-https://eunaman-pcm.vercel.app/.well-known/assetlinks.json
+https://eunamansistema.vercel.app/.well-known/assetlinks.json
 ```
 
 Conteúdo (substitua SHA256 pelo fingerprint da sua keystore):

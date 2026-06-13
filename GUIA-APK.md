@@ -3,7 +3,7 @@
 ## Estrutura do Projeto Android
 
 O projeto TWA (Trusted Web Activity) foi criado em `android-apk/`. 
-O APK vai abrir o site **https://eunaman-pcm.vercel.app** como um app nativo Android.
+O APK vai abrir o site **https://eunamansistema.vercel.app** como um app nativo Android.
 
 ---
 
@@ -72,7 +72,7 @@ Edite `public/.well-known/assetlinks.json` e substitua `SUBSTITUIR_COM_SHA256_DO
 O arquivo já está em `public/.well-known/assetlinks.json`. 
 Quando você fizer deploy no Vercel, ele ficará disponível em:
 ```
-https://eunaman-pcm.vercel.app/.well-known/assetlinks.json
+https://eunamansistema.vercel.app/.well-known/assetlinks.json
 ```
 
 Verifique em: https://developers.google.com/digital-asset-links/tools/generator

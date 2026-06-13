@@ -326,6 +326,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     console.log('[Auth] Iniciando Logout...');
     try {
+      // Se estiver no aplicativo nativo (WebView com EunamanApp), chama o logout nativo
+      if (typeof window !== 'undefined' && (window as any).EunamanApp?.logout) {
+        console.log('[Auth] Ponte nativa EunamanApp encontrada. Acionando expurgo de cache nativo...');
+        (window as any).EunamanApp.logout();
+        return; // Retorna pois o Android cuidará do expurgo e do reload da URL
+      }
+
       // Limpeza forçada de tudo antes mesmo de chamar o Supabase (prevenção de travamento)
       if (typeof window !== 'undefined') {
         localStorage.clear();
