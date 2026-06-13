@@ -8,6 +8,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,6 +20,7 @@ import android.util.Base64;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -80,18 +84,57 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
+
+        // Estratégia de Cache para Funcionamento Offline
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        // Habilita cookies e persistência de sessão
+        // Configuração de Sessão e Cookies (Login persistente)
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(webView, true);
         }
 
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return false; // Permite que o WebView gerencie as navegações
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                // Garante que os cookies/sessão sejam gravados no disco
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    CookieManager.getInstance().flush();
+                }
+            }
+        });
+
         webView.setWebChromeClient(new WebChromeClient());
         webView.addJavascriptInterface(new CameraJsBridge(), "EunamanCamera");
+
+        // Monitoramento de Rede para Sincronização
+        setupNetworkMonitoring();
+    }
+
+    private void setupNetworkMonitoring() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (connectivityManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            connectivityManager.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(@NonNull Network network) {
+                    runOnUiThread(() -> {
+                        // Quando a internet volta, avisa o site para sincronizar dados (ex: novos cargos)
+                        if (webView != null) {
+                            webView.loadUrl("javascript:(function(){"
+                                    + "if(window.onNetworkSync){ window.onNetworkSync(); }"
+                                    + "})();");
+                        }
+                    });
+                }
+            });
+        }
     }
 
     @Override
