@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">EUNAMAN PCM</string>
-    <string name="launch_url">https://pcmfrota.eunaman.com.br/</string>
-    <string name="asset_host">pcmfrota.eunaman.com.br</string>
+    <string name="launch_url">https://eunamansistema.vercel.app/</string>
+    <string name="asset_host">eunamansistema.vercel.app</string>
     <string name="asset_statements">
         [{
             \"relation\": [\"delegate_permission/common.handle_all_urls\"],

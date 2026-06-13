@@ -99,31 +99,30 @@ public class EunamanActivity extends AppCompatActivity {
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         
-        // ── Otimização de Performance ──
+        // ── Otimização Máxima de Performance e Sessão ──
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
-        settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
         
-        // Identificação como Navegador Mobile para evitar bloqueios de Login
-        String originalUA = settings.getUserAgentString();
-        settings.setUserAgentString(originalUA + " EunamanApp/1.1.0");
+        // Renderização acelerada e persistência de dados
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         
-        // Renderização acelerada
+        // User-Agent Robusto
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36 EunamanApp/1.1.0");
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
         }
-        
-        // Estratégia de Cache Inteligente
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        // Sessão e Cookies
+        // Habilita Cookies e Persistência de Dados Críticos
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -135,32 +134,45 @@ public class EunamanActivity extends AppCompatActivity {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                Log.d(TAG, "Carregamento iniciado: " + url);
+                
+                // Força a gravação de cookies no início de QUALQUER mudança de página
+                CookieManager.getInstance().flush();
 
-                // Detecta URLs de logout (sair) para limpar a sessão nativa
-                if (!isLoggingOut && (url.toLowerCase().contains("logout") || url.toLowerCase().contains("/sair"))) {
-                    Log.d(TAG, "Detectada URL de Logout. Executando limpeza nativa...");
+                String lowerUrl = url.toLowerCase();
+                if (!isLoggingOut && (lowerUrl.contains("logout") || lowerUrl.contains("/sair") || lowerUrl.contains("signout") || lowerUrl.contains("exit"))) {
                     performNativeLogout();
                 }
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                if (progressBar != null) progressBar.setVisibility(View.GONE);
-                
-                // Remove o Splash Screen após o primeiro carregamento completo
-                if (splashScreen != null && splashScreen.getVisibility() == View.VISIBLE) {
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        splashScreen.setVisibility(View.GONE);
-                        webView.setVisibility(View.VISIBLE);
-                        long loadTime = System.currentTimeMillis() - startTime;
-                        Log.d(TAG, "App pronto em: " + loadTime + "ms");
-                    }, 500);
-                }
+                // Sincronização agressiva de cookies após o carregamento
+                CookieManager.getInstance().flush();
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                if (url.toLowerCase().contains("dashboard") || url.toLowerCase().contains("home")) {
+                    // Se for a dashboard, garantimos que os cookies estão no disco antes de mostrar a tela
                     CookieManager.getInstance().flush();
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        finalizePageLoad(view, url);
+                    }, 300); // Atraso reduzido para 300ms para ser quase imperceptível
+                } else {
+                    finalizePageLoad(view, url);
+                }
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return false;
+            }
+
+            private void finalizePageLoad(WebView view, String url) {
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
+                CookieManager.getInstance().flush();
+
+                if (splashScreen != null && splashScreen.getVisibility() == View.VISIBLE) {
+                    splashScreen.setVisibility(View.GONE);
+                    webView.setVisibility(View.VISIBLE);
+                    Log.d(TAG, "App pronto e conta reconhecida.");
                 }
             }
 
@@ -395,45 +407,63 @@ public class EunamanActivity extends AppCompatActivity {
         if (isLoggingOut) return;
         isLoggingOut = true;
         
-        Log.d(TAG, "Iniciando processo de Logout Nativo...");
+        Log.w(TAG, "EXECUTANDO VARREDURA E LIMPEZA DE SESSÃO...");
         runOnUiThread(() -> {
-            if (webView != null) webView.stopLoading();
+            if (webView != null) {
+                webView.stopLoading();
+                webView.pauseTimers(); // Interrompe processamento JS em background
+            }
 
-            // 1. Limpa Cookies e Sessão
+            // 1. Limpeza de Cookies (Agressiva)
             CookieManager cookieManager = CookieManager.getInstance();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 cookieManager.removeAllCookies(success -> {
                     cookieManager.flush();
-                    finalizeLogout();
+                    Log.d(TAG, "Cookies limpos com sucesso.");
+                    continueLogoutStep2();
                 });
             } else {
                 cookieManager.removeAllCookie();
                 cookieManager.removeSessionCookie();
-                finalizeLogout();
+                continueLogoutStep2();
             }
         });
     }
 
-    private void finalizeLogout() {
+    private void continueLogoutStep2() {
         runOnUiThread(() -> {
+            // 2. Limpeza de Dados de Navegação e Cache Nativo
             if (webView != null) {
-                // 2. Limpa Cache e Armazenamento Nativo
                 webView.clearCache(true);
                 webView.clearHistory();
                 webView.clearFormData();
-                WebStorage.getInstance().deleteAllData();
-                
-                // 3. Limpa LocalStorage via JS (Garante que tokens sumam)
-                webView.loadUrl("javascript:(function(){ localStorage.clear(); sessionStorage.clear(); })();");
-                
-                // 4. Redireciona para a Home/Login
-                String loginUrl = getString(R.string.launch_url);
-                webView.loadUrl(loginUrl);
-                Log.d(TAG, "Logout Nativo finalizado. Redirecionado para: " + loginUrl);
+                webView.clearSslPreferences();
             }
             
-            isLoggingOut = false;
-            Toast.makeText(this, "Sessão encerrada com sucesso.", Toast.LENGTH_SHORT).show();
+            // 3. Limpeza de WebStorage (IndexedDB, LocalStorage, WebSQL)
+            WebStorage.getInstance().deleteAllData();
+            
+            // 4. Expurgo de Tokens via JavaScript (Prevenção de Cache JS)
+            if (webView != null) {
+                webView.loadUrl("javascript:(function(){ " +
+                        "localStorage.clear(); " +
+                        "sessionStorage.clear(); " +
+                        "document.cookie.split(';').forEach(function(c) { " +
+                        "  document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'); " +
+                        "}); " +
+                        "})();");
+            }
+
+            // 5. Redirecionamento Forçado e Reset de Estado
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (webView != null) {
+                    webView.resumeTimers();
+                    webView.loadUrl(getString(R.string.launch_url));
+                }
+                isLoggingOut = false;
+                Log.i(TAG, "VARREDURA DE LOGOUT CONCLUÍDA. Usuário redirecionado.");
+                Toast.makeText(this, "Sessão encerrada com segurança.", Toast.LENGTH_SHORT).show();
+            }, 300);
         });
     }
 
