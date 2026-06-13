@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Edit2, Save, X, Calendar as CalendarIcon, ShieldAlert } from "lucide-react";
 import { saveCalendario, importarCronograma2026, limparDuplicatasCalendario } from "./actions";
 
 import { useAuth } from "@/components/auth-context";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 
 const MESES_NOME = [
   "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -13,6 +15,7 @@ const MESES_NOME = [
 
 export default function CalendarioClient({ initialData }: { initialData: any[] }) {
   const { profile } = useAuth();
+  const { isOnline } = useOffline();
   const isVisitante = profile?.role === "visitante";
 
   const [data, setData] = useState(initialData);
@@ -20,6 +23,10 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
   const [editForm, setEditForm] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
+
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
 
   async function handleImport() {
     if (!confirm("Isso irá importar todos os meses de 2026. Deseja continuar?")) return;
@@ -50,9 +57,20 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
   async function handleSave() {
     if (!editForm) return;
     try {
-      await saveCalendario(editForm);
-      setEditingId(null);
-      window.location.reload(); 
+      if (isOnline) {
+        await saveCalendario(editForm);
+        await localDb.put("calendario_suzano", editForm);
+        setEditingId(null);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-calendario_suzano"));
+      } else {
+        const updated = { ...editForm, _isPendingSync: true };
+        await localDb.put("calendario_suzano", updated);
+        await localDb.addToQueue("calendario", "save_calendario", editForm);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+        window.dispatchEvent(new CustomEvent("offline-db-updated-calendario_suzano"));
+        setEditingId(null);
+        alert("✅ Calendário alterado localmente! Será sincronizado assim que a conexão voltar.");
+      }
     } catch (error) {
       alert("Erro ao salvar!");
     }
@@ -106,7 +124,12 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
                       <CalendarIcon size={16} />
                     </div>
                     <div>
-                      <div className="font-bold dark:text-white">{MESES_NOME[item.mes] || item.mes}</div>
+                      <div className="font-bold dark:text-white flex items-center gap-2">
+                        {MESES_NOME[item.mes] || item.mes}
+                        {item._isPendingSync && (
+                          <span className="text-[10px] text-amber-500 font-bold animate-pulse">(Offline)</span>
+                        )}
+                      </div>
                       <div className="text-xs text-zinc-500">{item.ano}</div>
                     </div>
                   </div>

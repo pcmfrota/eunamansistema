@@ -5,15 +5,15 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao';
-  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal';
+  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal';
   payload: any;
   timestamp: number;
 }
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 4;
+  private dbVersion = 6;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
@@ -83,6 +83,21 @@ export class OfflineDB {
         }
         if (!db.objectStoreNames.contains('lancamentos_captacao')) {
           db.createObjectStore('lancamentos_captacao', { keyPath: 'id' });
+        }
+
+        // Escala de Frotas
+        if (!db.objectStoreNames.contains('escala_frota')) {
+          db.createObjectStore('escala_frota', { keyPath: 'id' });
+        }
+
+        // Lavagens
+        if (!db.objectStoreNames.contains('lavagens')) {
+          db.createObjectStore('lavagens', { keyPath: 'id' });
+        }
+
+        // Programação Preventiva
+        if (!db.objectStoreNames.contains('prev_prog_semanal')) {
+          db.createObjectStore('prev_prog_semanal', { keyPath: 'id' });
         }
       };
     });

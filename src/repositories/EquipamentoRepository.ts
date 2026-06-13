@@ -17,12 +17,15 @@ const TABELAS_DEPENDENTES = [
 export class EquipamentoRepository {
   static async list() {
     const supabase = createClient();
-    return await supabase.from('equipamentos').select('*').order('placa', { ascending: true });
+    return await supabase.from('equipamentos').select('*').is('deleted_at', null).order('placa', { ascending: true });
   }
 
   static async create(data: EquipamentoInsert) {
     const supabase = createClient();
-    return await supabase.from('equipamentos').insert(data);
+    return await supabase.from('equipamentos').insert({
+      ...data,
+      deleted_at: null
+    });
   }
 
   static async update(id: string, data: EquipamentoUpdate) {
@@ -32,34 +35,21 @@ export class EquipamentoRepository {
 
   static async delete(id: string) {
     const supabase = createClient();
-
-    // Apaga dependentes primeiro (ignora erros de tabelas que não existem)
-    for (const tabela of TABELAS_DEPENDENTES) {
-      await (supabase.from(tabela as any) as any)
-        .delete()
-        .eq('equipamento_id', id);
-    }
-
-    // Agora apaga o equipamento
-    return await supabase.from('equipamentos').delete().eq('id', id);
+    return await supabase.from('equipamentos').update({ deleted_at: new Date().toISOString() }).eq('id', id);
   }
 
   static async deleteMany(ids: string[]) {
     const supabase = createClient();
-
-    // Apaga dependentes primeiro para cada id
-    for (const tabela of TABELAS_DEPENDENTES) {
-      await (supabase.from(tabela as any) as any)
-        .delete()
-        .in('equipamento_id', ids);
-    }
-
-    return await supabase.from('equipamentos').delete().in('id', ids);
+    return await supabase.from('equipamentos').update({ deleted_at: new Date().toISOString() }).in('id', ids);
   }
 
   static async upsertMany(data: EquipamentoInsert[]) {
     const supabase = createClient();
-    return await supabase.from('equipamentos').upsert(data, { onConflict: 'placa' });
+    const dataWithDeletedAt = data.map(d => ({
+      ...d,
+      deleted_at: null
+    }));
+    return await supabase.from('equipamentos').upsert(dataWithDeletedAt, { onConflict: 'placa,deleted_at' });
   }
 }
 

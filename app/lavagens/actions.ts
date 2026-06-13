@@ -45,6 +45,7 @@ export async function getEquipamentos() {
   const { data, error } = await supabase
     .from('equipamentos')
     .select('placa, modulo, categoria, area')
+    .is('deleted_at', null)
     .order('placa')
 
   if (error) {

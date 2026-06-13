@@ -1,8 +1,9 @@
 "use client";
 
-import { login } from './actions'
-import { KeyRound, Mail, AlertCircle, TrendingUp, Loader2 } from 'lucide-react'
-import { useFormStatus } from 'react-dom'
+import { useState } from 'react'
+import { createClient } from '@/utils/supabase/client'
+import { useRouter } from 'next/navigation'
+import { KeyRound, Mail, AlertCircle, Loader2 } from 'lucide-react'
 
 // Renderizamos aqui a UI Premium para Login
 export default function LoginPage({
@@ -10,6 +11,38 @@ export default function LoginPage({
 }: {
   searchParams: { error?: string }
 }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(searchParams?.error || null);
+  const supabase = createClient();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) throw signInError;
+
+      // Sincroniza cookies e recarrega antes do redirecionamento definitivo
+      router.refresh();
+      window.location.replace('/');
+    } catch (err: any) {
+      console.error('[Login] Erro ao entrar:', err);
+      setError(err.message || 'Credenciais inválidas ou erro ao conectar');
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-zinc-50 dark:bg-black p-4 items-center justify-center overflow-hidden">
       {/* Background Image Oficial EUNAMAN */}
@@ -43,7 +76,7 @@ export default function LoginPage({
             Bem-vindo de volta
           </h2>
           
-          <form action={login} className="space-y-5" id="login-form">
+          <form onSubmit={handleSubmit} className="space-y-5" id="login-form">
             <div className="space-y-2">
               <label 
                 htmlFor="email" 
@@ -92,14 +125,14 @@ export default function LoginPage({
               </div>
             </div>
 
-            {searchParams?.error && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400 border border-red-200 dark:border-red-900/50">
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400 border border-red-200 dark:border-red-900/50 animate-in fade-in duration-200">
                 <AlertCircle className="h-4 w-4" />
-                <span>{searchParams.error}</span>
+                <span>{error}</span>
               </div>
             )}
 
-            <LoginButton />
+            <LoginButton isSubmitting={isSubmitting} />
           </form>
         </div>
         
@@ -111,20 +144,18 @@ export default function LoginPage({
   )
 }
 
-function LoginButton() {
-  const { pending } = useFormStatus();
-  
+function LoginButton({ isSubmitting }: { isSubmitting: boolean }) {
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={isSubmitting}
       className="group relative w-full overflow-hidden rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 dark:focus:ring-offset-zinc-900"
     >
       <div className="absolute inset-0 flex h-full w-full justify-center [transform:skew(-12deg)_translateX(-100%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(100%)]">
         <div className="relative h-full w-8 bg-white/20" />
       </div>
       <span className="relative z-10 flex items-center justify-center gap-2">
-        {pending ? (
+        {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
             Entrando...

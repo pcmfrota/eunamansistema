@@ -98,7 +98,12 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const queue = await localDb.getQueue();
-      if (queue.length === 0) return;
+      if (queue.length === 0) {
+        // Fila vazia, apenas roda sync em background se estiver online
+        const { syncAllTables } = await import("@/lib/offline-sync");
+        await syncAllTables();
+        return;
+      }
 
       setSyncing(true);
       console.log(`[Sync Manager] Iniciando sincronização de ${queue.length} registros...`);
@@ -130,11 +135,15 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       // Recarrega o contador e notifica as tabelas abertas
       await updatePendingCount();
       
-      // Se limpou toda a fila, mostra sucesso
+      // Se limpou toda a fila, mostra sucesso e faz boot sync
       const finalQueue = await localDb.getQueue();
       if (finalQueue.length === 0) {
         setShowSyncSuccess(true);
         setTimeout(() => setShowSyncSuccess(false), 4000);
+        
+        // Atualiza banco local com dados frescos do Supabase
+        const { syncAllTables } = await import("@/lib/offline-sync");
+        await syncAllTables();
         
         // Dispara evento global para que todas as telas busquem a versão fresca do Supabase
         window.dispatchEvent(new CustomEvent("offline-sync-completed"));
@@ -153,6 +162,23 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       triggerSync();
     }
   }, [isOnline, pendingCount]);
+
+  // Boot Sync proativo ao iniciar online ou reatar conexão
+  useEffect(() => {
+    if (isOnline && !syncing) {
+      const runBootSync = async () => {
+        try {
+          console.log("[OfflineProvider] Executando boot sync em background...");
+          const { syncAllTables } = await import("@/lib/offline-sync");
+          await syncAllTables();
+          window.dispatchEvent(new CustomEvent("offline-sync-completed"));
+        } catch (err) {
+          console.error("[OfflineProvider] Erro ao rodar boot sync:", err);
+        }
+      };
+      runBootSync();
+    }
+  }, [isOnline]);
 
   return (
     <OfflineContext.Provider value={{ isOnline, pendingCount, syncing, triggerSync }}>

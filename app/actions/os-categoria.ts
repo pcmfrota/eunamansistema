@@ -46,12 +46,18 @@ export async function getOSporCategoriaV3(
     // 1. Buscar todos os equipamentos
     const { data: equips, error: eqError } = await supabase
       .from("equipamentos")
-      .select("id, placa, tipo, modelo, modulo, categoria");
+      .select("id, placa, tipo, modelo, modulo, categoria, created_at, deleted_at");
     
     debugData.allEquipsCount = equips?.length || 0;
     debugData.eqError = eqError;
 
     if (eqError) throw eqError;
+
+    const eqTimestamps = (equips ?? [])
+      .map(eq => eq.created_at ? new Date(eq.created_at).getTime() : null)
+      .filter((t): t is number => t !== null);
+    const minCreatedAt = eqTimestamps.length > 0 ? Math.min(...eqTimestamps) : Date.now();
+    const baselineThreshold = minCreatedAt + 7 * 24 * 60 * 60 * 1000;
 
     // Filtra localmente os equipamentos da categoria
     const filteredEquips = (equips ?? []).filter(e => {
@@ -63,7 +69,25 @@ export async function getOSporCategoriaV3(
         'MULTIFUNCIONAL': 'MULTI',
         'MULTI': 'MULTI',
       };
-      return TIPO_PARA_LABEL[tipoRaw] === catUpper;
+      if (TIPO_PARA_LABEL[tipoRaw] !== catUpper) return false;
+
+      // Filtro temporal de criação (com tratamento de baseline para meses passados)
+      const createdAt = e.created_at ? new Date(e.created_at).getTime() : 0;
+      const isPeriodBeforeSystemInit = fimTime < minCreatedAt;
+
+      if (isPeriodBeforeSystemInit) {
+        if (createdAt > baselineThreshold) return false;
+      } else {
+        if (createdAt > fimTime) return false;
+      }
+
+      // Filtro temporal de deleção
+      if (e.deleted_at) {
+        const deletedAt = new Date(e.deleted_at).getTime();
+        if (deletedAt < inicioTime) return false;
+      }
+
+      return true;
     });
 
     debugData.filteredEquipsCount = filteredEquips.length;

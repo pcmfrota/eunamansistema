@@ -11,6 +11,7 @@ const EquipamentoSchema = z.object({
   modelo: z.string().optional().nullable().transform((val: string | null | undefined) => val?.trim() ?? null),
   horimetro_limite_preventiva: z.number().optional().default(500),
   status: z.string().optional().default('Ativo'),
+  deleted_at: z.string().optional().nullable().default(null),
 });
 
 export class EquipamentoService {
@@ -71,6 +72,7 @@ export class EquipamentoService {
     if (data.modulo !== undefined) cleanData.modulo = String(data.modulo).trim();
     if (data.area !== undefined) cleanData.area = data.area ? String(data.area).toUpperCase().trim() : null;
     if (data.status !== undefined) cleanData.status = String(data.status).trim();
+    if (data.deleted_at !== undefined) cleanData.deleted_at = data.deleted_at;
 
     const { error } = await EquipamentoRepository.update(id, cleanData);
 

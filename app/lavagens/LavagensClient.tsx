@@ -26,6 +26,8 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay,
 import { ptBR } from 'date-fns/locale'
 import { Lavagem, saveLavagem, deleteLavagem, validarLavagem } from './actions'
 import { supabase } from '@/lib/supabase'
+import { useOffline } from '@/components/offline-provider'
+import { localDb } from '@/lib/offline-db'
 
 interface LavagensClientProps {
   initialLavagens: Lavagem[]
@@ -42,6 +44,7 @@ const STATUS_COLORS = {
 }
 
 export default function LavagensClient({ initialLavagens, equipamentos, currentMes, currentAno }: LavagensClientProps) {
+  const { isOnline } = useOffline()
   const [view, setView] = useState<'calendar' | 'gallery'>('calendar')
   const [lavagens, setLavagens] = useState<Lavagem[]>(initialLavagens)
   const [selectedLavagem, setSelectedLavagem] = useState<Lavagem | null>(null)
@@ -127,17 +130,40 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const formData = new FormData()
-    Object.entries(modalData).forEach(([key, value]) => {
-      formData.append(key, String(value))
-    })
-    
-    const res = await saveLavagem(formData)
-    if (res.success) {
-      // Optimistic update or just refresh
-      window.location.reload()
+    const id = modalData.id || `temp_${Date.now()}`
+    const dataToSave = {
+      ...modalData,
+      id,
+      horimetro: Number(modalData.horimetro || 0),
+      km: Number(modalData.km || 0),
+      status: !modalData.lavagem_realizada ? 'Não realizado' : (!modalData.horimetro || !modalData.km || !modalData.colaborador ? 'Pendente' : 'Lavado')
+    }
+
+    if (isOnline) {
+      const formData = new FormData()
+      Object.entries(dataToSave).forEach(([key, value]) => {
+        formData.append(key, String(value))
+      })
+      const res = await saveLavagem(formData)
+      if (res.success) {
+        await localDb.put("lavagens", dataToSave)
+        window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+        setIsModalOpen(false)
+      } else {
+        alert('Erro ao salvar: ' + res.error)
+      }
     } else {
-      alert('Erro ao salvar: ' + res.error)
+      const localData = { ...dataToSave, _isPendingSync: true }
+      await localDb.put("lavagens", localData)
+      const formDataObj: Record<string, any> = {}
+      Object.entries(dataToSave).forEach(([key, value]) => {
+        formDataObj[key] = value
+      })
+      await localDb.addToQueue("lavagem", modalData.id ? "update" : "create", formDataObj)
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+      setIsModalOpen(false)
+      alert("✅ Lançamento salvo localmente! Será sincronizado assim que a conexão voltar.")
     }
   }
 
@@ -270,12 +296,15 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                             onClick={() => handleOpenModal(eq.placa, day)}
                           >
                             <div className={cn(
-                              "w-8 h-8 mx-auto rounded-lg flex items-center justify-center transition-all transform group-hover/cell:scale-110",
+                              "w-8 h-8 mx-auto rounded-lg flex items-center justify-center transition-all transform group-hover/cell:scale-110 relative",
                               lavagem ? STATUS_COLORS[lavagem.status as keyof typeof STATUS_COLORS] : STATUS_COLORS.default
                             )}>
                               {lavagem?.status === 'Lavado' && <Check size={14} className="text-white font-bold" />}
                               {lavagem?.status === 'Pendente' && <AlertCircle size={14} className="text-white" />}
                               {lavagem?.status === 'Não realizado' && <X size={14} className="text-white" />}
+                              {lavagem && (lavagem as any)._isPendingSync && (
+                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white flex items-center justify-center animate-pulse" title="Lançamento offline pendente de sincronização"></span>
+                              )}
                             </div>
                           </td>
                         )
@@ -310,6 +339,12 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                     {l.validated_at && (
                       <span className="px-2 py-1 text-[9px] font-black uppercase rounded-md bg-blue-600 text-white shadow-lg">
                         VALIDADO
+                      </span>
+                    )}
+                    {(l as any)._isPendingSync && (
+                      <span className="px-2 py-1 text-[9px] font-black uppercase rounded-md bg-amber-500 text-white shadow-lg flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        OFFLINE
                       </span>
                     )}
                   </div>
@@ -514,8 +549,19 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               <button 
                 onClick={async () => {
                   if (confirm('Validar esta lavagem?')) {
-                    await validarLavagem(selectedLavagem.id)
-                    window.location.reload()
+                    if (isOnline) {
+                      await validarLavagem(selectedLavagem.id)
+                      await localDb.put("lavagens", { ...selectedLavagem, validated_at: new Date().toISOString(), status: 'Lavado' })
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+                    } else {
+                      const updated = { ...selectedLavagem, validated_at: new Date().toISOString(), status: 'Lavado', _isPendingSync: true }
+                      await localDb.put("lavagens", updated)
+                      await localDb.addToQueue("lavagem", "validate", { id: selectedLavagem.id })
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+                      alert("✅ Lavagem validada localmente! Será sincronizada quando você estiver online.")
+                    }
+                    setIsPanelOpen(false)
                   }
                 }}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/20"
@@ -530,8 +576,18 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               <button 
                 onClick={async () => {
                   if (confirm('Tem certeza que deseja excluir?')) {
-                    await deleteLavagem(selectedLavagem.id)
-                    window.location.reload()
+                    if (isOnline) {
+                      await deleteLavagem(selectedLavagem.id)
+                      await localDb.delete("lavagens", selectedLavagem.id)
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+                    } else {
+                      await localDb.delete("lavagens", selectedLavagem.id)
+                      await localDb.addToQueue("lavagem", "delete", { id: selectedLavagem.id })
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+                      alert("✅ Registro excluído localmente! Será sincronizado quando você estiver online.")
+                    }
+                    setIsPanelOpen(false)
                   }
                 }}
                 className="py-2.5 bg-zinc-100 hover:bg-red-50 dark:bg-zinc-900 dark:hover:bg-red-950 text-red-600 dark:text-red-500 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-red-900/30 transition-all"
@@ -540,6 +596,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               </button>
             </div>
           </div>
+
         </div>
       )}
     </div>

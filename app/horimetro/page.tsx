@@ -9,6 +9,7 @@ export default async function HorimetroPage() {
   const { data: equipamentos } = await supabase
     .from('equipamentos')
     .select('id, placa, modelo')
+    .is('deleted_at', null)
     .order('placa')
 
   // Buscar o histórico completo de apontamentos para a tabela

@@ -105,12 +105,16 @@ export async function buscarOSporPlaca(
     }
   } else {
     // Sem filtro de data — retorna tudo
-    const { data: eqData } = await supabase.from('equipamentos').select('id').ilike('placa', placa.trim()).maybeSingle();
-    const eqId = eqData?.id;
+    const { data: eqData } = await supabase.from('equipamentos').select('id').ilike('placa', placa.trim());
+    const eqIds = eqData?.map(e => e.id) || [];
 
     let query = supabase.from('ordens_servico').select('*');
-    if (eqId) {
-      query = query.or(`equipamento_id.eq.${eqId},placa.ilike.${placa.trim()}`);
+    if (eqIds.length > 0) {
+      if (eqIds.length === 1) {
+        query = query.or(`equipamento_id.eq.${eqIds[0]},placa.ilike.${placa.trim()}`);
+      } else {
+        query = query.or(`equipamento_id.in.(${eqIds.join(',')}),placa.ilike.${placa.trim()}`);
+      }
     } else {
       query = query.ilike('placa', placa.trim());
     }
@@ -137,21 +141,24 @@ export async function buscarOSporPlaca(
     return result;
   }
 
-  // 1. Busca o ID do equipamento de forma robusta
+  // 1. Busca os IDs de equipamento de forma robusta
   const { data: eqData } = await supabase
     .from('equipamentos')
     .select('id, placa')
-    .ilike('placa', placa.trim())
-    .maybeSingle();
+    .ilike('placa', placa.trim());
 
-  const eqId = eqData?.id;
+  const eqIds = eqData?.map(e => e.id) || [];
 
   let query = supabase
     .from('ordens_servico')
     .select('*, equipamento:equipamento_id(placa)');
 
-  if (eqId) {
-    query = query.or(`equipamento_id.eq.${eqId},placa.ilike.${placa.trim()}`);
+  if (eqIds.length > 0) {
+    if (eqIds.length === 1) {
+      query = query.or(`equipamento_id.eq.${eqIds[0]},placa.ilike.${placa.trim()}`);
+    } else {
+      query = query.or(`equipamento_id.in.(${eqIds.join(',')}),placa.ilike.${placa.trim()}`);
+    }
   } else {
     query = query.ilike('placa', placa.trim());
   }

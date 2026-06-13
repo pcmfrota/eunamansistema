@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v2";
+const CACHE_NAME = "eunaman-cache-v3";
 const STATIC_ASSETS = [
   "/",
   "/os",
@@ -6,6 +6,12 @@ const STATIC_ASSETS = [
   "/pneus",
   "/backlog",
   "/calendario",
+  "/dashboard",
+  "/indicadores",
+  "/lavagens",
+  "/captacao",
+  "/programacao-preventiva",
+  "/base-frotas",
   "/manifest.json",
   "/logo-eunaman-full.png",
   "/bg-eunaman.png"
@@ -41,18 +47,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Ignorar completamente em ambiente de desenvolvimento local (localhost / 127.0.0.1)
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-    return;
-  }
-
-  // 1. Ignorar requisições não-GET e chamadas do Supabase / API internas
+  // 1. Ignorar requisições não-GET, conexões de HMR/WebSocket e chamadas do Supabase / API internas
   if (
     event.request.method !== "GET" || 
     url.pathname.startsWith("/api/") ||
     url.host.includes("supabase.co") ||
     event.request.url.includes("_next/image") ||
-    event.request.url.includes("chrome-extension")
+    event.request.url.includes("chrome-extension") ||
+    event.request.url.includes("webpack-hmr") ||
+    event.request.url.includes("hot-reloader") ||
+    event.request.url.includes("socket.io")
   ) {
     return; // Pass-through para rede pura
   }

@@ -345,10 +345,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('[Auth] Erro ao deslogar no cliente:', e);
       }
 
-      // Chama a Server Action de logout para limpar os cookies no servidor (HttpOnly) e redirecionar
-      await serverLogout();
+      // Chama a Server Action de logout para limpar os cookies no servidor e redirecionar
+      try {
+        await serverLogout();
+      } catch (e) {
+        // Erro esperado devido ao throw de redirect da Server Action, ignoramos
+      }
     } catch (err) {
-      console.error('[Auth] Erro no signOut, forçando redirecionamento:', err);
+      console.error('[Auth] Erro no signOut:', err);
+    } finally {
       if (typeof window !== 'undefined') {
         window.location.replace('/login');
       }

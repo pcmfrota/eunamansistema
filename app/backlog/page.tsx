@@ -1,31 +1,92 @@
-import { createClient } from '@/utils/supabase/server'
-import BacklogClient from './BacklogClient'
+"use client";
 
-export default async function BacklogPage() {
-  const supabase = createClient()
+import { useEffect, useState } from "react";
+import BacklogClient from "./BacklogClient";
+import { localDb } from "@/lib/offline-db";
+import { useOffline } from "@/components/offline-provider";
+import { PremiumLoader } from "@/components/premium-loader";
 
-  const [equipamentosRes, colaboradoresRes] = await Promise.all([
-    supabase
-      .from('equipamentos')
-      .select('id, placa, modulo, area')
-      .order('placa'),
-    supabase
-      .from('colaboradores')
-      .select('id, nome')
-      .order('nome')
-  ])
+export default function BacklogPage() {
+  const { isOnline } = useOffline();
+  const [loading, setLoading] = useState(true);
+  const [placas, setPlacas] = useState<any[]>([]);
+  const [colaboradores, setColaboradores] = useState<any[]>([]);
 
-  const placas = (equipamentosRes.data || []).map(e => ({
-    id: e.id,
-    placa: e.placa as string,
-    modulo: e.modulo as string | null,
-    area: e.area as string | null,
-  }))
+  useEffect(() => {
+    let active = true;
 
-  const colaboradores = (colaboradoresRes.data || []).map(c => ({
-    id: c.id,
-    nome: c.nome as string,
-  }))
+    const loadData = async () => {
+      try {
+        // 1. Carrega local (Offline-First)
+        const localEq = await localDb.getAll("equipamentos");
+        const localCol = await localDb.getAll("colaboradores");
 
-  return <BacklogClient placas={placas} colaboradores={colaboradores} />
+        const pl = localEq.map(e => ({
+          id: e.id,
+          placa: e.placa,
+          modulo: e.modulo,
+          area: e.area,
+        }));
+
+        const col = localCol.map(c => ({
+          id: c.id,
+          nome: c.nome,
+        }));
+
+        if (active) {
+          setPlacas(pl);
+          setColaboradores(col);
+          setLoading(false);
+        }
+
+        // 2. Se online, roda sync e atualiza do IndexedDB
+        if (isOnline) {
+          const { syncAllTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncAllTables();
+          if (syncSuccess) {
+            const freshEq = await localDb.getAll("equipamentos");
+            const freshCol = await localDb.getAll("colaboradores");
+
+            const freshPl = freshEq.map(e => ({
+              id: e.id,
+              placa: e.placa,
+              modulo: e.modulo,
+              area: e.area,
+            }));
+
+            const freshColData = freshCol.map(c => ({
+              id: c.id,
+              nome: c.nome,
+            }));
+
+            if (active) {
+              setPlacas(freshPl);
+              setColaboradores(freshColData);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar backlog:", err);
+        if (active) setLoading(false);
+      }
+    };
+
+    loadData();
+
+    window.addEventListener("offline-sync-completed", loadData);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-sync-completed", loadData);
+    };
+  }, [isOnline]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+        <PremiumLoader type="squares-sequential" text="Carregando Backlog de Peças/Serviços" subtext="Buscando registros locais..." />
+      </div>
+    );
+  }
+
+  return <BacklogClient placas={placas} colaboradores={colaboradores} />;
 }

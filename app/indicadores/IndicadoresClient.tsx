@@ -11,6 +11,9 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/components/auth-context'
 import { IndicadoresData, getIndicadoresData } from './actions'
+import { useOffline } from '@/components/offline-provider'
+import { getOfflineIndicadoresData } from '@/lib/offline-calculations'
+import { useEffect } from 'react'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const META = 95
@@ -215,13 +218,13 @@ function GraficoDisp({ dados, titulo, subtitulo, mediaGeral, tipo, horasTotais }
   )
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
-interface Props { initialData: IndicadoresData }
+interface Props { initialData?: IndicadoresData }
 
 export default function IndicadoresClient({ initialData }: Props) {
   const { profile } = useAuth()
+  const { isOnline } = useOffline()
   const isVisitante = profile?.role === 'visitante'
-  const [data, setData] = useState(initialData)
+  const [data, setData] = useState<IndicadoresData | null>(initialData || null)
   const [isPending, startTransition] = useTransition()
 
   // Filtros
@@ -233,34 +236,78 @@ export default function IndicadoresClient({ initialData }: Props) {
   const [abaAtiva, setAbaAtiva] = useState<'todos' | 'leves' | 'pesados'>('todos')
   const [filtroIndisp, setFiltroIndisp] = useState<'todos' | 'apenas_indisp' | 'apenas_100'>('todos')
 
-  const fetchData = useCallback((params: { mes: number; ano: number; categoria: string; area: string; placa: string }) => {
+  useEffect(() => {
+    let active = true
+
     startTransition(async () => {
-      const result = await getIndicadoresData({
-        mes: params.mes > 0 ? params.mes : undefined,
-        ano: params.ano > 0 ? params.ano : undefined,
-        categoria: params.categoria || undefined,
-        area: params.area || undefined,
-        placa: params.placa || undefined,
-      })
-      setData(result)
+      try {
+        // 1. Carrega local primeiro (offline first)
+        const localData = await getOfflineIndicadoresData({
+          mes: mes > 0 ? mes : undefined,
+          ano: ano > 0 ? ano : undefined,
+          categoria: categoria || undefined,
+          area: filtroArea || undefined,
+          placa: filtroPlaca || undefined,
+        })
+        if (active) {
+          setData(localData)
+        }
+
+        // 2. Se estiver online, busca dados frescos do servidor
+        if (isOnline) {
+          try {
+            const freshData = await getIndicadoresData({
+              mes: mes > 0 ? mes : undefined,
+              ano: ano > 0 ? ano : undefined,
+              categoria: categoria || undefined,
+              area: filtroArea || undefined,
+              placa: filtroPlaca || undefined,
+            })
+            if (active && freshData) {
+              setData(freshData)
+            }
+          } catch (onlineErr) {
+            console.warn("Erro ao buscar indicadores online, mantendo locais:", onlineErr)
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar indicadores:", error)
+      }
     })
-  }, [])
+
+    return () => {
+      active = false
+    }
+  }, [mes, ano, categoria, filtroArea, filtroPlaca, isOnline])
 
   function handleChange(updates: Partial<{ mes: number; ano: number; categoria: string; area: string; placa: string }>) {
-    const next = { mes, ano, categoria, area: filtroArea, placa: filtroPlaca, ...updates }
     if (updates.mes !== undefined) setMes(updates.mes)
     if (updates.ano !== undefined) setAno(updates.ano)
     if (updates.categoria !== undefined) setCategoria(updates.categoria)
     if (updates.area !== undefined) setFiltroArea(updates.area)
     if (updates.placa !== undefined) setFiltroPlaca(updates.placa)
-    fetchData(next)
   }
 
   function handleReset() {
     const now = new Date()
-    setMes(0); setAno(now.getFullYear()); setCategoria(''); setFiltroArea(''); setFiltroPlaca('')
-    setAbaAtiva('todos'); setFiltroIndisp('todos')
-    fetchData({ mes: 0, ano: now.getFullYear(), categoria: '', area: '', placa: '' })
+    setMes(0)
+    setAno(now.getFullYear())
+    setCategoria('')
+    setFiltroArea('')
+    setFiltroPlaca('')
+    setAbaAtiva('todos')
+    setFiltroIndisp('todos')
+  }
+
+  if (!data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] w-full bg-[#0f1115]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+          <span className="text-sm text-zinc-400 font-bold font-sans">Carregando Indicadores...</span>
+        </div>
+      </div>
+    )
   }
 
   // Filtro por aba (categoria)

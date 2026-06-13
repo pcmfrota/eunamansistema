@@ -31,7 +31,29 @@ export class AuthService {
 
   static async signOut() {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('[AuthService] Erro ao deslogar no cliente Supabase:', e);
+    }
+
+    try {
+      const { cookies } = require('next/headers');
+      const cookieStore = cookies();
+      const allCookies = cookieStore.getAll();
+      allCookies.forEach((cookie: any) => {
+        if (
+          cookie.name.startsWith('sb-') || 
+          cookie.name.includes('supabase') || 
+          cookie.name === 'x-user-role'
+        ) {
+          cookieStore.set(cookie.name, '', { maxAge: 0, path: '/' });
+        }
+      });
+    } catch (cookieErr) {
+      console.error('[AuthService] Erro ao limpar cookies no servidor:', cookieErr);
+    }
+
     return { success: true };
   }
 

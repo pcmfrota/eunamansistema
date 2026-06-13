@@ -45,6 +45,23 @@ import {
   atualizarFicha
 } from "@/app/captacao/actions";
 
+import {
+  saveLavagem,
+  deleteLavagem,
+  validarLavagem
+} from "@/app/lavagens/actions";
+
+import {
+  saveCalendario
+} from "@/app/calendario/actions";
+
+import {
+  criarProgSemanal,
+  atualizarProgSemanal,
+  atualizarStatusProgSemanal,
+  excluirProgSemanal
+} from "@/app/programacao-preventiva/actions";
+
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
 
@@ -200,6 +217,42 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete_lancamento") {
         const res = await excluirLancamento(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "lavagem") {
+      if (action === "create" || action === "update") {
+        const formData = deserializeToFormData(payload);
+        const res = await saveLavagem(formData);
+        if (res && !res.success) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteLavagem(payload.id);
+        if (res && !res.success) throw new Error(res.error);
+      } else if (action === "validate") {
+        const res = await validarLavagem(payload.id);
+        if (res && !res.success) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "calendario") {
+      if (action === "save_calendario") {
+        await saveCalendario(payload);
+      }
+    }
+
+    else if (entity === "prev_prog_semanal") {
+      if (action === "create") {
+        const res = await criarProgSemanal(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const res = await atualizarProgSemanal(payload.id, payload.data);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update_status_prog_semanal") {
+        const res = await atualizarStatusProgSemanal(payload.id, payload.status, payload.extras);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirProgSemanal(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

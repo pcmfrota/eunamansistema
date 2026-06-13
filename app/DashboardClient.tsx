@@ -7,6 +7,8 @@ import { Filtros, type FiltrosValues } from "@/components/filtros";
 import { gerarSlideHTML } from "@/lib/gerar-slide";
 import { getDashboardData, type DashboardData } from "@/app/actions/dashboard";
 import { getHistoricoMensal } from "@/app/actions/historico";
+import { useOffline } from "@/components/offline-provider";
+import { getOfflineDashboardData, getOfflineHistoricoMensal } from "@/lib/offline-calculations";
 
 // Componentes estáticos que não usam bibliotecas pesadas de gráficos
 import { PainelFormulas } from "@/components/graficos";
@@ -38,6 +40,7 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ initialData }: DashboardClientProps) {
+  const { isOnline } = useOffline();
   const [data, setData] = useState<DashboardData | null>(initialData || null);
   const [isPending, startTransition] = useTransition();
   const [isLoadingInitial, setIsLoadingInitial] = useState(!initialData);
@@ -65,62 +68,86 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   useEffect(() => {
     setLoadingHistorico(true);
     const categoria = filtros.categoria || "PESADA";
-    getHistoricoMensal(categoria)
-      .then(setHistoricoMensal)
-      .catch(() => setHistoricoMensal([]))
-      .finally(() => setLoadingHistorico(false));
-  }, [filtros.categoria]);
-
-  // Busca inicial caso não tenha dados vindos do servidor
-  useEffect(() => {
-    if (!initialData) {
-      const fetchInitial = async () => {
+    
+    const fetchHistorico = async () => {
+      if (isOnline) {
         try {
-          setIsLoadingInitial(true);
-          const result = await getDashboardData({ categoria: "PESADA" });
-          setData(result);
-        } catch (error) {
-          console.error("Erro ao carregar dados iniciais:", error);
-        } finally {
-          setIsLoadingInitial(false);
+          const res = await getHistoricoMensal(categoria);
+          setHistoricoMensal(res);
+          return;
+        } catch (err) {
+          console.warn("Falha ao buscar histórico online, usando local:", err);
         }
-      };
-      fetchInitial();
-    }
-  }, [initialData]);
+      }
+      const localRes = await getOfflineHistoricoMensal(categoria);
+      setHistoricoMensal(localRes);
+    };
 
-  function handleFilterChange(key: keyof FiltrosValues, value: string | number) {
-    const newFiltros = { ...filtros, [key]: value };
-    setFiltros(newFiltros);
+    fetchHistorico().finally(() => setLoadingHistorico(false));
+  }, [filtros.categoria, isOnline]);
+
+  // Carrega e atualiza os dados do Dashboard (Offline-First)
+  useEffect(() => {
+    let active = true;
 
     startTransition(async () => {
-      const result = await getDashboardData({
-        mes: (newFiltros.mes as number) > 0 ? (newFiltros.mes as number) : undefined,
-        ano: (newFiltros.ano as number) > 0 ? (newFiltros.ano as number) : undefined,
-        categoria: newFiltros.categoria || undefined,
-        placa: newFiltros.placa || undefined,
-        modulo: newFiltros.modulo || undefined,
-        area: newFiltros.area || undefined,
-        status: newFiltros.status || undefined,
-        dataInicio: newFiltros.dataInicio || undefined,
-        dataFim: newFiltros.dataFim || undefined,
-      });
-      setData(result);
+      try {
+        // 1. Carrega do IndexedDB local imediatamente (Offline First)
+        const localData = await getOfflineDashboardData({
+          mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
+          ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
+          categoria: filtros.categoria || undefined,
+          placa: filtros.placa || undefined,
+          modulo: filtros.modulo || undefined,
+          area: filtros.area || undefined,
+          status: filtros.status || undefined,
+          dataInicio: filtros.dataInicio || undefined,
+          dataFim: filtros.dataFim || undefined,
+        });
+
+        if (active) {
+          setData(localData);
+          setIsLoadingInitial(false);
+        }
+
+        // 2. Se estiver online, busca dados frescos do servidor
+        if (isOnline) {
+          try {
+            const freshData = await getDashboardData({
+              mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
+              ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
+              categoria: filtros.categoria || undefined,
+              placa: filtros.placa || undefined,
+              modulo: filtros.modulo || undefined,
+              area: filtros.area || undefined,
+              status: filtros.status || undefined,
+              dataInicio: filtros.dataInicio || undefined,
+              dataFim: filtros.dataFim || undefined,
+            });
+            if (active && freshData) {
+              setData(freshData);
+            }
+          } catch (onlineErr) {
+            console.warn("Erro ao buscar dados online, mantendo locais:", onlineErr);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados do dashboard:", error);
+        if (active) setIsLoadingInitial(false);
+      }
     });
+
+    return () => {
+      active = false;
+    };
+  }, [filtros, isOnline]);
+
+  function handleFilterChange(key: keyof FiltrosValues, value: string | number) {
+    setFiltros(prev => ({ ...prev, [key]: value }));
   }
 
   function handleReset() {
     setFiltros(defaultFiltros);
-    startTransition(async () => {
-      const result = await getDashboardData({
-        mes: defaultFiltros.mes,
-        ano: defaultFiltros.ano,
-        categoria: defaultFiltros.categoria || undefined,
-        dataInicio: undefined,
-        dataFim: undefined,
-      });
-      setData(result);
-    });
   }
 
   const mttrLabel = data?.mttr && data.mttr > 0 ? `${data.mttr}h` : "—";

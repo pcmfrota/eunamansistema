@@ -12,6 +12,8 @@ import {
   criarProgSemanal, atualizarProgSemanal, excluirProgSemanal,
   atualizarStatusProgSemanal,
 } from "./actions"
+import { useOffline } from "@/components/offline-provider"
+import { localDb } from "@/lib/offline-db"
 import { mondayOfISOWeek, sundayOfISOWeek } from "./week-utils"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -142,6 +144,7 @@ export default function ProgPrevClient({
   anoAtivo: number
 }) {
   const { profile } = useAuth()
+  const { isOnline } = useOffline()
   const isVisitante = profile?.role === 'visitante'
   const [tab, setTab] = useState<Tab>("prog-semanal")
 
@@ -352,11 +355,24 @@ function TabProgSemanal({
             <button onClick={() => startT(async () => {
               const ns = item.status === "CONCLUÍDO" ? "PROGRAMADO" : "CONCLUÍDO"
               const today = new Date().toISOString().slice(0, 10)
-              await atualizarStatusProgSemanal(item.id, ns, ns === "CONCLUÍDO"
+              const extras = ns === "CONCLUÍDO"
                 ? { percentual: 100, data_fim_exec: today }
-                : { percentual: 0 })
+                : { percentual: 0 }
+              
+              if (isOnline) {
+                await atualizarStatusProgSemanal(item.id, ns, extras)
+              } else {
+                const updated = { ...item, status: ns, ...extras, _isPendingSync: true }
+                await localDb.put("prev_prog_semanal", updated)
+                await localDb.addToQueue("prev_prog_semanal", "update_status_prog_semanal", { id: item.id, status: ns, extras })
+                window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+                alert("✅ Status atualizado localmente! Será sincronizado assim que a conexão voltar.")
+              }
             })} className="hover:opacity-80 transition-opacity">
               <StatusBadge status={item.status} />
+              {(item as any)._isPendingSync && (
+                <span className="ml-1 text-[8px] text-amber-500 font-black animate-pulse">(OFFLINE)</span>
+              )}
             </button>
           ) : (
             <StatusBadge status={item.status} />
@@ -369,7 +385,20 @@ function TabProgSemanal({
           <div className="px-3 py-2.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button onClick={() => { setEditItem(item); setShowForm(true) }}
               className="p-1 text-zinc-600 hover:text-zinc-200 transition-colors"><Pencil size={11} /></button>
-            <button onClick={() => { if (confirm("Excluir este item?")) startT(async () => excluirProgSemanal(item.id)) }}
+            <button onClick={() => {
+              if (confirm("Excluir este item?")) {
+                startT(async () => {
+                  if (isOnline) {
+                    await excluirProgSemanal(item.id)
+                  } else {
+                    await localDb.delete("prev_prog_semanal", item.id)
+                    await localDb.addToQueue("prev_prog_semanal", "delete", { id: item.id })
+                    window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+                    alert("✅ Registro excluído localmente! Será sincronizado quando a conexão voltar.")
+                  }
+                })
+              }
+            }}
               className="p-1 text-zinc-600 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
           </div>
         )}
@@ -965,8 +994,17 @@ function ProgSemanalForm({
       observacoes:   form.observacoes || null,
     }
     startT(async () => {
-      if (item) await atualizarProgSemanal(item.id, payload)
-      else await criarProgSemanal(payload)
+      if (isOnline) {
+        if (item) await atualizarProgSemanal(item.id, payload)
+        else await criarProgSemanal(payload)
+      } else {
+        const id = item?.id || `temp_${Date.now()}`
+        const localData = { ...payload, id, _isPendingSync: true }
+        await localDb.put("prev_prog_semanal", localData)
+        await localDb.addToQueue("prev_prog_semanal", item ? "update" : "create", item ? { id, data: payload } : payload)
+        window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+        alert("✅ Programação salva localmente! Será sincronizada assim que você estiver online.")
+      }
       onClose()
     })
   }

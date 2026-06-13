@@ -73,10 +73,43 @@ export default function BaseFrotasPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await buscarEquipamentosComEscala();
-      setVehicles(data);
+      if (isOnline) {
+        const data = await buscarEquipamentosComEscala();
+        setVehicles(data);
+        await localDb.saveMany("equipamentos", data);
+        const scales = data.map((d: any) => d.escala).filter(Boolean);
+        await localDb.saveMany("escala_frota", scales);
+      } else {
+        const eqs = await localDb.getAll("equipamentos");
+        const escalas = await localDb.getAll("escala_frota");
+        const escalaMap = new Map(escalas.map((e: any) => [
+          String(e.placa ?? '').toUpperCase().replace(/\s+/g, ''),
+          e,
+        ]));
+        const joined = eqs.map((eq: any) => ({
+          ...eq,
+          escala: eq.escala || escalaMap.get(String(eq.placa ?? '').toUpperCase().replace(/\s+/g, '')) || null
+        }));
+        setVehicles(joined);
+      }
     } catch (err) {
       console.error(err);
+      try {
+        // Fallback to local DB on any error
+        const eqs = await localDb.getAll("equipamentos");
+        const escalas = await localDb.getAll("escala_frota");
+        const escalaMap = new Map(escalas.map((e: any) => [
+          String(e.placa ?? '').toUpperCase().replace(/\s+/g, ''),
+          e,
+        ]));
+        const joined = eqs.map((eq: any) => ({
+          ...eq,
+          escala: eq.escala || escalaMap.get(String(eq.placa ?? '').toUpperCase().replace(/\s+/g, '')) || null
+        }));
+        setVehicles(joined);
+      } catch (dbErr) {
+        console.error("Local DB load failed:", dbErr);
+      }
     } finally {
       setLoading(false);
     }
