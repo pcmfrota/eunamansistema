@@ -118,12 +118,16 @@ public class EunamanActivity extends AppCompatActivity {
         // Identificação como Navegador Desktop para forçar exibição de botões escondidos (Excluir, etc)
         settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
         
-        // Ajustes de visualização (Zoom e Desktop View)
+        // Ajustes de visualização (Zoom e Desktop View) - CORREÇÃO DE ROLAGEM
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
+        
+        // Garante que o WebView permita rolagem em todas as direções
+        webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        webView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
