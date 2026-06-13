@@ -26,6 +26,30 @@ Write-Host "============================================" -ForegroundColor Cyan
 
 # --- 1. Verificar JAVA_HOME ---
 Write-Host "`n[1/5] Verificando Java..." -ForegroundColor Yellow
+
+if (!$env:JAVA_HOME) {
+    # Tentar encontrar o JDK do Android Studio (JBR)
+    $asJdk = "C:\Program Files\Android\Android Studio\jbr"
+    if (Test-Path $asJdk) {
+        $env:JAVA_HOME = $asJdk
+        $env:PATH = "$asJdk\bin;" + $env:PATH
+    } else {
+        # Tentar encontrar em C:\Program Files\Eclipse Adoptium\
+        $adoptiumPath = Get-ChildItem "C:\Program Files\Eclipse Adoptium\jdk-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($adoptiumPath) {
+            $env:JAVA_HOME = $adoptiumPath.FullName
+            $env:PATH = "$($adoptiumPath.FullName)\bin;" + $env:PATH
+        } else {
+            # Tentar encontrar em C:\Program Files\Java\
+            $javaPath = Get-ChildItem "C:\Program Files\Java\jdk-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($javaPath) {
+                $env:JAVA_HOME = $javaPath.FullName
+                $env:PATH = "$($javaPath.FullName)\bin;" + $env:PATH
+            }
+        }
+    }
+}
+
 if ($env:JAVA_HOME) {
     $keytoolPath = Join-Path $env:JAVA_HOME "bin\keytool.exe"
     Write-Host "  Java encontrado: $env:JAVA_HOME" -ForegroundColor Green
@@ -34,10 +58,17 @@ if ($env:JAVA_HOME) {
     $javaCmd = Get-Command java -ErrorAction SilentlyContinue
     if ($javaCmd) {
         Write-Host "  Java encontrado no PATH: $($javaCmd.Source)" -ForegroundColor Green
-        $keytoolPath = "keytool"
+        # Tentar ver se keytool está no mesmo diretório do java.exe
+        $javaDir = Split-Path $javaCmd.Source
+        $localKeytool = Join-Path $javaDir "keytool.exe"
+        if (Test-Path $localKeytool) {
+            $keytoolPath = $localKeytool
+        } else {
+            $keytoolPath = "keytool"
+        }
     } else {
         Write-Host "  ERRO: Java não encontrado!" -ForegroundColor Red
-        Write-Host "  Instale o JDK 17+ de: https://adoptium.net/" -ForegroundColor Red
+        Write-Host "  Instale o JDK 17+ de: https://adoptium.net/ ou configure a variável de ambiente JAVA_HOME." -ForegroundColor Red
         exit 1
     }
 }

@@ -29,18 +29,25 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   // --- 1. Verificador de Conectividade Ativa (Ping Real) ---
   const checkConnectivity = async (): Promise<boolean> => {
-    if (typeof window === "undefined" || !navigator.onLine) {
-      return false;
-    }
+    if (typeof window === "undefined") return false;
+    if (!navigator.onLine) return false;
+
     try {
-      // Faz um HEAD fetch rápido no favicon para contornar Wi-Fis de fachada sem sinal real
-      const response = await fetch("/favicon.ico", {
-        method: "HEAD",
+      // Faz uma requisição GET simples e rápida no endpoint de ping
+      // Adicionamos timeout curto para não travar a UI
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch("/api/ping", {
+        method: "GET",
         cache: "no-store",
-        mode: "no-cors"
+        signal: controller.signal
       });
-      return true;
+      clearTimeout(timeoutId);
+
+      return response.ok;
     } catch (err) {
+      console.warn("[Connectivity Check] Falha ao conectar ao servidor:", err);
       return false;
     }
   };
