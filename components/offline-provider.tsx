@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { Wifi, WifiOff, RefreshCw, CheckCircle2 } from "lucide-react";
 import { localDb } from "@/lib/offline-db";
 
@@ -100,8 +100,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // --- 3. Motor de Sincronização (Replay Queue) ---
-  const triggerSync = async () => {
-    if (syncing || !isOnline) return;
+  const triggerSync = async (forceOnline = false) => {
+    if (syncing || (!isOnline && !forceOnline)) return;
 
     try {
       const queue = await localDb.getQueue();
@@ -186,6 +186,28 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       runBootSync();
     }
   }, [isOnline]);
+
+  // Salva referência estável do triggerSync para evitar re-registro do callback global
+  const triggerSyncRef = useRef(triggerSync);
+  useEffect(() => {
+    triggerSyncRef.current = triggerSync;
+  }, [triggerSync]);
+
+  // --- 4. Registro do Callback Nativo de Rede (Android WebView) ---
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).onNetworkSync = async () => {
+        console.log("[OfflineProvider] Sinal nativo de rede ativa (onNetworkSync) recebido.");
+        setIsOnline(true);
+        await triggerSyncRef.current(true);
+      };
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).onNetworkSync;
+      }
+    };
+  }, []);
 
   return (
     <OfflineContext.Provider value={{ isOnline, pendingCount, syncing, triggerSync }}>

@@ -115,19 +115,21 @@ public class EunamanActivity extends AppCompatActivity {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         
-        // Identificação como Navegador Desktop para forçar exibição de botões escondidos (Excluir, etc)
+        // Identificação como Navegador Desktop para forçar exibição de botões        // Identificação idêntica ao Google Chrome Desktop (Garante mesmas funções da Web)
         settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
         
-        // Ajustes de visualização (Zoom e Desktop View) - CORREÇÃO DE ROLAGEM
+        // Estratégia Máxima de Sincronização (Sem Cache Antigo)
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false); // Esconde os botões +/- feios do Android, usa só os dedos
+        settings.setDisplayZoomControls(false); 
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE); // Força carregar do Vercel sempre
         
         // Garante que o WebView permita rolagem em todas as direções
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
         webView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        webView.clearCache(true); // Limpa cache residual ao abrir
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
