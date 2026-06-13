@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Plus, 
   X, 
@@ -473,6 +474,11 @@ export default function CaptacaoClient({
 }: CaptacaoClientProps) {
   const { isOnline } = useOffline();
   const { profile } = useAuth();
+  
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // State
   const [fichas, setFichas] = useState<any[]>(initialFichas);
@@ -2150,17 +2156,8 @@ export default function CaptacaoClient({
       )}
 
       {/* ─── FULLSCREEN EXPANDED FICHA VIEW ─── */}
-      {isFichaExpanded && selectedFicha && (
-        <div className="fixed inset-0 z-[1500] bg-white dark:bg-zinc-950 flex flex-col animate-in fade-in duration-200 select-none print:hidden">
-          {/* Oculta temporariamente a barra lateral e o padding para a ficha ocupar a tela inteira */}
-          <style dangerouslySetInnerHTML={{__html: `
-            aside, header.lg\\:hidden {
-              display: none !important;
-            }
-            .lg\\:pl-64 {
-              padding-left: 0 !important;
-            }
-          `}} />
+      {isFichaExpanded && selectedFicha && mounted && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-white dark:bg-zinc-950 flex flex-col animate-in fade-in duration-200 select-none print:hidden">
           {/* Header of fullscreen view */}
           <header className="p-3 border-b border-zinc-200 dark:border-zinc-855 flex flex-col sm:flex-row gap-2 items-center justify-between bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-md sticky top-0 z-10">
             <div className="flex items-center gap-2">
@@ -2234,7 +2231,8 @@ export default function CaptacaoClient({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
