@@ -518,6 +518,38 @@ export default function CaptacaoClient({
   // Search and status filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'Todas' | 'Aberta' | 'Fechada'>('Todas');
+
+  // Filtro de período operacional (Default para o período operacional ativo)
+  const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<{ mes: number; ano: number } | 'Todos'>(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const period = calendario.find(p => p.data_inicio <= today && p.data_fim >= today);
+    if (period) {
+      return { mes: period.mes, ano: period.ano };
+    }
+    const now = new Date();
+    return { mes: now.getMonth() + 1, ano: now.getFullYear() };
+  });
+
+  const periodOptions = useMemo(() => {
+    const list = (calendario && calendario.length > 0) ? calendario : fichas;
+    const options = list.map(c => ({
+      mes: c.mes,
+      ano: c.ano,
+      label: `${getMonthName(c.mes)} / ${c.ano}`
+    }));
+    
+    const unique: typeof options = [];
+    const seen = new Set<string>();
+    options.forEach(o => {
+      const key = `${o.ano}-${o.mes}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(o);
+      }
+    });
+    
+    return unique.sort((a, b) => b.ano - a.ano || b.mes - a.mes);
+  }, [calendario, fichas]);
   const [isExporting, setIsExporting] = useState(false);
   const [isFichaExpanded, setIsFichaExpanded] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
@@ -888,9 +920,14 @@ export default function CaptacaoClient({
       const computedStatus = locked ? 'Fechada' : 'Aberta';
       const matchesStatus = filterStatus === 'Todas' || computedStatus === filterStatus;
       
-      return matchesSearch && matchesStatus;
+      let matchesPeriod = true;
+      if (selectedPeriodFilter !== 'Todos') {
+        matchesPeriod = f.mes === selectedPeriodFilter.mes && f.ano === selectedPeriodFilter.ano;
+      }
+      
+      return matchesSearch && matchesStatus && matchesPeriod;
     });
-  }, [fichas, searchTerm, filterStatus, isFichaLocked]);
+  }, [fichas, searchTerm, filterStatus, isFichaLocked, selectedPeriodFilter]);
 
   // Handle Creating a new Ficha
   const handleCreateFicha = async (e: React.FormEvent) => {
@@ -1190,7 +1227,7 @@ export default function CaptacaoClient({
           </h1>
           <span className="bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
             <Clock size={12} />
-            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{getMonthName(currentPeriod.mes)} / {currentPeriod.ano}</span>
+            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{selectedPeriodFilter === 'Todos' ? 'TODOS' : `${getMonthName(selectedPeriodFilter.mes)} / ${selectedPeriodFilter.ano}`}</span>
           </span>
         </div>
       </header>
@@ -1281,6 +1318,27 @@ export default function CaptacaoClient({
                     />
                   </div>
  
+                  <select
+                    value={selectedPeriodFilter === 'Todos' ? 'Todos' : `${selectedPeriodFilter.ano}-${selectedPeriodFilter.mes}`}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'Todos') {
+                        setSelectedPeriodFilter('Todos');
+                      } else {
+                        const [ano, mes] = val.split('-').map(Number);
+                        setSelectedPeriodFilter({ ano, mes });
+                      }
+                    }}
+                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
+                  >
+                    <option value="Todos">TODOS OS MESES</option>
+                    {periodOptions.map(opt => (
+                      <option key={`${opt.ano}-${opt.mes}`} value={`${opt.ano}-${opt.mes}`}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value as any)}

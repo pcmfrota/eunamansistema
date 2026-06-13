@@ -123,7 +123,7 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
+        settings.setDisplayZoomControls(false); // Esconde os botões +/- feios do Android, usa só os dedos
         
         // Garante que o WebView permita rolagem em todas as direções
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
@@ -162,13 +162,17 @@ public class EunamanActivity extends AppCompatActivity {
 
                 // ── CUSTOMIZAÇÕES VISUAIS VIA JAVASCRIPT ──
                 // 1. Renomeia a aba "Ficha com fotos" para "HISTÓRICO DA FICHA"
-                // 2. Tenta forçar a exibição de botões de exclusão se o elemento existir no código
+                // 2. Tenta forçar a exibição de botões de exclusão e OCULTAR "Visualizar Ficha"
                 String jsCustom = "javascript:(function(){" +
                         "  /* Mudar nome da aba */ " +
                         "  var elements = document.querySelectorAll('*');" +
                         "  for (var i = 0; i < elements.length; i++) {" +
                         "    if (elements[i].innerText === 'Ficha com fotos') {" +
                         "      elements[i].innerText = 'HISTÓRICO DA FICHA';" +
+                        "    }" +
+                        "    /* Ocultar Visualizar Ficha */ " +
+                        "    if (elements[i].innerText === 'Visualizar Ficha' || elements[i].innerText === 'VISUALIZAR FICHA') {" +
+                        "      elements[i].style.display = 'none';" +
                         "    }" +
                         "  }" +
                         "  /* Ajuste de Layout para Botões */ " +
