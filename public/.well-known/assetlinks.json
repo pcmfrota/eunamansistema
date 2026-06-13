@@ -1,8 +1,12 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "com.eunaman.pcm",
-    "sha256_cert_fingerprints": ["C2:5E:64:88:94:05:44:A2:38:91:D5:8C:97:75:A0:0B:65:28:CF:74:44:03:99:99:02:44:E0:04:4F:9E:26:A6"]
-  }
-}]
+﻿{
+    "target":  {
+                   "sha256_cert_fingerprints":  [
+                                                    "BA:17:6A:12:FD:F5:C8:F5:A8:BE:3C:90:0E:42:E0:C4:9D:7F:3A:CB:DE:DD:8F:11:AD:A2:7C:65:FC:C5:54:24"
+                                                ],
+                   "namespace":  "android_app",
+                   "package_name":  "com.eunaman.pcm"
+               },
+    "relation":  [
+                     "delegate_permission/common.handle_all_urls"
+                 ]
+}
