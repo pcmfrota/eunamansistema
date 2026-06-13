@@ -31,8 +31,6 @@ const nextConfig = {
   },
   // Compressão gzip/brotli das respostas HTTP
   compress: true,
-  // Evita bundling server-only packages no client
-  serverExternalPackages: [],
   experimental: {
     // Otimiza Server Actions (reduz roundtrips)
     serverActions: {
