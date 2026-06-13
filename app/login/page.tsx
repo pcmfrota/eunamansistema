@@ -33,7 +33,87 @@ export default function LoginPage({
 
       if (signInError) throw signInError;
 
-      // Sincroniza cookies e recarrega antes do redirecionamento definitivo
+      const user = data.user;
+      if (user) {
+        // 1. Busca o perfil e permissões imediatamente para preencher o cache local
+        const userEmailBase = user.email?.toLowerCase().trim() || '';
+        const isMasterAdmin = 
+          userEmailBase.includes('marcos.rocha') || 
+          userEmailBase.includes('marcos.aurelio') ||
+          userEmailBase.includes('marcos.aurelio.rocha') ||
+          userEmailBase.includes('douglas.torres') ||
+          userEmailBase.includes('jessica') ||
+          userEmailBase.includes('pcmfrota') ||
+          userEmailBase.includes('marcos.eunaman') ||
+          userEmailBase.includes('eunaman.sistema') ||
+          userEmailBase.endsWith('@eunaman.com.br');
+
+        // Busca do banco em paralelo
+        const [profileRes, permRes] = await Promise.all([
+          supabase.from('profiles').select('id, full_name, role, avatar_url').eq('id', user.id).maybeSingle(),
+          supabase.from('role_permissions').select('role, allowed_tabs')
+        ]);
+
+        const profileData = profileRes?.data;
+        const allPerms = permRes?.data || [];
+
+        const tokenRole = user.app_metadata?.role || user.user_metadata?.role;
+        const finalRole = 
+          (profileData?.role as any) || 
+          (tokenRole as any) || 
+          (isMasterAdmin ? 'admin' : 'visitante');
+
+        const finalProfile = {
+          id: user.id,
+          email: user.email || '',
+          full_name: profileData?.full_name || userEmailBase.split('@')[0] || 'Usuário',
+          role: finalRole,
+          avatar_url: profileData?.avatar_url || null
+        };
+
+        const rolePerm = allPerms.find(p => p.role === finalRole);
+        let finalPerms: string[] = [];
+        const allTabs = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/admin/usuarios'];
+        
+        if (rolePerm?.allowed_tabs && rolePerm.allowed_tabs.length > 0) {
+          finalPerms = rolePerm.allowed_tabs;
+        } else {
+          if (finalRole === 'admin') finalPerms = allTabs;
+          else if (finalRole === 'visitante') finalPerms = ['/', '/preventivas', '/backlog', '/calendario'];
+          else if (finalRole === 'mecanico') finalPerms = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao'];
+          else if (finalRole === 'motorista') finalPerms = ['/', '/pneus', '/calendario', '/lavagens', '/captacao'];
+          else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
+        }
+
+        // Salva tudo no localStorage para o AuthProvider restaurar instantaneamente
+        localStorage.setItem(`eunaman_profile_${user.id}`, JSON.stringify(finalProfile));
+        localStorage.setItem(`eunaman_perms_${user.id}`, JSON.stringify(finalPerms));
+        localStorage.setItem('eunaman_last_user_id', user.id);
+        
+        // Define o cookie de role temporário imediatamente no cliente para a middleware
+        document.cookie = `x-user-role=${finalRole}; path=/; max-age=3600; SameSite=Lax`;
+      }
+
+      // 2. Aguarda até que o cookie do Supabase apareça no navegador (evitando redirecionamento prematuro sem sessão)
+      const startCheck = Date.now();
+      let cookieFound = false;
+      while (Date.now() - startCheck < 1000) {
+        if (document.cookie.split(';').some(c => c.trim().startsWith('sb-'))) {
+          cookieFound = true;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+      
+      // Fallback: se não achar, aguarda no mínimo 250ms totais para gravação assíncrona
+      if (!cookieFound) {
+        const elapsed = Date.now() - startCheck;
+        if (elapsed < 250) {
+          await new Promise(r => setTimeout(r, 250 - elapsed));
+        }
+      }
+
+      // Recarrega o roteador e redireciona definitivamente
       router.refresh();
       window.location.replace('/');
     } catch (err: any) {
