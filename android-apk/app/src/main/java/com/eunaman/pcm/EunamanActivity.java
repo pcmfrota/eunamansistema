@@ -15,15 +15,24 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.util.Log;
+import android.view.View;
+import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -49,31 +58,45 @@ import java.util.Locale;
  */
 public class EunamanActivity extends AppCompatActivity {
 
+    private static final String TAG = "EunamanPCM";
     private static final int REQUEST_CAMERA        = 1001;
     private static final int REQUEST_CAMERA_PERM   = 1002;
     private static final int MAX_IMAGE_SIZE_PX     = 1280;
     private static final int JPEG_QUALITY          = 80;
 
-    private WebView webView;
-    private String  currentPhotoPath;
-    private Uri     photoUri;
+    private WebView     webView;
+    private ProgressBar progressBar;
+    private ImageView   splashScreen;
+    private String      currentPhotoPath;
+    private Uri         photoUri;
+    private long        startTime;
 
     // ── Ciclo de vida ────────────────────────────────────────────────────────
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        startTime = System.currentTimeMillis();
+        Log.d(TAG, "Iniciando EunamanActivity...");
+        
         setContentView(R.layout.activity_main);
 
-        webView = findViewById(R.id.webview);
+        webView      = findViewById(R.id.webview);
+        progressBar  = findViewById(R.id.loading_progress);
+        splashScreen = findViewById(R.id.splash_screen);
+
         if (webView != null) {
             configureWebView();
-            webView.loadUrl(getString(R.string.launch_url));
+            String url = getString(R.string.launch_url);
+            Log.d(TAG, "Carregando URL: " + url);
+            webView.loadUrl(url);
         }
     }
 
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
+        
+        // ── Otimização de Performance ──
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
@@ -81,14 +104,18 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setAllowContentAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-
-        // Estratégia de Cache para Funcionamento Offline
+        settings.setSupportZoom(false); // Melhora performance ao desativar zoom desnecessário
+        settings.setBuiltInZoomControls(false);
+        
+        // Renderização acelerada
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            settings.setSafeBrowsingEnabled(true);
+        }
+        
+        // Estratégia de Cache Inteligente
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        // Configuração de Sessão e Cookies (Login persistente)
+        // Sessão e Cookies
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -97,24 +124,76 @@ public class EunamanActivity extends AppCompatActivity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return false; // Permite que o WebView gerencie as navegações
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+                Log.d(TAG, "Carregamento iniciado: " + url);
+
+                // Detecta automaticamente URLs de logout para limpar a sessão nativa
+                if (url.contains("logout") || url.contains("sair")) {
+                    Log.d(TAG, "Detectada URL de Logout. Executando limpeza nativa...");
+                    performNativeLogout();
+                }
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                // Garante que os cookies/sessão sejam gravados no disco
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
+                
+                // Remove o Splash Screen após o primeiro carregamento completo
+                if (splashScreen != null && splashScreen.getVisibility() == View.VISIBLE) {
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        splashScreen.setVisibility(View.GONE);
+                        webView.setVisibility(View.VISIBLE);
+                        long loadTime = System.currentTimeMillis() - startTime;
+                        Log.d(TAG, "App pronto em: " + loadTime + "ms");
+                    }, 500);
+                }
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     CookieManager.getInstance().flush();
                 }
             }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame()) {
+                    Log.e(TAG, "Erro de carregamento: " + error.toString());
+                    Toast.makeText(EunamanActivity.this, "Erro de conexão. Verifique sua internet.", Toast.LENGTH_LONG).show();
+                }
+            }
         });
 
-        webView.setWebChromeClient(new WebChromeClient());
-        webView.addJavascriptInterface(new CameraJsBridge(), "EunamanCamera");
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                if (progressBar != null) {
+                    if (newProgress < 100) {
+                        progressBar.setVisibility(View.VISIBLE);
+                        progressBar.setIndeterminate(false);
+                        progressBar.setProgress(newProgress);
+                    } else {
+                        progressBar.setVisibility(View.GONE);
+                    }
+                }
+            }
 
-        // Monitoramento de Rede para Sincronização
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                Log.d(TAG, "[JS CONSOLE] " + consoleMessage.message() + " -- From line "
+                        + consoleMessage.lineNumber() + " of "
+                        + consoleMessage.sourceId());
+                return true;
+            }
+        });
+
+        // Injeta a Ponte JS (Câmera + Logout + Sincronização)
+        EunamanJsBridge bridge = new EunamanJsBridge();
+        webView.addJavascriptInterface(bridge, "EunamanApp");
+        webView.addJavascriptInterface(bridge, "EunamanCamera"); // Alias para compatibilidade
+        
         setupNetworkMonitoring();
     }
 
@@ -135,6 +214,26 @@ public class EunamanActivity extends AppCompatActivity {
                 }
             });
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) webView.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) webView.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.destroy();
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -284,23 +383,45 @@ public class EunamanActivity extends AppCompatActivity {
         });
     }
 
-    private void sendErrorToJs(String message) {
-        String js = "javascript:(function(){"
-                + "if(window.onEunamanCameraResult){"
-                + "window.onEunamanCameraResult(JSON.stringify({success:false,error:'" + message + "'}));"
-                + "}})();";
-        runOnUiThread(() -> {
-            if (webView != null) webView.loadUrl(js);
-        });
+    private void performNativeLogout() {
+        Log.d(TAG, "Executando performNativeLogout...");
+        
+        // 1. Limpa Cookies de forma agressiva
+        CookieManager cookieManager = CookieManager.getInstance();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.removeAllCookies(value -> {
+                cookieManager.flush();
+                Log.d(TAG, "Cookies removidos.");
+            });
+        } else {
+            cookieManager.removeAllCookie();
+            cookieManager.removeSessionCookie();
+        }
+
+        // 2. Limpa Cache e Histórico
+        if (webView != null) {
+            webView.clearCache(true);
+            webView.clearHistory();
+            webView.clearFormData();
+            
+            // 3. Limpa WebStorage via JS
+            webView.loadUrl("javascript:(function(){ localStorage.clear(); sessionStorage.clear(); })();");
+            
+            // 4. Redireciona para evitar loops
+            String loginUrl = getString(R.string.launch_url);
+            webView.loadUrl(loginUrl);
+        }
+
+        Toast.makeText(this, "Sessão encerrada.", Toast.LENGTH_SHORT).show();
     }
 
-    // ── Ponte JavaScript ─────────────────────────────────────────────────────
+    // ── Ponte JavaScript Integrada ───────────────────────────────────────────
 
-    private class CameraJsBridge {
+    private class EunamanJsBridge {
 
         /**
-         * Chamado pelo site web via: EunamanCamera.openCamera()
-         * Abre a câmera nativa sem navegar para fora do contexto da página.
+         * Abre a câmera nativa.
+         * Chamado via: EunamanApp.openCamera()
          */
         @JavascriptInterface
         public void openCamera() {
@@ -320,5 +441,32 @@ public class EunamanActivity extends AppCompatActivity {
                 }
             });
         }
+
+        /**
+         * Logout Funcional: Limpa TUDO e reinicia.
+         * Chamado via: EunamanApp.logout()
+         */
+        @JavascriptInterface
+        public void logout() {
+            runOnUiThread(EunamanActivity.this::performNativeLogout);
+        }
+        
+        /**
+         * Log de Performance vindo da Web
+         */
+        @JavascriptInterface
+        public void logPerformance(String message) {
+            Log.d(TAG, "[WEB PERFORMANCE] " + message);
+        }
+    }
+
+    private void sendErrorToJs(String message) {
+        String js = "javascript:(function(){"
+                + "if(window.onEunamanCameraResult){"
+                + "window.onEunamanCameraResult(JSON.stringify({success:false,error:'" + message + "'}));"
+                + "}})();";
+        runOnUiThread(() -> {
+            if (webView != null) webView.loadUrl(js);
+        });
     }
 }

@@ -1,8 +1,8 @@
 -keep class com.google.androidbrowserhelper.** { *; }
 -keep class androidx.browser.** { *; }
 
-# Mantém a ponte JavaScript para a Câmera e Sincronização
--keepclassmembers class com.eunaman.pcm.EunamanActivity$CameraJsBridge {
+# Mantém a ponte JavaScript para a Câmera, Logout e Sincronização
+-keepclassmembers class com.eunaman.pcm.EunamanActivity$EunamanJsBridge {
     @android.webkit.JavascriptInterface <methods>;
 }
 
