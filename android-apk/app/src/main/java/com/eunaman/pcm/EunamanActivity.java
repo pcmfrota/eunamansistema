@@ -28,6 +28,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
@@ -71,6 +72,8 @@ public class EunamanActivity extends AppCompatActivity {
     private Uri         photoUri;
     private long        startTime;
 
+    private boolean isLoggingOut = false;
+
     // ── Ciclo de vida ────────────────────────────────────────────────────────
 
     @Override
@@ -104,8 +107,13 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setAllowContentAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setSupportZoom(false); // Melhora performance ao desativar zoom desnecessário
+        settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        
+        // Identificação como Navegador Mobile para evitar bloqueios de Login
+        String originalUA = settings.getUserAgentString();
+        settings.setUserAgentString(originalUA + " EunamanApp/1.1.0");
         
         // Renderização acelerada
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -129,8 +137,8 @@ public class EunamanActivity extends AppCompatActivity {
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
                 Log.d(TAG, "Carregamento iniciado: " + url);
 
-                // Detecta automaticamente URLs de logout para limpar a sessão nativa
-                if (url.contains("logout") || url.contains("sair")) {
+                // Detecta URLs de logout (sair) para limpar a sessão nativa
+                if (!isLoggingOut && (url.toLowerCase().contains("logout") || url.toLowerCase().contains("/sair"))) {
                     Log.d(TAG, "Detectada URL de Logout. Executando limpeza nativa...");
                     performNativeLogout();
                 }
@@ -384,35 +392,49 @@ public class EunamanActivity extends AppCompatActivity {
     }
 
     private void performNativeLogout() {
-        Log.d(TAG, "Executando performNativeLogout...");
+        if (isLoggingOut) return;
+        isLoggingOut = true;
         
-        // 1. Limpa Cookies de forma agressiva
-        CookieManager cookieManager = CookieManager.getInstance();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            cookieManager.removeAllCookies(value -> {
-                cookieManager.flush();
-                Log.d(TAG, "Cookies removidos.");
-            });
-        } else {
-            cookieManager.removeAllCookie();
-            cookieManager.removeSessionCookie();
-        }
+        Log.d(TAG, "Iniciando processo de Logout Nativo...");
+        runOnUiThread(() -> {
+            if (webView != null) webView.stopLoading();
 
-        // 2. Limpa Cache e Histórico
-        if (webView != null) {
-            webView.clearCache(true);
-            webView.clearHistory();
-            webView.clearFormData();
-            
-            // 3. Limpa WebStorage via JS
-            webView.loadUrl("javascript:(function(){ localStorage.clear(); sessionStorage.clear(); })();");
-            
-            // 4. Redireciona para evitar loops
-            String loginUrl = getString(R.string.launch_url);
-            webView.loadUrl(loginUrl);
-        }
+            // 1. Limpa Cookies e Sessão
+            CookieManager cookieManager = CookieManager.getInstance();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                cookieManager.removeAllCookies(success -> {
+                    cookieManager.flush();
+                    finalizeLogout();
+                });
+            } else {
+                cookieManager.removeAllCookie();
+                cookieManager.removeSessionCookie();
+                finalizeLogout();
+            }
+        });
+    }
 
-        Toast.makeText(this, "Sessão encerrada.", Toast.LENGTH_SHORT).show();
+    private void finalizeLogout() {
+        runOnUiThread(() -> {
+            if (webView != null) {
+                // 2. Limpa Cache e Armazenamento Nativo
+                webView.clearCache(true);
+                webView.clearHistory();
+                webView.clearFormData();
+                WebStorage.getInstance().deleteAllData();
+                
+                // 3. Limpa LocalStorage via JS (Garante que tokens sumam)
+                webView.loadUrl("javascript:(function(){ localStorage.clear(); sessionStorage.clear(); })();");
+                
+                // 4. Redireciona para a Home/Login
+                String loginUrl = getString(R.string.launch_url);
+                webView.loadUrl(loginUrl);
+                Log.d(TAG, "Logout Nativo finalizado. Redirecionado para: " + loginUrl);
+            }
+            
+            isLoggingOut = false;
+            Toast.makeText(this, "Sessão encerrada com sucesso.", Toast.LENGTH_SHORT).show();
+        });
     }
 
     // ── Ponte JavaScript Integrada ───────────────────────────────────────────

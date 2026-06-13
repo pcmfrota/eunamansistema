@@ -40,6 +40,7 @@
             android:name=".EunamanActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask"
             android:alwaysRetainTaskState="true"
             android:label="@string/app_name">
