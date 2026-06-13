@@ -483,7 +483,7 @@ export default function CaptacaoClient({
   // State
   const [fichas, setFichas] = useState<any[]>(initialFichas);
   const [selectedFicha, setSelectedFicha] = useState<any | null>(null);
-  const [showFichaPaper, setShowFichaPaper] = useState(false);
+  const [showFichaPaper, setShowFichaPaper] = useState(true);
   
   const [activeScreen, setActiveScreen] = useState<'home' | 'list' | 'details'>('home');
   const [isFichaModalOpen, setIsFichaModalOpen] = useState(false);
@@ -1366,7 +1366,7 @@ export default function CaptacaoClient({
                     return (
                       <div
                         key={f.id}
-                        onClick={() => { setSelectedFicha(f); setActiveScreen('details'); setViewMode('suzano'); setShowFichaPaper(false); }}
+                        onClick={() => { setSelectedFicha(f); setActiveScreen('details'); setViewMode('suzano'); setShowFichaPaper(true); }}
                         className="p-5 bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-2xl transition-all duration-300 cursor-pointer flex flex-col gap-4 shadow-lg group relative overflow-hidden"
                       >
                         <div className="flex justify-between items-start">
@@ -1571,59 +1571,30 @@ export default function CaptacaoClient({
               <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-100/10 dark:bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
                   <div className="flex flex-col gap-3">
-                    {!showFichaPaper ? (
-                      <div className="flex flex-col items-center justify-center p-8 bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-3xl gap-4 max-w-md mx-auto w-full shadow-lg">
-                        <span className="text-4xl">📋</span>
-                        <div className="text-center space-y-1">
-                          <h3 className="font-extrabold text-zinc-900 dark:text-white text-sm uppercase">Ficha Oculta</h3>
-                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">
-                            A visualização em papel está oculta para facilitar a rolagem da tela.
-                          </p>
-                        </div>
-                        <button
+                    <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-white/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-center sm:text-left">
+                        ℹ️ Arraste para o lado para rolar a ficha, ou expanda para tela cheia
+                      </span>
+                      <div className="flex gap-2 w-full sm:w-auto">
+                        <button 
                           type="button"
-                          onClick={() => setShowFichaPaper(true)}
-                          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl uppercase tracking-wider transition-all shadow-md active:scale-95"
+                          onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
+                          className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow"
                         >
-                          Visualizar Ficha
+                          <span>🔍</span>
+                          <span>TELA CHEIA</span>
                         </button>
                       </div>
-                    ) : (
-                      <>
-                        <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-white/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-center sm:text-left">
-                            ℹ️ Arraste para o lado para rolar a ficha, ou expanda para tela cheia
-                          </span>
-                          <div className="flex gap-2 w-full sm:w-auto">
-                            <button 
-                              type="button"
-                              onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
-                              className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow"
-                            >
-                              <span>🔍</span>
-                              <span>TELA CHEIA</span>
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={() => setShowFichaPaper(false)}
-                              className="flex-1 sm:flex-initial px-4 py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95"
-                            >
-                              <span>👁️‍🗨️</span>
-                              <span>Ocultar Ficha</span>
-                            </button>
-                          </div>
-                        </div>
+                    </div>
 
-                        <div 
-                          className="w-full overflow-x-auto p-4 bg-white/40 dark:bg-zinc-950/40 rounded-3xl border border-zinc-200 dark:border-transparent custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
-                          style={{ WebkitOverflowScrolling: 'touch' }}
-                        >
-                          <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
-                            {renderPaperFicha(selectedFicha)}
-                          </div>
-                        </div>
-                      </>
-                    )}
+                    <div 
+                      className="w-full overflow-x-auto p-4 bg-white/40 dark:bg-zinc-950/40 rounded-3xl border border-zinc-200 dark:border-transparent custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    >
+                      <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
+                        {renderPaperFicha(selectedFicha)}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-6 max-w-5xl mx-auto">

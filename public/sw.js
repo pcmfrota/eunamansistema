@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v6";
+const CACHE_NAME = "eunaman-cache-v7";
 const STATIC_ASSETS = [
   "/",
   "/os",

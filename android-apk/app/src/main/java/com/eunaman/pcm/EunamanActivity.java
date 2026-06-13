@@ -167,17 +167,22 @@ public class EunamanActivity extends AppCompatActivity {
                         "  /* Mudar nome da aba */ " +
                         "  var elements = document.querySelectorAll('*');" +
                         "  for (var i = 0; i < elements.length; i++) {" +
-                        "    if (elements[i].innerText === 'Ficha com fotos') {" +
+                        "    var text = elements[i].innerText || '';" +
+                        "    if (text === 'Ficha com fotos') {" +
                         "      elements[i].innerText = 'HISTÓRICO DA FICHA';" +
                         "    }" +
-                        "    /* Ocultar Visualizar Ficha */ " +
-                        "    if (elements[i].innerText === 'Visualizar Ficha' || elements[i].innerText === 'VISUALIZAR FICHA') {" +
-                        "      elements[i].style.display = 'none';" +
+                        "    /* Ocultar Visualizar Ficha de forma agressiva */ " +
+                        "    if (text.toUpperCase().trim() === 'VISUALIZAR FICHA') {" +
+                        "      elements[i].style.setProperty('display', 'none', 'important');" +
+                        "      elements[i].style.setProperty('visibility', 'hidden', 'important');" +
                         "    }" +
                         "  }" +
-                        "  /* Ajuste de Layout para Botões */ " +
-                        "  var deleteBtns = document.querySelectorAll('[class*=\"delete\"], [id*=\"delete\"], [aria-label*=\"excluir\"]');" +
-                        "  deleteBtns.forEach(btn => { btn.style.display = 'block'; btn.style.visibility = 'visible'; });" +
+                        "  /* Ajuste de Layout para Botões - Força exibição de botões de ação */ " +
+                        "  var actionBtns = document.querySelectorAll('[class*=\"delete\"], [id*=\"delete\"], [aria-label*=\"excluir\"], [class*=\"edit\"], [id*=\"edit\"]');" +
+                        "  actionBtns.forEach(btn => { " +
+                        "    btn.style.setProperty('display', 'inline-block', 'important'); " +
+                        "    btn.style.setProperty('visibility', 'visible', 'important'); " +
+                        "  });" +
                         "})();";
                 view.loadUrl(jsCustom);
 
