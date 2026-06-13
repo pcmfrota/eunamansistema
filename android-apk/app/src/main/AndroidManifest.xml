@@ -32,54 +32,17 @@
             android:resource="@string/asset_statements" />
 
         <!-- ══════════════════════════════════════════════════════════════════
-             Activity principal TWA (LauncherActivity do androidbrowserhelper)
-             Responsável por abrir o site no Chrome em modo "tela cheia".
-             singleTask + alwaysRetainTaskState = nunca mata o processo ao
-             sair para a câmera.
+             Activity principal (WebView com Ponte para Câmera)
+             Substitui a LauncherActivity do TWA para permitir injeção de JS
+             e resolver problemas de sessão (Login) e navegação (Sair).
         ══════════════════════════════════════════════════════════════════════ -->
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:name=".EunamanActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden"
             android:launchMode="singleTask"
             android:alwaysRetainTaskState="true"
             android:label="@string/app_name">
-
-            <!-- URL que abre ao iniciar pelo ícone -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="@string/launch_url" />
-
-            <!-- Cor da status bar -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
-                android:resource="@color/colorPrimary" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR_DARK"
-                android:resource="@color/colorPrimary" />
-
-            <!-- Cor da navigation bar -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
-                android:resource="@color/colorPrimary" />
-
-            <!-- Modo standalone (sem barra de endereço do Chrome) -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.DISPLAY_MODE"
-                android:value="standalone" />
-
-            <meta-data
-                android:name="android.support.customtabs.trusted.ORIENTATION"
-                android:value="default" />
-
-            <meta-data
-                android:name="android.support.customtabs.trusted.SITE_SETTINGS_SHORTCUT"
-                android:value="true" />
-
-            <!-- Fallback para Custom Tabs se TWA não suportado -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY"
-                android:value="customtabs" />
 
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.MAIN" />
@@ -97,6 +60,11 @@
             </intent-filter>
 
         </activity>
+
+        <!-- LauncherActivity do TWA (Mantida para referência) -->
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:exported="true" />
 
         <!-- ══════════════════════════════════════════════════════════════════
              Service Worker Update Broadcaster

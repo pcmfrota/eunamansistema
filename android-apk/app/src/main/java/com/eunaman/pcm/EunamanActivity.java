@@ -14,8 +14,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -47,6 +51,7 @@ public class EunamanActivity extends AppCompatActivity {
     private static final int JPEG_QUALITY          = 80;
 
     private WebView webView;
+    private String  currentPhotoPath;
     private Uri     photoUri;
 
     // ── Ciclo de vida ────────────────────────────────────────────────────────
@@ -54,14 +59,47 @@ public class EunamanActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Delega a maior parte do trabalho ao TWA normal;
-        // esta activity apenas registra a ponte JS.
         setContentView(R.layout.activity_main);
 
         webView = findViewById(R.id.webview);
         if (webView != null) {
-            webView.addJavascriptInterface(new CameraJsBridge(), "EunamanCamera");
+            configureWebView();
+            webView.loadUrl(getString(R.string.launch_url));
+        }
+    }
+
+    private void configureWebView() {
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        // Habilita cookies e persistência de sessão
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(webView, true);
+        }
+
+        webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient());
+        webView.addJavascriptInterface(new CameraJsBridge(), "EunamanCamera");
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
         }
     }
 
@@ -97,6 +135,7 @@ public class EunamanActivity extends AppCompatActivity {
     private void launchCamera() {
         try {
             File photoFile = createTempPhotoFile();
+            currentPhotoPath = photoFile.getAbsolutePath();
             photoUri = FileProvider.getUriForFile(
                     this,
                     getPackageName() + ".provider",
@@ -123,10 +162,15 @@ public class EunamanActivity extends AppCompatActivity {
     private void processAndSendPhoto() {
         new Thread(() -> {
             try {
+                if (currentPhotoPath == null) {
+                    sendErrorToJs("Caminho do arquivo não encontrado.");
+                    return;
+                }
+
                 // 1. Decodifica com amostragem para evitar OOM
                 BitmapFactory.Options opts = new BitmapFactory.Options();
                 opts.inJustDecodeBounds = true;
-                BitmapFactory.decodeFile(photoUri.getPath(), opts);
+                BitmapFactory.decodeFile(currentPhotoPath, opts);
 
                 int scale = 1;
                 while (opts.outWidth / scale > MAX_IMAGE_SIZE_PX
@@ -136,7 +180,7 @@ public class EunamanActivity extends AppCompatActivity {
 
                 opts.inJustDecodeBounds = false;
                 opts.inSampleSize = scale;
-                Bitmap bitmap = BitmapFactory.decodeFile(photoUri.getPath(), opts);
+                Bitmap bitmap = BitmapFactory.decodeFile(currentPhotoPath, opts);
 
                 if (bitmap == null) {
                     sendErrorToJs("Não foi possível ler a imagem.");
@@ -144,7 +188,7 @@ public class EunamanActivity extends AppCompatActivity {
                 }
 
                 // 2. Corrige rotação EXIF
-                bitmap = fixRotation(bitmap, photoUri.getPath());
+                bitmap = fixRotation(bitmap, currentPhotoPath);
 
                 // 3. Comprime para JPEG Base64
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
