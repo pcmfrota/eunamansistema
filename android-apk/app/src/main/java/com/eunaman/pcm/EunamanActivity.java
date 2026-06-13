@@ -156,6 +156,23 @@ public class EunamanActivity extends AppCompatActivity {
                 // Sincronização agressiva de cookies após o carregamento
                 CookieManager.getInstance().flush();
 
+                // ── CUSTOMIZAÇÕES VISUAIS VIA JAVASCRIPT ──
+                // 1. Renomeia a aba "Ficha com fotos" para "HISTÓRICO DA FICHA"
+                // 2. Tenta forçar a exibição de botões de exclusão se o elemento existir no código
+                String jsCustom = "javascript:(function(){" +
+                        "  /* Mudar nome da aba */ " +
+                        "  var elements = document.querySelectorAll('*');" +
+                        "  for (var i = 0; i < elements.length; i++) {" +
+                        "    if (elements[i].innerText === 'Ficha com fotos') {" +
+                        "      elements[i].innerText = 'HISTÓRICO DA FICHA';" +
+                        "    }" +
+                        "  }" +
+                        "  /* Ajuste de Layout para Botões */ " +
+                        "  var deleteBtns = document.querySelectorAll('[class*=\"delete\"], [id*=\"delete\"], [aria-label*=\"excluir\"]');" +
+                        "  deleteBtns.forEach(btn => { btn.style.display = 'block'; btn.style.visibility = 'visible'; });" +
+                        "})();";
+                view.loadUrl(jsCustom);
+
                 if (url.toLowerCase().contains("dashboard") || url.toLowerCase().contains("home")) {
                     // Se for a dashboard, garantimos que os cookies estão no disco antes de mostrar a tela
                     CookieManager.getInstance().flush();
