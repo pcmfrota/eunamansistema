@@ -1422,10 +1422,10 @@ export default function CaptacaoClient({
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col overflow-visible lg:overflow-hidden bg-zinc-900/10">
-              {/* Toolbar matching second image exactly */}
-              <div className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col xl:flex-row gap-3 xl:items-center justify-between bg-white/70 dark:bg-zinc-900/50 shrink-0">
-                <div className="flex flex-col gap-1">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden bg-zinc-900/10">
+              {/* Left Panel: Sidebar containing title and vertical button stack */}
+              <div className="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800 p-4 bg-white/70 dark:bg-zinc-900/50 flex flex-col gap-4 overflow-y-auto">
+                <div className="flex flex-col gap-1 pb-3 border-b border-zinc-200 dark:border-zinc-800">
                   <h2 className="text-md font-black text-zinc-900 dark:text-white leading-none uppercase tracking-wide">
                     FICHA: {selectedFicha.placa}
                   </h2>
@@ -1434,13 +1434,14 @@ export default function CaptacaoClient({
                   </p>
                 </div>
 
-                <div className="w-full xl:w-auto flex flex-col portrait:flex-col landscape:flex-row landscape:flex-wrap sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5">
+                <div className="flex flex-col gap-2.5">
                   {/* Ficha Suzano / Ficha com Fotos Toggle */}
-                  <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded-2xl p-1 border border-zinc-200 dark:border-zinc-800 shadow-inner w-full portrait:w-full landscape:w-auto sm:w-auto">
+                  <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded-2xl p-1 border border-zinc-200 dark:border-zinc-800 shadow-inner w-full">
                     <button 
+                      type="button"
                       onClick={() => setViewMode('suzano')}
                       className={cn(
-                        "flex-1 sm:flex-initial flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
+                        "flex-1 flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
                         viewMode === 'suzano' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
                       )}
                     >
@@ -1448,9 +1449,10 @@ export default function CaptacaoClient({
                       <span>FICHA SUZANO</span>
                     </button>
                     <button 
+                      type="button"
                       onClick={() => setViewMode('sistema')}
                       className={cn(
-                        "flex-1 sm:flex-initial flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
+                        "flex-1 flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
                         viewMode === 'sistema' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
                       )}
                     >
@@ -1461,8 +1463,9 @@ export default function CaptacaoClient({
 
                   {/* Expand Ficha Button */}
                   <button
+                    type="button"
                     onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
-                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg hover:shadow-blue-600/10 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto text-xs uppercase tracking-wider"
+                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg hover:shadow-blue-600/10 active:scale-95 transition-all w-full text-xs uppercase tracking-wider"
                     title="Visualizar a Ficha Operacional em Tela Cheia com Zoom e Rolagem"
                   >
                     <span>🔍</span>
@@ -1471,18 +1474,20 @@ export default function CaptacaoClient({
 
                   {/* Print Button */}
                   <button
+                    type="button"
                     onClick={() => window.print()}
-                    className="p-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto text-xs font-extrabold"
+                    className="p-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-650 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-extrabold"
                     title="Imprimir Ficha"
                   >
-                    <Printer size={16} />
-                    <span className="portrait:inline landscape:hidden sm:hidden uppercase">Imprimir</span>
+                    <Printer size={15} />
+                    <span className="uppercase">IMPRIMIR</span>
                   </button>
 
                   {/* Excel Button */}
                   <button
+                    type="button"
                     onClick={handleExportExcel}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full"
                     title="Exportar para Excel"
                   >
                     <FileSpreadsheet size={15} className="text-emerald-500" />
@@ -1491,8 +1496,9 @@ export default function CaptacaoClient({
 
                   {/* PDF Button */}
                   <button
+                    type="button"
                     onClick={handleExportPDF}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full"
                     title="Exportar e baixar em PDF"
                   >
                     <Download size={15} className="text-blue-500" />
@@ -1503,14 +1509,16 @@ export default function CaptacaoClient({
                   {profile?.role !== 'visitante' && (
                     selectedFicha.assinatura_supervisor ? (
                       <button
+                        type="button"
                         onClick={handleRemoveSignature}
-                        className="px-4 py-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-red-500 dark:text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                        className="px-4 py-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-red-500 dark:text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full"
                         title="Remover Assinatura"
                       >
                         ❌ REMOVER ASSINATURA
                       </button>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => {
                           setShowSignaturePad(true);
                           setTimeout(() => {
@@ -1521,7 +1529,7 @@ export default function CaptacaoClient({
                             }
                           }, 50);
                         }}
-                        className="px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto"
+                        className="px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all w-full"
                         title="Assinar Digitalmente como Supervisor"
                       >
                         <span>✍️</span>
@@ -1533,8 +1541,9 @@ export default function CaptacaoClient({
                   {/* Add Line Button */}
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
+                      type="button"
                       onClick={() => setIsLancamentoModalOpen(true)}
-                      className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full portrait:w-full landscape:w-auto sm:w-auto animate-pulse"
+                      className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full animate-pulse"
                     >
                       <span>+</span>
                       <span>ADICIONAR LINHA</span>
@@ -1544,8 +1553,9 @@ export default function CaptacaoClient({
                   {/* Close Month Button */}
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
+                      type="button"
                       onClick={() => handleCloseFicha(selectedFicha.id)}
-                      className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                      className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-650 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full"
                       title="Fechar Ficha"
                     >
                       <Lock size={12} />
@@ -1556,12 +1566,17 @@ export default function CaptacaoClient({
                   {/* Delete Button */}
                   {profile?.role === 'admin' && (
                     <button
+                      type="button"
                       onClick={() => handleDeleteFicha(selectedFicha.id)}
-                      className="p-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-900 rounded-2xl text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full portrait:w-full landscape:w-auto sm:w-auto"
+                      className="p-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-900 rounded-2xl text-zinc-550 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-black uppercase"
                       title="Excluir Ficha"
                     >
                       <Trash2 size={16} />
-                      <span className="portrait:inline landscape:hidden sm:hidden text-xs font-black uppercase">Excluir</span>
+                      <span>EXCLUIR FICHA</span>
+                    </button>
+                  )}
+                </div>
+              </div>luir</span>
                     </button>
                   )}
                 </div>
