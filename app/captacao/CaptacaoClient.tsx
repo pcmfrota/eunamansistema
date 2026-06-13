@@ -362,14 +362,22 @@ const renderPaperFicha = (ficha: any) => {
             <td className="p-2 border-r border-black w-[45%]">
               <span className="font-bold">Motorista:</span> <span className="font-bold">{ficha.motorista}</span>
             </td>
-            <td className="p-2 w-[22%] relative">
-              <div className="flex flex-col gap-0.5 justify-center min-h-[22px]">
-                <div><span className="font-bold">Supervisor Suzano:</span> <span className="font-bold">{ficha.supervisor_suzano}</span></div>
-                {ficha.assinatura_supervisor && (
-                  <div className="absolute right-2 bottom-1 h-[26px] w-[110px] pointer-events-none">
-                    <img src={ficha.assinatura_supervisor} className="max-h-full max-w-full object-contain mx-auto" alt="Assinatura Supervisor" />
-                  </div>
-                )}
+            <td className="p-1 w-[22%] text-center align-middle relative">
+              <div className="flex flex-col items-center justify-center min-h-[32px] w-full py-0.5">
+                <div className="text-[9px] leading-none mb-1">
+                  <span className="font-bold">Supervisor Suzano:</span> <span className="font-extrabold">{ficha.supervisor_suzano}</span>
+                </div>
+                <div className="h-[22px] w-[110px] flex items-center justify-center">
+                  {ficha.assinatura_supervisor ? (
+                    <img 
+                      src={ficha.assinatura_supervisor} 
+                      className="max-h-full max-w-full object-contain" 
+                      alt="Assinatura Supervisor" 
+                    />
+                  ) : (
+                    <div className="w-2/3 border-b border-dotted border-zinc-400 h-px mt-2" />
+                  )}
+                </div>
               </div>
             </td>
           </tr>
