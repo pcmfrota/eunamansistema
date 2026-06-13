@@ -1576,10 +1576,6 @@ export default function CaptacaoClient({
                     </button>
                   )}
                 </div>
-              </div>luir</span>
-                    </button>
-                  )}
-                </div>
               </div>
               
               {/* View area */}
