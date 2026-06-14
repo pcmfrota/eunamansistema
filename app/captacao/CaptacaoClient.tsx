@@ -585,7 +585,22 @@ export default function CaptacaoClient({
       }
     };
 
+    // Recupera foto pendente se a Activity tiver sido recriada pelo Android
+    const timer = setTimeout(() => {
+      if ((window as any).EunamanCamera && (window as any).EunamanCamera.getPendingPhoto) {
+        try {
+          const pending = (window as any).EunamanCamera.getPendingPhoto();
+          if (pending) {
+            (window as any).onEunamanCameraResult(pending);
+          }
+        } catch (e) {
+          console.warn("[EunamanCamera] Erro ao buscar foto pendente:", e);
+        }
+      }
+    }, 500);
+
     return () => {
+      clearTimeout(timer);
       delete (window as any).onEunamanCameraResult;
     };
   }, []);

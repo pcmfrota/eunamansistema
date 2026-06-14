@@ -2,6 +2,7 @@ package com.eunaman.pcm;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -21,11 +22,13 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import android.view.View;
-import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
-import android.webkit.ValueCallback;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
@@ -43,6 +46,7 @@ import androidx.core.content.FileProvider;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -68,6 +72,7 @@ public class EunamanActivity extends AppCompatActivity {
     private boolean isLoggingOut = false;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
+    private String pendingPhotoDataUrl = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,6 +81,7 @@ public class EunamanActivity extends AppCompatActivity {
         if (savedInstanceState != null) {
             currentPhotoPath = savedInstanceState.getString("currentPhotoPath");
             photoUri = savedInstanceState.getParcelable("photoUri");
+            pendingPhotoDataUrl = savedInstanceState.getString("pendingPhotoDataUrl");
         }
 
         setContentView(R.layout.activity_main);
@@ -101,6 +107,7 @@ public class EunamanActivity extends AppCompatActivity {
         if (webView != null) webView.saveState(outState);
         outState.putString("currentPhotoPath", currentPhotoPath);
         outState.putParcelable("photoUri", photoUri);
+        outState.putString("pendingPhotoDataUrl", pendingPhotoDataUrl);
     }
 
     private void configureWebView() {
@@ -343,6 +350,10 @@ public class EunamanActivity extends AppCompatActivity {
             }
 
             bitmap = rotateImageIfRequired(bitmap, currentPhotoPath);
+            
+            // Salva na galeria pública antes de redimensionar
+            saveImageToGallery(bitmap);
+
             bitmap = scaleBitmapIfRequired(bitmap);
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -351,6 +362,7 @@ public class EunamanActivity extends AppCompatActivity {
             String base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
 
             String dataUrl = "data:image/jpeg;base64," + base64Image;
+            pendingPhotoDataUrl = dataUrl;
 
             String jsonResponse = "{\"success\":true,\"dataUrl\":\"" + dataUrl + "\"}";
             sendCameraResultToWeb(jsonResponse);
@@ -451,6 +463,38 @@ public class EunamanActivity extends AppCompatActivity {
         });
     }
 
+    private void saveImageToGallery(Bitmap bitmap) {
+        try {
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            String imageFileName = "EUNAMAN_" + timeStamp + ".jpg";
+            
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, imageFileName);
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/Eunaman");
+                values.put(MediaStore.Images.Media.IS_PENDING, 1);
+            }
+            
+            Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri != null) {
+                OutputStream out = getContentResolver().openOutputStream(uri);
+                if (out != null) {
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out);
+                    out.close();
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.clear();
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0);
+                    getContentResolver().update(uri, values, null, null);
+                }
+                Log.d(TAG, "Foto salva com sucesso na galeria publica.");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Erro ao salvar imagem na galeria publica", e);
+        }
+    }
+
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
@@ -460,6 +504,16 @@ public class EunamanActivity extends AppCompatActivity {
         @JavascriptInterface
         public void openCamera() {
             runOnUiThread(EunamanActivity.this::checkCameraPermissionAndOpen);
+        }
+
+        @JavascriptInterface
+        public String getPendingPhoto() {
+            String photo = pendingPhotoDataUrl;
+            pendingPhotoDataUrl = null; // consome
+            if (photo != null) {
+                return "{\"success\":true,\"dataUrl\":\"" + photo + "\"}";
+            }
+            return "";
         }
     }
 }
