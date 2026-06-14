@@ -66,7 +66,7 @@ import {
 const tempToRealOSMap: Record<string, string> = {};
 
 // --- 1. REPLAY ENGINE (Chamado pelo OfflineProvider) ---
-export async function replaySyncItem(item: SyncItem): Promise<boolean> {
+export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   const { entity, action, payload } = item;
   
   try {
@@ -257,10 +257,48 @@ export async function replaySyncItem(item: SyncItem): Promise<boolean> {
       }
     }
 
-    return true;
+    return { success: true };
   } catch (err: any) {
     console.error(`[Sync Engine] Falha grave no replay ${entity}:${action}:`, err);
-    // Retorna falso para sinalizar falha no item (interrompe o lote temporariamente)
-    return false;
+    const retryable = isRetryableError(err);
+    return { success: false, error: err.message || String(err), retryable };
   }
+}
+
+function isRetryableError(error: any): boolean {
+  if (!error) return false;
+  const msg = String(error.message || error || "").toLowerCase();
+  
+  const nonRetryableKeywords = [
+    "zod",
+    "validation",
+    "obrigatório",
+    "required",
+    "violates",
+    "duplicate key",
+    "not-null",
+    "foreign key",
+    "permission",
+    "not authorized",
+    "row-level security",
+    "rls",
+    "negada",
+    "inválido",
+    "invalid",
+    "forbidden",
+    "bad request",
+    "null value",
+    "apenas administradores",
+    "pode cadastrar",
+    "profiles_pkey",
+    "unique_violation"
+  ];
+  
+  for (const keyword of nonRetryableKeywords) {
+    if (msg.includes(keyword)) {
+      return false;
+    }
+  }
+  
+  return true;
 }

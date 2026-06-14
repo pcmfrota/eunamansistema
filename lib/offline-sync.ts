@@ -1,6 +1,38 @@
 import { createClient } from "@/utils/supabase/client";
 import { localDb } from "./offline-db";
 
+async function safeSyncStore(
+  storeName: string,
+  serverItems: any[],
+  idField: string = "id"
+): Promise<void> {
+  const localItems = await localDb.getAll(storeName);
+  const serverIds = new Set(serverItems.map(item => item[idField]));
+
+  // 1. Salva ou atualiza os itens que vieram do servidor no IndexedDB
+  if (serverItems.length > 0) {
+    await localDb.saveMany(storeName, serverItems);
+  }
+
+  // 2. Filtra itens locais para deletar: aqueles que não estão no servidor,
+  // mas que NÃO sejam rascunhos ou registros criados offline pendentes de sync.
+  const toDelete = localItems.filter((item: any) => {
+    const isPending = item._isPendingSync || 
+                      String(item[idField]).startsWith("temp_") ||
+                      String(item[idField]).startsWith("os_draft_") || 
+                      item.draftData;
+                      
+    const isTempOS = storeName === "ordens_servico" && 
+                     (String(item.numero_os).startsWith("OS-OFF-") || String(item.numero_os).startsWith("temp_"));
+
+    return !serverIds.has(item[idField]) && !isPending && !isTempOS;
+  });
+
+  if (toDelete.length > 0) {
+    await localDb.deleteMany(storeName, toDelete.map((item: any) => item[idField]));
+  }
+}
+
 export async function syncAllTables(): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
@@ -21,8 +53,7 @@ export async function syncAllTables(): Promise<boolean> {
       .is("deleted_at", null);
     if (errEq) throw errEq;
     if (equipamentos) {
-      await localDb.clearStore("equipamentos");
-      await localDb.saveMany("equipamentos", equipamentos);
+      await safeSyncStore("equipamentos", equipamentos);
     }
 
     // 2. Escala Frota
@@ -31,8 +62,7 @@ export async function syncAllTables(): Promise<boolean> {
       .select("*");
     if (errEsc) throw errEsc;
     if (escala) {
-      await localDb.clearStore("escala_frota");
-      await localDb.saveMany("escala_frota", escala);
+      await safeSyncStore("escala_frota", escala);
     }
 
     // 3. Calendário Suzano
@@ -43,8 +73,7 @@ export async function syncAllTables(): Promise<boolean> {
       .order("mes", { ascending: true });
     if (errCal) throw errCal;
     if (calendario) {
-      await localDb.clearStore("calendario_suzano");
-      await localDb.saveMany("calendario_suzano", calendario);
+      await safeSyncStore("calendario_suzano", calendario);
     }
 
     // 4. Ordens de Serviço (com join para manter compatibilidade)
@@ -63,8 +92,7 @@ export async function syncAllTables(): Promise<boolean> {
       .limit(1000);
     if (errOS) throw errOS;
     if (ordens) {
-      await localDb.clearStore("ordens_servico");
-      await localDb.saveMany("ordens_servico", ordens);
+      await safeSyncStore("ordens_servico", ordens);
     }
 
     // 5. Preventivas (com join para manter compatibilidade)
@@ -74,8 +102,7 @@ export async function syncAllTables(): Promise<boolean> {
       .order("data_atualizacao", { ascending: false });
     if (errPrev) throw errPrev;
     if (preventivas) {
-      await localDb.clearStore("preventivas");
-      await localDb.saveMany("preventivas", preventivas);
+      await safeSyncStore("preventivas", preventivas);
     }
 
     // 6. Inspeções Pneus (com join para manter compatibilidade)
@@ -90,8 +117,7 @@ export async function syncAllTables(): Promise<boolean> {
       .order("created_at", { ascending: false });
     if (errPneus) throw errPneus;
     if (inspecoes) {
-      await localDb.clearStore("pneus_inspecao");
-      await localDb.saveMany("pneus_inspecao", inspecoes);
+      await safeSyncStore("pneus_inspecao", inspecoes);
     }
 
     // 7. Backlog
@@ -102,8 +128,7 @@ export async function syncAllTables(): Promise<boolean> {
       .limit(2000);
     if (errBacklog) throw errBacklog;
     if (backlog) {
-      await localDb.clearStore("backlog");
-      await localDb.saveMany("backlog", backlog);
+      await safeSyncStore("backlog", backlog);
     }
 
     // 8. Catálogo Manutenção
@@ -113,8 +138,7 @@ export async function syncAllTables(): Promise<boolean> {
       .order("sistema_codigo");
     if (errCat) throw errCat;
     if (catalogo) {
-      await localDb.clearStore("catalogo_manutencao");
-      await localDb.saveMany("catalogo_manutencao", catalogo);
+      await safeSyncStore("catalogo_manutencao", catalogo);
     }
 
     // 9. Configurações Auxiliares
@@ -123,8 +147,7 @@ export async function syncAllTables(): Promise<boolean> {
       .select("*");
     if (errAux) throw errAux;
     if (aux) {
-      await localDb.clearStore("aux_config");
-      await localDb.saveMany("aux_config", aux);
+      await safeSyncStore("aux_config", aux);
     }
 
     // 10. Colaboradores
@@ -134,8 +157,7 @@ export async function syncAllTables(): Promise<boolean> {
       .order("nome");
     if (errColab) throw errColab;
     if (colaboradores) {
-      await localDb.clearStore("colaboradores");
-      await localDb.saveMany("colaboradores", colaboradores);
+      await safeSyncStore("colaboradores", colaboradores);
     }
 
     // 11. Captação de Água (Fichas e Lançamentos)
@@ -145,8 +167,7 @@ export async function syncAllTables(): Promise<boolean> {
       .order("created_at", { ascending: false });
     if (errFichas) throw errFichas;
     if (fichas) {
-      await localDb.clearStore("fichas_captacao");
-      await localDb.saveMany("fichas_captacao", fichas);
+      await safeSyncStore("fichas_captacao", fichas);
     }
 
     const { data: lancamentos, error: errLanc } = await supabase
@@ -154,8 +175,7 @@ export async function syncAllTables(): Promise<boolean> {
       .select("*");
     if (errLanc) throw errLanc;
     if (lancamentos) {
-      await localDb.clearStore("lancamentos_captacao");
-      await localDb.saveMany("lancamentos_captacao", lancamentos);
+      await safeSyncStore("lancamentos_captacao", lancamentos);
     }
 
     // 12. Lavagens
@@ -164,8 +184,7 @@ export async function syncAllTables(): Promise<boolean> {
       .select("*");
     if (errLav) throw errLav;
     if (lavagens) {
-      await localDb.clearStore("lavagens");
-      await localDb.saveMany("lavagens", lavagens);
+      await safeSyncStore("lavagens", lavagens);
     }
 
     // 13. Programação Preventiva
@@ -174,8 +193,7 @@ export async function syncAllTables(): Promise<boolean> {
       .select("*");
     if (errProg) throw errProg;
     if (progSemanal) {
-      await localDb.clearStore("prev_prog_semanal");
-      await localDb.saveMany("prev_prog_semanal", progSemanal);
+      await safeSyncStore("prev_prog_semanal", progSemanal);
     }
 
     console.log("[Sync Engine] Sincronização em lote finalizada com sucesso!");

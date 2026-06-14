@@ -36,7 +36,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       // Faz uma requisição GET simples e rápida no endpoint de ping
       // Adicionamos timeout curto para não travar a UI
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const response = await fetch("/api/ping", {
         method: "GET",
@@ -122,7 +122,11 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         console.log(`[Sync Manager] Sincronizando item ID: ${item.id} (${item.entity}:${item.action})...`);
         
         try {
-          const success = await replaySyncItem(item);
+          const res = await replaySyncItem(item);
+          const success = typeof res === "boolean" ? res : res.success;
+          const retryable = typeof res === "boolean" ? true : (res.retryable !== false);
+          const errorMsg = typeof res === "boolean" ? "Erro desconhecido" : (res.error || "Erro de sincronização");
+
           if (success) {
             // Remove da fila do IndexedDB
             if (item.id !== undefined) {
@@ -130,8 +134,20 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
             }
             console.log(`[Sync Manager] Item ID ${item.id} sincronizado com sucesso!`);
           } else {
-            console.warn(`[Sync Manager] Falha ao sincronizar item ID ${item.id}. Interrompendo lote.`);
-            break; // Para o processamento em lote se der erro técnico
+            if (!retryable) {
+              console.error(`[Sync Manager] Erro permanente no item ID ${item.id}: ${errorMsg}. Marcando como falho para não bloquear a fila.`);
+              if (item.id !== undefined) {
+                await localDb.put("sync_queue", {
+                  ...item,
+                  failed: true,
+                  errorMessage: errorMsg
+                });
+              }
+              continue; // Continua com o próximo item da fila
+            } else {
+              console.warn(`[Sync Manager] Falha temporária no item ID ${item.id}. Interrompendo lote.`);
+              break; // Para o processamento em lote se for erro de rede/timeout
+            }
           }
         } catch (err) {
           console.error(`[Sync Manager] Erro crítico no item ID ${item.id}:`, err);

@@ -246,8 +246,10 @@ export class OfflineDB {
 
   async getQueue(): Promise<SyncItem[]> {
     const queue = await this.getAll<SyncItem>('sync_queue');
-    // Ordena pelo timestamp garantindo a ordem cronológica estrita de lançamentos
-    return queue.sort((a, b) => a.timestamp - b.timestamp);
+    // Filtra os itens ignorando os que falharam permanentemente e depois ordena pelo timestamp
+    return queue
+      .filter((item: any) => !item.failed)
+      .sort((a, b) => a.timestamp - b.timestamp);
   }
 
   async removeFromQueue(id: number): Promise<void> {

@@ -851,18 +851,39 @@ export default function CaptacaoClient({
   const cacheToLocalDB = async () => {
     if (!isOnline) return;
     try {
-      // Clean up first to avoid deleted ghost records
-      await localDb.clearStore('fichas_captacao');
-      await localDb.clearStore('lancamentos_captacao');
-
-      await localDb.saveMany('fichas_captacao', initialFichas.map(({ lancamentos, ...f }) => f));
+      const localFichas = await localDb.getAll('fichas_captacao');
+      const localLanc = await localDb.getAll('lancamentos_captacao');
       
-      const allLancamientos = initialFichas.flatMap(f => f.lancamentos || []);
-      if (allLancamientos.length > 0) {
-        await localDb.saveMany('lancamentos_captacao', allLancamientos);
+      const serverFichas = initialFichas.map(({ lancamentos, ...f }) => f);
+      const serverLanc = initialFichas.flatMap(f => f.lancamentos || []);
+      
+      const serverFichasIds = new Set(serverFichas.map(f => f.id));
+      const serverLancIds = new Set(serverLanc.map(l => l.id));
+      
+      // Salva/atualiza os dados vindos do servidor no IndexedDB
+      await localDb.saveMany('fichas_captacao', serverFichas);
+      if (serverLanc.length > 0) {
+        await localDb.saveMany('lancamentos_captacao', serverLanc);
+      }
+      
+      // Deleta itens locais obsoletos que NÃO estão no servidor e NÃO estão pendentes de sincronização
+      const fichasToDelete = localFichas.filter(f => {
+        const isPending = f._isPendingSync || String(f.id).startsWith('temp_');
+        return !serverFichasIds.has(f.id) && !isPending;
+      });
+      if (fichasToDelete.length > 0) {
+        await localDb.deleteMany('fichas_captacao', fichasToDelete.map(f => f.id));
+      }
+      
+      const lancToDelete = localLanc.filter(l => {
+        const isPending = l._isPendingSync || String(l.id).startsWith('temp_');
+        return !serverLancIds.has(l.id) && !isPending;
+      });
+      if (lancToDelete.length > 0) {
+        await localDb.deleteMany('lancamentos_captacao', lancToDelete.map(l => l.id));
       }
     } catch (err) {
-      console.warn("Erro ao fazer cache dos dados no IndexedDB:", err);
+      console.warn("Erro ao fazer cache seguro dos dados no IndexedDB:", err);
     }
   };
 

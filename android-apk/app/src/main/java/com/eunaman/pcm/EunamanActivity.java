@@ -115,21 +115,47 @@ public class EunamanActivity extends AppCompatActivity {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         
-        // Identificação como Navegador Desktop para forçar exibição de botões        // Identificação idêntica ao Google Chrome Desktop (Garante mesmas funções da Web)
-        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
+        // Identificação como Navegador Desktop para forçar exibição de botões        // ── CONFIGURAÇÃO DE COMUNICAÇÃO TOTAL (Linkagem Web/App/Banco) ──
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true); 
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
         
-        // Estratégia Máxima de Sincronização (Sem Cache Antigo)
+        // Habilita Cookies para domínios cruzados (Vercel <-> Supabase)
+        CookieManager.getInstance().setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        }
+        
+        // Mantém a sessão ativa e estável e força o salvamento de dados no disco
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT); 
+        
+        // Identidade idêntica ao Chrome Desktop para sincronização perfeita com Supabase
+        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
+
+        // Limpeza de cache antigo para forçar sincronização de novos registros
+        webView.clearCache(true);
+        
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false); 
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE); // Força carregar do Vercel sempre
-        
-        // Garante que o WebView permita rolagem em todas as direções
+        settings.setDisplayZoomControls(false);
+
+        // Garante que o WebView permita rolagem e interação total
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
         webView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        webView.clearCache(true); // Limpa cache residual ao abrir
+        
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+
+        // Garante que o WebView permita rolagem e interação
+        webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        webView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -159,8 +185,15 @@ public class EunamanActivity extends AppCompatActivity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                // Sincronização agressiva de cookies após o carregamento
+                // Sincronização agressiva de cookies após o carregamento (Garante gravação no Supabase)
                 CookieManager.getInstance().flush();
+                
+                // Força o LocalStorage a persistir no Android (Crítico para sincronização de registros)
+                view.loadUrl("javascript:(function(){ " +
+                        "  if(window.localStorage) { " +
+                        "    localStorage.setItem('eunaman_sync_timestamp', Date.now()); " +
+                        "  }" +
+                        "})();");
 
                 // ── CUSTOMIZAÇÕES VISUAIS VIA JAVASCRIPT ──
                 // 1. Renomeia a aba "Ficha com fotos" para "HISTÓRICO DA FICHA"
@@ -285,6 +318,9 @@ public class EunamanActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         if (webView != null) webView.onPause();
+        
+        // Garante a persistência de cookies no disco físico ao sair do app
+        CookieManager.getInstance().flush();
     }
 
     @Override
