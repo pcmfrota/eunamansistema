@@ -605,31 +605,41 @@ export default function CaptacaoClient({
     };
   }, []);
 
+  const hasRestoredRef = useRef(false);
+
   // Salvar rascunho do lançamento de captação
   useEffect(() => {
-    if (!mounted) return;
-    if (isLancamentoModalOpen) {
-      localStorage.setItem('eunaman_captacao_lancamento_draft', JSON.stringify(newLancamentoData));
-      localStorage.setItem('eunaman_captacao_modal_open', 'true');
-    } else {
-      localStorage.removeItem('eunaman_captacao_lancamento_draft');
-      localStorage.setItem('eunaman_captacao_modal_open', 'false');
+    if (!mounted || !hasRestoredRef.current) return;
+    try {
+      if (isLancamentoModalOpen) {
+        localStorage.setItem('eunaman_captacao_lancamento_draft', JSON.stringify(newLancamentoData));
+        localStorage.setItem('eunaman_captacao_modal_open', 'true');
+      } else {
+        localStorage.removeItem('eunaman_captacao_lancamento_draft');
+        localStorage.setItem('eunaman_captacao_modal_open', 'false');
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho de captação:", e);
     }
   }, [newLancamentoData, isLancamentoModalOpen, mounted]);
 
   // Restaurar rascunho do lançamento de captação ao montar
   useEffect(() => {
     if (typeof window === "undefined" || !mounted) return;
-    const modalOpen = localStorage.getItem('eunaman_captacao_modal_open');
-    const draft = localStorage.getItem('eunaman_captacao_lancamento_draft');
-    if (modalOpen === 'true' && draft) {
-      try {
+    try {
+      const modalOpen = localStorage.getItem('eunaman_captacao_modal_open');
+      const draft = localStorage.getItem('eunaman_captacao_lancamento_draft');
+      if (modalOpen === 'true' && draft) {
         const parsed = JSON.parse(draft);
-        setNewLancamentoData(parsed);
-        setIsLancamentoModalOpen(true);
-      } catch (e) {
-        console.error("Erro ao restaurar rascunho de captação:", e);
+        if (parsed && typeof parsed === 'object') {
+          setNewLancamentoData(parsed);
+          setIsLancamentoModalOpen(true);
+        }
       }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho de captação:", e);
+    } finally {
+      hasRestoredRef.current = true;
     }
   }, [mounted]);
 

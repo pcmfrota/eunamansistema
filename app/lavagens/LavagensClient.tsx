@@ -162,32 +162,42 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
     };
   }, [mounted]);
 
+  const hasRestoredRef = useRef(false);
+
   // Salvar rascunho do lançamento de lavagem
   useEffect(() => {
-    if (!mounted) return;
-    if (isModalOpen) {
-      localStorage.setItem('eunaman_lavagens_modal_data', JSON.stringify(modalData));
-      localStorage.setItem('eunaman_lavagens_modal_open', 'true');
-    } else {
-      localStorage.removeItem('eunaman_lavagens_modal_data');
-      localStorage.setItem('eunaman_lavagens_modal_open', 'false');
-      localStorage.removeItem('eunaman_lavagens_active_field');
+    if (!mounted || !hasRestoredRef.current) return;
+    try {
+      if (isModalOpen) {
+        localStorage.setItem('eunaman_lavagens_modal_data', JSON.stringify(modalData));
+        localStorage.setItem('eunaman_lavagens_modal_open', 'true');
+      } else {
+        localStorage.removeItem('eunaman_lavagens_modal_data');
+        localStorage.setItem('eunaman_lavagens_modal_open', 'false');
+        localStorage.removeItem('eunaman_lavagens_active_field');
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho de lavagem:", e);
     }
   }, [modalData, isModalOpen, mounted]);
 
   // Restaurar rascunho do lançamento de lavagem ao montar
   useEffect(() => {
     if (typeof window === "undefined" || !mounted) return;
-    const modalOpen = localStorage.getItem('eunaman_lavagens_modal_open');
-    const draft = localStorage.getItem('eunaman_lavagens_modal_data');
-    if (modalOpen === 'true' && draft) {
-      try {
+    try {
+      const modalOpen = localStorage.getItem('eunaman_lavagens_modal_open');
+      const draft = localStorage.getItem('eunaman_lavagens_modal_data');
+      if (modalOpen === 'true' && draft) {
         const parsed = JSON.parse(draft);
-        setModalData(parsed);
-        setIsModalOpen(true);
-      } catch (e) {
-        console.error("Erro ao restaurar rascunho de lavagem:", e);
+        if (parsed && typeof parsed === 'object') {
+          setModalData(parsed);
+          setIsModalOpen(true);
+        }
       }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho de lavagem:", e);
+    } finally {
+      hasRestoredRef.current = true;
     }
   }, [mounted]);
 
