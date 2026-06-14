@@ -899,14 +899,8 @@ export default function CaptacaoClient({
     }
   }, [initialFichas, isOnline]);
 
-  // Listener to sync completed
-  useEffect(() => {
-    const handleSyncComplete = () => {
-      window.location.reload();
-    };
-    window.addEventListener('offline-sync-completed', handleSyncComplete);
-    return () => window.removeEventListener('offline-sync-completed', handleSyncComplete);
-  }, []);
+  // Listener to sync completed removido para evitar loop infinito de reloads.
+  // A atualização dos dados locais após o sync já é tratada reativamente no pai (page.tsx).
 
   // Load sheetjs and html2pdf scripts dynamically
   useEffect(() => {
