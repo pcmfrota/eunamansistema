@@ -736,7 +736,7 @@ export default function CaptacaoClient({
   // Filtro de período operacional (Default para o período operacional ativo)
   const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<{ mes: number; ano: number } | 'Todos'>(() => {
     const today = new Date().toISOString().split('T')[0];
-    const period = calendario.find(p => p.data_inicio <= today && p.data_fim >= today);
+    const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) {
       return { mes: period.mes, ano: period.ano };
     }
@@ -745,8 +745,8 @@ export default function CaptacaoClient({
   });
 
   const periodOptions = useMemo(() => {
-    const list = (calendario && calendario.length > 0) ? calendario : fichas;
-    const options = list.map(c => ({
+    const list = (Array.isArray(calendario) && calendario.length > 0) ? calendario : (Array.isArray(fichas) ? fichas : []);
+    const options = list.filter(c => c && c.mes !== undefined && c.ano !== undefined).map(c => ({
       mes: c.mes,
       ano: c.ano,
       label: `${getMonthName(c.mes)} / ${c.ano}`
@@ -762,7 +762,7 @@ export default function CaptacaoClient({
       }
     });
     
-    return unique.sort((a, b) => a.ano - b.ano || a.mes - b.mes);
+    return unique.sort((a, b) => (Number(a.ano) || 0) - (Number(b.ano) || 0) || (Number(a.mes) || 0) - (Number(b.mes) || 0));
   }, [calendario, fichas]);
   const [isExporting, setIsExporting] = useState(false);
   const [isFichaExpanded, setIsFichaExpanded] = useState(false);

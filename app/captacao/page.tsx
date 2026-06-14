@@ -27,20 +27,20 @@ export default function CaptacaoPage() {
         const localCal = await localDb.getAll("calendario_suzano");
 
         // Associa os lançamentos correspondentes a cada ficha (ficha_id)
-        const fichasComLancamentos = localFichas.map((ficha: any) => ({
+        const fichasComLancamentos = Array.isArray(localFichas) ? localFichas.map((ficha: any) => ({
           ...ficha,
-          lancamentos: localLancamentos.filter((l: any) => l.ficha_id === ficha.id)
-        }));
+          lancamentos: Array.isArray(localLancamentos) ? localLancamentos.filter((l: any) => l && l.ficha_id === ficha.id) : []
+        })) : [];
 
-        const eqFiltrados = localEq.filter(
-          eq => !eq.status || (eq.status !== "Inativo" && eq.status !== "INATIVO")
-        );
+        const eqFiltrados = Array.isArray(localEq) ? localEq.filter(
+          eq => eq && (!eq.status || (eq.status !== "Inativo" && eq.status !== "INATIVO"))
+        ) : [];
 
         if (active) {
           setFichas(fichasComLancamentos);
           setEquipamentos(eqFiltrados);
-          setColaboradores(localCol);
-          setCalendario(localCal);
+          setColaboradores(Array.isArray(localCol) ? localCol : []);
+          setCalendario(Array.isArray(localCal) ? localCal : []);
           setLoading(false);
         }
 
@@ -55,20 +55,20 @@ export default function CaptacaoPage() {
             const freshCol = await localDb.getAll("colaboradores");
             const freshCal = await localDb.getAll("calendario_suzano");
 
-            const freshFichasComLancamentos = freshFichas.map((ficha: any) => ({
+            const freshFichasComLancamentos = Array.isArray(freshFichas) ? freshFichas.map((ficha: any) => ({
               ...ficha,
-              lancamentos: freshLancamentos.filter((l: any) => l.ficha_id === ficha.id)
-            }));
+              lancamentos: Array.isArray(freshLancamentos) ? freshLancamentos.filter((l: any) => l && l.ficha_id === ficha.id) : []
+            })) : [];
 
-            const freshEqFiltrados = freshEq.filter(
-              eq => !eq.status || (eq.status !== "Inativo" && eq.status !== "INATIVO")
-            );
+            const freshEqFiltrados = Array.isArray(freshEq) ? freshEq.filter(
+              eq => eq && (!eq.status || (eq.status !== "Inativo" && eq.status !== "INATIVO"))
+            ) : [];
 
             if (active) {
               setFichas(freshFichasComLancamentos);
               setEquipamentos(freshEqFiltrados);
-              setColaboradores(freshCol);
-              setCalendario(freshCal);
+              setColaboradores(Array.isArray(freshCol) ? freshCol : []);
+              setCalendario(Array.isArray(freshCal) ? freshCal : []);
             }
           }
         }
