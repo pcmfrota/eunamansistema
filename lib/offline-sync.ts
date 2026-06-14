@@ -43,41 +43,59 @@ export async function syncAllTables(): Promise<boolean> {
   }
 
   const supabase = createClient();
-  console.log("[Sync Engine] Iniciando sincronização em lote de todas as tabelas...");
+  console.log("[Sync Engine] Iniciando sincronização em lote isolada de todas as tabelas...");
 
-  try {
-    // 1. Equipamentos
-    const { data: equipamentos, error: errEq } = await supabase
+  let successCount = 0;
+  let failCount = 0;
+
+  const syncTable = async (
+    name: string,
+    fetchFn: () => Promise<{ data: any[] | null; error: any }>,
+    storeName: string = name,
+    idField: string = "id"
+  ) => {
+    try {
+      console.log(`[Sync Engine] Sincronizando tabela: ${name}...`);
+      const { data, error } = await fetchFn();
+      if (error) throw error;
+      if (data) {
+        await safeSyncStore(storeName, data, idField);
+        console.log(`[Sync Engine] Tabela ${name} sincronizada com sucesso! (${data.length} itens)`);
+        successCount++;
+      } else {
+        console.log(`[Sync Engine] Tabela ${name} retornou dados vazios.`);
+      }
+    } catch (err: any) {
+      console.error(`[Sync Engine] Falha ao sincronizar tabela ${name}:`, err?.message || err);
+      failCount++;
+    }
+  };
+
+  // 1. Equipamentos
+  await syncTable("equipamentos", () =>
+    supabase
       .from("equipamentos")
       .select("id, placa, modulo, area, tipo, categoria, status, created_at, deleted_at")
-      .is("deleted_at", null);
-    if (errEq) throw errEq;
-    if (equipamentos) {
-      await safeSyncStore("equipamentos", equipamentos);
-    }
+      .is("deleted_at", null)
+  );
 
-    // 2. Escala Frota
-    const { data: escala, error: errEsc } = await supabase
-      .from("escala_frota")
-      .select("*");
-    if (errEsc) throw errEsc;
-    if (escala) {
-      await safeSyncStore("escala_frota", escala);
-    }
+  // 2. Escala Frota
+  await syncTable("escala_frota", () =>
+    supabase.from("escala_frota").select("*")
+  );
 
-    // 3. Calendário Suzano
-    const { data: calendario, error: errCal } = await supabase
+  // 3. Calendário Suzano
+  await syncTable("calendario_suzano", () =>
+    supabase
       .from("calendario_suzano")
       .select("*")
       .order("ano", { ascending: true })
-      .order("mes", { ascending: true });
-    if (errCal) throw errCal;
-    if (calendario) {
-      await safeSyncStore("calendario_suzano", calendario);
-    }
+      .order("mes", { ascending: true })
+  );
 
-    // 4. Ordens de Serviço (com join para manter compatibilidade)
-    const { data: ordens, error: errOS } = await supabase
+  // 4. Ordens de Serviço
+  await syncTable("ordens_servico", () =>
+    supabase
       .from("ordens_servico")
       .select(`
         id, numero_os, placa, modulo, status, data_abertura, data_fechamento, 
@@ -89,24 +107,20 @@ export async function syncAllTables(): Promise<boolean> {
       `)
       .not("equipamento_id", "is", null)
       .order("data_abertura", { ascending: false })
-      .limit(1000);
-    if (errOS) throw errOS;
-    if (ordens) {
-      await safeSyncStore("ordens_servico", ordens);
-    }
+      .limit(1000)
+  );
 
-    // 5. Preventivas (com join para manter compatibilidade)
-    const { data: preventivas, error: errPrev } = await supabase
+  // 5. Preventivas
+  await syncTable("preventivas", () =>
+    supabase
       .from("preventivas")
       .select("*, equipamentos(placa, tipo, categoria, modulo)")
-      .order("data_atualizacao", { ascending: false });
-    if (errPrev) throw errPrev;
-    if (preventivas) {
-      await safeSyncStore("preventivas", preventivas);
-    }
+      .order("data_atualizacao", { ascending: false })
+  );
 
-    // 6. Inspeções Pneus (com join para manter compatibilidade)
-    const { data: inspecoes, error: errPneus } = await supabase
+  // 6. Inspeções Pneus
+  await syncTable("inspecoes_pneus", () =>
+    supabase
       .from("inspecoes_pneus")
       .select(`
         id, equipamento_id, data_inspecao, km_atual, condicao, observacoes, created_at,
@@ -114,92 +128,56 @@ export async function syncAllTables(): Promise<boolean> {
         equipamentos(placa, tipo, modulo, categoria)
       `)
       .order("data_inspecao", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (errPneus) throw errPneus;
-    if (inspecoes) {
-      await safeSyncStore("pneus_inspecao", inspecoes);
-    }
+      .order("created_at", { ascending: false }),
+    "pneus_inspecao"
+  );
 
-    // 7. Backlog
-    const { data: backlog, error: errBacklog } = await supabase
+  // 7. Backlog
+  await syncTable("backlog", () =>
+    supabase
       .from("backlog")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(2000);
-    if (errBacklog) throw errBacklog;
-    if (backlog) {
-      await safeSyncStore("backlog", backlog);
-    }
+      .limit(2000)
+  );
 
-    // 8. Catálogo Manutenção
-    const { data: catalogo, error: errCat } = await supabase
-      .from("catalogo_manutencao")
-      .select("*")
-      .order("sistema_codigo");
-    if (errCat) throw errCat;
-    if (catalogo) {
-      await safeSyncStore("catalogo_manutencao", catalogo);
-    }
+  // 8. Catálogo Manutenção
+  await syncTable("catalogo_manutencao", () =>
+    supabase.from("catalogo_manutencao").select("*").order("sistema_codigo")
+  );
 
-    // 9. Configurações Auxiliares
-    const { data: aux, error: errAux } = await supabase
-      .from("aux_config")
-      .select("*");
-    if (errAux) throw errAux;
-    if (aux) {
-      await safeSyncStore("aux_config", aux);
-    }
+  // 9. Configurações Auxiliares
+  await syncTable("aux_config", () =>
+    supabase.from("aux_config").select("*")
+  );
 
-    // 10. Colaboradores
-    const { data: colaboradores, error: errColab } = await supabase
-      .from("colaboradores")
-      .select("*")
-      .order("nome");
-    if (errColab) throw errColab;
-    if (colaboradores) {
-      await safeSyncStore("colaboradores", colaboradores);
-    }
+  // 10. Colaboradores
+  await syncTable("colaboradores", () =>
+    supabase.from("colaboradores").select("*").order("nome")
+  );
 
-    // 11. Captação de Água (Fichas e Lançamentos)
-    const { data: fichas, error: errFichas } = await supabase
+  // 11. Captação de Água (Fichas e Lançamentos)
+  await syncTable("fichas_captacao", () =>
+    supabase
       .from("fichas_captacao")
       .select("*")
-      .order("created_at", { ascending: false });
-    if (errFichas) throw errFichas;
-    if (fichas) {
-      await safeSyncStore("fichas_captacao", fichas);
-    }
+      .order("created_at", { ascending: false })
+  );
 
-    const { data: lancamentos, error: errLanc } = await supabase
-      .from("lancamentos_captacao")
-      .select("*");
-    if (errLanc) throw errLanc;
-    if (lancamentos) {
-      await safeSyncStore("lancamentos_captacao", lancamentos);
-    }
+  await syncTable("lancamentos_captacao", () =>
+    supabase.from("lancamentos_captacao").select("*")
+  );
 
-    // 12. Lavagens
-    const { data: lavagens, error: errLav } = await supabase
-      .from("lavagens")
-      .select("*");
-    if (errLav) throw errLav;
-    if (lavagens) {
-      await safeSyncStore("lavagens", lavagens);
-    }
+  // 12. Lavagens
+  await syncTable("lavagens", () =>
+    supabase.from("lavagens").select("*")
+  );
 
-    // 13. Programação Preventiva
-    const { data: progSemanal, error: errProg } = await supabase
-      .from("prev_prog_semanal")
-      .select("*");
-    if (errProg) throw errProg;
-    if (progSemanal) {
-      await safeSyncStore("prev_prog_semanal", progSemanal);
-    }
+  // 13. Programação Preventiva
+  await syncTable("prev_prog_semanal", () =>
+    supabase.from("prev_prog_semanal").select("*")
+  );
 
-    console.log("[Sync Engine] Sincronização em lote finalizada com sucesso!");
-    return true;
-  } catch (err) {
-    console.error("[Sync Engine] Falha geral ao sincronizar tabelas em lote:", err);
-    return false;
-  }
+  console.log(`[Sync Engine] Sincronização robusta finalizada. Sucesso: ${successCount}, Falhas: ${failCount}`);
+  return successCount > 0;
 }
