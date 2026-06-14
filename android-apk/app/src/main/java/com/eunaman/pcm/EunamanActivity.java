@@ -22,13 +22,10 @@ import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.webkit.ConsoleMessage;
-import android.webkit.PermissionRequest;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
+import android.webkit.PermissionRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
@@ -51,8 +48,8 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * EunamanActivity — Motor Ultra-Robusto EUNAMAN PCM.
- * OTIMIZADO PARA 100% OFFLINE COM ZERO TRAVAMENTOS.
+ * EunamanActivity — Motor Ultra-Robusto de Alta Disponibilidade.
+ * CONFIGURADO PARA OPERAÇÃO 100% OFFLINE E SINCRONIZAÇÃO AUTOMÁTICA.
  */
 public class EunamanActivity extends AppCompatActivity {
 
@@ -92,6 +89,7 @@ public class EunamanActivity extends AppCompatActivity {
             if (savedInstanceState != null) {
                 webView.restoreState(savedInstanceState);
             } else {
+                // Carregamento inteligente: se houver cache, ele abre instantaneamente mesmo offline
                 webView.loadUrl(getString(R.string.launch_url));
             }
         }
@@ -108,7 +106,7 @@ public class EunamanActivity extends AppCompatActivity {
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         
-        // ── CONFIGURAÇÃO DE ALTA PERFORMANCE OFFLINE ──
+        // ── CONFIGURAÇÕES PARA OFFLINE TOTAL (100% FUNCIONAL) ──
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true); 
         settings.setDatabaseEnabled(true);
@@ -117,24 +115,22 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setAllowFileAccessFromFileURLs(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
         
-        // Aceleração e Prioridade
-        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        
-        // Localização física para persistência
+        // Caminho para armazenamento de banco de dados e LocalStorage
         String databasePath = this.getApplicationContext().getDir("databases", android.content.Context.MODE_PRIVATE).getPath();
         settings.setDatabasePath(databasePath);
+        
+        // Estratégia de Cache Mestra: Prefere cache, busca rede em segundo plano
+        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         
         settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
         CookieManager.getInstance().setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
         
-        // Ativa aceleração de hardware nativa
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -142,7 +138,7 @@ public class EunamanActivity extends AppCompatActivity {
                 super.onPageStarted(view, url, favicon);
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
                 
-                // Força o modo cache se a rede estiver instável ou offline
+                // Se a rede estiver instável, trava no modo cache para não dar erro
                 if (!isNetworkAvailable()) {
                     view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
                 } else {
@@ -152,7 +148,7 @@ public class EunamanActivity extends AppCompatActivity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                // Sincronização em background sem travar a UI
+                // Sincronização agressiva de cookies (Grava a sessão no disco físico)
                 new Thread(() -> CookieManager.getInstance().flush()).start();
 
                 if (splashScreen != null && splashScreen.getVisibility() == View.VISIBLE) {
@@ -165,7 +161,7 @@ public class EunamanActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
-                    // Se falhar, tenta carregar instantaneamente do que está salvo no celular
+                    // Se falhar a rede, força a carga do que está salvo localmente (Elimina tela de erro)
                     view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
                     view.loadUrl(request.getUrl().toString());
                 }
@@ -190,9 +186,17 @@ public class EunamanActivity extends AppCompatActivity {
                 startActivityForResult(Intent.createChooser(i, "Selecionar Imagem"), REQUEST_FILE_CHOOSER);
                 return true;
             }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    request.grant(request.getResources());
+                }
+            }
         });
 
         webView.addJavascriptInterface(new EunamanJsBridge(), "EunamanApp");
+        webView.addJavascriptInterface(new EunamanCameraBridge(), "EunamanCamera");
         setupNetworkMonitoring();
     }
 
@@ -202,8 +206,7 @@ public class EunamanActivity extends AppCompatActivity {
             Network network = cm.getActiveNetwork();
             if (network == null) return false;
             NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
-            return capabilities != null && (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && 
-                   capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+            return capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
         }
         return cm.getActiveNetworkInfo() != null && cm.getActiveNetworkInfo().isConnected();
     }
@@ -217,7 +220,7 @@ public class EunamanActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         if (webView != null) {
                             webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
-                            // Sincroniza dados novos sem recarregar a página
+                            // Avisa o site para sincronizar apenas as atualizações offline
                             webView.loadUrl("javascript:(function(){ if(window.onNetworkSync) window.onNetworkSync(); })();");
                         }
                     });
@@ -233,7 +236,207 @@ public class EunamanActivity extends AppCompatActivity {
             Uri[] results = (resultCode == Activity.RESULT_OK && data != null) ? new Uri[]{data.getData()} : null;
             filePathCallback.onReceiveValue(results);
             filePathCallback = null;
+        } else if (requestCode == REQUEST_CAMERA) {
+            if (resultCode == Activity.RESULT_OK) {
+                new Thread(this::processAndSendPhoto).start();
+            } else {
+                sendCameraResultError("Captura de foto cancelada ou falhou.");
+            }
         }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA_PERM) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                launchCameraIntent();
+            } else {
+                Toast.makeText(this, "Permissão de câmera negada", Toast.LENGTH_SHORT).show();
+                sendCameraResultError("Permissão de câmera negada");
+            }
+        }
+    }
+
+    private void checkCameraPermissionAndOpen() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERM);
+        } else {
+            launchCameraIntent();
+        }
+    }
+
+    private void launchCameraIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        File photoFile = null;
+        try {
+            photoFile = createImageFile();
+        } catch (IOException ex) {
+            Log.e(TAG, "Erro ao criar arquivo de imagem", ex);
+            sendCameraResultError("Erro ao criar arquivo para salvar a foto.");
+            return;
+        }
+        if (photoFile != null) {
+            try {
+                String authority = getPackageName() + ".provider";
+                photoUri = FileProvider.getUriForFile(this, authority, photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                startActivityForResult(takePictureIntent, REQUEST_CAMERA);
+            } catch (Exception e) {
+                Log.e(TAG, "Erro ao iniciar camera intent", e);
+                sendCameraResultError("Não foi possível abrir a câmera: " + e.getMessage());
+            }
+        }
+    }
+
+    private File createImageFile() throws IOException {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+            imageFileName,  /* prefix */
+            ".jpg",         /* suffix */
+            storageDir      /* directory */
+        );
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
+    private void processAndSendPhoto() {
+        if (currentPhotoPath == null) {
+            sendCameraResultError("Caminho da foto não encontrado.");
+            return;
+        }
+
+        File file = new File(currentPhotoPath);
+        if (!file.exists()) {
+            sendCameraResultError("Arquivo de foto não encontrado.");
+            return;
+        }
+
+        Bitmap bitmap = null;
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(currentPhotoPath, options);
+
+            int srcWidth = options.outWidth;
+            int srcHeight = options.outHeight;
+
+            int inSampleSize = 1;
+            if (srcWidth > MAX_IMAGE_SIZE_PX || srcHeight > MAX_IMAGE_SIZE_PX) {
+                int halfWidth = srcWidth / 2;
+                int halfHeight = srcHeight / 2;
+                while ((halfWidth / inSampleSize) >= MAX_IMAGE_SIZE_PX && (halfHeight / inSampleSize) >= MAX_IMAGE_SIZE_PX) {
+                    inSampleSize *= 2;
+                }
+            }
+
+            options.inJustDecodeBounds = false;
+            options.inSampleSize = inSampleSize;
+            bitmap = BitmapFactory.decodeFile(currentPhotoPath, options);
+
+            if (bitmap == null) {
+                sendCameraResultError("Erro ao decodificar a foto.");
+                return;
+            }
+
+            bitmap = rotateImageIfRequired(bitmap, currentPhotoPath);
+            bitmap = scaleBitmapIfRequired(bitmap);
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, baos);
+            byte[] imageBytes = baos.toByteArray();
+            String base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
+
+            String dataUrl = "data:image/jpeg;base64," + base64Image;
+
+            String jsonResponse = "{\"success\":true,\"dataUrl\":\"" + dataUrl + "\"}";
+            sendCameraResultToWeb(jsonResponse);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Erro ao processar imagem", e);
+            sendCameraResultError("Erro ao processar imagem: " + e.getMessage());
+        } finally {
+            if (bitmap != null && !bitmap.isRecycled()) {
+                bitmap.recycle();
+            }
+            try {
+                if (file.exists()) {
+                    file.delete();
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Erro ao deletar arquivo temporario", e);
+            }
+        }
+    }
+
+    private Bitmap rotateImageIfRequired(Bitmap img, String imagePath) throws IOException {
+        ExifInterface ei = new ExifInterface(imagePath);
+        int orientation = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                return rotateImage(img, 90);
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                return rotateImage(img, 180);
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                return rotateImage(img, 270);
+            default:
+                return img;
+        }
+    }
+
+    private static Bitmap rotateImage(Bitmap img, int degree) {
+        Matrix matrix = new Matrix();
+        matrix.postRotate(degree);
+        Bitmap rotatedImg = Bitmap.createBitmap(img, 0, 0, img.getWidth(), img.getHeight(), matrix, true);
+        if (rotatedImg != img) {
+            img.recycle();
+        }
+        return rotatedImg;
+    }
+
+    private Bitmap scaleBitmapIfRequired(Bitmap img) {
+        int width = img.getWidth();
+        int height = img.getHeight();
+
+        if (width <= MAX_IMAGE_SIZE_PX && height <= MAX_IMAGE_SIZE_PX) {
+            return img;
+        }
+
+        int newWidth, newHeight;
+        if (width > height) {
+            newWidth = MAX_IMAGE_SIZE_PX;
+            newHeight = (height * MAX_IMAGE_SIZE_PX) / width;
+        } else {
+            newHeight = MAX_IMAGE_SIZE_PX;
+            newWidth = (width * MAX_IMAGE_SIZE_PX) / height;
+        }
+
+        Bitmap scaledImg = Bitmap.createScaledBitmap(img, newWidth, newHeight, true);
+        if (scaledImg != img) {
+            img.recycle();
+        }
+        return scaledImg;
+    }
+
+    private void sendCameraResultToWeb(final String jsonString) {
+        runOnUiThread(() -> {
+            if (webView != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    webView.evaluateJavascript("javascript:if(window.onEunamanCameraResult) { window.onEunamanCameraResult('" + jsonString.replace("\\", "\\\\").replace("'", "\\'") + "'); }", null);
+                } else {
+                    webView.loadUrl("javascript:if(window.onEunamanCameraResult) { window.onEunamanCameraResult('" + jsonString.replace("\\", "\\\\").replace("'", "\\'") + "'); }");
+                }
+            }
+        });
+    }
+
+    private void sendCameraResultError(String errorMessage) {
+        String jsonResponse = "{\"success\":false,\"error\":\"" + errorMessage.replace("\"", "\\\"") + "\"}";
+        sendCameraResultToWeb(jsonResponse);
     }
 
     private void performNativeLogout() {
@@ -251,5 +454,12 @@ public class EunamanActivity extends AppCompatActivity {
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
+    }
+
+    private class EunamanCameraBridge {
+        @JavascriptInterface
+        public void openCamera() {
+            runOnUiThread(EunamanActivity.this::checkCameraPermissionAndOpen);
+        }
     }
 }
