@@ -25,6 +25,7 @@ import android.webkit.ConsoleMessage;
 import android.webkit.PermissionRequest;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -71,6 +72,8 @@ public class EunamanActivity extends AppCompatActivity {
     private boolean isLoggingOut = false;
     private PermissionRequest pendingPermissionRequest;
     private static final int REQUEST_CAMERA_WEBVIEW_PERM = 1003;
+    private static final int REQUEST_FILE_CHOOSER = 1004;
+    private ValueCallback<Uri[]> filePathCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -272,6 +275,44 @@ public class EunamanActivity extends AppCompatActivity {
                     }
                 }
             }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
+                if (EunamanActivity.this.filePathCallback != null) {
+                    EunamanActivity.this.filePathCallback.onReceiveValue(null);
+                }
+                EunamanActivity.this.filePathCallback = filePathCallback;
+
+                Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                File photoFile = null;
+                try {
+                    photoFile = createTempPhotoFile();
+                    currentPhotoPath = photoFile.getAbsolutePath();
+                    photoUri = FileProvider.getUriForFile(EunamanActivity.this, getPackageName() + ".provider", photoFile);
+                    takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+                } catch (IOException ex) {
+                    Log.e(TAG, "Erro ao criar arquivo", ex);
+                }
+
+                Intent contentSelectionIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                contentSelectionIntent.setType("image/*");
+
+                Intent[] intentArray;
+                if (takePictureIntent != null && photoUri != null) {
+                    intentArray = new Intent[]{takePictureIntent};
+                } else {
+                    intentArray = new Intent[0];
+                }
+
+                Intent chooserIntent = new Intent(Intent.ACTION_CHOOSER);
+                chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent);
+                chooserIntent.putExtra(Intent.EXTRA_TITLE, "Selecionar Imagem");
+                chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, intentArray);
+
+                startActivityForResult(chooserIntent, REQUEST_FILE_CHOOSER);
+                return true;
+            }
         });
 
         EunamanJsBridge bridge = new EunamanJsBridge();
@@ -339,6 +380,18 @@ public class EunamanActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CAMERA && resultCode == Activity.RESULT_OK) {
             processAndSendPhoto();
+        } else if (requestCode == REQUEST_FILE_CHOOSER) {
+            if (filePathCallback == null) return;
+            Uri[] results = null;
+            if (resultCode == Activity.RESULT_OK) {
+                if (data != null && data.getData() != null) {
+                    results = new Uri[]{data.getData()};
+                } else if (photoUri != null) {
+                    results = new Uri[]{photoUri};
+                }
+            }
+            filePathCallback.onReceiveValue(results);
+            filePathCallback = null;
         }
     }
 
@@ -423,8 +476,16 @@ public class EunamanActivity extends AppCompatActivity {
     }
 
     private void sendPhotoToJs(String dataUrl) {
-        String js = "javascript:(function(){ if(window.onEunamanCameraResult){ window.onEunamanCameraResult(JSON.stringify({success:true,dataUrl:\"" + dataUrl + "\"})); }})();";
-        runOnUiThread(() -> { if (webView != null) webView.loadUrl(js); });
+        String js = "if(window.onEunamanCameraResult){ window.onEunamanCameraResult(JSON.stringify({success:true,dataUrl:\"" + dataUrl + "\"})); }";
+        runOnUiThread(() -> {
+            if (webView != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    webView.evaluateJavascript(js, null);
+                } else {
+                    webView.loadUrl("javascript:(function(){ " + js + " })();");
+                }
+            }
+        });
     }
 
     private void performNativeLogout() {
