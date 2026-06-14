@@ -308,10 +308,38 @@ function UploadBox({ label, url, onCapture, onFileSelect, showCameraOption }: {
   );
 }
 
-// Format month name
-const getMonthName = (m: number) => {
-  const dates = new Date(2026, m - 1, 15);
-  return format(dates, 'MMMM', { locale: ptBR }).toUpperCase();
+// Safe date formatter to prevent RangeError from date-fns
+const safeFormatDate = (dateVal: any, formatPattern: string, options?: any) => {
+  if (!dateVal) return '-';
+  try {
+    let dateObj: Date;
+    if (dateVal instanceof Date) {
+      dateObj = dateVal;
+    } else {
+      const dateStr = String(dateVal);
+      const cleanStr = dateStr.includes(' ') ? dateStr.replace(' ', 'T') : dateStr;
+      const finalStr = cleanStr.includes('T') ? cleanStr : cleanStr + 'T12:00:00';
+      dateObj = new Date(finalStr);
+    }
+    if (isNaN(dateObj.getTime())) return '-';
+    return format(dateObj, formatPattern, options);
+  } catch (e) {
+    return '-';
+  }
+};
+
+// Format month name safely
+const getMonthName = (m: any) => {
+  const num = Number(m);
+  if (!m || isNaN(num) || num < 1 || num > 12) {
+    return 'MÊS INVÁLIDO';
+  }
+  try {
+    const dates = new Date(2026, num - 1, 15);
+    return format(dates, 'MMMM', { locale: ptBR }).toUpperCase();
+  } catch (e) {
+    return 'MÊS INVÁLIDO';
+  }
 };
 
 // Standalone Printable Sheet View component/helper function
@@ -435,7 +463,7 @@ const renderPaperFicha = (ficha: any, onPhotoClick?: (url: string) => void) => {
           {ficha.lancamentos && ficha.lancamentos.length > 0 ? (
             ficha.lancamentos.map((row: any, index: number) => (
               <tr key={index} className="text-center text-zinc-955 font-semibold border-b border-black">
-                <td className="border border-black p-1.5">{format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                <td className="border border-black p-1.5">{safeFormatDate(row.data, 'dd/MM/yyyy')}</td>
                 <td className="border border-black p-1.5 font-mono">
                   {row.foto_ponto && onPhotoClick ? (
                     <>
@@ -909,7 +937,7 @@ export default function CaptacaoClient({
       
       sortedLancamentos.forEach((row: any) => {
         aoa.push([
-          format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy'),
+          safeFormatDate(row.data, 'dd/MM/yyyy'),
           row.id_ponto || "",
           row.hora_inicial || "",
           row.hora_final || "",
@@ -1106,11 +1134,12 @@ export default function CaptacaoClient({
 
   // Determine if a Ficha is expired (belongs to a past operational month)
   const isFichaLocked = useCallback((ficha: any) => {
+    if (!ficha) return true;
     if (ficha.status === 'Fechada') return true;
     
     // If the Ficha belongs to a past year or past month, it is automatically closed
-    if (ficha.ano < currentPeriod.ano) return true;
-    if (ficha.ano === currentPeriod.ano && ficha.mes < currentPeriod.mes) return true;
+    if (Number(ficha.ano) < currentPeriod.ano) return true;
+    if (Number(ficha.ano) === currentPeriod.ano && Number(ficha.mes) < currentPeriod.mes) return true;
     
     return false;
   }, [currentPeriod]);
@@ -1454,7 +1483,7 @@ export default function CaptacaoClient({
           </h1>
           <span className="bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
             <Clock size={12} />
-            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{selectedPeriodFilter === 'Todos' ? 'TODOS' : `${getMonthName(selectedPeriodFilter.mes)} / ${selectedPeriodFilter.ano}`}</span>
+            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{(!selectedPeriodFilter || selectedPeriodFilter === 'Todos') ? 'TODOS' : `${getMonthName(selectedPeriodFilter.mes)} / ${selectedPeriodFilter.ano}`}</span>
           </span>
         </div>
       </header>
@@ -1887,7 +1916,7 @@ export default function CaptacaoClient({
                             <div>
                               <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
                               <span className="font-extrabold text-zinc-900 dark:text-white text-sm">
-                                {format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}
+                                {safeFormatDate(row.data, 'dd/MM/yyyy')}
                               </span>
                               <span className="block text-zinc-550 dark:text-zinc-400 font-bold mt-1 tracking-tight">
                                 ⏱️ {row.hora_inicial} - {row.hora_final}
@@ -1935,8 +1964,8 @@ export default function CaptacaoClient({
                               <span className="block text-zinc-500 font-bold font-mono text-[9px] leading-tight">
                                 Ref: {row.id.substring(0, 8)}
                               </span>
-                              <span className="block text-zinc-500 text-[9px] font-bold mt-1">
-                                Registrado em: {row.created_at ? format(new Date(row.created_at.replace(' ', 'T')), 'dd/MM HH:mm') : '-'}
+                              <span className="block text-zinc-550 text-[9px] font-bold mt-1">
+                                Registrado em: {safeFormatDate(row.created_at, 'dd/MM HH:mm')}
                               </span>
                             </div>
                           </div>

@@ -29,6 +29,26 @@ import { supabase } from '@/lib/supabase'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
 
+// Safe date formatter to prevent RangeError from date-fns
+const safeFormatDate = (dateVal: any, formatPattern: string, options?: any) => {
+  if (!dateVal) return '-';
+  try {
+    let dateObj: Date;
+    if (dateVal instanceof Date) {
+      dateObj = dateVal;
+    } else {
+      const dateStr = String(dateVal);
+      const cleanStr = dateStr.includes(' ') ? dateStr.replace(' ', 'T') : dateStr;
+      const finalStr = cleanStr.includes('T') ? cleanStr : cleanStr + 'T12:00:00';
+      dateObj = new Date(finalStr);
+    }
+    if (isNaN(dateObj.getTime())) return '-';
+    return format(dateObj, formatPattern, options);
+  } catch (e) {
+    return '-';
+  }
+};
+
 interface LavagensClientProps {
   initialLavagens: Lavagem[]
   equipamentos: any[]
@@ -223,7 +243,11 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
   }, [lavagens, searchTerm, filterStatus, filterArea, equipamentos])
 
   const getStatus = (placa: string, date: Date) => {
-    const lavagem = lavagens.find(l => l.placa === placa && isSameDay(new Date(l.data + 'T12:00:00'), date))
+    const lavagem = lavagens.find(l => {
+      if (!l.data) return false;
+      const d = new Date(l.data.includes('T') ? l.data : l.data + 'T12:00:00');
+      return l.placa === placa && !isNaN(d.getTime()) && isSameDay(d, date);
+    });
     return lavagem
   }
 
@@ -487,7 +511,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-black text-lg text-zinc-900 dark:text-white leading-none">{l.placa}</h3>
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 tracking-wider">{format(new Date(l.data + 'T12:00:00'), "dd 'de' MMMM", { locale: ptBR })}</p>
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 tracking-wider">{safeFormatDate(l.data, "dd 'de' MMMM", { locale: ptBR })}</p>
                     </div>
                     <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500">
                       <MoreVertical size={16} />
@@ -661,7 +685,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
                 </div>
                 <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                   <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">DATA</p>
-                  <p className="text-lg font-black text-zinc-900 dark:text-white">{format(new Date(selectedLavagem.data + 'T12:00:00'), 'dd/MM/yyyy')}</p>
+                  <p className="text-lg font-black text-zinc-900 dark:text-white">{safeFormatDate(selectedLavagem.data, 'dd/MM/yyyy')}</p>
                 </div>
               </div>
 
