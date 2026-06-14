@@ -78,6 +78,11 @@ public class EunamanActivity extends AppCompatActivity {
         startTime = System.currentTimeMillis();
         Log.d(TAG, "Iniciando EunamanActivity...");
         
+        if (savedInstanceState != null) {
+            currentPhotoPath = savedInstanceState.getString("currentPhotoPath");
+            photoUri = savedInstanceState.getParcelable("photoUri");
+        }
+
         setContentView(R.layout.activity_main);
 
         webView      = findViewById(R.id.webview);
@@ -86,10 +91,27 @@ public class EunamanActivity extends AppCompatActivity {
 
         if (webView != null) {
             configureWebView();
-            String url = getString(R.string.launch_url);
-            Log.d(TAG, "Carregando URL: " + url);
-            webView.loadUrl(url);
+            
+            if (savedInstanceState != null) {
+                Log.d(TAG, "Restaurando estado do WebView...");
+                webView.restoreState(savedInstanceState);
+            } else {
+                String url = getString(R.string.launch_url);
+                Log.d(TAG, "Carregando URL inicial: " + url);
+                webView.loadUrl(url);
+            }
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (webView != null) {
+            webView.saveState(outState);
+        }
+        outState.putString("currentPhotoPath", currentPhotoPath);
+        outState.putParcelable("photoUri", photoUri);
+        Log.d(TAG, "Estado da Activity salvo.");
     }
 
     private void configureWebView() {
