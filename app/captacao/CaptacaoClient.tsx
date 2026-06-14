@@ -659,6 +659,7 @@ export default function CaptacaoClient({
       if (res.success && res.data) {
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? { ...f, assinatura_supervisor: base64Signature } : f));
         setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: base64Signature }));
+        alert("Assinatura do supervisor salva com sucesso!");
       } else {
         alert("Erro ao salvar assinatura: " + res.error);
       }
@@ -672,6 +673,7 @@ export default function CaptacaoClient({
         
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? updated : f));
         setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: base64Signature }));
+        alert("Assinatura do supervisor salva com sucesso (Offline)!");
       }
     }
 
@@ -680,13 +682,13 @@ export default function CaptacaoClient({
 
   const handleRemoveSignature = async () => {
     if (!selectedFicha) return;
-    if (!confirm("Tem certeza de que deseja remover a assinatura do supervisor?")) return;
 
     if (isOnline) {
       const res = await atualizarFicha(selectedFicha.id, { assinatura_supervisor: null });
       if (res.success && res.data) {
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? { ...f, assinatura_supervisor: null } : f));
         setSelectedFicha(prev => ({ ...prev, ...res.data, assinatura_supervisor: null }));
+        alert("Assinatura do supervisor removida com sucesso!");
       } else if (res.error) {
         alert("Erro ao remover assinatura: " + res.error);
       }
@@ -700,6 +702,7 @@ export default function CaptacaoClient({
         
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? updated : f));
         setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: null }));
+        alert("Assinatura do supervisor removida com sucesso (Offline)!");
       }
     }
   };
@@ -781,6 +784,7 @@ export default function CaptacaoClient({
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Controle Captação");
     XLSX.writeFile(workbook, `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.xlsx`);
+    alert("Planilha Excel gerada e baixada com sucesso!");
   };
 
   const handleExportPDF = () => {
@@ -817,6 +821,7 @@ export default function CaptacaoClient({
             .save()
             .then(() => {
               setIsExporting(false);
+              alert("Ficha em PDF gerada e baixada com sucesso!");
             })
             .catch((err: any) => {
               console.error("Erro ao gerar PDF:", err);
@@ -1039,7 +1044,6 @@ export default function CaptacaoClient({
 
   // Handle Closing a Ficha manually
   const handleCloseFicha = async (id: string) => {
-    if (!confirm('Deseja realmente fechar esta ficha operacional? Ela se tornará somente leitura.')) return;
 
     if (isOnline) {
       const res = await fecharFicha(id);
@@ -1048,6 +1052,7 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
         }
+        alert("Ficha fechada com sucesso!");
       } else {
         alert('Erro ao fechar ficha: ' + res.error);
       }
@@ -1064,13 +1069,13 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
         }
+        alert("Ficha fechada com sucesso (Offline)!");
       }
     }
   };
 
   // Handle Deleting a Ficha
   const handleDeleteFicha = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta ficha e todos os seus lançamentos de captação? Esta ação é irreversível.')) return;
 
     if (isOnline) {
       const res = await excluirFicha(id);
@@ -1079,7 +1084,7 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(null);
         }
-        alert("ficha excluida");
+        alert("Ficha excluída com sucesso!");
         window.location.reload();
       } else {
         alert('Erro ao excluir: ' + res.error);
@@ -1100,7 +1105,7 @@ export default function CaptacaoClient({
       if (selectedFicha?.id === id) {
         setSelectedFicha(null);
       }
-      alert("ficha excluida");
+      alert("Ficha excluída com sucesso (Offline)!");
       window.location.reload();
     }
   };
@@ -1174,6 +1179,7 @@ export default function CaptacaoClient({
     }
 
     setIsLancamentoModalOpen(false);
+    alert("Lançamento adicionado com sucesso!");
     // Reset launch form
     setNewLancamentoData({
       data: new Date().toISOString().split('T')[0],
@@ -1192,7 +1198,7 @@ export default function CaptacaoClient({
 
   // Handle Deleting a Launch row
   const handleDeleteLancamento = async (id: string) => {
-    if (!confirm('Deseja realmente remover este lançamento da ficha?')) return;
+    if (!window.confirm('Deseja realmente remover este lançamento da ficha?')) return;
 
     if (isOnline) {
       const res = await excluirLancamento(id);
@@ -1207,6 +1213,7 @@ export default function CaptacaoClient({
           ...prev,
           lancamentos: prev.lancamentos.filter((l: any) => l.id !== id)
         }));
+        alert("Lançamento excluído com sucesso!");
       } else {
         alert('Erro ao excluir: ' + res.error);
       }
@@ -1226,6 +1233,7 @@ export default function CaptacaoClient({
         ...prev,
         lancamentos: prev.lancamentos.filter((l: any) => l.id !== id)
       }));
+      alert("Lançamento excluído com sucesso (Offline)!");
     }
   };
 
@@ -1475,7 +1483,6 @@ export default function CaptacaoClient({
                         viewMode === 'suzano' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
                       )}
                     >
-                      <span className="text-sm mb-1">📋</span>
                       <span>FICHA SUZANO</span>
                     </button>
                     <button 
@@ -1486,125 +1493,145 @@ export default function CaptacaoClient({
                         viewMode === 'sistema' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
                       )}
                     >
-                      <span className="text-sm mb-1">📸</span>
                       <span>FICHA COM FOTOS</span>
                     </button>
                   </div>
 
-                  {/* Expand Ficha Button */}
+                  {/* 1. Adicionar linha */}
+                  {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Deseja realmente adicionar uma linha?")) {
+                          setIsLancamentoModalOpen(true);
+                        }
+                      }}
+                      className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full uppercase tracking-wider"
+                    >
+                      <span>ADICIONAR LINHA</span>
+                    </button>
+                  )}
+
+                  {/* 2. Ver ficha */}
                   <button
                     type="button"
-                    onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
+                    onClick={() => {
+                      if (window.confirm("Deseja realmente ver a ficha?")) {
+                        setIsFichaExpanded(true);
+                        setZoomScale(1.0);
+                        alert("Visualização da ficha aberta com sucesso!");
+                      }
+                    }}
                     className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg hover:shadow-blue-600/10 active:scale-95 transition-all w-full text-xs uppercase tracking-wider"
-                    title="Visualizar a Ficha Operacional"
                   >
-                    <span>🔍</span>
                     <span>VER FICHA</span>
                   </button>
 
-                  {/* Print Button */}
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="p-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-650 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-extrabold"
-                    title="Imprimir Ficha"
-                  >
-                    <Printer size={15} />
-                    <span className="uppercase">IMPRIMIR</span>
-                  </button>
-
-                  {/* Excel Button */}
-                  <button
-                    type="button"
-                    onClick={handleExportExcel}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full"
-                    title="Exportar para Excel"
-                  >
-                    <FileSpreadsheet size={15} className="text-emerald-500" />
-                    <span>EXCEL</span>
-                  </button>
-
-                  {/* PDF Button */}
-                  <button
-                    type="button"
-                    onClick={handleExportPDF}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full"
-                    title="Exportar e baixar em PDF"
-                  >
-                    <Download size={15} className="text-blue-500" />
-                    <span>PDF</span>
-                  </button>
-
-                  {/* Signature Button */}
+                  {/* 3. Assinar supervisor */}
                   {profile?.role !== 'visitante' && (
                     selectedFicha.assinatura_supervisor ? (
                       <button
                         type="button"
-                        onClick={handleRemoveSignature}
-                        className="px-4 py-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-red-500 dark:text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full"
-                        title="Remover Assinatura"
+                        onClick={() => {
+                          if (window.confirm("Deseja realmente remover a assinatura do supervisor?")) {
+                            handleRemoveSignature();
+                          }
+                        }}
+                        className="px-4 py-3.5 bg-white hover:bg-red-50 dark:bg-zinc-955 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-red-500 dark:text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full uppercase tracking-wider"
                       >
-                        ❌ REMOVER ASSINATURA
+                        <span>REMOVER ASSINATURA</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => {
-                          setShowSignaturePad(true);
-                          setTimeout(() => {
-                            const canvas = sigCanvasRef.current;
-                            if (canvas) {
-                              const ctx = canvas.getContext('2d');
-                              ctx?.clearRect(0, 0, canvas.width, canvas.height);
-                            }
-                          }, 50);
+                          if (window.confirm("Deseja realmente assinar como supervisor?")) {
+                            setShowSignaturePad(true);
+                            setTimeout(() => {
+                              const canvas = sigCanvasRef.current;
+                              if (canvas) {
+                                const ctx = canvas.getContext('2d');
+                                ctx?.clearRect(0, 0, canvas.width, canvas.height);
+                              }
+                            }, 50);
+                          }
                         }}
-                        className="px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all w-full"
-                        title="Assinar Digitalmente como Supervisor"
+                        className="px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all w-full uppercase tracking-wider"
                       >
-                        <span>✍️</span>
                         <span>ASSINAR SUPERVISOR</span>
                       </button>
                     )
                   )}
 
-                  {/* Add Line Button */}
+                  {/* 4. Fecha mês */}
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
                       type="button"
-                      onClick={() => setIsLancamentoModalOpen(true)}
-                      className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full animate-pulse"
+                      onClick={() => {
+                        if (window.confirm("Deseja realmente fechar o mês?")) {
+                          handleCloseFicha(selectedFicha.id);
+                        }
+                      }}
+                      className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-700 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full uppercase tracking-wider"
                     >
-                      <span>+</span>
-                      <span>ADICIONAR LINHA</span>
+                      <span>FECHA MÊS</span>
                     </button>
                   )}
 
-                  {/* Close Month Button */}
-                  {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
-                    <button
-                      type="button"
-                      onClick={() => handleCloseFicha(selectedFicha.id)}
-                      className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-650 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full"
-                      title="Fechar Ficha"
-                    >
-                      <Lock size={12} />
-                      <span>FECHAR MÊS</span>
-                    </button>
-                  )}
-
-                  {/* Delete Button */}
+                  {/* 5. Excluir ficha */}
                   {profile?.role === 'admin' && (
                     <button
                       type="button"
-                      onClick={() => handleDeleteFicha(selectedFicha.id)}
-                      className="p-3.5 bg-white hover:bg-red-50 dark:bg-zinc-950 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-900 rounded-2xl text-zinc-550 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-black uppercase"
-                      title="Excluir Ficha"
+                      onClick={() => {
+                        if (window.confirm("Deseja realmente excluir a ficha?")) {
+                          handleDeleteFicha(selectedFicha.id);
+                        }
+                      }}
+                      className="p-3.5 bg-white hover:bg-red-50 dark:bg-zinc-955 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-900 rounded-2xl text-zinc-550 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-black uppercase tracking-wider"
                     >
-                      <Trash2 size={16} />
                       <span>EXCLUIR FICHA</span>
                     </button>
                   )}
+
+                  {/* 6. Baixar pdf */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Deseja realmente baixar o PDF?")) {
+                        handleExportPDF();
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
+                  >
+                    <span>BAIXAR PDF</span>
+                  </button>
+
+                  {/* 7. Baixar excel */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Deseja realmente baixar o Excel?")) {
+                        handleExportExcel();
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
+                  >
+                    <span>BAIXAR EXCEL</span>
+                  </button>
+
+                  {/* 8. Imprimir ficha */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Deseja realmente imprimir a ficha?")) {
+                        window.print();
+                        alert("Impressão iniciada com sucesso!");
+                      }
+                    }}
+                    className="p-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-650 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-extrabold uppercase tracking-wider"
+                  >
+                    <span>IMPRIMIR FICHA</span>
+                  </button>
                 </div>
               </div>
               

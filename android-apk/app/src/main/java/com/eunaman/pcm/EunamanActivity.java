@@ -22,6 +22,7 @@ import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.webkit.ConsoleMessage;
+import android.webkit.PermissionRequest;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -68,6 +69,8 @@ public class EunamanActivity extends AppCompatActivity {
     private long        startTime;
 
     private boolean isLoggingOut = false;
+    private PermissionRequest pendingPermissionRequest;
+    private static final int REQUEST_CAMERA_WEBVIEW_PERM = 1003;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -223,6 +226,30 @@ public class EunamanActivity extends AppCompatActivity {
                 Log.d(TAG, "[JS] " + consoleMessage.message());
                 return true;
             }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                Log.d(TAG, "onPermissionRequest recebido para recursos: " + java.util.Arrays.toString(request.getResources()));
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    boolean needsCamera = false;
+                    for (String resource : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                            needsCamera = true;
+                            break;
+                        }
+                    }
+                    if (needsCamera) {
+                        if (ContextCompat.checkSelfPermission(EunamanActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                            request.grant(request.getResources());
+                        } else {
+                            pendingPermissionRequest = request;
+                            ActivityCompat.requestPermissions(EunamanActivity.this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_WEBVIEW_PERM);
+                        }
+                    } else {
+                        request.grant(request.getResources());
+                    }
+                }
+            }
         });
 
         EunamanJsBridge bridge = new EunamanJsBridge();
@@ -292,6 +319,18 @@ public class EunamanActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA_PERM && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             launchCamera();
+        } else if (requestCode == REQUEST_CAMERA_WEBVIEW_PERM) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && pendingPermissionRequest != null) {
+                    pendingPermissionRequest.grant(pendingPermissionRequest.getResources());
+                }
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && pendingPermissionRequest != null) {
+                    pendingPermissionRequest.deny();
+                }
+                Toast.makeText(this, "Permissão de câmera negada.", Toast.LENGTH_SHORT).show();
+            }
+            pendingPermissionRequest = null;
         }
     }
 
