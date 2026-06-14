@@ -32,6 +32,20 @@ import { cn } from "@/lib/utils";
 import { PremiumLoader } from './premium-loader';
 import AlterarSenhaModal from './AlterarSenhaModal';
 
+const ModernWaterIcon = (props: any) => (
+  <svg 
+    width={props.size || 18} 
+    height={props.size || 18} 
+    className={props.className} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="currentColor" />
+    <ellipse cx="9.5" cy="9.5" rx="1.5" ry="2.5" transform="rotate(-30 9.5 9.5)" fill="#ffffff" opacity="0.65" />
+  </svg>
+);
+
 const navigation = [
   { name: 'Dashboard',                path: '/dashboard',              icon: LayoutDashboard },
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
@@ -42,8 +56,8 @@ const navigation = [
   { name: 'Base de Frota',            path: '/base-frotas',            icon: Truck },
   { name: 'Base de Dados',            path: '/base-dados',             icon: Database },
   { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
-  { name: 'Controle de Lavagens',     path: '/lavagens',               icon: Droplets },
-  { name: 'Captação de Água',         path: '/captacao',               icon: Droplets },
+  { name: 'Controle de Lavagens',     path: '/lavagens',               icon: ModernWaterIcon },
+  { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {

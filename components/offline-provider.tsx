@@ -341,8 +341,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     <OfflineContext.Provider value={{ isOnline, pendingCount, syncing, triggerSync }}>
       {children}
 
-      {/* ─── Premium Glassmorphic floating symbol (fixed at the top right) ─── */}
-      <div className="fixed top-3 right-14 lg:top-4 lg:right-6 z-[999] pointer-events-auto">
+      {/* ─── Premium Glassmorphic floating symbol (fixed at the top center on mobile, top right on desktop) ─── */}
+      <div className="fixed top-[12px] left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-6 lg:top-4 z-[999] pointer-events-auto">
         {/* State 1: Offline status symbol */}
         {!isOnline && (
           <button 

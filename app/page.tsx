@@ -28,6 +28,20 @@ import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
 import { useTheme } from "@/components/theme-provider";
 
+const ModernWaterIcon = (props: any) => (
+  <svg 
+    width={props.size || 18} 
+    height={props.size || 18} 
+    className={props.className} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="currentColor" />
+    <ellipse cx="9.5" cy="9.5" rx="1.5" ry="2.5" transform="rotate(-30 9.5 9.5)" fill="#ffffff" opacity="0.65" />
+  </svg>
+);
+
 const portalItems = [
   { 
     name: "Dashboard", 
@@ -96,14 +110,14 @@ const portalItems = [
     name: "Controle de Lavagens", 
     path: "/lavagens", 
     desc: "Registros diários e histórico de lavagens de veículos.", 
-    icon: Droplets, 
+    icon: ModernWaterIcon, 
     color: "from-cyan-500 to-teal-600 bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/25 dark:border-cyan-450/20" 
   },
   { 
     name: "Captação de Água", 
     path: "/captacao", 
     desc: "Controle de captação e lançamentos operacionais de água.", 
-    icon: Droplets, 
+    icon: ModernWaterIcon, 
     color: "from-blue-500 to-sky-600 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25 dark:border-blue-400/20" 
   }
 ];
