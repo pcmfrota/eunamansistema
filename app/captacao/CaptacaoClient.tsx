@@ -564,6 +564,34 @@ export default function CaptacaoClient({
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
 
+  // New Ficha form state
+  const [newFichaData, setNewFichaData] = useState({
+    placa: '',
+    placaCustom: '',
+    motorista: '',
+    motoristaCustom: '',
+    processo: 'Colheita',
+    nucleo: 'Suzano',
+    supervisor_suzano: '',
+    codigo: 'CO-PR-005',
+    revisao: '03'
+  });
+
+  // New Lancamento form state
+  const [newLancamentoData, setNewLancamentoData] = useState({
+    data: new Date().toISOString().split('T')[0],
+    id_ponto: '',
+    hora_inicial: '',
+    hora_final: '',
+    volume_captado: '',
+    fazenda_captada: '',
+    up_captacao: '',
+    atividade: 'Lavagem',
+    fazenda_atividade: '',
+    up_atividade: '',
+    foto_ponto: null as string | null
+  });
+
   // ── Registra o callback da ponte nativa do APK (EunamanCamera) para Captação ──
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -698,34 +726,6 @@ export default function CaptacaoClient({
       setSelectedFicha(null);
     }
   }, [activeScreen]);
-
-  // New Ficha form state
-  const [newFichaData, setNewFichaData] = useState({
-    placa: '',
-    placaCustom: '',
-    motorista: '',
-    motoristaCustom: '',
-    processo: 'Colheita',
-    nucleo: 'Suzano',
-    supervisor_suzano: '',
-    codigo: 'CO-PR-005',
-    revisao: '03'
-  });
-
-  // New Lancamento form state
-  const [newLancamentoData, setNewLancamentoData] = useState({
-    data: new Date().toISOString().split('T')[0],
-    id_ponto: '',
-    hora_inicial: '',
-    hora_final: '',
-    volume_captado: '',
-    fazenda_captada: '',
-    up_captacao: '',
-    atividade: 'Lavagem',
-    fazenda_atividade: '',
-    up_atividade: '',
-    foto_ponto: ''
-  });
 
   const [showCamera, setShowCamera] = useState(false);
 
@@ -1018,7 +1018,14 @@ export default function CaptacaoClient({
             })
             .catch((err: any) => {
               console.error("Erro ao gerar PDF:", err);
-              // Load IndexedDB cache on init or sync complete
+              setIsExporting(false);
+            });
+        }, 50);
+      });
+    });
+  };
+
+  // Load IndexedDB cache on init or sync complete
   const loadLocalCache = async () => {
     try {
       const localFichas = await localDb.getAll('fichas_captacao');
