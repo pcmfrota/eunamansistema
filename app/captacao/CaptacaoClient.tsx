@@ -1300,7 +1300,12 @@ export default function CaptacaoClient({
       <header className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0 select-none print:hidden">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
-            <span className="p-2 bg-blue-600 rounded-lg shadow-inner shadow-blue-500/20 text-white"><Droplets size={18} /></span>
+            <span className="p-2 bg-gradient-to-tr from-blue-600 to-cyan-500 rounded-xl shadow-md text-white flex items-center justify-center shrink-0">
+              <svg className="w-[18px] h-[18px] filter drop-shadow-sm" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="currentColor" />
+                <ellipse cx="9.5" cy="9.5" rx="1.5" ry="2.5" transform="rotate(-30 9.5 9.5)" fill="#ffffff" opacity="0.65" />
+              </svg>
+            </span>
             CAPTAÇÃO DE ÁGUA
           </h1>
           <span className="bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
@@ -1317,11 +1322,42 @@ export default function CaptacaoClient({
         {activeScreen === 'home' && (
           <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-4xl mx-auto w-full select-none animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="text-center mb-10">
-              <div className="inline-flex p-4 bg-blue-600/10 border border-blue-500/20 rounded-3xl text-blue-500 mb-4 shadow-inner">
-                <Droplets size={48} className="animate-pulse" />
+              <div className="relative inline-flex items-center justify-center p-6 bg-gradient-to-tr from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-[2rem] text-blue-600 dark:text-blue-400 mb-5 shadow-lg shadow-blue-500/5 backdrop-blur-sm group hover:scale-105 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-all duration-500">
+                {/* Glow ring */}
+                <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 to-cyan-500/20 blur-xl opacity-75 group-hover:opacity-100 transition-opacity animate-pulse" />
+                
+                {/* Ripple animation rings */}
+                <div className="absolute w-24 h-24 rounded-full border border-blue-500/25 animate-ping opacity-45 pointer-events-none" />
+                <div className="absolute w-28 h-28 rounded-full border border-cyan-500/15 animate-[ping_2s_infinite] opacity-35 pointer-events-none" />
+
+                {/* Modern water SVG */}
+                <svg className="w-16 h-16 relative z-10 filter drop-shadow-md" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="modernWaterGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#2563eb" />
+                      <stop offset="40%" stopColor="#06b6d4" />
+                      <stop offset="100%" stopColor="#3b82f6" />
+                    </linearGradient>
+                    <linearGradient id="innerShine" x1="12" y1="3" x2="12" y2="21" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
+                      <stop offset="45%" stopColor="#ffffff" stopOpacity="0.15" />
+                      <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  
+                  {/* Outer glow drop */}
+                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="url(#modernWaterGrad)" />
+                  
+                  {/* Inner shine path for 3D feeling */}
+                  <path d="M12 4.5c2.3 2.3 3.5 4.2 3.5 6s-1.2 3-3.5 3-3.5-1.2-3.5-3 1.2-3.7 3.5-6z" fill="url(#innerShine)" opacity="0.4" />
+                  
+                  {/* Small bright specular highlight */}
+                  <ellipse cx="9.5" cy="9.5" rx="1.5" ry="2.5" transform="rotate(-30 9.5 9.5)" fill="#ffffff" opacity="0.8" />
+                  <circle cx="8" cy="13" r="0.8" fill="#ffffff" opacity="0.6" />
+                </svg>
               </div>
-              <h2 className="text-2xl font-black tracking-tight text-white uppercase">Captação de Água</h2>
-              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mt-2">
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-950 dark:text-white uppercase">Captação de Água</h2>
+              <p className="text-xs text-zinc-650 dark:text-zinc-400 font-bold uppercase tracking-wider mt-2">
                 Selecione uma etapa do processo para iniciar
               </p>
             </div>
