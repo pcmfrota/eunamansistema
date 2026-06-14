@@ -506,6 +506,34 @@ export default function CaptacaoClient({
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
 
+  // Sincronizar o activeScreen com o histórico do navegador (botão voltar do celular)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({ screen: 'home' }, '');
+
+      const handlePopState = (event: PopStateEvent) => {
+        const state = event.state;
+        if (state && state.screen) {
+          setActiveScreen(state.screen);
+        } else {
+          setActiveScreen('home');
+        }
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }
+  }, []);
+
+  // Limpar a Ficha selecionada quando voltar das telas de detalhes
+  useEffect(() => {
+    if (activeScreen !== 'details') {
+      setSelectedFicha(null);
+    }
+  }, [activeScreen]);
+
   // New Ficha form state
   const [newFichaData, setNewFichaData] = useState({
     placa: '',
@@ -1001,6 +1029,9 @@ export default function CaptacaoClient({
         setSelectedFicha({ ...res.data, lancamentos: [] });
         setShowFichaPaper(false);
         setViewMode('suzano');
+        if (typeof window !== 'undefined') {
+          window.history.pushState({ screen: 'details' }, '', '#details');
+        }
         setActiveScreen('details');
       } else {
         alert('Erro ao criar ficha: ' + res.error);
@@ -1024,6 +1055,9 @@ export default function CaptacaoClient({
       setSelectedFicha({ ...offlineFicha, lancamentos: [] });
       setShowFichaPaper(false);
       setViewMode('suzano');
+      if (typeof window !== 'undefined') {
+        window.history.pushState({ screen: 'details' }, '', '#details');
+      }
       setActiveScreen('details');
     }
 
@@ -1295,7 +1329,12 @@ export default function CaptacaoClient({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
               {/* Card 1: Fichas Operacionais */}
               <div 
-                onClick={() => setActiveScreen('list')}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.history.pushState({ screen: 'list' }, '', '#list');
+                  }
+                  setActiveScreen('list');
+                }}
                 className={cn(
                   "bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-white/95 dark:hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300",
                   profile?.role === 'visitante' ? "col-span-2 max-w-md mx-auto w-full" : ""
@@ -1336,7 +1375,13 @@ export default function CaptacaoClient({
           <div className="flex-1 flex flex-col p-4 overflow-hidden animate-in fade-in duration-200">
             <div className="mb-4">
               <button 
-                onClick={() => setActiveScreen('home')} 
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.history.back();
+                  } else {
+                    setActiveScreen('home');
+                  }
+                }} 
                 className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors bg-white/80 hover:bg-white dark:bg-zinc-900 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800"
               >
                 <ArrowLeft size={14} /> Voltar para o Início
@@ -1404,7 +1449,15 @@ export default function CaptacaoClient({
                     return (
                       <div
                         key={f.id}
-                        onClick={() => { setSelectedFicha(f); setActiveScreen('details'); setViewMode('suzano'); setShowFichaPaper(true); }}
+                        onClick={() => { 
+                          setSelectedFicha(f); 
+                          if (typeof window !== 'undefined') {
+                            window.history.pushState({ screen: 'details' }, '', '#details');
+                          }
+                          setActiveScreen('details'); 
+                          setViewMode('suzano'); 
+                          setShowFichaPaper(true); 
+                        }}
                         className="p-5 bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-2xl transition-all duration-300 cursor-pointer flex flex-col gap-4 shadow-lg group relative overflow-hidden"
                       >
                         <div className="flex justify-between items-start">
@@ -1453,7 +1506,14 @@ export default function CaptacaoClient({
           <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden animate-in fade-in duration-200">
             <div className="p-4 landscape:py-2.5 landscape:px-4 bg-white/50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-900 flex items-center justify-between gap-4 shrink-0">
               <button 
-                onClick={() => { setSelectedFicha(null); setActiveScreen('list'); }} 
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.history.back();
+                  } else {
+                    setSelectedFicha(null);
+                    setActiveScreen('list');
+                  }
+                }} 
                 className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors bg-white hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
               >
                 <ArrowLeft size={14} /> Voltar para as Fichas
