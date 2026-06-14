@@ -605,6 +605,34 @@ export default function CaptacaoClient({
     };
   }, []);
 
+  // Salvar rascunho do lançamento de captação
+  useEffect(() => {
+    if (!mounted) return;
+    if (isLancamentoModalOpen) {
+      localStorage.setItem('eunaman_captacao_lancamento_draft', JSON.stringify(newLancamentoData));
+      localStorage.setItem('eunaman_captacao_modal_open', 'true');
+    } else {
+      localStorage.removeItem('eunaman_captacao_lancamento_draft');
+      localStorage.setItem('eunaman_captacao_modal_open', 'false');
+    }
+  }, [newLancamentoData, isLancamentoModalOpen, mounted]);
+
+  // Restaurar rascunho do lançamento de captação ao montar
+  useEffect(() => {
+    if (typeof window === "undefined" || !mounted) return;
+    const modalOpen = localStorage.getItem('eunaman_captacao_modal_open');
+    const draft = localStorage.getItem('eunaman_captacao_lancamento_draft');
+    if (modalOpen === 'true' && draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        setNewLancamentoData(parsed);
+        setIsLancamentoModalOpen(true);
+      } catch (e) {
+        console.error("Erro ao restaurar rascunho de captação:", e);
+      }
+    }
+  }, [mounted]);
+
   // Sincronizar o activeScreen com o histórico do navegador (botão voltar do celular)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1124,6 +1152,7 @@ export default function CaptacaoClient({
     if (isOnline) {
       const res = await criarFicha(payload);
       if (res.success && res.data) {
+        await localDb.put('fichas_captacao', res.data);
         setFichas(prev => [res.data, ...prev]);
         setSelectedFicha({ ...res.data, lancamentos: [] });
         setShowFichaPaper(false);
@@ -1181,6 +1210,10 @@ export default function CaptacaoClient({
     if (isOnline) {
       const res = await fecharFicha(id);
       if (res.success) {
+        const dbFicha = await localDb.get('fichas_captacao', id);
+        if (dbFicha) {
+          await localDb.put('fichas_captacao', { ...dbFicha, status: 'Fechada' });
+        }
         setFichas(prev => prev.map(f => f.id === id ? { ...f, status: 'Fechada' } : f));
         if (selectedFicha?.id === id) {
           setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
@@ -1273,6 +1306,7 @@ export default function CaptacaoClient({
       const res = await adicionarLancamento(payload);
       if (res.success && res.data) {
         const added = res.data;
+        await localDb.put('lancamentos_captacao', added);
         setFichas(prev => prev.map(f => {
           if (f.id === selectedFicha.id) {
             return { ...f, lancamentos: [...(f.lancamentos || []), added] };
@@ -1336,6 +1370,7 @@ export default function CaptacaoClient({
     if (isOnline) {
       const res = await excluirLancamento(id);
       if (res.success) {
+        await localDb.delete('lancamentos_captacao', id);
         setFichas(prev => prev.map(f => {
           if (f.id === selectedFicha.id) {
             return { ...f, lancamentos: f.lancamentos.filter((l: any) => l.id !== id) };

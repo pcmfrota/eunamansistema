@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { 
   Calendar as CalendarIcon, 
   Grid, 
@@ -43,8 +43,45 @@ const STATUS_COLORS = {
   'default': 'bg-zinc-200 dark:bg-zinc-800'
 }
 
+// Helper para compressão de imagem via canvas para ~50KB
+const compressBase64 = (dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.6): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = dataUrl;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let w = img.width;
+      let h = img.height;
+      if (w > h) {
+        if (w > maxWidth) {
+          h = Math.round((h * maxWidth) / w);
+          w = maxWidth;
+        }
+      } else {
+        if (h > maxHeight) {
+          w = Math.round((w * maxHeight) / h);
+          h = maxHeight;
+        }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } else {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => {
+      resolve(dataUrl);
+    };
+  });
+};
+
 export default function LavagensClient({ initialLavagens, equipamentos, currentMes, currentAno }: LavagensClientProps) {
   const { isOnline } = useOffline()
+  const [mounted, setMounted] = useState(false)
   const [view, setView] = useState<'calendar' | 'gallery'>('calendar')
   const [lavagens, setLavagens] = useState<Lavagem[]>(initialLavagens)
   const [selectedLavagem, setSelectedLavagem] = useState<Lavagem | null>(null)
@@ -75,6 +112,84 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
     imagem_3_url: '',
     imagem_horimetro_url: ''
   })
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    setLavagens(initialLavagens)
+  }, [initialLavagens])
+
+  // ── Registra o callback da ponte nativa do APK (EunamanCamera) para Lavagens ──
+  useEffect(() => {
+    if (typeof window === "undefined" || !mounted) return;
+
+    (window as any).onEunamanCameraResult = async (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        if (result.success && result.dataUrl) {
+          const activeField = localStorage.getItem('eunaman_lavagens_active_field');
+          if (activeField) {
+            const compressed = await compressBase64(result.dataUrl);
+            setModalData((prev: any) => ({ ...prev, [activeField]: compressed }));
+          }
+        } else if (!result.success) {
+          console.warn("[EunamanCamera] Erro na ponte nativa:", result.error);
+        }
+      } catch (e) {
+        console.error("[EunamanCamera] Erro ao processar resultado:", e);
+      }
+    };
+
+    // Recupera foto pendente se a Activity tiver sido recriada pelo Android
+    const timer = setTimeout(() => {
+      if ((window as any).EunamanCamera && (window as any).EunamanCamera.getPendingPhoto) {
+        try {
+          const pending = (window as any).EunamanCamera.getPendingPhoto();
+          if (pending) {
+            (window as any).onEunamanCameraResult(pending);
+          }
+        } catch (e) {
+          console.warn("[EunamanCamera] Erro ao buscar foto pendente:", e);
+        }
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      delete (window as any).onEunamanCameraResult;
+    };
+  }, [mounted]);
+
+  // Salvar rascunho do lançamento de lavagem
+  useEffect(() => {
+    if (!mounted) return;
+    if (isModalOpen) {
+      localStorage.setItem('eunaman_lavagens_modal_data', JSON.stringify(modalData));
+      localStorage.setItem('eunaman_lavagens_modal_open', 'true');
+    } else {
+      localStorage.removeItem('eunaman_lavagens_modal_data');
+      localStorage.setItem('eunaman_lavagens_modal_open', 'false');
+      localStorage.removeItem('eunaman_lavagens_active_field');
+    }
+  }, [modalData, isModalOpen, mounted]);
+
+  // Restaurar rascunho do lançamento de lavagem ao montar
+  useEffect(() => {
+    if (typeof window === "undefined" || !mounted) return;
+    const modalOpen = localStorage.getItem('eunaman_lavagens_modal_open');
+    const draft = localStorage.getItem('eunaman_lavagens_modal_data');
+    if (modalOpen === 'true' && draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        setModalData(parsed);
+        setIsModalOpen(true);
+      } catch (e) {
+        console.error("Erro ao restaurar rascunho de lavagem:", e);
+      }
+    }
+  }, [mounted]);
 
   const days = useMemo(() => {
     const start = startOfMonth(activeDate)
@@ -167,26 +282,35 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const fileName = `${Date.now()}-${file.name}`
-    const { data, error } = await supabase.storage
-      .from('lavagens')
-      .upload(fileName, file)
-
-    if (error) {
-      // If bucket doesn't exist, we might need to create it manually in Supabase UI
-      // but for now let's try to alert
-      console.error('Upload error:', error)
-      alert('Certifique-se que o bucket "lavagens" existe no Storage do Supabase.')
-      return
+  const handleCapture = (field: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem('eunaman_lavagens_active_field', field);
+      localStorage.setItem('eunaman_lavagens_modal_data', JSON.stringify(modalData));
+      localStorage.setItem('eunaman_lavagens_modal_open', 'true');
+      if ((window as any).EunamanCamera && (window as any).EunamanCamera.openCamera) {
+        try {
+          (window as any).EunamanCamera.openCamera();
+        } catch (e) {
+          console.error("Erro ao chamar openCamera nativo:", e);
+        }
+      } else {
+        alert("Câmera nativa disponível apenas no aplicativo APK.");
+      }
     }
+  };
 
-    const { data: { publicUrl } } = supabase.storage.from('lavagens').getPublicUrl(fileName)
-    setModalData((prev: any) => ({ ...prev, [field]: publicUrl }))
-  }
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      const compressed = await compressBase64(base64);
+      setModalData((prev: any) => ({ ...prev, [field]: compressed }));
+    };
+  };
 
   const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
 
@@ -457,10 +581,38 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
 
                 {/* File Uploads */}
                 <div className="col-span-2 pt-4 border-t border-zinc-800 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <UploadBox label="Horímetro" field="imagem_horimetro_url" url={modalData.imagem_horimetro_url} onChange={handleFileChange} />
-                  <UploadBox label="Foto 01" field="imagem_1_url" url={modalData.imagem_1_url} onChange={handleFileChange} />
-                  <UploadBox label="Foto 02" field="imagem_2_url" url={modalData.imagem_2_url} onChange={handleFileChange} />
-                  <UploadBox label="Foto 03" field="imagem_3_url" url={modalData.imagem_3_url} onChange={handleFileChange} />
+                  <UploadBox 
+                    label="Horímetro" 
+                    field="imagem_horimetro_url" 
+                    url={modalData.imagem_horimetro_url} 
+                    onCapture={handleCapture}
+                    onFileSelect={handleFileSelect}
+                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                  />
+                  <UploadBox 
+                    label="Foto 01" 
+                    field="imagem_1_url" 
+                    url={modalData.imagem_1_url} 
+                    onCapture={handleCapture}
+                    onFileSelect={handleFileSelect}
+                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                  />
+                  <UploadBox 
+                    label="Foto 02" 
+                    field="imagem_2_url" 
+                    url={modalData.imagem_2_url} 
+                    onCapture={handleCapture}
+                    onFileSelect={handleFileSelect}
+                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                  />
+                  <UploadBox 
+                    label="Foto 03" 
+                    field="imagem_3_url" 
+                    url={modalData.imagem_3_url} 
+                    onCapture={handleCapture}
+                    onFileSelect={handleFileSelect}
+                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                  />
                 </div>
               </div>
 
@@ -603,28 +755,69 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
   )
 }
 
-function UploadBox({ label, field, url, onChange }: any) {
+function UploadBox({ label, field, url, onCapture, onFileSelect, onClear }: any) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
   return (
-    <div className="relative aspect-square rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden group">
+    <div className="relative aspect-square rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 overflow-hidden flex flex-col items-center justify-center p-3 group shadow-sm transition-all duration-300">
       {url ? (
-        <img src={url} className="w-full h-full object-cover" />
+        <div className="absolute inset-0">
+          <img src={url} alt={label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 pointer-events-none group-hover:pointer-events-auto">
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()}
+              className="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-900 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all shadow-md active:scale-95 pointer-events-auto"
+            >
+              Galeria
+            </button>
+            <button 
+              type="button" 
+              onClick={() => onCapture(field)}
+              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black rounded-lg uppercase tracking-wide transition-all shadow-md active:scale-95 pointer-events-auto"
+            >
+              Câmera
+            </button>
+            <button 
+              type="button" 
+              onClick={() => onClear(field)}
+              className="px-2.5 py-1 bg-red-650 hover:bg-red-750 text-white text-[9px] font-black rounded-lg uppercase tracking-wide transition-all shadow-md active:scale-95 pointer-events-auto"
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
       ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-700 group-hover:text-zinc-700 dark:group-hover:text-zinc-500 transition-colors">
-          <Camera size={24} />
-          <span className="text-[8px] font-black uppercase mt-1">{label}</span>
+        <div className="flex flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-650 group-hover:text-zinc-650 dark:group-hover:text-zinc-400 transition-colors duration-300 w-full h-full">
+          <div className="p-2.5 bg-zinc-100 dark:bg-zinc-850 rounded-xl transition-all duration-300 group-hover:scale-110 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/30 group-hover:text-blue-500">
+            <Camera size={20} />
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</span>
+          <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-750 text-zinc-700 dark:text-zinc-300 text-[8px] font-black rounded uppercase tracking-wide transition-all pointer-events-auto"
+            >
+              Galeria
+            </button>
+            <button
+              type="button"
+              onClick={() => onCapture(field)}
+              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-[8px] font-black rounded uppercase tracking-wide transition-all pointer-events-auto"
+            >
+              Câmera
+            </button>
+          </div>
         </div>
       )}
       <input 
         type="file" 
+        ref={fileInputRef}
         accept="image/*"
-        onChange={(e) => onChange(e, field)}
-        className="absolute inset-0 opacity-0 cursor-pointer"
+        onChange={(e) => onFileSelect(e, field)}
+        className="hidden"
       />
-      {url && (
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
-          <Plus size={20} className="text-white" />
-        </div>
-      )}
     </div>
   )
 }
