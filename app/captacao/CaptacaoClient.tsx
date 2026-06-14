@@ -1473,30 +1473,6 @@ export default function CaptacaoClient({
                 </div>
 
                 <div className="flex flex-col gap-2.5">
-                  {/* Ficha Suzano / Ficha com Fotos Toggle */}
-                  <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded-2xl p-1 border border-zinc-200 dark:border-zinc-800 shadow-inner w-full">
-                    <button 
-                      type="button"
-                      onClick={() => setViewMode('suzano')}
-                      className={cn(
-                        "flex-1 flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
-                        viewMode === 'suzano' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
-                      )}
-                    >
-                      <span>FICHA SUZANO</span>
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setViewMode('sistema')}
-                      className={cn(
-                        "flex-1 flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all text-[8px] font-black uppercase tracking-wider",
-                        viewMode === 'sistema' ? "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white shadow" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-350"
-                      )}
-                    >
-                      <span>FICHA COM FOTOS</span>
-                    </button>
-                  </div>
-
                   {/* 1. Adicionar linha */}
                   {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                     <button
@@ -1637,162 +1613,139 @@ export default function CaptacaoClient({
               
               {/* View area */}
               <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-100/10 dark:bg-zinc-950/20">
-                {viewMode === 'suzano' ? (
-                  <div className="max-w-xl mx-auto flex flex-col gap-6 items-center justify-center py-16 px-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/20">
-                      <Droplets className="w-10 h-10 text-blue-600 dark:text-blue-400" />
+                <div className="space-y-6 max-w-5xl mx-auto">
+                  
+                  {/* Header metrics card */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+                      <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">CAPTAÇÕES</p>
+                      <p className="text-2xl font-black text-zinc-900 dark:text-white">{selectedFicha.lancamentos?.length || 0}</p>
                     </div>
-                    <div className="text-center">
-                      <h3 className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tight">Ficha Suzano Carregada</h3>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 max-w-sm">
-                        Esta ficha contém {selectedFicha.lancamentos?.length || 0} lançamentos registrados para o veículo {selectedFicha.placa}.
+                    <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl col-span-2 shadow-sm">
+                      <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">VOLUME TOTAL CAPTADO</p>
+                      <p className="text-2xl font-black text-blue-600 dark:text-blue-500">
+                        {totalVolume.toLocaleString('pt-BR')} <span className="text-sm text-zinc-500 dark:text-zinc-400 font-bold">LITROS</span>
                       </p>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
-                      className="flex items-center justify-center gap-2.5 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-xl hover:shadow-blue-600/20 active:scale-95 transition-all text-sm uppercase tracking-wider w-full sm:w-auto"
-                    >
-                      <span>🔍</span>
-                      <span>VER FICHA</span>
-                    </button>
-                    
-                    {/* Elemento oculto no layout mas ativo no DOM para impressão/PDF */}
-                    <div className="absolute opacity-0 pointer-events-none -z-50 -left-[9999px] print:static print:opacity-100 print:pointer-events-auto">
-                      <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
-                        {renderPaperFicha(selectedFicha, setActivePhoto)}
-                      </div>
+                    <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+                      <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">MÊS OPERACIONAL</p>
+                      <p className="text-lg font-black text-zinc-900 dark:text-white uppercase mt-0.5">{getMonthName(selectedFicha.mes)} {selectedFicha.ano}</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-6 max-w-5xl mx-auto">
-                    
-                    {/* Header metrics card */}
-                    <div className="grid grid-cols-4 gap-4">
-                      <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
-                        <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">CAPTAÇÕES</p>
-                        <p className="text-2xl font-black text-zinc-900 dark:text-white">{selectedFicha.lancamentos?.length || 0}</p>
-                      </div>
-                      <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl col-span-2 shadow-sm">
-                        <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">VOLUME TOTAL CAPTADO</p>
-                        <p className="text-2xl font-black text-blue-600 dark:text-blue-500">
-                          {totalVolume.toLocaleString('pt-BR')} <span className="text-sm text-zinc-500 dark:text-zinc-400 font-bold">LITROS</span>
-                        </p>
-                      </div>
-                      <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
-                        <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">MÊS OPERACIONAL</p>
-                        <p className="text-lg font-black text-zinc-900 dark:text-white uppercase mt-0.5">{getMonthName(selectedFicha.mes)} {selectedFicha.ano}</p>
-                      </div>
-                    </div>
 
-                    {/* Detailed list rows */}
-                    <div className="space-y-4">
-                      {selectedFicha.lancamentos && selectedFicha.lancamentos.length > 0 ? (
-                        [...selectedFicha.lancamentos].sort((a: any, b: any) => b.data.localeCompare(a.data) || b.created_at?.localeCompare(a.created_at)).map((row: any) => (
-                          <div 
-                            key={row.id}
-                            className="bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row gap-5 justify-between items-start md:items-center hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-lg"
-                          >
-                            <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-y-4 gap-x-6 text-xs text-zinc-700 dark:text-zinc-300">
-                              
-                              {/* Group 1: Time */}
-                              <div>
-                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
-                                <span className="font-extrabold text-zinc-900 dark:text-white text-sm">
-                                  {format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}
-                                </span>
-                                <span className="block text-zinc-550 dark:text-zinc-400 font-bold mt-1 tracking-tight">
-                                  ⏱️ {row.hora_inicial} - {row.hora_final}
-                                </span>
-                              </div>
-
-                              {/* Group 2: Point & Volume */}
-                              <div>
-                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
-                                {row.foto_ponto ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setActivePhoto(row.foto_ponto)}
-                                    className="px-2 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-lg font-mono font-bold text-xs tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 hover:scale-105 active:scale-95"
-                                  >
-                                    📷 {row.id_ponto}
-                                  </button>
-                                ) : (
-                                  <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{row.id_ponto}</span>
-                                )}
-                                <span className="block text-blue-600 dark:text-blue-400 font-black text-sm mt-1">
-                                  💧 {Number(row.volume_captado).toLocaleString('pt-BR')} Litros
-                                </span>
-                              </div>
-
-                              {/* Group 3: Capture Location */}
-                              <div>
-                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">FAZENDA / UP CAPTAÇÃO</span>
-                                <span className="font-bold text-zinc-900 dark:text-white uppercase leading-none">{row.fazenda_captada}</span>
-                                <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">UP: {row.up_captacao}</span>
-                              </div>
-
-                              {/* Group 4: Activity Location */}
-                              <div>
-                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">ATIVIDADE / DESTINO</span>
-                                <span className="font-bold text-zinc-900 dark:text-white leading-none">{row.atividade}</span>
-                                <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">
-                                  {row.fazenda_atividade} / UP {row.up_atividade}
-                                </span>
-                              </div>
-
-                              {/* Group 5: Creator metadata */}
-                              <div>
-                                <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">METADADOS</span>
-                                <span className="block text-zinc-500 font-bold font-mono text-[9px] leading-tight">
-                                  Ref: {row.id.substring(0, 8)}
-                                </span>
-                                <span className="block text-zinc-500 text-[9px] font-bold mt-1">
-                                  Registrado em: {row.created_at ? format(new Date(row.created_at.replace(' ', 'T')), 'dd/MM HH:mm') : '-'}
-                                </span>
-                              </div>
+                  {/* Detailed list rows */}
+                  <div className="space-y-4">
+                    {selectedFicha.lancamentos && selectedFicha.lancamentos.length > 0 ? (
+                      [...selectedFicha.lancamentos].sort((a: any, b: any) => b.data.localeCompare(a.data) || b.created_at?.localeCompare(a.created_at)).map((row: any) => (
+                        <div 
+                          key={row.id}
+                          className="bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row gap-5 justify-between items-start md:items-center hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-lg"
+                        >
+                          <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-y-4 gap-x-6 text-xs text-zinc-700 dark:text-zinc-300">
+                            
+                            {/* Group 1: Time */}
+                            <div>
+                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
+                              <span className="font-extrabold text-zinc-900 dark:text-white text-sm">
+                                {format(new Date(row.data + 'T12:00:00'), 'dd/MM/yyyy')}
+                              </span>
+                              <span className="block text-zinc-550 dark:text-zinc-400 font-bold mt-1 tracking-tight">
+                                ⏱️ {row.hora_inicial} - {row.hora_final}
+                              </span>
                             </div>
 
-                            {/* Evidence Photo / Image Thumbnail */}
-                            <div className="flex items-center gap-3 shrink-0">
+                            {/* Group 2: Point & Volume */}
+                            <div>
+                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
                               {row.foto_ponto ? (
-                                <div 
-                                  onClick={() => setActivePhoto(row.foto_ponto)}
-                                  className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden relative cursor-zoom-in group shadow-md"
-                                >
-                                  <img src={row.foto_ponto} className="w-full h-full object-cover transition-transform group-hover:scale-115" alt="Ponto" />
-                                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                                    <Eye size={12} className="text-white animate-pulse" />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-850/50 bg-zinc-100 dark:bg-zinc-950/40 flex flex-col items-center justify-center text-zinc-655 dark:text-zinc-650">
-                                  <Camera size={18} strokeWidth={1.5} />
-                                  <span className="text-[8px] font-black tracking-tighter uppercase mt-1">Sem Foto</span>
-                                </div>
-                              )}
-
-                              {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
                                 <button
-                                  onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
-                                  className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-950 text-zinc-600 dark:text-zinc-500 hover:text-red-650 dark:hover:text-red-400 border border-zinc-200 dark:border-zinc-850 hover:border-red-350 dark:hover:border-red-900 rounded-xl transition-all"
-                                  title="Remover Registro"
+                                  type="button"
+                                  onClick={() => setActivePhoto(row.foto_ponto)}
+                                  className="px-2 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-lg font-mono font-bold text-xs tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 hover:scale-105 active:scale-95"
                                 >
-                                  <Trash2 size={14} />
+                                  📷 {row.id_ponto}
                                 </button>
+                              ) : (
+                                <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{row.id_ponto}</span>
                               )}
+                              <span className="block text-blue-600 dark:text-blue-400 font-black text-sm mt-1">
+                                💧 {Number(row.volume_captado).toLocaleString('pt-BR')} Litros
+                              </span>
+                            </div>
+
+                            {/* Group 3: Capture Location */}
+                            <div>
+                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">FAZENDA / UP CAPTAÇÃO</span>
+                              <span className="font-bold text-zinc-900 dark:text-white uppercase leading-none">{row.fazenda_captada}</span>
+                              <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">UP: {row.up_captacao}</span>
+                            </div>
+
+                            {/* Group 4: Activity Location */}
+                            <div>
+                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">ATIVIDADE / DESTINO</span>
+                              <span className="font-bold text-zinc-900 dark:text-white leading-none">{row.atividade}</span>
+                              <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">
+                                {row.fazenda_atividade} / UP {row.up_atividade}
+                              </span>
+                            </div>
+
+                            {/* Group 5: Creator metadata */}
+                            <div>
+                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">METADADOS</span>
+                              <span className="block text-zinc-500 font-bold font-mono text-[9px] leading-tight">
+                                Ref: {row.id.substring(0, 8)}
+                              </span>
+                              <span className="block text-zinc-500 text-[9px] font-bold mt-1">
+                                Registrado em: {row.created_at ? format(new Date(row.created_at.replace(' ', 'T')), 'dd/MM HH:mm') : '-'}
+                              </span>
                             </div>
                           </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-16 bg-white/40 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-850 rounded-2xl">
-                          <p className="text-xs text-zinc-550 dark:text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
+
+                          {/* Evidence Photo / Image Thumbnail */}
+                          <div className="flex items-center gap-3 shrink-0">
+                            {row.foto_ponto ? (
+                              <div 
+                                onClick={() => setActivePhoto(row.foto_ponto)}
+                                className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden relative cursor-zoom-in group shadow-md"
+                              >
+                                <img src={row.foto_ponto} className="w-full h-full object-cover transition-transform group-hover:scale-115" alt="Ponto" />
+                                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                                  <Eye size={12} className="text-white animate-pulse" />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-850/50 bg-zinc-100 dark:bg-zinc-950/40 flex flex-col items-center justify-center text-zinc-655 dark:text-zinc-650">
+                                <Camera size={18} strokeWidth={1.5} />
+                                <span className="text-[8px] font-black tracking-tighter uppercase mt-1">Sem Foto</span>
+                              </div>
+                            )}
+
+                            {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+                              <button
+                                onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
+                                className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-955/20 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full"
+                                title="Remover Registro"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-16 bg-white/40 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-850 rounded-2xl">
+                        <p className="text-xs text-zinc-550 dark:text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* Elemento oculto no layout mas ativo no DOM para impressão/PDF */}
+                <div className="absolute opacity-0 pointer-events-none -z-50 -left-[9999px] print:static print:opacity-100 print:pointer-events-auto">
+                  <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
+                    {renderPaperFicha(selectedFicha, setActivePhoto)}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
