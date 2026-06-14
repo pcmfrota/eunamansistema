@@ -298,6 +298,12 @@ public class EunamanActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        Log.d(TAG, "Configuração mudada (rotação/teclado), impedindo recarregamento.");
+    }
+
+    @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
