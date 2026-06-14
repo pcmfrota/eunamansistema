@@ -1018,27 +1018,23 @@ export default function CaptacaoClient({
             })
             .catch((err: any) => {
               console.error("Erro ao gerar PDF:", err);
-              setIsExporting(false);
-            });
-        }, 50);
-      });
-    });
-  };
-
-  // Load IndexedDB cache on init or sync complete
+              // Load IndexedDB cache on init or sync complete
   const loadLocalCache = async () => {
     try {
       const localFichas = await localDb.getAll('fichas_captacao');
-      const localLancamientos = await localDb.getAll('lancamentos_captacao');
+      const localLancamentos = await localDb.getAll('lancamentos_captacao');
       
-      // Merge Fichas and Lancamentos
-      const merged = localFichas.map(f => {
-        const rows = localLancamientos.filter(l => l.ficha_id === f.id);
-        return { ...f, lancamentos: rows };
-      });
-      
-      if (merged.length > 0) {
-        setFichas(merged);
+      if (Array.isArray(localFichas)) {
+        const cleanLancamentos = Array.isArray(localLancamentos) ? localLancamentos : [];
+        const merged = localFichas.map(f => {
+          if (!f) return null;
+          const rows = cleanLancamentos.filter(l => l && l.ficha_id === f.id);
+          return { ...f, lancamentos: rows };
+        }).filter(Boolean);
+        
+        if (merged.length > 0) {
+          setFichas(merged);
+        }
       }
     } catch (err) {
       console.error("Erro ao carregar dados do cache IndexedDB:", err);
@@ -1047,16 +1043,19 @@ export default function CaptacaoClient({
 
   // Sync Supabase to IndexedDB when online
   const cacheToLocalDB = async () => {
-    if (!isOnline) return;
+    if (!isOnline || !Array.isArray(initialFichas)) return;
     try {
       const localFichas = await localDb.getAll('fichas_captacao');
       const localLanc = await localDb.getAll('lancamentos_captacao');
       
-      const serverFichas = initialFichas.map(({ lancamentos, ...f }) => f);
-      const serverLanc = initialFichas.flatMap(f => f.lancamentos || []);
+      const cleanLocalFichas = Array.isArray(localFichas) ? localFichas : [];
+      const cleanLocalLanc = Array.isArray(localLanc) ? localLanc : [];
       
-      const serverFichasIds = new Set(serverFichas.map(f => f.id));
-      const serverLancIds = new Set(serverLanc.map(l => l.id));
+      const serverFichas = initialFichas.filter(f => f).map(({ lancamentos, ...f }) => f);
+      const serverLanc = initialFichas.filter(f => f).flatMap(f => f.lancamentos || []);
+      
+      const serverFichasIds = new Set(serverFichas.filter(f => f && f.id).map(f => f.id));
+      const serverLancIds = new Set(serverLanc.filter(l => l && l.id).map(l => l.id));
       
       // Salva/atualiza os dados vindos do servidor no IndexedDB
       await localDb.saveMany('fichas_captacao', serverFichas);
@@ -1065,7 +1064,8 @@ export default function CaptacaoClient({
       }
       
       // Deleta itens locais obsoletos que NÃO estão no servidor e NÃO estão pendentes de sincronização
-      const fichasToDelete = localFichas.filter(f => {
+      const fichasToDelete = cleanLocalFichas.filter(f => {
+        if (!f) return false;
         const isPending = f._isPendingSync || String(f.id).startsWith('temp_');
         return !serverFichasIds.has(f.id) && !isPending;
       });
@@ -1073,7 +1073,8 @@ export default function CaptacaoClient({
         await localDb.deleteMany('fichas_captacao', fichasToDelete.map(f => f.id));
       }
       
-      const lancToDelete = localLanc.filter(l => {
+      const lancToDelete = cleanLocalLanc.filter(l => {
+        if (!l) return false;
         const isPending = l._isPendingSync || String(l.id).startsWith('temp_');
         return !serverLancIds.has(l.id) && !isPending;
       });
