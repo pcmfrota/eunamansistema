@@ -51,9 +51,8 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * EunamanActivity — Principal motor do EUNAMAN PCM.
- * Gerencia Sincronização em tempo real entre Vercel/Supabase e o APK.
- * OTIMIZADO PARA OPERAÇÃO 100% OFFLINE COM SINCRONIZAÇÃO DE DELTA.
+ * EunamanActivity — Motor Ultra-Robusto EUNAMAN PCM.
+ * OTIMIZADO PARA 100% OFFLINE COM ZERO TRAVAMENTOS.
  */
 public class EunamanActivity extends AppCompatActivity {
 
@@ -68,19 +67,14 @@ public class EunamanActivity extends AppCompatActivity {
     private ImageView   splashScreen;
     private String      currentPhotoPath;
     private Uri         photoUri;
-    private long        startTime;
 
     private boolean isLoggingOut = false;
-    private PermissionRequest pendingPermissionRequest;
-    private static final int REQUEST_CAMERA_WEBVIEW_PERM = 1003;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        startTime = System.currentTimeMillis();
-        Log.d(TAG, "Iniciando EunamanActivity em modo Offline-First...");
         
         if (savedInstanceState != null) {
             currentPhotoPath = savedInstanceState.getString("currentPhotoPath");
@@ -95,12 +89,10 @@ public class EunamanActivity extends AppCompatActivity {
 
         if (webView != null) {
             configureWebView();
-            
             if (savedInstanceState != null) {
                 webView.restoreState(savedInstanceState);
             } else {
-                String url = getString(R.string.launch_url);
-                webView.loadUrl(url);
+                webView.loadUrl(getString(R.string.launch_url));
             }
         }
     }
@@ -108,9 +100,7 @@ public class EunamanActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (webView != null) {
-            webView.saveState(outState);
-        }
+        if (webView != null) webView.saveState(outState);
         outState.putString("currentPhotoPath", currentPhotoPath);
         outState.putParcelable("photoUri", photoUri);
     }
@@ -118,7 +108,7 @@ public class EunamanActivity extends AppCompatActivity {
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         
-        // ── CONFIGURAÇÃO DE PERSISTÊNCIA OFFLINE TOTAL ──
+        // ── CONFIGURAÇÃO DE ALTA PERFORMANCE OFFLINE ──
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true); 
         settings.setDatabaseEnabled(true);
@@ -127,42 +117,43 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setAllowFileAccessFromFileURLs(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
         
-        // Modo de Cache: Prefere sempre o que está no celular (Offline First)
-        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        // Aceleração e Prioridade
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         
-        // Identidade de Desktop para evitar bloqueios do servidor
+        // Localização física para persistência
+        String databasePath = this.getApplicationContext().getDir("databases", android.content.Context.MODE_PRIVATE).getPath();
+        settings.setDatabasePath(databasePath);
+        
         settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
-        // Habilita Cookies persistentes (Sessão não expira offline)
         CookieManager.getInstance().setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         }
         
+        // Ativa aceleração de hardware nativa
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
-        webView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            settings.setSafeBrowsingEnabled(true);
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                CookieManager.getInstance().flush();
+                
+                // Força o modo cache se a rede estiver instável ou offline
+                if (!isNetworkAvailable()) {
+                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+                } else {
+                    view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                }
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                CookieManager.getInstance().flush();
-                // Garante que o LocalStorage seja persistido no Android
-                view.loadUrl("javascript:(function(){ if(window.localStorage) localStorage.setItem('eunaman_last_sync', Date.now()); })();");
+                // Sincronização em background sem travar a UI
+                new Thread(() -> CookieManager.getInstance().flush()).start();
 
                 if (splashScreen != null && splashScreen.getVisibility() == View.VISIBLE) {
                     splashScreen.setVisibility(View.GONE);
@@ -174,7 +165,9 @@ public class EunamanActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
-                    Log.w(TAG, "Offline ou erro de rede. Tentando carregar do cache...");
+                    // Se falhar, tenta carregar instantaneamente do que está salvo no celular
+                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+                    view.loadUrl(request.getUrl().toString());
                 }
             }
         });
@@ -191,16 +184,28 @@ public class EunamanActivity extends AppCompatActivity {
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
                 EunamanActivity.this.filePathCallback = filePathCallback;
-                Intent contentSelectionIntent = new Intent(Intent.ACTION_GET_CONTENT);
-                contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                contentSelectionIntent.setType("image/*");
-                startActivityForResult(Intent.createChooser(contentSelectionIntent, "Selecionar Imagem"), REQUEST_FILE_CHOOSER);
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("image/*");
+                startActivityForResult(Intent.createChooser(i, "Selecionar Imagem"), REQUEST_FILE_CHOOSER);
                 return true;
             }
         });
 
         webView.addJavascriptInterface(new EunamanJsBridge(), "EunamanApp");
         setupNetworkMonitoring();
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Network network = cm.getActiveNetwork();
+            if (network == null) return false;
+            NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
+            return capabilities != null && (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && 
+                   capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+        }
+        return cm.getActiveNetworkInfo() != null && cm.getActiveNetworkInfo().isConnected();
     }
 
     private void setupNetworkMonitoring() {
@@ -211,7 +216,8 @@ public class EunamanActivity extends AppCompatActivity {
                 public void onAvailable(@NonNull Network network) {
                     runOnUiThread(() -> {
                         if (webView != null) {
-                            // Quando a internet volta, avisa o site para sincronizar apenas os deltas
+                            webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                            // Sincroniza dados novos sem recarregar a página
                             webView.loadUrl("javascript:(function(){ if(window.onNetworkSync) window.onNetworkSync(); })();");
                         }
                     });
@@ -223,12 +229,10 @@ public class EunamanActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_FILE_CHOOSER) {
-            if (filePathCallback != null) {
-                Uri[] results = (resultCode == Activity.RESULT_OK && data != null) ? new Uri[]{data.getData()} : null;
-                filePathCallback.onReceiveValue(results);
-                filePathCallback = null;
-            }
+        if (requestCode == REQUEST_FILE_CHOOSER && filePathCallback != null) {
+            Uri[] results = (resultCode == Activity.RESULT_OK && data != null) ? new Uri[]{data.getData()} : null;
+            filePathCallback.onReceiveValue(results);
+            filePathCallback = null;
         }
     }
 
