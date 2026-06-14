@@ -597,7 +597,7 @@ export default function CaptacaoClient({
       }
     });
     
-    return unique.sort((a, b) => b.ano - a.ano || b.mes - a.mes);
+    return unique.sort((a, b) => a.ano - b.ano || a.mes - b.mes);
   }, [calendario, fichas]);
   const [isExporting, setIsExporting] = useState(false);
   const [isFichaExpanded, setIsFichaExpanded] = useState(false);
