@@ -88,7 +88,7 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
     
-    const MAX = 1000; // Compress ideal size
+    const MAX = 800; // Compress ideal size
     let w = video.videoWidth;
     let h = video.videoHeight;
     if (w > h) {
@@ -107,7 +107,7 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
     setCaptured(dataUrl);
     streamRef.current?.getTracks().forEach(t => t.stop());
   };
@@ -204,10 +204,40 @@ function UploadBox({ label, url, onCapture, onFileSelect, showCameraOption }: {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      onFileSelect(reader.result as string);
-    };
     reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > MAX) {
+            h = Math.round((h * MAX) / w);
+            w = MAX;
+          }
+        } else {
+          if (h > MAX) {
+            w = Math.round((w * MAX) / h);
+            h = MAX;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          onFileSelect(canvas.toDataURL("image/jpeg", 0.6));
+        } else {
+          onFileSelect(event.target?.result as string);
+        }
+      };
+      img.onerror = () => {
+        onFileSelect(event.target?.result as string);
+      };
+    };
   };
 
   return (
@@ -505,6 +535,60 @@ export default function CaptacaoClient({
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
+
+  // ── Registra o callback da ponte nativa do APK (EunamanCamera) para Captação ──
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    (window as any).onEunamanCameraResult = (jsonStr: string) => {
+      try {
+        const result = JSON.parse(jsonStr);
+        if (result.success && result.dataUrl) {
+          // Comprime via canvas antes de adicionar
+          const img = new Image();
+          img.src = result.dataUrl;
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const MAX = 800;
+            let w = img.width;
+            let h = img.height;
+            if (w > h) {
+              if (w > MAX) {
+                h = Math.round((h * MAX) / w);
+                w = MAX;
+              }
+            } else {
+              if (h > MAX) {
+                w = Math.round((w * MAX) / h);
+                h = MAX;
+              }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h);
+              const compressed = canvas.toDataURL("image/jpeg", 0.6);
+              setNewLancamentoData(prev => ({ ...prev, foto_ponto: compressed }));
+            } else {
+              setNewLancamentoData(prev => ({ ...prev, foto_ponto: result.dataUrl }));
+            }
+          };
+          img.onerror = () => {
+            setNewLancamentoData(prev => ({ ...prev, foto_ponto: result.dataUrl }));
+          };
+        } else if (!result.success) {
+          console.warn("[EunamanCamera] Erro na ponte nativa:", result.error);
+        }
+      } catch (e) {
+        console.error("[EunamanCamera] Erro ao processar resultado:", e);
+      }
+    };
+
+    return () => {
+      delete (window as any).onEunamanCameraResult;
+    };
+  }, []);
 
   // Sincronizar o activeScreen com o histórico do navegador (botão voltar do celular)
   useEffect(() => {
@@ -2146,7 +2230,13 @@ export default function CaptacaoClient({
                   <UploadBox 
                     label="Tirar Foto do Ponto"
                     url={newLancamentoData.foto_ponto}
-                    onCapture={() => setShowCamera(true)}
+                    onCapture={() => {
+                      if (typeof window !== "undefined" && (window as any).EunamanCamera) {
+                        (window as any).EunamanCamera.openCamera();
+                      } else {
+                        setShowCamera(true);
+                      }
+                    }}
                     onFileSelect={(base64) => setNewLancamentoData({ ...newLancamentoData, foto_ponto: base64 })}
                     showCameraOption={true}
                   />

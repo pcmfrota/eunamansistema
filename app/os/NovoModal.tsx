@@ -50,7 +50,7 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
-    const MAX = 1280;
+    const MAX = 800;
     let w = video.videoWidth;
     let h = video.videoHeight;
     if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
@@ -60,7 +60,7 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
     setCaptured(dataUrl);
     // Para o stream enquanto mostra preview
     streamRef.current?.getTracks().forEach(t => t.stop());

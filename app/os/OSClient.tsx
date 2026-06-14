@@ -363,8 +363,8 @@ export default function ControleOSClient({
             img.src = event.target?.result as string;
             img.onload = () => {
               const canvas = document.createElement("canvas");
-              const MAX_WIDTH = 1280;
-              const MAX_HEIGHT = 1280;
+              const MAX_WIDTH = 800;
+              const MAX_HEIGHT = 800;
               let width = img.width;
               let height = img.height;
 
@@ -388,7 +388,7 @@ export default function ControleOSClient({
                 return;
               }
               ctx.drawImage(img, 0, 0, width, height);
-              resolve(canvas.toDataURL("image/jpeg", 0.75));
+              resolve(canvas.toDataURL("image/jpeg", 0.6));
             };
             img.onerror = (err) => reject(err);
           };
@@ -491,7 +491,7 @@ export default function ControleOSClient({
           img.src = result.dataUrl;
           img.onload = () => {
             const canvas = document.createElement("canvas");
-            const MAX = 1280;
+            const MAX = 800;
             let w = img.width;
             let h = img.height;
             if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
@@ -501,7 +501,7 @@ export default function ControleOSClient({
             const ctx = canvas.getContext("2d");
             if (ctx) {
               ctx.drawImage(img, 0, 0, w, h);
-              addPhotoDataUrl(canvas.toDataURL("image/jpeg", 0.75));
+              addPhotoDataUrl(canvas.toDataURL("image/jpeg", 0.6));
             } else {
               addPhotoDataUrl(result.dataUrl);
             }

@@ -34,7 +34,7 @@ const nextConfig = {
   experimental: {
     // Otimiza Server Actions (reduz roundtrips)
     serverActions: {
-      bodySizeLimit: "2mb",
+      bodySizeLimit: "20mb",
     },
   },
   // Headers para Digital Asset Links (TWA/Android verificação)
