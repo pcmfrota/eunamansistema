@@ -1496,10 +1496,10 @@ export default function CaptacaoClient({
                     type="button"
                     onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
                     className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg hover:shadow-blue-600/10 active:scale-95 transition-all w-full text-xs uppercase tracking-wider"
-                    title="Visualizar a Ficha Operacional em Tela Cheia com Zoom e Rolagem"
+                    title="Visualizar a Ficha Operacional"
                   >
                     <span>🔍</span>
-                    <span>EXPANDIR FICHA</span>
+                    <span>VER FICHA</span>
                   </button>
 
                   {/* Print Button */}
@@ -1611,27 +1611,28 @@ export default function CaptacaoClient({
               {/* View area */}
               <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-100/10 dark:bg-zinc-950/20">
                 {viewMode === 'suzano' ? (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-white/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-center sm:text-left">
-                        ℹ️ Arraste para o lado para rolar a ficha, ou expanda para tela cheia
-                      </span>
-                      <div className="flex gap-2 w-full sm:w-auto">
-                        <button 
-                          type="button"
-                          onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
-                          className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow"
-                        >
-                          <span>🔍</span>
-                          <span>TELA CHEIA</span>
-                        </button>
-                      </div>
+                  <div className="max-w-xl mx-auto flex flex-col gap-6 items-center justify-center py-16 px-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/20">
+                      <Droplets className="w-10 h-10 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="text-center">
+                      <h3 className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tight">Ficha Suzano Carregada</h3>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 max-w-sm">
+                        Esta ficha contém {selectedFicha.lancamentos?.length || 0} lançamentos registrados para o veículo {selectedFicha.placa}.
+                      </p>
                     </div>
 
-                    <div 
-                      className="w-full overflow-x-auto p-4 bg-white/40 dark:bg-zinc-950/40 rounded-3xl border border-zinc-200 dark:border-transparent custom-scrollbar touch-pan-x overscroll-x-contain shadow-inner"
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <button
+                      type="button"
+                      onClick={() => { setIsFichaExpanded(true); setZoomScale(1.0); }}
+                      className="flex items-center justify-center gap-2.5 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-xl hover:shadow-blue-600/20 active:scale-95 transition-all text-sm uppercase tracking-wider w-full sm:w-auto"
                     >
+                      <span>🔍</span>
+                      <span>VER FICHA</span>
+                    </button>
+                    
+                    {/* Elemento oculto no layout mas ativo no DOM para impressão/PDF */}
+                    <div className="absolute opacity-0 pointer-events-none -z-50 -left-[9999px] print:static print:opacity-100 print:pointer-events-auto">
                       <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
                         {renderPaperFicha(selectedFicha, setActivePhoto)}
                       </div>
