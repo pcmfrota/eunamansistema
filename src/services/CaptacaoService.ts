@@ -118,4 +118,20 @@ export class CaptacaoService {
     }
     return { success: true };
   }
+
+  static async updateLancamento(id: string, updates: Partial<LancamentoCaptacao>) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("lancamentos_captacao")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Erro ao atualizar lançamento ${id}:`, error);
+      throw error;
+    }
+    return data as LancamentoCaptacao;
+  }
 }

@@ -69,3 +69,14 @@ export async function excluirLancamento(id: string) {
     return { error: error.message || "Erro ao excluir lançamento de captação." };
   }
 }
+
+export async function atualizarLancamento(id: string, updates: Partial<LancamentoCaptacao>) {
+  try {
+    const result = await CaptacaoService.updateLancamento(id, updates);
+    revalidatePath('/captacao');
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action atualizarLancamento:", error);
+    return { error: error.message || "Erro ao atualizar lançamento de captação." };
+  }
+}

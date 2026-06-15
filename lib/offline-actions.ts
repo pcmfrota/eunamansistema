@@ -42,7 +42,8 @@ import {
   excluirFicha,
   adicionarLancamento,
   excluirLancamento,
-  atualizarFicha
+  atualizarFicha,
+  atualizarLancamento
 } from "@/app/captacao/actions";
 
 import {
@@ -214,6 +215,10 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "add_lancamento") {
         const res = await adicionarLancamento(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update_lancamento") {
+        const { id, ...updates } = payload;
+        const res = await atualizarLancamento(id, updates);
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete_lancamento") {
         const res = await excluirLancamento(payload.id);
