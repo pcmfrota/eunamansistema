@@ -8,7 +8,7 @@ if (Test-Path $asJdk) {
     $env:PATH = "$asJdk\bin;" + $env:PATH
 }
 
-./gradlew assembleDebug
+./gradlew assembleRelease
 
 if ($?) {
     $destino = "C:\eunaman-apk"
@@ -16,8 +16,8 @@ if ($?) {
         New-Item -ItemType Directory -Path $destino
     }
 
-    Copy-Item "app/build/outputs/apk/debug/app-debug.apk" "$destino\eunaman-debug.apk" -Force
-    Write-Host "APK exportado com sucesso para $destino\eunaman-debug.apk" -ForegroundColor Green
+    Copy-Item "app/build/outputs/apk/release/app-release.apk" "$destino\eunaman.apk" -Force
+    Write-Host "APK de produção (Release) exportado com sucesso para $destino\eunaman.apk" -ForegroundColor Green
     Start-Process $destino
 } else {
     Write-Host "Erro ao gerar o APK. Verifique os logs acima." -ForegroundColor Red

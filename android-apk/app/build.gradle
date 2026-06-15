@@ -10,6 +10,8 @@ android {
             storePassword 'eunaman2024'
             keyAlias 'eunaman'
             keyPassword 'eunaman2024'
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
     }
 
