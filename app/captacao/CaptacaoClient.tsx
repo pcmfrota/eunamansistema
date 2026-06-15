@@ -1179,7 +1179,7 @@ export default function CaptacaoClient({
   // Determine current active Suzano operational period
   const currentPeriod = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    const period = calendario.find(p => p.data_inicio <= today && p.data_fim >= today);
+    const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) return period;
     
     // Fallback if no matching dates: use current month/year
@@ -1207,6 +1207,7 @@ export default function CaptacaoClient({
   // Filtered Fichas list
   const filteredFichas = useMemo(() => {
     return fichas.filter(f => {
+      if (!f) return false;
       const motoristaName = f.motorista?.toLowerCase() || '';
       const placaStr = f.placa?.toLowerCase() || '';
       const matchesSearch = motoristaName.includes(searchTerm.toLowerCase()) || placaStr.includes(searchTerm.toLowerCase());
