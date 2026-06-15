@@ -343,7 +343,7 @@ const getMonthName = (m: any) => {
 };
 
 // Standalone Printable Sheet View component/helper function
-const renderPaperFicha = (ficha: any, onPhotoClick?: (url: string) => void) => {
+const renderPaperFicha = (ficha: any, onPhotoClick?: (url: string) => void, calendario?: any[]) => {
   return (
     <div className="w-[1080px] bg-white text-zinc-950 p-5 font-sans mx-auto text-[10px] leading-normal border border-black select-none shadow-xl print:shadow-none print:border-0 print:p-0">
       
@@ -438,6 +438,24 @@ const renderPaperFicha = (ficha: any, onPhotoClick?: (url: string) => void) => {
                   )}
                 </div>
               </div>
+            </td>
+          </tr>
+          {/* Row 3 - Operational Period */}
+          <tr className="border-t border-black">
+            <td className="p-2 border-r border-black w-1/3">
+              <span className="font-bold">Mês Referência:</span> <span className="font-bold uppercase">{getMonthName(ficha.mes)} / {ficha.ano}</span>
+            </td>
+            <td className="p-2 border-r border-black w-[45%]" colSpan={2}>
+              <span className="font-bold">Período Operacional:</span>{' '}
+              {(() => {
+                const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === ficha.mes && p.ano === ficha.ano) : null;
+                if (!period) return <span className="font-mono text-zinc-450">Não informado</span>;
+                return (
+                  <span className="font-mono font-bold">
+                    {safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a {safeFormatDate(period.data_fim, 'dd/MM/yyyy')} ({period.total_dias} dias)
+                  </span>
+                );
+              })()}
             </td>
           </tr>
         </tbody>
@@ -574,8 +592,21 @@ export default function CaptacaoClient({
     nucleo: 'Suzano',
     supervisor_suzano: '',
     codigo: 'CO-PR-005',
-    revisao: '03'
+    revisao: '03',
+    mes: 0,
+    ano: 0
   });
+
+  // Initialize new Ficha period to current period on modal open
+  useEffect(() => {
+    if (isFichaModalOpen && currentPeriod) {
+      setNewFichaData(prev => ({
+        ...prev,
+        mes: prev.mes || currentPeriod.mes,
+        ano: prev.ano || currentPeriod.ano
+      }));
+    }
+  }, [isFichaModalOpen, currentPeriod]);
 
   // New Lancamento form state
   const [newLancamentoData, setNewLancamentoData] = useState({
@@ -698,6 +729,27 @@ export default function CaptacaoClient({
       hasRestoredRef.current = true;
     }
   }, [mounted]);
+
+  // Ajustar a data do lançamento para ficar dentro do período operacional da Ficha
+  useEffect(() => {
+    if (isLancamentoModalOpen && selectedFicha) {
+      const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+      if (period) {
+        const today = new Date().toISOString().split('T')[0];
+        const isTodayValid = today >= period.data_inicio && today <= period.data_fim;
+        const defaultDate = isTodayValid ? today : period.data_inicio;
+        
+        setNewLancamentoData(prev => {
+          const currentVal = prev.data;
+          const isCurrentValValid = currentVal >= period.data_inicio && currentVal <= period.data_fim;
+          if (!isCurrentValValid) {
+            return { ...prev, data: defaultDate };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [isLancamentoModalOpen, selectedFicha, calendario]);
 
   // Sincronizar o activeScreen com o histórico do navegador (botão voltar do celular)
   useEffect(() => {
@@ -1185,8 +1237,8 @@ export default function CaptacaoClient({
     }
 
     const payload = {
-      ano: currentPeriod.ano,
-      mes: currentPeriod.mes,
+      ano: newFichaData.ano || currentPeriod.ano,
+      mes: newFichaData.mes || currentPeriod.mes,
       placa: finalPlaca,
       motorista: finalMotorista,
       processo: newFichaData.processo,
@@ -1247,7 +1299,9 @@ export default function CaptacaoClient({
       nucleo: 'Suzano',
       supervisor_suzano: '',
       codigo: 'CO-PR-005',
-      revisao: '03'
+      revisao: '03',
+      mes: 0,
+      ano: 0
     });
   };
 
@@ -1332,6 +1386,14 @@ export default function CaptacaoClient({
     if (isNaN(volumeNum) || volumeNum <= 0) {
       alert('Volume captado deve ser um número válido maior que 0.');
       return;
+    }
+
+    const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+    if (period) {
+      if (newLancamentoData.data < period.data_inicio || newLancamentoData.data > period.data_fim) {
+        alert(`A data do lançamento deve estar dentro do período operacional da ficha: de ${safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a ${safeFormatDate(period.data_fim, 'dd/MM/yyyy')}`);
+        return;
+      }
     }
 
     const payload = {
@@ -1473,13 +1535,13 @@ export default function CaptacaoClient({
       {/* Printable Sheet View - ONLY VISIBLE ON PRINT */}
       {selectedFicha && (
         <div className="hidden print:block">
-          {renderPaperFicha(selectedFicha, setActivePhoto)}
+          {renderPaperFicha(selectedFicha, setActivePhoto, calendario)}
         </div>
       )}
 
       {/* Screen layout */}
       <header className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0 select-none print:hidden">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <h1 className="text-lg font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
             <span className="p-2 bg-gradient-to-tr from-blue-600 to-cyan-500 rounded-xl shadow-md text-white flex items-center justify-center shrink-0">
               <svg className="w-[18px] h-[18px] filter drop-shadow-sm" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1493,6 +1555,16 @@ export default function CaptacaoClient({
             <Clock size={12} />
             Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{(!selectedPeriodFilter || selectedPeriodFilter === 'Todos') ? 'TODOS' : `${getMonthName(selectedPeriodFilter.mes)} / ${selectedPeriodFilter.ano}`}</span>
           </span>
+          {selectedPeriodFilter !== 'Todos' && (() => {
+            const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedPeriodFilter.mes && p.ano === selectedPeriodFilter.ano) : null;
+            if (!period) return null;
+            return (
+              <span className="bg-blue-50 dark:bg-blue-950/30 border border-blue-150 dark:border-blue-900/50 text-[10px] text-blue-750 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold shadow-sm flex items-center gap-1.5">
+                <Calendar size={12} className="text-blue-500" />
+                Período: <span className="font-extrabold">{safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a {safeFormatDate(period.data_fim, 'dd/MM/yyyy')}</span>
+              </span>
+            );
+          })()}
         </div>
       </header>
 
@@ -1695,8 +1767,17 @@ export default function CaptacaoClient({
                             )}>
                               {locked ? 'Fechada' : 'Aberta'}
                             </span>
-                            <span className="text-[9px] text-zinc-500 dark:text-zinc-500 font-bold uppercase bg-zinc-50 dark:bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800">
-                              {getMonthName(f.mes)} {f.ano}
+                            <span className="text-[9px] text-zinc-500 dark:text-zinc-500 font-bold uppercase bg-zinc-50 dark:bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 flex flex-col items-end">
+                              <span>{getMonthName(f.mes)} {f.ano}</span>
+                              {(() => {
+                                const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === f.mes && p.ano === f.ano) : null;
+                                if (!period) return null;
+                                return (
+                                  <span className="text-[8px] text-blue-600 dark:text-blue-400 font-extrabold mt-0.5 normal-case tracking-normal">
+                                    {safeFormatDate(period.data_inicio, 'dd/MM')} a {safeFormatDate(period.data_fim, 'dd/MM')}
+                                  </span>
+                                );
+                              })()}
                             </span>
                           </div>
                         </div>
@@ -2022,8 +2103,8 @@ export default function CaptacaoClient({
                   "absolute pointer-events-none -z-50 print:static print:opacity-100 print:pointer-events-auto bg-white text-zinc-950",
                   isExporting ? "opacity-100 left-0 top-0" : "opacity-0 -left-[9999px]"
                 )}>
-                  <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0 bg-white text-zinc-950">
-                    {renderPaperFicha(selectedFicha, setActivePhoto)}
+                  <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0 bg-white text-zinc-955">
+                    {renderPaperFicha(selectedFicha, setActivePhoto, calendario)}
                   </div>
                 </div>
               </div>
@@ -2045,7 +2126,7 @@ export default function CaptacaoClient({
                     Nova Ficha de Captação
                   </h2>
                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-                    Suzano Mês Operacional: {getMonthName(currentPeriod.mes)} {currentPeriod.ano}
+                    Suzano Mês Operacional: {getMonthName(currentPeriod.mes)} {currentPeriod.ano} ({safeFormatDate(currentPeriod.data_inicio, 'dd/MM/yyyy')} a {safeFormatDate(currentPeriod.data_fim, 'dd/MM/yyyy')})
                   </p>
                 </div>
                 <button type="button" onClick={() => setIsFichaModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
@@ -2055,6 +2136,27 @@ export default function CaptacaoClient({
 
               <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
                 
+                {/* Mês/Período Operacional Select */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Mês / Período Operacional</label>
+                  <select
+                    required
+                    value={newFichaData.ano && newFichaData.mes ? `${newFichaData.ano}-${newFichaData.mes}` : ''}
+                    onChange={e => {
+                      const [ano, mes] = e.target.value.split('-').map(Number);
+                      setNewFichaData(prev => ({ ...prev, ano, mes }));
+                    }}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-zinc-200 font-bold"
+                  >
+                    <option value="">Selecione o Mês Operacional...</option>
+                    {periodOptions.map(opt => (
+                      <option key={`${opt.ano}-${opt.mes}`} value={`${opt.ano}-${opt.mes}`}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Truck Plate Select / Input */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Caminhão / Placa</label>
@@ -2186,11 +2288,16 @@ export default function CaptacaoClient({
                     <span className="p-1 bg-emerald-600 rounded text-white"><Plus size={14} /></span>
                     Adicionar Lançamento
                   </h2>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
+                  <p className="text-[10px] text-zinc-550 dark:text-zinc-400 font-bold uppercase tracking-wider mt-1">
                     Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
+                    {(() => {
+                      const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+                      if (!period) return null;
+                      return ` (${safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a ${safeFormatDate(period.data_fim, 'dd/MM/yyyy')})`;
+                    })()}
                   </p>
                 </div>
-                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
+                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-550 transition-colors">
                   <X size={16} />
                 </button>
               </div>
@@ -2205,8 +2312,25 @@ export default function CaptacaoClient({
                     required
                     value={newLancamentoData.data}
                     onChange={e => setNewLancamentoData({ ...newLancamentoData, data: e.target.value })}
+                    min={(() => {
+                      const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+                      return period?.data_inicio || undefined;
+                    })()}
+                    max={(() => {
+                      const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+                      return period?.data_fim || undefined;
+                    })()}
                     className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-white font-mono"
                   />
+                  {(() => {
+                    const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+                    if (!period) return null;
+                    return (
+                      <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-semibold mt-1">
+                        * Período operacional permitido: de <span className="font-bold text-blue-600 dark:text-blue-400">{safeFormatDate(period.data_inicio, 'dd/MM/yyyy')}</span> até <span className="font-bold text-blue-600 dark:text-blue-400">{safeFormatDate(period.data_fim, 'dd/MM/yyyy')}</span>
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 {/* ID Ponto */}
@@ -2516,7 +2640,7 @@ export default function CaptacaoClient({
               }}
             >
               <div className="w-[1080px] shrink-0 bg-white p-4 rounded-xl shadow-2xl text-zinc-955">
-                {renderPaperFicha(selectedFicha, setActivePhoto)}
+                {renderPaperFicha(selectedFicha, setActivePhoto, calendario)}
               </div>
             </div>
           </div>
