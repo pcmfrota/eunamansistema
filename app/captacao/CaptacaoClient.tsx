@@ -1832,7 +1832,7 @@ export default function CaptacaoClient({
                   )}
 
                   {/* 5. Excluir ficha */}
-                  {profile?.role === 'admin' && (
+                  {(profile?.role === 'admin' || profile?.role === 'pcm' || profile?.role === 'gestao') && (
                     <button
                       type="button"
                       onClick={() => {
@@ -2018,8 +2018,11 @@ export default function CaptacaoClient({
                 </div>
 
                 {/* Elemento oculto no layout mas ativo no DOM para impressão/PDF */}
-                <div className="absolute opacity-0 pointer-events-none -z-50 -left-[9999px] print:static print:opacity-100 print:pointer-events-auto">
-                  <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0">
+                <div className={cn(
+                  "absolute pointer-events-none -z-50 print:static print:opacity-100 print:pointer-events-auto bg-white text-zinc-950",
+                  isExporting ? "opacity-100 left-0 top-0" : "opacity-0 -left-[9999px]"
+                )}>
+                  <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0 bg-white text-zinc-950">
                     {renderPaperFicha(selectedFicha, setActivePhoto)}
                   </div>
                 </div>
