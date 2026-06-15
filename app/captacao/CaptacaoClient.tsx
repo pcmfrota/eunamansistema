@@ -478,45 +478,54 @@ const renderPaperFicha = (ficha: any, onPhotoClick?: (url: string) => void, cale
           </tr>
         </thead>
         <tbody>
-          {ficha.lancamentos && ficha.lancamentos.length > 0 ? (
-            ficha.lancamentos.map((row: any, index: number) => (
-              <tr key={index} className="text-center text-zinc-955 font-semibold border-b border-black">
-                <td className="border border-black p-1.5">{safeFormatDate(row.data, 'dd/MM/yyyy')}</td>
-                <td className="border border-black p-1.5 font-mono">
-                  {row.foto_ponto && onPhotoClick ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onPhotoClick(row.foto_ponto)}
-                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md font-bold text-[9px] tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 mx-auto hover:scale-105 active:scale-95 print:hidden"
-                      >
-                        📷 {row.id_ponto}
-                      </button>
-                      <span className="hidden print:inline">{row.id_ponto}</span>
-                    </>
-                  ) : (
-                    row.id_ponto
-                  )}
+          {(() => {
+            const sorted = ficha.lancamentos && Array.isArray(ficha.lancamentos)
+              ? [...ficha.lancamentos].sort((a: any, b: any) => {
+                  const dateCompare = (a.data || '').localeCompare(b.data || '');
+                  if (dateCompare !== 0) return dateCompare;
+                  return (a.hora_inicial || '').localeCompare(b.hora_inicial || '');
+                })
+              : [];
+            return sorted.length > 0 ? (
+              sorted.map((row: any, index: number) => (
+                <tr key={index} className="text-center text-zinc-955 font-semibold border-b border-black">
+                  <td className="border border-black p-1.5">{safeFormatDate(row.data, 'dd/MM/yyyy')}</td>
+                  <td className="border border-black p-1.5 font-mono">
+                    {row.foto_ponto && onPhotoClick ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onPhotoClick(row.foto_ponto)}
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md font-bold text-[9px] tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 mx-auto hover:scale-105 active:scale-95 print:hidden"
+                        >
+                          📷 {row.id_ponto}
+                        </button>
+                        <span className="hidden print:inline">{row.id_ponto}</span>
+                      </>
+                    ) : (
+                      row.id_ponto
+                    )}
+                  </td>
+                  <td className="border border-black p-1.5 font-mono">{row.hora_inicial}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.hora_final}</td>
+                  <td className="border border-black p-1.5 font-mono font-bold">
+                    {Number(row.volume_captado).toLocaleString('pt-BR')} L
+                  </td>
+                  <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_captada}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.up_captacao}</td>
+                  <td className="border border-black p-1.5">{row.atividade}</td>
+                  <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_atividade}</td>
+                  <td className="border border-black p-1.5 font-mono">{row.up_atividade}</td>
+                </tr>
+              ))
+            ) : (
+              <tr className="border-b border-black">
+                <td colSpan={10} className="border border-black p-6 text-center text-zinc-400 italic">
+                  Nenhum lançamento registrado nesta ficha operacional.
                 </td>
-                <td className="border border-black p-1.5 font-mono">{row.hora_inicial}</td>
-                <td className="border border-black p-1.5 font-mono">{row.hora_final}</td>
-                <td className="border border-black p-1.5 font-mono font-bold">
-                  {Number(row.volume_captado).toLocaleString('pt-BR')} L
-                </td>
-                <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_captada}</td>
-                <td className="border border-black p-1.5 font-mono">{row.up_captacao}</td>
-                <td className="border border-black p-1.5">{row.atividade}</td>
-                <td className="border border-black p-1.5 uppercase truncate max-w-[120px]">{row.fazenda_atividade}</td>
-                <td className="border border-black p-1.5 font-mono">{row.up_atividade}</td>
               </tr>
-            ))
-          ) : (
-            <tr className="border-b border-black">
-              <td colSpan={10} className="border border-black p-6 text-center text-zinc-400 italic">
-                Nenhum lançamento registrado nesta ficha operacional.
-              </td>
-            </tr>
-          )}
+            );
+          })()}
           {/* Blank rows to fill space */}
           {Array.from({ length: Math.max(0, 14 - (ficha.lancamentos?.length || 0)) }).map((_, idx) => (
             <tr key={`blank-${idx}`} className="border-b border-black">
@@ -1088,18 +1097,27 @@ export default function CaptacaoClient({
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setTimeout(() => {
-          html2pdf()
-            .set(opt)
-            .from(element)
-            .save()
-            .then(() => {
+          const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
+          const worker = html2pdf().set(opt).from(element);
+          
+          if (isAndroidApp) {
+            worker.outputPdf('datauristring').then((pdfBase64: string) => {
+              (window as any).EunamanApp.saveBase64File(pdfBase64, opt.filename, 'application/pdf');
+              setIsExporting(false);
+            }).catch((err: any) => {
+              console.error("Erro ao gerar PDF para App:", err);
+              setIsExporting(false);
+              alert("Erro ao salvar PDF: " + err.message);
+            });
+          } else {
+            worker.save().then(() => {
               setIsExporting(false);
               alert("Ficha em PDF gerada e baixada com sucesso!");
-            })
-            .catch((err: any) => {
+            }).catch((err: any) => {
               console.error("Erro ao gerar PDF:", err);
               setIsExporting(false);
             });
+          }
         }, 50);
       });
     });

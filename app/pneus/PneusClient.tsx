@@ -519,13 +519,28 @@ export default function PneusClient({
     `;
     const element = document.createElement("div");
     element.innerHTML = html;
-    (window as any).html2pdf().set({
+    const filename = `Boletim_${ins.equipamentos?.placa}_${fmtDate(ins.data_inspecao).replace(/\//g, '-')}.pdf`;
+    const opt = {
       margin: [5, 5, 5, 5],
-      filename: `Boletim_${ins.equipamentos?.placa}_${fmtDate(ins.data_inspecao).replace(/\//g, '-')}.pdf`,
+      filename: filename,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).from(element).save();
+    };
+    
+    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
+    const worker = (window as any).html2pdf().set(opt).from(element);
+    
+    if (isAndroidApp) {
+      worker.outputPdf('datauristring').then((pdfBase64: string) => {
+        (window as any).EunamanApp.saveBase64File(pdfBase64, filename, 'application/pdf');
+      }).catch((err: any) => {
+        console.error("Erro ao gerar PDF do Boletim para App:", err);
+        alert("Erro ao salvar PDF: " + err.message);
+      });
+    } else {
+      worker.save();
+    }
   };
 
   return (

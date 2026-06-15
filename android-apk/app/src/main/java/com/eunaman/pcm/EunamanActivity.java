@@ -498,6 +498,64 @@ public class EunamanActivity extends AppCompatActivity {
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
+
+        @JavascriptInterface
+        public void saveBase64File(String base64Data, String filename, String mimeType) {
+            runOnUiThread(() -> {
+                try {
+                    String cleanBase64 = base64Data;
+                    if (base64Data.contains(",")) {
+                        cleanBase64 = base64Data.split(",")[1];
+                    }
+                    byte[] fileBytes = Base64.decode(cleanBase64, Base64.DEFAULT);
+
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                        values.put(MediaStore.Downloads.IS_PENDING, 1);
+                    }
+
+                    Uri uri = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                        if (uri != null) {
+                            OutputStream out = getContentResolver().openOutputStream(uri);
+                            if (out != null) {
+                                out.write(fileBytes);
+                                out.close();
+                            }
+                            values.clear();
+                            values.put(MediaStore.Downloads.IS_PENDING, 0);
+                            getContentResolver().update(uri, values, null, null);
+                            Toast.makeText(EunamanActivity.this, "PDF salvo na pasta Downloads: " + filename, Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(EunamanActivity.this, "Erro ao salvar arquivo", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                        if (!downloadsDir.exists()) {
+                            downloadsDir.mkdirs();
+                        }
+                        File file = new File(downloadsDir, filename);
+                        java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
+                        fos.write(fileBytes);
+                        fos.close();
+                        
+                        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                        mediaScanIntent.setData(Uri.fromFile(file));
+                        sendBroadcast(mediaScanIntent);
+
+                        Toast.makeText(EunamanActivity.this, "PDF salvo na pasta Downloads: " + filename, Toast.LENGTH_LONG).show();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Erro ao salvar arquivo base64", e);
+                    Toast.makeText(EunamanActivity.this, "Erro ao salvar arquivo: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
     }
 
     private class EunamanCameraBridge {

@@ -546,60 +546,107 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
           jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        if (pdfAction === "download") {
-          html2pdf()
-            .set(opt)
-            .from(element)
-            .save()
-            .then(() => {
-              setIsExporting(false);
-              onClose();
-            })
-            .catch((err: any) => {
-              console.error("Erro ao gerar PDF:", err);
-              setIsExporting(false);
-              onClose();
-            });
-        } else if (pdfAction === "share") {
-          html2pdf()
-            .set(opt)
-            .from(element)
-            .toPdf()
-            .output("blob")
-            .then(async (blob: Blob) => {
-              // 1. Baixar localmente primeiro
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `OS_${os.numero_os}.pdf`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
+        const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
 
-              // 2. Compartilhar
-              const file = new File([blob], `OS_${os.numero_os}.pdf`, { type: "application/pdf" });
-              if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
+        if (pdfAction === "download") {
+          const worker = html2pdf().set(opt).from(element);
+          if (isAndroidApp) {
+            worker.outputPdf('datauristring').then((pdfBase64: string) => {
+              (window as any).EunamanApp.saveBase64File(pdfBase64, opt.filename, 'application/pdf');
+              setIsExporting(false);
+              onClose();
+            }).catch((err: any) => {
+              console.error("Erro ao gerar PDF da OS para App:", err);
+              setIsExporting(false);
+              onClose();
+              alert("Erro ao salvar PDF: " + err.message);
+            });
+          } else {
+            worker.save()
+              .then(() => {
+                setIsExporting(false);
+                onClose();
+              })
+              .catch((err: any) => {
+                console.error("Erro ao gerar PDF:", err);
+                setIsExporting(false);
+                onClose();
+              });
+          }
+        } else if (pdfAction === "share") {
+          const worker = html2pdf().set(opt).from(element);
+          if (isAndroidApp) {
+            worker.outputPdf('datauristring').then(async (pdfBase64: string) => {
+              // Salva localmente primeiro
+              (window as any).EunamanApp.saveBase64File(pdfBase64, opt.filename, 'application/pdf');
+              
+              // E tenta compartilhar se o navigator.share estiver disponível
+              try {
+                const cleanBase64 = pdfBase64.includes(",") ? pdfBase64.split(",")[1] : pdfBase64;
+                const binaryStr = atob(cleanBase64);
+                const len = binaryStr.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                  bytes[i] = binaryStr.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: "application/pdf" });
+                const file = new File([blob], opt.filename, { type: "application/pdf" });
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                   await navigator.share({
                     files: [file],
                     title: `OS ${os.numero_os}`,
                     text: `Ficha da Ordem de Serviço ${os.numero_os}`
                   });
-                } catch (shareErr) {
-                  console.log("Compartilhamento cancelado ou falhou:", shareErr);
                 }
-              } else {
-                alert("Compartilhamento não suportado neste dispositivo. O arquivo foi apenas baixado.");
+              } catch (shareErr) {
+                console.log("Compartilhamento pelo App falhou ou cancelado:", shareErr);
               }
+              
               setIsExporting(false);
               onClose();
-            })
-            .catch((err: any) => {
-              console.error("Erro ao compartilhar PDF:", err);
+            }).catch((err: any) => {
+              console.error("Erro ao compartilhar PDF no App:", err);
               setIsExporting(false);
               onClose();
             });
+          } else {
+            worker.toPdf()
+              .output("blob")
+              .then(async (blob: Blob) => {
+                // 1. Baixar localmente primeiro
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = opt.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                // 2. Compartilhar
+                const file = new File([blob], opt.filename, { type: "application/pdf" });
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                  try {
+                    await navigator.share({
+                      files: [file],
+                      title: `OS ${os.numero_os}`,
+                      text: `Ficha da Ordem de Serviço ${os.numero_os}`
+                    });
+                  } catch (shareErr) {
+                    console.log("Compartilhamento cancelado ou falhou:", shareErr);
+                  }
+                } else {
+                  alert("Compartilhamento não suportado neste dispositivo. O arquivo foi apenas baixado.");
+                }
+                setIsExporting(false);
+                onClose();
+              })
+              .catch((err: any) => {
+                console.error("Erro ao compartilhar PDF:", err);
+                setIsExporting(false);
+                onClose();
+              });
+          }
         }
       };
 

@@ -74,13 +74,28 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
       alert("Aguarde o carregamento do gerador de PDF."); return;
     }
     const element = document.getElementById("ai-report-content");
-    (window as any).html2pdf().set({
+    const filename = `Relatorio_Inteligencia_Pneus.pdf`;
+    const opt = {
       margin: 10,
-      filename: `Relatorio_Inteligencia_Pneus.pdf`,
+      filename: filename,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-    }).from(element).save();
+    };
+    
+    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
+    const worker = (window as any).html2pdf().set(opt).from(element);
+    
+    if (isAndroidApp) {
+      worker.outputPdf('datauristring').then((pdfBase64: string) => {
+        (window as any).EunamanApp.saveBase64File(pdfBase64, filename, 'application/pdf');
+      }).catch((err: any) => {
+        console.error("Erro ao gerar PDF do Relatório de Inteligência para App:", err);
+        alert("Erro ao salvar PDF: " + err.message);
+      });
+    } else {
+      worker.save();
+    }
   };
 
   if (!analysis) return null;
