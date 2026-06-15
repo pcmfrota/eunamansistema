@@ -38,14 +38,6 @@ export async function saveCalendario(item: any) {
 export async function importarCronograma2026() {
   const supabase = createClient();
 
-  // Verificar se já existem registros de 2026 antes de importar
-  const { data: existentes } = await supabase
-    .from("calendario_suzano")
-    .select("mes")
-    .eq("ano", 2026);
-
-  const mesesExistentes = new Set((existentes || []).map((r: any) => r.mes));
-
   const cronograma2026 = [
     { ano: 2026, mes: 1,  data_inicio: "2025-12-22", data_fim: "2026-01-21", total_dias: 31 },
     { ano: 2026, mes: 2,  data_inicio: "2026-01-22", data_fim: "2026-02-19", total_dias: 29 },
@@ -61,15 +53,16 @@ export async function importarCronograma2026() {
     { ano: 2026, mes: 12, data_inicio: "2026-11-22", data_fim: "2026-12-21", total_dias: 30 },
   ];
 
-  // Inserir apenas os meses que ainda não existem
-  const novos = cronograma2026.filter((r) => !mesesExistentes.has(r.mes));
+  // Deletar registros de 2026 existentes para evitar duplicados e atualizar com as datas corretas
+  const { error: deleteError } = await supabase
+    .from("calendario_suzano")
+    .delete()
+    .eq("ano", 2026);
 
-  if (novos.length === 0) {
-    throw new Error("O cronograma 2026 já foi importado. Use 'Limpar Duplicatas' se houver repetições.");
-  }
+  if (deleteError) throw deleteError;
 
-  const { error } = await supabase.from("calendario_suzano").insert(novos);
-  if (error) throw error;
+  const { error: insertError } = await supabase.from("calendario_suzano").insert(cronograma2026);
+  if (insertError) throw insertError;
 
   revalidatePath("/calendario");
   revalidatePath("/");
