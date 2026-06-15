@@ -582,6 +582,34 @@ export default function CaptacaoClient({
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
 
+  // Determine current active Suzano operational period
+  const currentPeriod = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
+    if (period) return period;
+    
+    // Fallback if no matching dates: use current month/year
+    const now = new Date();
+    return {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1,
+      data_inicio: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+      data_fim: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+    };
+  }, [calendario]);
+
+  // Determine if a Ficha is expired (belongs to a past operational month)
+  const isFichaLocked = useCallback((ficha: any) => {
+    if (!ficha) return true;
+    if (ficha.status === 'Fechada') return true;
+    
+    // If the Ficha belongs to a past year or past month, it is automatically closed
+    if (Number(ficha.ano) < currentPeriod.ano) return true;
+    if (Number(ficha.ano) === currentPeriod.ano && Number(ficha.mes) < currentPeriod.mes) return true;
+    
+    return false;
+  }, [currentPeriod]);
+
   // New Ficha form state
   const [newFichaData, setNewFichaData] = useState({
     placa: '',
@@ -1176,33 +1204,7 @@ export default function CaptacaoClient({
     }
   }, []);
 
-  // Determine current active Suzano operational period
-  const currentPeriod = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
-    if (period) return period;
-    
-    // Fallback if no matching dates: use current month/year
-    const now = new Date();
-    return {
-      ano: now.getFullYear(),
-      mes: now.getMonth() + 1,
-      data_inicio: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-      data_fim: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
-    };
-  }, [calendario]);
 
-  // Determine if a Ficha is expired (belongs to a past operational month)
-  const isFichaLocked = useCallback((ficha: any) => {
-    if (!ficha) return true;
-    if (ficha.status === 'Fechada') return true;
-    
-    // If the Ficha belongs to a past year or past month, it is automatically closed
-    if (Number(ficha.ano) < currentPeriod.ano) return true;
-    if (Number(ficha.ano) === currentPeriod.ano && Number(ficha.mes) < currentPeriod.mes) return true;
-    
-    return false;
-  }, [currentPeriod]);
 
   // Filtered Fichas list
   const filteredFichas = useMemo(() => {
