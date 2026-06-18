@@ -2154,38 +2154,47 @@ export default function CaptacaoClient({
                               </div>
                             )}
 
-                            {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+                            {/* Botões de ação: editar (admin pode editar mesmo em ficha fechada) e excluir */}
+                            {profile?.role !== 'visitante' && (
                               <div className="flex flex-col gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingLancamentoId(row.id);
-                                    setNewLancamentoData({
-                                      data: row.data,
-                                      id_ponto: row.id_ponto,
-                                      hora_inicial: row.hora_inicial,
-                                      hora_final: row.hora_final,
-                                      volume_captado: String(row.volume_captado),
-                                      fazenda_captada: row.fazenda_captada,
-                                      up_captacao: row.up_captacao,
-                                      atividade: row.atividade,
-                                      fazenda_atividade: row.fazenda_atividade,
-                                      up_atividade: row.up_atividade,
-                                      foto_ponto: row.foto_ponto
-                                    });
-                                    setIsLancamentoModalOpen(true);
-                                  }}
-                                  className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-blue-50 dark:hover:bg-blue-955/20 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-blue-500 transition-all flex items-center justify-center shadow"
-                                  title="Editar Registro"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
-                                  className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-955/20 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center shadow"
-                                  title="Remover Registro"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                                {/* Editar: disponível sempre para admin/pcm/gestao, e em ficha aberta para outros */}
+                                {(!isFichaLocked(selectedFicha) || ['admin', 'pcm', 'gestao'].includes(profile?.role || '')) && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingLancamentoId(row.id);
+                                      setNewLancamentoData({
+                                        data: row.data,
+                                        id_ponto: row.id_ponto,
+                                        hora_inicial: row.hora_inicial,
+                                        hora_final: row.hora_final,
+                                        volume_captado: String(row.volume_captado),
+                                        fazenda_captada: row.fazenda_captada,
+                                        up_captacao: row.up_captacao,
+                                        atividade: row.atividade,
+                                        fazenda_atividade: row.fazenda_atividade,
+                                        up_atividade: row.up_atividade,
+                                        foto_ponto: row.foto_ponto
+                                      });
+                                      setIsLancamentoModalOpen(true);
+                                    }}
+                                    className="px-3 py-2 bg-white dark:bg-zinc-950 hover:bg-blue-50 dark:hover:bg-blue-950/30 border border-zinc-200 dark:border-zinc-800 hover:border-blue-400 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-blue-600 transition-all flex items-center justify-center gap-1.5 shadow text-[9px] font-black uppercase tracking-wide"
+                                    title="Editar Lançamento"
+                                  >
+                                    <Pencil size={12} />
+                                    <span>EDITAR</span>
+                                  </button>
+                                )}
+                                {/* Excluir: apenas em ficha aberta ou para admin */}
+                                {(!isFichaLocked(selectedFicha) || ['admin', 'pcm', 'gestao'].includes(profile?.role || '')) && (
+                                  <button
+                                    onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
+                                    className="px-3 py-2 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-400 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center gap-1.5 shadow text-[9px] font-black uppercase tracking-wide"
+                                    title="Remover Lançamento"
+                                  >
+                                    <Trash2 size={12} />
+                                    <span>EXCLUIR</span>
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2386,8 +2395,10 @@ export default function CaptacaoClient({
               <div className="p-6 border-b border-zinc-200 dark:border-zinc-855 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/40">
                 <div>
                   <h2 className="text-md font-black text-zinc-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
-                    <span className="p-1 bg-emerald-600 rounded text-white"><Plus size={14} /></span>
-                    {editingLancamentoId ? 'Editar Lançamento' : 'Adicionar Lançamento'}
+                    <span className={`p-1 rounded text-white ${editingLancamentoId ? 'bg-blue-600' : 'bg-emerald-600'}`}>
+                      {editingLancamentoId ? <Pencil size={14} /> : <Plus size={14} />}
+                    </span>
+                    {editingLancamentoId ? '✏️ Editar Lançamento' : 'Adicionar Lançamento'}
                   </h2>
                   <p className="text-[10px] text-zinc-550 dark:text-zinc-400 font-bold uppercase tracking-wider mt-1">
                     Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
