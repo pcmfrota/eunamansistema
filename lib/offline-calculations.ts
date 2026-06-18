@@ -159,6 +159,12 @@ export async function getOfflineDashboardData(filtros?: {
   let calSuzano: any = null;
   const todayStr = agoraRef.toISOString().split('T')[0];
 
+  // Se o usuário selecionou um mês mas não um ano, assume o ano atual
+  // para garantir que a busca no calendário Suzano sempre funcione
+  if (mesFiltro > 0 && anoFiltro === 0) {
+    anoFiltro = anoAtualRef;
+  }
+
   // Identificação do calendário operacional
   if (mesFiltro === 0) {
     calSuzano = calendarioSuzano.find(c => todayStr >= c.data_inicio && todayStr <= c.data_fim) || null;

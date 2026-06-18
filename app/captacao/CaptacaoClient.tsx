@@ -24,7 +24,8 @@ import {
   Wifi,
   WifiOff,
   FileSpreadsheet,
-  Download
+  Download,
+  Pencil
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -38,7 +39,8 @@ import {
   excluirFicha, 
   adicionarLancamento, 
   excluirLancamento,
-  atualizarFicha
+  atualizarFicha,
+  atualizarLancamento
 } from './actions';
 
 // Camera Modal Component
@@ -590,6 +592,7 @@ export default function CaptacaoClient({
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
+  const [editingLancamentoId, setEditingLancamentoId] = useState<string | null>(null);
 
   // Determine current active Suzano operational period
   const currentPeriod = useMemo(() => {
@@ -1398,7 +1401,7 @@ export default function CaptacaoClient({
     }
   };
 
-  // Handle Adding a Launch row
+  // Handle Adding or Updating a Launch row
   const handleAddLancamento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFicha) return;
@@ -1432,51 +1435,103 @@ export default function CaptacaoClient({
       foto_ponto: newLancamentoData.foto_ponto // base64 representation
     };
 
-    if (isOnline) {
-      const res = await adicionarLancamento(payload);
-      if (res.success && res.data) {
-        const added = res.data;
-        await localDb.put('lancamentos_captacao', added);
+    if (editingLancamentoId) {
+      if (isOnline) {
+        const res = await atualizarLancamento(editingLancamentoId, payload);
+        if (res.success && res.data) {
+          const updated = res.data;
+          await localDb.put('lancamentos_captacao', updated);
+          setFichas(prev => prev.map(f => {
+            if (f.id === selectedFicha.id) {
+              return {
+                ...f,
+                lancamentos: f.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
+              };
+            }
+            return f;
+          }));
+          setSelectedFicha(prev => ({
+            ...prev,
+            lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
+          }));
+          alert("Lançamento atualizado com sucesso!");
+        } else {
+          alert('Erro ao atualizar lançamento: ' + res.error);
+        }
+      } else {
+        // Offline update
+        const updatedRow = {
+          id: editingLancamentoId,
+          ...payload
+        };
+        await localDb.put('lancamentos_captacao', updatedRow);
+        await localDb.addToQueue('captacao', 'update', { id: editingLancamentoId, ...payload });
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
         setFichas(prev => prev.map(f => {
           if (f.id === selectedFicha.id) {
-            return { ...f, lancamentos: [...(f.lancamentos || []), added] };
+            return {
+              ...f,
+              lancamentos: f.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
+            };
           }
           return f;
         }));
         setSelectedFicha(prev => ({
           ...prev,
-          lancamentos: [...(prev.lancamentos || []), added]
+          lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
         }));
-      } else {
-        alert('Erro ao adicionar lançamento: ' + res.error);
+        alert("Lançamento atualizado com sucesso (Offline)!");
       }
     } else {
-      // Offline launch
-      const tempId = crypto.randomUUID();
-      const offlineRow = {
-        id: tempId,
-        created_at: new Date().toISOString().split('.')[0],
-        ...payload
-      };
-
-      await localDb.put('lancamentos_captacao', offlineRow);
-      await localDb.addToQueue('captacao', 'add_lancamento', payload);
-      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
-
-      setFichas(prev => prev.map(f => {
-        if (f.id === selectedFicha.id) {
-          return { ...f, lancamentos: [...(f.lancamentos || []), offlineRow] };
+      if (isOnline) {
+        const res = await adicionarLancamento(payload);
+        if (res.success && res.data) {
+          const added = res.data;
+          await localDb.put('lancamentos_captacao', added);
+          setFichas(prev => prev.map(f => {
+            if (f.id === selectedFicha.id) {
+              return { ...f, lancamentos: [...(f.lancamentos || []), added] };
+            }
+            return f;
+          }));
+          setSelectedFicha(prev => ({
+            ...prev,
+            lancamentos: [...(prev.lancamentos || []), added]
+          }));
+          alert("Lançamento adicionado com sucesso!");
+        } else {
+          alert('Erro ao adicionar lançamento: ' + res.error);
         }
-        return f;
-      }));
-      setSelectedFicha(prev => ({
-        ...prev,
-        lancamentos: [...(prev.lancamentos || []), offlineRow]
-      }));
+      } else {
+        // Offline launch
+        const tempId = crypto.randomUUID();
+        const offlineRow = {
+          id: tempId,
+          created_at: new Date().toISOString().split('.')[0],
+          ...payload
+        };
+
+        await localDb.put('lancamentos_captacao', offlineRow);
+        await localDb.addToQueue('captacao', 'add_lancamento', payload);
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+        setFichas(prev => prev.map(f => {
+          if (f.id === selectedFicha.id) {
+            return { ...f, lancamentos: [...(f.lancamentos || []), offlineRow] };
+          }
+          return f;
+        }));
+        setSelectedFicha(prev => ({
+          ...prev,
+          lancamentos: [...(prev.lancamentos || []), offlineRow]
+        }));
+        alert("Lançamento adicionado com sucesso (Offline)!");
+      }
     }
 
     setIsLancamentoModalOpen(false);
-    alert("Lançamento adicionado com sucesso!");
+    setEditingLancamentoId(null);
     // Reset launch form
     setNewLancamentoData({
       data: new Date().toISOString().split('T')[0],
@@ -2093,20 +2148,45 @@ export default function CaptacaoClient({
                                 </div>
                               </div>
                             ) : (
-                              <div className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-850/50 bg-zinc-100 dark:bg-zinc-950/40 flex flex-col items-center justify-center text-zinc-655 dark:text-zinc-650">
+                              <div className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-850/50 bg-zinc-100 dark:bg-zinc-955 flex flex-col items-center justify-center text-zinc-655 dark:text-zinc-650">
                                 <Camera size={18} strokeWidth={1.5} />
                                 <span className="text-[8px] font-black tracking-tighter uppercase mt-1">Sem Foto</span>
                               </div>
                             )}
 
                             {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
-                              <button
-                                onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
-                                className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-955/20 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full"
-                                title="Remover Registro"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              <div className="flex flex-col gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingLancamentoId(row.id);
+                                    setNewLancamentoData({
+                                      data: row.data,
+                                      id_ponto: row.id_ponto,
+                                      hora_inicial: row.hora_inicial,
+                                      hora_final: row.hora_final,
+                                      volume_captado: String(row.volume_captado),
+                                      fazenda_captada: row.fazenda_captada,
+                                      up_captacao: row.up_captacao,
+                                      atividade: row.atividade,
+                                      fazenda_atividade: row.fazenda_atividade,
+                                      up_atividade: row.up_atividade,
+                                      foto_ponto: row.foto_ponto
+                                    });
+                                    setIsLancamentoModalOpen(true);
+                                  }}
+                                  className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-blue-50 dark:hover:bg-blue-955/20 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-blue-500 transition-all flex items-center justify-center shadow"
+                                  title="Editar Registro"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
+                                  className="p-2.5 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-955/20 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-red-500 transition-all flex items-center justify-center shadow"
+                                  title="Remover Registro"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -2297,17 +2377,17 @@ export default function CaptacaoClient({
         </div>
       )}
 
-      {/* ─── MODAL: ADICIONAR LANÇAMENTO (LINHA) ─── */}
+      {/* ─── MODAL: ADICIONAR OU EDITAR LANÇAMENTO (LINHA) ─── */}
       {isLancamentoModalOpen && selectedFicha && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setIsLancamentoModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setIsLancamentoModalOpen(false); setEditingLancamentoId(null); }} />
           <div className="relative bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <form onSubmit={handleAddLancamento}>
               <div className="p-6 border-b border-zinc-200 dark:border-zinc-855 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/40">
                 <div>
                   <h2 className="text-md font-black text-zinc-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
                     <span className="p-1 bg-emerald-600 rounded text-white"><Plus size={14} /></span>
-                    Adicionar Lançamento
+                    {editingLancamentoId ? 'Editar Lançamento' : 'Adicionar Lançamento'}
                   </h2>
                   <p className="text-[10px] text-zinc-550 dark:text-zinc-400 font-bold uppercase tracking-wider mt-1">
                     Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
@@ -2490,11 +2570,11 @@ export default function CaptacaoClient({
               </div>
 
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-850 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                <button type="button" onClick={() => { setIsLancamentoModalOpen(false); setEditingLancamentoId(null); }} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   CANCELAR
                 </button>
                 <button type="submit" className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-600/10 active:scale-95 transition-all">
-                  SALVAR CAPTAÇÃO
+                  {editingLancamentoId ? 'ATUALIZAR CAPTAÇÃO' : 'SALVAR CAPTAÇÃO'}
                 </button>
               </div>
             </form>

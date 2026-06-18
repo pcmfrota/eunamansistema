@@ -185,6 +185,12 @@ export async function getDashboardData(filtros?: {
   let calSuzano: any = null;
   const todayStr = agoraRef.toISOString().split('T')[0];
 
+  // Se o usuário selecionou um mês mas não um ano, assume o ano atual
+  // para garantir que a busca no calendário Suzano sempre funcione
+  if (mesFiltro > 0 && anoFiltro === 0) {
+    anoFiltro = anoAtualRef;
+  }
+
   // Buscamos calendários, equipamentos e outros metadados em PARALELO para evitar waterfalls
   const [infraRes, eqRes, escalasRes, prevRes] = await Promise.all([
     mesFiltro === 0 

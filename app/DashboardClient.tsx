@@ -63,6 +63,20 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const [availabilityType, setAvailabilityType] = useState<"DM" | "DO">("DM");
   const [historicoMensal, setHistoricoMensal] = useState<{ mes: string; dm: number; doOp: number }[]>([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const initialSyncDone = React.useRef(false);
+
+  // Sincroniza os filtros com o mês operacional Suzano detectado pelo servidor
+  // apenas na carga inicial (para que o dropdown mostre o mês correto automaticamente)
+  useEffect(() => {
+    if (data && !initialSyncDone.current && data.mesSelecionado > 0) {
+      initialSyncDone.current = true;
+      setFiltros(prev => ({
+        ...prev,
+        mes: data.mesSelecionado,
+        ano: data.anoSelecionado,
+      }));
+    }
+  }, [data]);
 
   // Busca histórico mensal de DM (últimos 6 meses)
   useEffect(() => {
