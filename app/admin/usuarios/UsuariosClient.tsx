@@ -16,22 +16,29 @@ import {
   Settings2,
   ChevronRight,
   ChevronDown,
-  Layout
+  Layout,
+  Building2,
+  Plus,
 } from "lucide-react";
 import { 
   updateUserRole, 
   createNewUser, 
   deleteUser, 
-  updateRolePermissions 
+  updateRolePermissions,
+  updateUserFilial,
+  createFilial
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
+
+type Filial = { id: string; nome: string; ativo: boolean };
 
 type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   role: string;
+  filial_id: string;
   updated_at: string;
 };
 
@@ -42,16 +49,23 @@ type RolePermission = {
 
 export default function UsuariosClient({ 
   initialProfiles,
-  initialPermissions 
+  initialPermissions,
+  initialFiliais,
 }: { 
   initialProfiles: Profile[],
-  initialPermissions: RolePermission[] 
+  initialPermissions: RolePermission[],
+  initialFiliais: Filial[],
 }) {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [permissions, setPermissions] = useState<RolePermission[]>(initialPermissions);
+  const [filiais, setFiliais] = useState<Filial[]>(initialFiliais);
   const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showNovaFilial, setShowNovaFilial] = useState(false);
+  const [novaFilialNome, setNovaFilialNome] = useState("");
+  const [filialError, setFilialError] = useState<string | null>(null);
+  const [filialLoading, setFilialLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -74,6 +88,18 @@ export default function UsuariosClient({
     });
   };
 
+  const handleFilialChange = async (userId: string, newFilial: string) => {
+    if (isVisitante) return;
+    startTransition(async () => {
+      const result = await updateUserFilial(userId, newFilial);
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        setProfiles(prev => prev.map(p => p.id === userId ? { ...p, filial_id: newFilial } : p));
+      }
+    });
+  };
+
   const handleDelete = async (userId: string) => {
     if (isVisitante) return;
     if (!confirm("Tem certeza que deseja excluir permanentemente este usuário?")) return;
@@ -86,6 +112,25 @@ export default function UsuariosClient({
         setProfiles(prev => prev.filter(p => p.id !== userId));
       }
     });
+  };
+
+  const handleCreateFilial = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFilialLoading(true);
+    setFilialError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const result = await createFilial(formData);
+
+    if ('error' in result) {
+      setFilialError(result.error);
+      setFilialLoading(false);
+    } else {
+      setFiliais(prev => [...prev, { id: result.id!, nome: result.nome!, ativo: true }]);
+      setNovaFilialNome("");
+      setShowNovaFilial(false);
+      setFilialLoading(false);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -165,6 +210,69 @@ export default function UsuariosClient({
               <UserPlus size={18} /> Novo Usuário
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Filiais Section */}
+      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Building2 className="text-blue-600" /> Gestão de Filiais
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Cadastre e visualize as filiais do sistema</p>
+          </div>
+          {!isVisitante && (
+            <button
+              onClick={() => setShowNovaFilial(!showNovaFilial)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+            >
+              {showNovaFilial ? <X size={14} /> : <Plus size={14} />} 
+              {showNovaFilial ? 'Cancelar' : 'Nova Filial'}
+            </button>
+          )}
+        </div>
+
+        {showNovaFilial && !isVisitante && (
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
+            <form onSubmit={handleCreateFilial} className="flex gap-3 items-end max-w-md">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs font-bold uppercase text-zinc-500 tracking-wider">Nome da Filial</label>
+                <input
+                  type="text"
+                  name="nome"
+                  required
+                  placeholder="Ex: Filial Nova Era"
+                  value={novaFilialNome}
+                  onChange={e => setNovaFilialNome(e.target.value)}
+                  disabled={filialLoading}
+                  className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={filialLoading || !novaFilialNome.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {filialLoading ? 'Salvando...' : 'Salvar'}
+              </button>
+            </form>
+            {filialError && <p className="text-red-500 text-xs mt-2 flex items-center gap-1"><AlertCircle size={14} /> {filialError}</p>}
+          </div>
+        )}
+
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {filiais.map(f => (
+            <div key={f.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                <Building2 size={16} />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate" title={f.nome}>{f.nome}</p>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider truncate" title={f.id}>{f.id}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -269,6 +377,7 @@ export default function UsuariosClient({
               <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
                 <th className="px-6 py-4 font-semibold text-zinc-700 dark:text-zinc-300">Usuário</th>
                 <th className="px-6 py-4 font-semibold text-zinc-700 dark:text-zinc-300">Cargo / Permissão</th>
+                <th className="px-6 py-4 font-semibold text-zinc-700 dark:text-zinc-300">Filial</th>
                 <th className="px-6 py-4 font-semibold text-zinc-700 dark:text-zinc-300 text-right">Ações</th>
               </tr>
             </thead>
@@ -310,6 +419,22 @@ export default function UsuariosClient({
                         <option value="visitante">Visitante</option>
                       </select>
                     </div>
+                  </td>
+                  {/* Coluna Filial */}
+                  <td className="px-6 py-4">
+                    <select
+                      value={p.filial_id || 'MATRIZ'}
+                      onChange={(e) => handleFilialChange(p.id, e.target.value)}
+                      disabled={isPending || isVisitante}
+                      className={cn(
+                        "bg-transparent border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1 text-xs font-medium focus:ring-0",
+                        isVisitante ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+                      )}
+                    >
+                      {filiais.map(f => (
+                        <option key={f.id} value={f.id}>{f.nome}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-6 py-4 text-right">
                     {!isVisitante && (
@@ -392,6 +517,20 @@ export default function UsuariosClient({
                       </label>
                     ))}
                   </div>
+                </div>
+
+                {/* Campo Filial */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-zinc-500 tracking-wider">Filial 🏢</label>
+                  <select
+                    name="filial_id"
+                    defaultValue="MATRIZ"
+                    className="w-full px-3 py-2.5 text-sm border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                  >
+                    {filiais.map(f => (
+                      <option key={f.id} value={f.id}>{f.nome}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

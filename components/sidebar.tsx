@@ -19,6 +19,7 @@ import {
   Shield,
   BarChart2,
   Droplets,
+  Building2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -63,7 +64,7 @@ export function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const { theme, setTheme } = useTheme();
-  const { permissions, profile } = useAuth();
+  const { permissions, profile, filialId, filialNome, isAdmin } = useAuth();
 
   const filteredRoutes = routes.filter(route => 
     profile?.role === 'admin' || permissions.includes(route.path)
@@ -86,12 +87,24 @@ export function Sidebar() {
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="p-6 flex items-center justify-center hidden md:flex border-b border-zinc-200 dark:border-zinc-800 bg-white">
+        <div className="p-6 flex items-center justify-center hidden md:flex border-b border-zinc-200 dark:border-zinc-800 bg-white flex-col gap-2">
           <img 
             src="/logo-eunaman-full.png" 
             alt="EUNAMAN" 
             className="h-16 w-auto mix-blend-multiply" 
           />
+          {/* Badge de Filial Ativa */}
+          <div
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border"
+            style={{
+              background: isAdmin ? 'rgba(124,58,237,0.08)' : 'rgba(22,163,74,0.08)',
+              borderColor: isAdmin ? 'rgba(124,58,237,0.2)' : 'rgba(22,163,74,0.2)',
+              color: isAdmin ? '#7c3aed' : '#16a34a',
+            }}
+          >
+            <Building2 size={10} />
+            <span className="truncate max-w-[140px]">{isAdmin ? 'ADM GERAL' : filialNome}</span>
+          </div>
         </div>
 
         <nav className="flex-1 flex flex-col gap-2 px-4 py-4 overflow-y-auto">

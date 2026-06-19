@@ -13,6 +13,7 @@ export interface FiltrosValues {
   status: string;
   dataInicio: string;
   dataFim: string;
+  filial?: string; // Apenas para admin — 'TODAS' ou ID da filial
 }
 
 interface FiltrosProps {
@@ -140,6 +141,32 @@ export function Filtros({ opcoes, valores, onChange, onReset, periodoLabel }: Fi
           options={opcoes.statusList.map((s) => ({ value: s, label: s }))}
           placeholder="Todos os Status"
         />
+
+        {/* Filial — Visível APENAS para Administrador Geral */}
+        {opcoes.filiais && opcoes.filiais.length > 0 && (
+          <>
+            <div className="h-8 w-[1px] bg-violet-200 dark:bg-violet-900/30 mx-1"></div>
+            <div className="relative group flex-shrink-0">
+              <select
+                value={valores.filial || 'TODAS'}
+                onChange={(e) => onChange('filial' as any, e.target.value)}
+                className="appearance-none pr-9 pl-3.5 py-2 text-[13px] rounded-xl min-w-[170px] cursor-pointer transition-colors outline-none font-bold"
+                style={{
+                  background: 'rgba(124,58,237,0.07)',
+                  color: '#7c3aed',
+                  border: '1px solid rgba(124,58,237,0.25)',
+                  fontWeight: 700,
+                }}
+              >
+                <option value="TODAS">🏢 TODAS AS FILIAIS</option>
+                {opcoes.filiais.map((f: any) => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" size={14} style={{ color: '#7c3aed' }} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

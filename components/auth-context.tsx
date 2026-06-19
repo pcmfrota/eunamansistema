@@ -12,6 +12,8 @@ type Profile = {
   full_name: string | null
   avatar_url: string | null
   role: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista'
+  filial_id: string          // ID da filial do usuário (ex: 'MATRIZ', 'ACAILANDIA')
+  filial_nome: string        // Nome exibido (ex: 'FILIAL AÇAILÂNDIA')
 }
 
 type AuthContextType = {
@@ -23,6 +25,9 @@ type AuthContextType = {
   updatePassword: (newPassword: string) => Promise<void>
   refreshProfile: () => Promise<void>
   permissions: string[]
+  filialId: string           // Atalho direto para profile.filial_id
+  filialNome: string         // Atalho direto para profile.filial_nome
+  isAdmin: boolean           // Atalho direto para profile.role === 'admin'
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -108,7 +113,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: u.email || '',
       full_name: u.user_metadata?.full_name || userEmailBase.split('@')[0] || 'Usuário',
       role: (tokenRole as any) || (isMasterAdmin ? 'admin' : 'visitante'),
-      avatar_url: u.user_metadata?.avatar_url || null
+      avatar_url: u.user_metadata?.avatar_url || null,
+      filial_id: 'MATRIZ',
+      filial_nome: 'MATRIZ',
     };
 
     let skipLoading = false;
@@ -164,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Busca profile e permissões em PARALELO com Timeout de 5s para evitar travar na tela de "Carregando Acessos"
       // caso o banco esteja em pausa (cold start) ou a rede do usuário esteja instável.
       const dbPromise = Promise.all([
-        supabase.from('profiles').select('id, full_name, role, avatar_url').eq('id', u.id).maybeSingle(),
+        supabase.from('profiles').select('id, full_name, role, avatar_url, filial_id, filiais(nome)').eq('id', u.id).maybeSingle(),
         supabase.from('role_permissions').select('role, allowed_tabs')
       ]);
 
@@ -189,12 +196,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (u.user_metadata?.role as any) || 
         (isMasterAdmin ? 'admin' : 'visitante');
 
+      const filialId = (profileData as any)?.filial_id || 'MATRIZ'
+      const filialNome = (profileData as any)?.filiais?.nome || filialId
+
       const finalProfile: Profile = {
         id: u.id,
         email: u.email || '',
         full_name: profileData?.full_name || currentProfile.full_name,
         role: finalRole,
-        avatar_url: profileData?.avatar_url || null
+        avatar_url: profileData?.avatar_url || null,
+        filial_id: filialId,
+        filial_nome: filialNome,
       };
 
       // 4. Determinação das Permissões
@@ -373,9 +385,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const isVisitante = profile?.role === 'visitante'
+  const isAdmin = profile?.role === 'admin'
+  const filialId = profile?.filial_id ?? 'MATRIZ'
+  const filialNome = profile?.filial_nome ?? 'MATRIZ'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isVisitante, signOut, updatePassword, refreshProfile, permissions }}>
+    <AuthContext.Provider value={{ user, profile, loading, isVisitante, signOut, updatePassword, refreshProfile, permissions, filialId, filialNome, isAdmin }}>
       {children}
     </AuthContext.Provider>
   )

@@ -56,6 +56,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     status: "",
     dataInicio: "",
     dataFim: "",
+    filial: "TODAS", // Admin pode trocar; usuário comum não vê este campo
   };
 
   const [filtros, setFiltros] = useState<FiltrosValues>(defaultFiltros);
@@ -137,6 +138,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
               status: filtros.status || undefined,
               dataInicio: filtros.dataInicio || undefined,
               dataFim: filtros.dataFim || undefined,
+              filial: (filtros as any).filial || undefined,
             });
             if (active && freshData) {
               setData(freshData);

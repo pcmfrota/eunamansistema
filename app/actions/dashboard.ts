@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { getUserFilial } from "@/utils/filial";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type VeiculoDisp = {
@@ -40,6 +41,7 @@ export type FiltroOpcoes = {
   modulos: string[];
   areas: string[];
   statusList: string[];
+  filiais?: { id: string; nome: string }[]; // Só presente para admin
 };
 
 export type DashboardData = {
@@ -146,6 +148,7 @@ export async function getDashboardData(filtros?: {
   status?: string;
   dataInicio?: string;
   dataFim?: string;
+  filial?: string; // 'TODAS' ou ID da filial (ex: 'ACAILANDIA') — apenas para admin
 }): Promise<DashboardData> {
   // Chave do cache normalizada baseada nos filtros
   const normalizedFiltros = {
@@ -157,7 +160,8 @@ export async function getDashboardData(filtros?: {
     area: (filtros?.area || "").toUpperCase(),
     status: (filtros?.status || "").toUpperCase(),
     dataInicio: filtros?.dataInicio || "",
-    dataFim: filtros?.dataFim || ""
+    dataFim: filtros?.dataFim || "",
+    filial: (filtros?.filial || "").toUpperCase()
   };
   const cacheKey = JSON.stringify(normalizedFiltros);
   const cached = dashboardCache.get(cacheKey);
@@ -169,6 +173,23 @@ export async function getDashboardData(filtros?: {
   }
 
   const supabase = createClient();
+
+  // ── Contexto de Filial do Usuário Logado ──────────────────────────────────
+  const filialCtx = await getUserFilial(supabase);
+  // Determina a filial alvo:
+  // - Admin com 'TODAS' ou sem seleção → sem filtro de filial
+  // - Admin com filial selecionada → filtra por essa filial
+  // - Usuário comum → sempre filtra pela sua própria filial
+  const filialFiltro = filtros?.filial && filtros.filial !== 'TODAS'
+    ? filtros.filial
+    : (filialCtx.isAdmin ? null : filialCtx.filialId);
+
+  // Busca lista de filiais (para preencher o select no frontend — admin only)
+  const filiaisRes = filialCtx.isAdmin
+    ? await supabase.from('filiais').select('id, nome').eq('ativo', true).order('id')
+    : { data: [] };
+  const filiaisOpcoes = filiaisRes.data ?? [];
+
   const agoraRef = new Date();
   // Ontem às 23:59:59 (D+1)
   const ontem = new Date(agoraRef);
@@ -192,12 +213,23 @@ export async function getDashboardData(filtros?: {
   }
 
   // Buscamos calendários, equipamentos e outros metadados em PARALELO para evitar waterfalls
+  let eqQuery = supabase.from("equipamentos")
+    .select("id, placa, tipo, categoria, modulo, modelo, status, area, created_at, deleted_at");
+  if (filialFiltro) eqQuery = eqQuery.eq('filial_id', filialFiltro);
+
+  let osBaseQuery = supabase.from("ordens_servico").select(`
+    id, status, horas_manutencao, data_abertura, data_fechamento, 
+    equipamento_id, placa, classe, foi_enviado_reserva,
+    horario_parada, horas_reserva_chegou, descricao, numero_os,
+    equipamento:equipamento_id(area)
+  `);
+  if (filialFiltro) osBaseQuery = osBaseQuery.eq('filial_id', filialFiltro);
+
   const [infraRes, eqRes, escalasRes, prevRes] = await Promise.all([
     mesFiltro === 0 
       ? supabase.from("calendario_suzano").select("*").lte("data_inicio", todayStr).gte("data_fim", todayStr).single()
       : supabase.from("calendario_suzano").select("*").eq("mes", mesFiltro).eq("ano", anoFiltro).single(),
-    supabase.from("equipamentos")
-      .select("id, placa, tipo, categoria, modulo, modelo, status, area, created_at, deleted_at"),
+    eqQuery,
     supabase.from("escala_frota").select("placa, carga_horaria, periodo_inicio, periodo_fim"),
     supabase.from("preventivas").select("equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas")
   ]);
@@ -257,13 +289,8 @@ export async function getDashboardData(filtros?: {
     dataFimExibicao = fimFiltro.split("T")[0];
   }
 
-  // 3. Busca de Ordens de Serviço (agora com as datas precisas)
-  let queryOS = supabase.from("ordens_servico").select(`
-    id, status, horas_manutencao, data_abertura, data_fechamento, 
-    equipamento_id, placa, classe, foi_enviado_reserva,
-    horario_parada, horas_reserva_chegou, descricao, numero_os,
-    equipamento:equipamento_id(area)
-  `)
+  // 3. Busca de Ordens de Serviço (agora com as datas precisas e filtro de filial)
+  let queryOS = osBaseQuery
   .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`);
 
   if (filtros?.placa) {
@@ -915,7 +942,9 @@ export async function getDashboardData(filtros?: {
         "MALHA VIÁRIA"
       ],
       areas: Array.from(new Set(["COLHEITA", "CARREGAMENTO", "BASE", ...areasSet])).sort(),
-      statusList: ["Disponível", "Manutenção", "Atenção", "Crítico"]
+      statusList: ["Disponível", "Manutenção", "Atenção", "Crítico"],
+      // Lista de filiais populada apenas para admin (vazio = usuário comum não vê o filtro de filial)
+      filiais: filiaisOpcoes as { id: string; nome: string }[]
     },
     periodoLabel: filtros?.dataInicio && filtros?.dataFim 
       ? `${new Date(filtros.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(filtros.dataFim + 'T12:00:00').toLocaleDateString('pt-BR')}`

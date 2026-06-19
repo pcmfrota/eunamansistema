@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { OSService } from '@/src/services/OSService'
 import { OSInsert, OSUpdate } from '@/src/models/os'
 import { createClient } from '@/utils/supabase/server'
+import { getUserFilial } from '@/utils/filial'
 
 const parseFormData = (formData: FormData): OSInsert => ({
   equipamento_id: formData.get('equipamento_id') as string,
@@ -48,17 +49,21 @@ export async function criarOrdemServico(formData: FormData) {
     const data = parseFormData(formData)
     data.mecanicos = extractMecanicos(formData)
     
-    // Determina o cargo do usuário autenticado no servidor
+    // Determina o cargo e a filial do usuário autenticado no servidor
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     let userRole = 'visitante';
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, filial_id')
         .eq('id', user.id)
         .single();
-      if (profile) userRole = profile.role;
+      if (profile) {
+        userRole = profile.role;
+        // Injeta a filial_id automaticamente a partir do perfil do usuário
+        ;(data as any).filial_id = profile.filial_id || 'MATRIZ';
+      }
     }
     
     // Se criado por mecânico, inicia como pendente de aprovação (aprovado = false)

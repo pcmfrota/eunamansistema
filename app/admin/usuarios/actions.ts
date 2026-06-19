@@ -78,6 +78,7 @@ export async function createNewUser(formData: FormData) {
   const password = formData.get("password") as string;
   const fullName = formData.get("full_name") as string;
   const role = formData.get("role") as string;
+  const filialId = (formData.get("filial_id") as string) || "MATRIZ";
 
   try {
     const adminClient = getAdminClient();
@@ -99,6 +100,7 @@ export async function createNewUser(formData: FormData) {
       .update({ 
         role, 
         full_name: fullName,
+        filial_id: filialId,
         plain_password: password // Adicionado para gestão administrativa
       })
       .eq("id", authData.user.id);
@@ -142,6 +144,34 @@ export async function deleteUser(userId: string) {
   }
 }
 
+// Atualiza a filial de um usuário (apenas admins)
+export async function updateUserFilial(userId: string, newFilialId: string) {
+  const supabase = createServerClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado" };
+
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (adminProfile?.role !== 'admin') {
+    return { error: "Apenas administradores podem alterar filiais." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ filial_id: newFilialId })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+  
+  revalidatePath("/admin/usuarios");
+  return { success: true };
+}
+
 export async function getRolePermissions() {
   const supabase = createServerClient();
   const { data, error } = await supabase
@@ -151,6 +181,60 @@ export async function getRolePermissions() {
   if (error) return { error: error.message };
   return { permissions: data };
 }
+
+// Lista todas as filiais ativas do banco
+export async function getFiliais() {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('filiais')
+    .select('id, nome, ativo')
+    .order('id');
+
+  if (error) return { filiais: [] as { id: string; nome: string; ativo: boolean }[] };
+  return { filiais: data as { id: string; nome: string; ativo: boolean }[] };
+}
+
+// Cria uma nova filial (apenas admin)
+export async function createFilial(formData: FormData) {
+  const supabase = createServerClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado" };
+
+  const { data: adminProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (adminProfile?.role !== 'admin') {
+    return { error: "Apenas administradores podem criar filiais." };
+  }
+
+  const nome = (formData.get('nome') as string || '').trim();
+  if (!nome) return { error: "Nome da filial é obrigatório." };
+
+  // Gera ID a partir do nome: remove acentos, espaços e caracteres especiais
+  const id = nome
+    .toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^A-Z0-9]/g, '_')                         // substitui especiais por _
+    .replace(/_+/g, '_')                                 // colapsa underscores duplicados
+    .replace(/^_|_$/g, '');                              // remove _ inicial/final
+
+  const { error } = await supabase
+    .from('filiais')
+    .insert({ id, nome, ativo: true });
+
+  if (error) {
+    if (error.code === '23505') return { error: `Já existe uma filial com o ID "${id}". Use um nome diferente.` };
+    return { error: error.message };
+  }
+
+  revalidatePath('/admin/usuarios');
+  return { success: true, id, nome };
+}
+
 
 export async function updateRolePermissions(role: string, allowedTabs: string[]) {
   const supabase = createServerClient();

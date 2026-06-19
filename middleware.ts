@@ -75,38 +75,45 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 3. Determina role — usa metadata (sem query extra ao banco)
+  // 3. Determina role e filial — usa metadata (sem query extra ao banco)
   let userRole = 'visitante'
+  let userFilial = 'MATRIZ'
   if (user.email?.includes('marcos.rocha')) {
     userRole = 'admin'
   } else {
     const metaRole = user.app_metadata?.role || user.user_metadata?.role
     if (metaRole) {
       userRole = String(metaRole).toLowerCase()
+      // Lê filial do cookie se disponível
+      const filialCookie = request.cookies.get('x-user-filial')?.value
+      if (filialCookie) userFilial = filialCookie
     } else {
       // Fallback ao banco apenas se não há metadata (cache via cookie de role evita isso)
       const roleCookie = request.cookies.get('x-user-role')?.value
+      const filialCookie = request.cookies.get('x-user-filial')?.value
       if (roleCookie) {
         userRole = roleCookie
+        if (filialCookie) userFilial = filialCookie
       } else {
         try {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, filial_id')
             .eq('id', user.id)
             .single()
           if (profile?.role) {
             userRole = profile.role.toLowerCase()
-            // Salva role em cookie leve (1h) para evitar query repetida
+            userFilial = profile.filial_id || 'MATRIZ'
+            // Salva role e filial em cookie leve (1h) para evitar query repetida
             response.cookies.set('x-user-role', userRole, {
-              maxAge: 3600,
-              httpOnly: true,
-              sameSite: 'lax',
-              path: '/',
+              maxAge: 3600, httpOnly: true, sameSite: 'lax', path: '/',
+            })
+            response.cookies.set('x-user-filial', userFilial, {
+              maxAge: 3600, httpOnly: false, sameSite: 'lax', path: '/',
             })
           }
         } catch {
-          // mantém 'visitante'
+          // mantém defaults
         }
       }
     }
@@ -123,14 +130,17 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Sincroniza o cookie x-user-role para evitar cookies desatualizados/órfãos
-  const currentCookie = request.cookies.get('x-user-role')?.value;
-  if (currentCookie !== userRole) {
+  // Sincroniza os cookies x-user-role e x-user-filial
+  const currentRoleCookie = request.cookies.get('x-user-role')?.value;
+  if (currentRoleCookie !== userRole) {
     response.cookies.set('x-user-role', userRole, {
-      maxAge: 3600,
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
+      maxAge: 3600, httpOnly: true, sameSite: 'lax', path: '/',
+    })
+  }
+  const currentFilialCookie = request.cookies.get('x-user-filial')?.value;
+  if (currentFilialCookie !== userFilial) {
+    response.cookies.set('x-user-filial', userFilial, {
+      maxAge: 3600, httpOnly: false, sameSite: 'lax', path: '/',
     })
   }
 
