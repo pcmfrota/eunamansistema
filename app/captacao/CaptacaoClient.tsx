@@ -590,6 +590,7 @@ export default function CaptacaoClient({
   
   const [activeScreen, setActiveScreen] = useState<'home' | 'list' | 'details'>('home');
   const [isFichaModalOpen, setIsFichaModalOpen] = useState(false);
+  const [isSavingFicha, setIsSavingFicha] = useState(false);
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'suzano' | 'sistema'>('suzano');
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
@@ -1252,6 +1253,7 @@ export default function CaptacaoClient({
   // Handle Creating a new Ficha
   const handleCreateFicha = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingFicha) return;
     
     const finalPlaca = newFichaData.placa === 'custom' ? newFichaData.placaCustom.toUpperCase().trim() : newFichaData.placa;
     const finalMotorista = newFichaData.motorista === 'custom' ? newFichaData.motoristaCustom.trim() : newFichaData.motorista;
@@ -1261,9 +1263,28 @@ export default function CaptacaoClient({
       return;
     }
 
+    const finalMes = newFichaData.mes || currentPeriod.mes;
+    const finalAno = newFichaData.ano || currentPeriod.ano;
+
+    // Trava para salvar apenas uma ficha por placa no mesmo período operacional (mês e ano)
+    const exists = fichas.some(f => 
+      f && 
+      f.placa && 
+      f.placa.toUpperCase() === finalPlaca.toUpperCase() && 
+      Number(f.mes) === Number(finalMes) && 
+      Number(f.ano) === Number(finalAno)
+    );
+
+    if (exists) {
+      alert(`Já existe uma ficha cadastrada para a placa ${finalPlaca} no período de ${getMonthName(finalMes)} / ${finalAno}!`);
+      return;
+    }
+
+    setIsSavingFicha(true);
+
     const payload = {
-      ano: newFichaData.ano || currentPeriod.ano,
-      mes: newFichaData.mes || currentPeriod.mes,
+      ano: finalAno,
+      mes: finalMes,
       placa: finalPlaca,
       motorista: finalMotorista,
       processo: newFichaData.processo,
@@ -1273,61 +1294,82 @@ export default function CaptacaoClient({
       revisao: newFichaData.revisao
     };
 
-    if (isOnline) {
-      const res = await criarFicha(payload);
-      if (res.success && res.data) {
-        await localDb.put('fichas_captacao', res.data);
-        setFichas(prev => [res.data, ...prev]);
-        setSelectedFicha({ ...res.data, lancamentos: [] });
+    try {
+      if (isOnline) {
+        const res = await criarFicha(payload);
+        if (res.success && res.data) {
+          await localDb.put('fichas_captacao', res.data);
+          setFichas(prev => [res.data, ...prev]);
+          setSelectedFicha({ ...res.data, lancamentos: [] });
+          setShowFichaPaper(false);
+          setViewMode('suzano');
+          if (typeof window !== 'undefined') {
+            window.history.pushState({ screen: 'details' }, '', '#details');
+          }
+          setActiveScreen('details');
+          setIsFichaModalOpen(false);
+          // Reset form
+          setNewFichaData({
+            placa: '',
+            placaCustom: '',
+            motorista: '',
+            motoristaCustom: '',
+            processo: 'Colheita',
+            nucleo: 'Suzano',
+            supervisor_suzano: '',
+            codigo: 'CO-PR-005',
+            revisao: '03',
+            mes: 0,
+            ano: 0
+          });
+        } else {
+          alert('Erro ao criar ficha: ' + res.error);
+        }
+      } else {
+        // Offline implementation
+        const tempId = crypto.randomUUID();
+        const offlineFicha = {
+          id: tempId,
+          status: 'Aberta' as const,
+          criado_por: null,
+          created_at: new Date().toISOString().split('.')[0],
+          ...payload
+        };
+
+        await localDb.put('fichas_captacao', offlineFicha);
+        await localDb.addToQueue('captacao', 'create', payload);
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+        setFichas(prev => [offlineFicha, ...prev]);
+        setSelectedFicha({ ...offlineFicha, lancamentos: [] });
         setShowFichaPaper(false);
         setViewMode('suzano');
         if (typeof window !== 'undefined') {
           window.history.pushState({ screen: 'details' }, '', '#details');
         }
         setActiveScreen('details');
-      } else {
-        alert('Erro ao criar ficha: ' + res.error);
+        setIsFichaModalOpen(false);
+        // Reset form
+        setNewFichaData({
+          placa: '',
+          placaCustom: '',
+          motorista: '',
+          motoristaCustom: '',
+          processo: 'Colheita',
+          nucleo: 'Suzano',
+          supervisor_suzano: '',
+          codigo: 'CO-PR-005',
+          revisao: '03',
+          mes: 0,
+          ano: 0
+        });
       }
-    } else {
-      // Offline implementation
-      const tempId = crypto.randomUUID();
-      const offlineFicha = {
-        id: tempId,
-        status: 'Aberta' as const,
-        criado_por: null,
-        created_at: new Date().toISOString().split('.')[0],
-        ...payload
-      };
-
-      await localDb.put('fichas_captacao', offlineFicha);
-      await localDb.addToQueue('captacao', 'create', payload);
-      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
-
-      setFichas(prev => [offlineFicha, ...prev]);
-      setSelectedFicha({ ...offlineFicha, lancamentos: [] });
-      setShowFichaPaper(false);
-      setViewMode('suzano');
-      if (typeof window !== 'undefined') {
-        window.history.pushState({ screen: 'details' }, '', '#details');
-      }
-      setActiveScreen('details');
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro inesperado: ' + err.message);
+    } finally {
+      setIsSavingFicha(false);
     }
-
-    setIsFichaModalOpen(false);
-    // Reset form
-    setNewFichaData({
-      placa: '',
-      placaCustom: '',
-      motorista: '',
-      motoristaCustom: '',
-      processo: 'Colheita',
-      nucleo: 'Suzano',
-      supervisor_suzano: '',
-      codigo: 'CO-PR-005',
-      revisao: '03',
-      mes: 0,
-      ano: 0
-    });
   };
 
   // Handle Closing a Ficha manually
@@ -2371,11 +2413,22 @@ export default function CaptacaoClient({
               </div>
 
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-855 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                <button type="button" disabled={isSavingFicha} onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors disabled:opacity-50">
                   CANCELAR
                 </button>
-                <button type="submit" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 active:scale-95 transition-all">
-                  CRIAR FICHA
+                <button 
+                  type="submit" 
+                  disabled={isSavingFicha}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSavingFicha ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      SALVANDO...
+                    </>
+                  ) : (
+                    'CRIAR FICHA'
+                  )}
                 </button>
               </div>
             </form>

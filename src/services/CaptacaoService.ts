@@ -35,6 +35,21 @@ export class CaptacaoService {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
+    // Validar se já existe uma ficha para esta placa neste período (mes/ano)
+    const { data: existing, error: checkError } = await supabase
+      .from("fichas_captacao")
+      .select("id")
+      .eq("placa", ficha.placa)
+      .eq("mes", ficha.mes)
+      .eq("ano", ficha.ano)
+      .limit(1);
+
+    if (checkError) {
+      console.error("Erro ao verificar duplicados na criação da ficha:", checkError);
+    } else if (existing && existing.length > 0) {
+      throw new Error(`Já existe uma ficha cadastrada para a placa ${ficha.placa} neste período!`);
+    }
+
     const newFicha = {
       ...ficha,
       status: "Aberta" as const,
