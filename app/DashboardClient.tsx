@@ -24,6 +24,7 @@ const GraficoManuTipo = dynamic(() => import("@/components/graficos").then((mod)
 const TabelaStatusFrota = dynamic(() => import("@/components/graficos").then((mod) => mod.TabelaStatusFrota), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDMModulo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMModulo), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDMMensal = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMMensal), { ssr: false, loading: () => <CarregandoGrafico /> });
+const GraficoDispCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
 
 function CarregandoGrafico() {
   return (
@@ -348,6 +349,15 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
         {/* Gráfico de tendência mensal de DM */}
         <GraficoDMMensal dados={historicoMensal} loading={loadingHistorico} />
+
+        <GraficoDispCategoria
+          dados={data.dispPorCategoria}
+          periodoLabel={data.periodoLabel}
+          mes={filtros.mes || undefined}
+          ano={filtros.ano || undefined}
+          dataInicio={data.data_inicio || undefined}
+          dataFim={data.data_fim || undefined}
+        />
 
         <div className="grid grid-cols-1 gap-6">
           <RankingFalhas dados={data.rankingFalhas} />
