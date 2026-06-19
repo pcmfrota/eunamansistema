@@ -858,9 +858,6 @@ export function GraficoPreventivas({ dados }: GraficoPreventigasProps) {
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ATENÇÃO
             </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> NO PRAZO
-            </div>
           </div>
           <button
             onClick={() => setFullscreen(true)}

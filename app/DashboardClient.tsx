@@ -23,7 +23,6 @@ const RankingFalhas = dynamic(() => import("@/components/graficos").then((mod) =
 const GraficoManuTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoManuTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDispTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
 const TabelaStatusFrota = dynamic(() => import("@/components/graficos").then((mod) => mod.TabelaStatusFrota), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoDispCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDMModulo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMModulo), { ssr: false, loading: () => <CarregandoGrafico /> });
 const GraficoDMMensal = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMMensal), { ssr: false, loading: () => <CarregandoGrafico /> });
 
@@ -345,15 +344,6 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
             tipoAvailability={availabilityType}
           />
         </div>
-
-        <GraficoDispCategoria 
-          dados={data.dispPorCategoria} 
-          periodoLabel={data.periodoLabel} 
-          mes={filtros.mes || data.mesSelecionado}
-          ano={filtros.ano || data.anoSelecionado}
-          dataInicio={data.data_inicio || undefined}
-          dataFim={data.data_fim || undefined}
-        />
 
         <GraficoDMModulo dados={data.dispPorModulo} />
 

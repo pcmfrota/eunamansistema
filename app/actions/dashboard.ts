@@ -919,14 +919,13 @@ export async function getDashboardData(filtros?: {
     statusFrota: statusFrota.sort((a, b) => a.disponibilidade - b.disponibilidade),
     dispSemanal,
     preventivas: (prevData ?? [])
-      .filter((p: any) => {
-        const catFiltro = (filtros?.categoria || "PESADA").toUpperCase();
-        return p.equipamentos?.categoria?.toUpperCase() === catFiltro;
-      })
+      .filter((p: any) => p.equipamentos?.categoria?.toUpperCase() === "PESADA")
       .map((p: any) => {
         const restantes = Number(p.ultimo_horimetro) + Number(p.intervalo_horas) - Number(p.horimetro_atual);
         return { placa: p.equipamentos?.placa || "—", horas_restantes: Math.round(restantes), status: restantes < 0 ? "atrasado" : restantes <= 50 ? "atencao" : "no_prazo" };
-      }).sort((a: any, b: any) => a.horas_restantes - b.horas_restantes).slice(0, 10) as any,
+      })
+      .filter((p: any) => p.status === "atrasado" || p.status === "atencao")
+      .sort((a: any, b: any) => a.horas_restantes - b.horas_restantes).slice(0, 10) as any,
     docsValidos: 0, docsAVencer: 0, docsVencidos: 0,
     filtroOpcoes: {
       meses: MESES_NOME.slice(1).map((m, i) => ({ value: i + 1, label: m })),
