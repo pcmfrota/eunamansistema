@@ -522,19 +522,25 @@ function TabProgSemanal({
                 title={`${fmtBR(w.data_inicio)} À ${fmtBR(w.data_fim)} — SEMANA ${w.semana_iso}`}
                 className={`relative flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                   isActive
-                    ? "bg-green-600 text-white border-green-500 shadow-lg shadow-green-900/30"
-                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:text-gray-800"}`}>
+                    ? "bg-green-700 text-white border-green-600 shadow-lg shadow-green-900/30"
+                    : "bg-white text-gray-800 border-gray-300 hover:bg-gray-100 hover:text-black"}`}>
                 <div className="flex items-center gap-1.5">
                   <span>{ORDINAL[w.semana_numero]} Sem</span>
                   {itensW.length > 0 && (
-                    <span className={`text-[10px] px-1 rounded-sm ${
-                      isActive ? "bg-white/20 text-white" : pctW >= 100 ? "bg-emerald-500/20 text-emerald-400" : pctW >= 50 ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+                    <span className={`text-[10px] px-1.5 py-0.5 font-black rounded-md ${
+                      isActive 
+                        ? "bg-white/30 text-white" 
+                        : pctW >= 100 
+                          ? "bg-emerald-100 text-emerald-800" 
+                          : pctW >= 50 
+                            ? "bg-amber-100 text-amber-700" 
+                            : "bg-red-100 text-red-700"
                     }`}>
                       {pctW}%
                     </span>
                   )}
                 </div>
-                <span className="text-[9px] font-normal opacity-70">S{w.semana_iso}</span>
+                <span className={`text-[10px] font-bold mt-0.5 ${isActive ? "text-green-100" : "text-gray-500"}`}>S{w.semana_iso}</span>
                 {count > 0 && (
                   <span className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[8px] font-black flex items-center justify-center ${
                     isActive ? "bg-white text-green-700" : "bg-green-600 text-white"}`}>
