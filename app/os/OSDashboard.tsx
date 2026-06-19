@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { Download } from "lucide-react";
 import { getOSDashboardData, type PeriodoSuzano } from "./actions-dashboard";
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 // ─── Cores dos anos nos gráficos de linha ────────────────────────────────────
 const LINE_COLORS = [
@@ -440,10 +441,13 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
         {/* Placa */}
         <div className="flex flex-col gap-1 min-w-[150px]">
           <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Placa</label>
-          <select value={filtroPlaca} onChange={e => setFiltroPlaca(e.target.value)}
-            className="px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#1e2028] text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer font-bold">
-            {placas.map(p => <option key={p}>{p}</option>)}
-          </select>
+          <SearchableSelect 
+            name="filtroPlaca"
+            value={filtroPlaca} 
+            onChange={val => setFiltroPlaca(val)}
+            options={placas.map(p => ({ value: p, label: p }))}
+            placeholder="Todas"
+          />
         </div>
 
         {/* Classe */}

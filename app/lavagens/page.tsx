@@ -20,6 +20,7 @@ export default function LavagensPage({
   const [loading, setLoading] = useState(true);
   const [lavagens, setLavagens] = useState<any[]>([]);
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
+  const [colaboradores, setColaboradores] = useState<any[]>([]);
 
   const now = new Date();
   const mes = searchParams?.mes ? parseInt(searchParams.mes) : now.getMonth() + 1;
@@ -32,6 +33,7 @@ export default function LavagensPage({
         // 1. Carrega do IndexedDB local imediatamente (Offline First)
         const localL = await localDb.getAll("lavagens");
         const localEq = await localDb.getAll("equipamentos");
+        const localCol = await localDb.getAll("colaboradores");
         
         // Filtra lavagens locais por mês e ano
         const startDate = `${ano}-${String(mes).padStart(2, '0')}-01`;
@@ -41,6 +43,7 @@ export default function LavagensPage({
         if (active) {
           setLavagens(filteredLocalL);
           setEquipamentos(localEq);
+          setColaboradores(localCol);
           setLoading(false);
         }
 
@@ -59,6 +62,8 @@ export default function LavagensPage({
           if (active) {
             setLavagens(freshL);
             setEquipamentos(freshEq);
+            const freshCol = await localDb.getAll("colaboradores"); // Assume offline-sync brings it or we just use localDB
+            setColaboradores(freshCol);
           }
         }
       } catch (err) {
@@ -91,6 +96,7 @@ export default function LavagensPage({
       <LavagensClient 
         initialLavagens={lavagens} 
         equipamentos={equipamentos}
+        colaboradores={colaboradores}
         currentMes={mes}
         currentAno={ano}
       />

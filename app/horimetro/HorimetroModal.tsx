@@ -16,6 +16,7 @@ import {
 import { registrarHorimetro, atualizarHorimetro } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import * as XLSX from 'xlsx'
+import { SearchableSelect } from '@/components/SearchableSelect'
 
 interface HorimetroModalProps {
   isOpen: boolean
@@ -217,19 +218,12 @@ export default function HorimetroModal({
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Equipamento <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select
+                    <SearchableSelect 
                       name="equipamento_id"
+                      options={equipamentos.map(eq => ({ value: eq.id, label: `${eq.placa} - ${eq.modelo}` }))}
                       value={form.equipamento_id}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full pl-3 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none font-medium"
-                    >
-                      <option value="">Selecione...</option>
-                      {equipamentos.map(eq => (
-                        <option key={eq.id} value={eq.id}>{eq.placa} - {eq.modelo}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                      onChange={val => setForm(prev => ({ ...prev, equipamento_id: val }))}
+                    />
                   </div>
                 </div>
 

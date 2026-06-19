@@ -28,6 +28,7 @@ import { Lavagem, saveLavagem, deleteLavagem, validarLavagem } from './actions'
 import { supabase } from '@/lib/supabase'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
+import { SearchableSelect } from '@/components/SearchableSelect'
 
 // Safe date formatter to prevent RangeError from date-fns
 const safeFormatDate = (dateVal: any, formatPattern: string, options?: any) => {
@@ -52,6 +53,7 @@ const safeFormatDate = (dateVal: any, formatPattern: string, options?: any) => {
 interface LavagensClientProps {
   initialLavagens: Lavagem[]
   equipamentos: any[]
+  colaboradores: any[]
   currentMes: number
   currentAno: number
 }
@@ -99,7 +101,7 @@ const compressBase64 = (dataUrl: string, maxWidth = 800, maxHeight = 800, qualit
   });
 };
 
-export default function LavagensClient({ initialLavagens, equipamentos, currentMes, currentAno }: LavagensClientProps) {
+export default function LavagensClient({ initialLavagens, equipamentos, colaboradores, currentMes, currentAno }: LavagensClientProps) {
   const { isOnline } = useOffline()
   const [mounted, setMounted] = useState(false)
   const [view, setView] = useState<'calendar' | 'gallery'>('calendar')
@@ -552,13 +554,10 @@ export default function LavagensClient({ initialLavagens, equipamentos, currentM
               <div className="p-6 grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <div className="col-span-2 space-y-1">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Colaborador Responsável</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={modalData.colaborador}
-                    onChange={e => setModalData({...modalData, colaborador: e.target.value})}
-                    placeholder="Nome completo..."
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white" 
+                  <SearchableSelect 
+                    options={colaboradores.map(c => ({ value: c.nome, label: c.nome }))}
+                    value={modalData.colaborador} 
+                    onChange={val => setModalData({...modalData, colaborador: val})}
                   />
                 </div>
 

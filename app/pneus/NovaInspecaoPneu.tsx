@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, X, RotateCcw } from "lucide-react";
 import { registrarInspecaoPneu } from "./actions";
 import { useFormDraft } from '@/hooks/use-form-draft'
+import { SearchableSelect } from '@/components/SearchableSelect'
 
 interface InspecaoPneuFormValues {
   equipamento_id: string;
@@ -96,18 +97,13 @@ export default function NovaInspecaoPneu({ equipamentos }: { equipamentos: any[]
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium">Equipamento</label>
-            <select 
-              name="equipamento_id" 
-              required 
+            <SearchableSelect 
+              name="equipamento_id"
+              options={equipamentos.map(eq => ({ value: eq.id, label: eq.placa }))}
               value={form.equipamento_id}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="">Selecione...</option>
-              {equipamentos.map(eq => (
-                <option key={eq.id} value={eq.id}>{eq.placa}</option>
-              ))}
-            </select>
+              onChange={val => setForm(prev => ({ ...prev, equipamento_id: val }))}
+              placeholder="Selecione..."
+            />
           </div>
 
           <div className="flex flex-col gap-2">

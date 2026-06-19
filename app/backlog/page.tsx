@@ -28,10 +28,12 @@ export default function BacklogPage() {
           area: e.area,
         }));
 
-        const col = localCol.map(c => ({
-          id: c.id,
-          nome: c.nome,
-        }));
+        const col = localCol
+          .filter(c => c.tipo?.toUpperCase() === "MECÂNICO")
+          .map(c => ({
+            id: c.id,
+            nome: c.nome,
+          }));
 
         if (active) {
           setPlacas(pl);
@@ -54,10 +56,12 @@ export default function BacklogPage() {
               area: e.area,
             }));
 
-            const freshColData = freshCol.map(c => ({
-              id: c.id,
-              nome: c.nome,
-            }));
+            const freshColData = freshCol
+              .filter(c => c.tipo?.toUpperCase() === "MECÂNICO")
+              .map(c => ({
+                id: c.id,
+                nome: c.nome,
+              }));
 
             if (active) {
               setPlacas(freshPl);

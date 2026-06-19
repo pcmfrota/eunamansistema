@@ -6,6 +6,7 @@ import { registrarInspecaoCompleta, atualizarInspecao } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import { useOffline } from '@/components/offline-provider'
 import { localDb, serializeFormData } from '@/lib/offline-db'
+import { SearchableSelect } from '@/components/SearchableSelect'
 
 interface PneusModalProps {
   isOpen: boolean
@@ -282,17 +283,13 @@ export default function PneusModal({
               <div className="flex flex-col gap-1.5 md:flex-1 md:min-w-[180px]">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Equipamento *</label>
                 <div className="relative">
-                  <select 
-                    name="equipamento_id" 
+                  <SearchableSelect 
+                    name="equipamento_id"
+                    options={equipamentos.map(eq => ({ value: eq.id, label: eq.placa }))}
                     value={form.equipamento_id}
-                    onChange={handleInputChange}
-                    required 
-                    className="w-full pl-3 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none appearance-none font-medium"
-                  >
-                    <option value="">Selecione</option>
-                    {equipamentos.map(eq => <option key={eq.id} value={eq.id}>{eq.placa}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                    onChange={val => setForm(prev => ({ ...prev, equipamento_id: val }))}
+                    placeholder="Selecione"
+                  />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 md:w-auto shrink-0">

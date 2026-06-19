@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { X, CheckCircle2, AlertTriangle, ListChecks, Check, FlipHorizontal } from "lucide-react";
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 // ─── Componente de Câmera In-Page ────────────────────────────────────────────
 // Usa getUserMedia para tirar foto sem sair da página (evita reload no mobile)
@@ -849,15 +850,12 @@ export default function OSFormModal({
               </select>
             </Field>
             <Field label="Placa *">
-              <select name="equipamento_id" required
-                defaultValue={initialData?.equipamento_id || ""}
-                onChange={e => handleEquipChange(e.target.value)}
-                className={I}>
-                <option value="">Selecione a placa...</option>
-                {filteredEquipamentos.map(eq => (
-                  <option key={eq.id} value={eq.id}>{eq.placa}</option>
-                ))}
-              </select>
+              <SearchableSelect 
+                name="equipamento_id"
+                options={filteredEquipamentos.map(eq => ({ value: eq.id, label: eq.placa }))}
+                value={equip?.id || ""} 
+                onChange={val => handleEquipChange(val)}
+              />
             </Field>
           </div>
 
@@ -1069,22 +1067,18 @@ export default function OSFormModal({
               {mecanicos.map((nome, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <span className="text-xs text-zinc-400 w-4 shrink-0">{idx + 1}.</span>
-                  <select
-                    value={nome}
-                    onChange={e => {
-                      const copia = [...mecanicos];
-                      copia[idx] = e.target.value;
-                      setMecanicos(copia);
-                    }}
-                    className={`${I} flex-1`}
-                  >
-                    <option value="">Selecione o mecânico {idx + 1}...</option>
-                    {colaboradores.map(colab => (
-                      <option key={colab.id} value={colab.nome}>
-                        {colab.nome}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <SearchableSelect
+                      options={colaboradores.map(colab => ({ value: colab.nome, label: colab.nome }))}
+                      value={nome}
+                      onChange={val => {
+                        const copia = [...mecanicos];
+                        copia[idx] = val;
+                        setMecanicos(copia);
+                      }}
+                      placeholder={`Selecione o mecânico ${idx + 1}...`}
+                    />
+                  </div>
                   {mecanicos.length > 1 && (
                     <button
                       type="button"

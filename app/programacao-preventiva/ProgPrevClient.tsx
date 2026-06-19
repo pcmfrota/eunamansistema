@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
   CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart,
 } from "recharts"
+import { SearchableSelect } from '@/components/SearchableSelect'
 import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import type { ProgSemanal } from "./actions"
@@ -1187,10 +1188,11 @@ function ProgSemanalForm({
             </div>
             <div>
               <label className={lbl}>Placa</label>
-              <select value={form.placa} onChange={e => set("placa", e.target.value)} className={inp}>
-                <option value="">— selecione —</option>
-                {equipamentos.map(eq => <option key={eq.id} value={eq.placa}>{eq.placa}</option>)}
-              </select>
+              <SearchableSelect 
+                options={equipamentos.map(eq => ({ value: eq.placa, label: eq.placa }))}
+                value={form.placa} 
+                onChange={val => set("placa", val)}
+              />
             </div>
           </div>
 

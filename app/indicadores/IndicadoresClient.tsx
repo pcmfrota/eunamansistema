@@ -14,6 +14,7 @@ import { IndicadoresData, getIndicadoresData } from './actions'
 import { useOffline } from '@/components/offline-provider'
 import { getOfflineIndicadoresData } from '@/lib/offline-calculations'
 import { useEffect } from 'react'
+import { SearchableSelect } from '@/components/SearchableSelect'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const META = 95
@@ -429,13 +430,15 @@ export default function IndicadoresClient({ initialData }: Props) {
           ))}
         </select>
 
-        <select value={filtroPlaca} onChange={e => handleChange({ placa: e.target.value })}
-          className={selectCls(!!filtroPlaca)}>
-          <option value="">🚗 Veículo</option>
-          {data.filtroOpcoes.placas.map(p => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
+        <div className="w-48">
+          <SearchableSelect 
+            name="filtroPlaca"
+            value={filtroPlaca} 
+            onChange={val => handleChange({ placa: val })}
+            options={data.filtroOpcoes.placas.map(p => ({ value: p, label: p }))}
+            placeholder="🚗 Veículo"
+          />
+        </div>
 
         {/* Filtro Indisponibilidade */}
         <div className="flex items-center gap-1 ml-1 border-l border-zinc-800 pl-3">

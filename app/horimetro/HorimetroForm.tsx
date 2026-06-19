@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { registrarHorimetro } from "./actions";
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 export default function HorimetroForm({ equipamentos }: { equipamentos: any[] }) {
   const [loading, setLoading] = useState(false);
@@ -42,17 +43,11 @@ export default function HorimetroForm({ equipamentos }: { equipamentos: any[] })
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="flex flex-col gap-2">
             <label htmlFor="equipamento_id" className="text-sm font-medium">Equipamento <span className="text-red-500">*</span></label>
-            <select 
-              id="equipamento_id" 
+            <SearchableSelect 
               name="equipamento_id"
-              required
-              className="w-full px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="">Selecione...</option>
-              {equipamentos.map(eq => (
-                <option key={eq.id} value={eq.id}>{eq.placa} - {eq.modelo}</option>
-              ))}
-            </select>
+              options={equipamentos.map(eq => ({ value: eq.id, label: `${eq.placa} - ${eq.modelo}` }))}
+              placeholder="Selecione..."
+            />
           </div>
 
           <div className="flex flex-col gap-2">

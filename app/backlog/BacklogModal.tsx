@@ -21,6 +21,7 @@ import { useFormDraft } from '@/hooks/use-form-draft'
 import { upsertBacklogItem } from './actions'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
+import { SearchableSelect } from '@/components/SearchableSelect'
 
 // ─── Types and Config ────────────────────────────────────────────────────────
 type Placa = { id: string; placa: string; modulo: string | null }
@@ -245,10 +246,11 @@ export default function BacklogModal({
                         <input className={inputCls} placeholder="Ex: Corretiva" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} />
                      </Field>
                      <Field label="Colaborador / Mecânico">
-                        <select className={inputCls} value={form.colaborador || ''} onChange={e => setForm({...form, colaborador: e.target.value})}>
-                           <option value="">Selecione...</option>
-                           {(colaboradores || []).map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-                        </select>
+                        <SearchableSelect 
+                          options={(colaboradores || []).map(c => ({ value: c.nome, label: c.nome }))}
+                          value={form.colaborador || ''} 
+                          onChange={val => setForm({...form, colaborador: val})}
+                        />
                      </Field>
                      <Field label="Origem">
                         <input className={inputCls} placeholder="Ex: Operador / Inspeção" value={form.origem} onChange={e => setForm({...form, origem: e.target.value})} />
@@ -259,13 +261,14 @@ export default function BacklogModal({
                {step === 2 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <Field label="Frota (Placa)" span={2}>
-                        <select className={inputCls} value={form.frota} onChange={e => {
-                          const eq = placas.find(p => p.placa === e.target.value);
-                          setForm({...form, frota: e.target.value, modulo: eq?.modulo || ''});
-                        }}>
-                          <option value="">Selecione...</option>
-                          {placas.map(p => <option key={p.id} value={p.placa}>{p.placa}</option>)}
-                        </select>
+                        <SearchableSelect 
+                          options={placas.map(p => ({ value: p.placa, label: p.placa }))}
+                          value={form.frota} 
+                          onChange={val => {
+                            const eq = placas.find(p => p.placa === val);
+                            setForm({...form, frota: val, modulo: eq?.modulo || ''});
+                          }}
+                        />
                      </Field>
                      <Field label="Módulo">
                         <input className={inputCls} placeholder="Selecione a placa..." value={form.modulo} onChange={e => setForm({...form, modulo: e.target.value})} />

@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-context';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { 
   criarFicha, 
   fecharFicha, 
@@ -2270,18 +2271,16 @@ export default function CaptacaoClient({
                 {/* Truck Plate Select / Input */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Caminhão / Placa</label>
-                  <select
-                    required
+                  <SearchableSelect 
+                    name="placa"
                     value={newFichaData.placa}
-                    onChange={e => setNewFichaData({ ...newFichaData, placa: e.target.value })}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-zinc-200 font-bold"
-                  >
-                    <option value="">Selecione a Placa...</option>
-                    {equipamentos.map(eq => (
-                      <option key={eq.id} value={eq.placa}>{eq.placa}</option>
-                    ))}
-                    <option value="custom">Outra Placa (Digitar)...</option>
-                  </select>
+                    onChange={val => setNewFichaData({ ...newFichaData, placa: val })}
+                    options={[
+                      ...equipamentos.map(eq => ({ value: eq.placa, label: eq.placa })),
+                      { value: 'custom', label: 'Outra Placa (Digitar)...' }
+                    ]}
+                    placeholder="Selecione a Placa..."
+                  />
 
                   {newFichaData.placa === 'custom' && (
                     <input 
@@ -2298,18 +2297,16 @@ export default function CaptacaoClient({
                 {/* Driver Select / Input */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Motorista</label>
-                  <select
-                    required
+                  <SearchableSelect 
+                    name="motorista"
                     value={newFichaData.motorista}
-                    onChange={e => setNewFichaData({ ...newFichaData, motorista: e.target.value })}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-zinc-900 dark:text-zinc-200 font-bold"
-                  >
-                    <option value="">Selecione o Motorista...</option>
-                    {colaboradores.map(c => (
-                      <option key={c.id} value={c.nome}>{c.nome}</option>
-                    ))}
-                    <option value="custom">Outro Motorista (Digitar)...</option>
-                  </select>
+                    onChange={val => setNewFichaData({ ...newFichaData, motorista: val })}
+                    options={[
+                      ...colaboradores.map(c => ({ value: c.nome, label: c.nome })),
+                      { value: 'custom', label: 'Outro Motorista (Digitar)...' }
+                    ]}
+                    placeholder="Selecione o Motorista..."
+                  />
 
                   {newFichaData.motorista === 'custom' && (
                     <input 
