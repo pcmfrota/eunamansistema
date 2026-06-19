@@ -283,6 +283,7 @@ export async function buscarColaboradores() {
     const { data, error } = await supabase
       .from('colaboradores')
       .select('*')
+      .order('tipo', { ascending: false }) // 'MOTORISTA' then 'MECÂNICO'
       .order('nome', { ascending: true });
     if (error) throw error;
     return data || [];
@@ -292,12 +293,26 @@ export async function buscarColaboradores() {
   }
 }
 
-export async function criarColaborador(nome: string) {
+export async function criarColaborador(dados: {
+  nome: string;
+  matricula?: string;
+  tipo?: string;
+  cargo?: string;
+  local?: string;
+  status?: string;
+}) {
   try {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('colaboradores')
-      .insert([{ nome: nome.trim() }])
+      .insert([{
+        nome: dados.nome.trim(),
+        matricula: dados.matricula?.trim(),
+        tipo: dados.tipo || 'MECÂNICO',
+        cargo: dados.cargo?.trim(),
+        local: dados.local?.trim(),
+        status: dados.status || 'Ativo',
+      }])
       .select()
       .single();
     if (error) throw error;

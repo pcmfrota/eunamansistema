@@ -57,7 +57,15 @@ export default function BaseFrotasPage() {
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [colabLoading, setColabLoading] = useState(true);
   const [colabSearchTerm, setColabSearchTerm] = useState('');
-  const [newColabName, setNewColabName] = useState('');
+  const [colabFilterTipo, setColabFilterTipo] = useState('TODOS');
+  const [newColab, setNewColab] = useState({
+    nome: '',
+    matricula: '',
+    tipo: 'MECÂNICO',
+    cargo: '',
+    local: '',
+    status: 'Ativo'
+  });
   const [colabSubmitting, setColabSubmitting] = useState(false);
 
   const areaOptions = React.useMemo(() => {
@@ -151,9 +159,9 @@ export default function BaseFrotasPage() {
 
   const handleAddColaborador = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newColabName.trim()) return;
+    if (!newColab.nome.trim()) return;
 
-    const nomeClean = newColabName.trim();
+    const nomeClean = newColab.nome.trim();
     
     // Check duplication (case insensitive)
     const exists = colaboradores.some(c => c.nome.toLowerCase() === nomeClean.toLowerCase());
@@ -165,24 +173,28 @@ export default function BaseFrotasPage() {
     setColabSubmitting(true);
     try {
       if (isOnline) {
-        const res = await criarColaborador(nomeClean);
+        const res = await criarColaborador({
+          ...newColab,
+          nome: nomeClean
+        });
         if ('error' in res) {
           alert(`Erro ao criar colaborador: ${res.error}`);
         } else {
-          setNewColabName('');
+          setNewColab({ nome: '', matricula: '', tipo: 'MECÂNICO', cargo: '', local: '', status: 'Ativo' });
           await localDb.put("colaboradores", res.data);
           setColaboradores(prev => [...prev, res.data].sort((a, b) => String(a.nome).localeCompare(String(b.nome))));
         }
       } else {
         const localItem = {
           id: `temp_colab_${Date.now()}`,
+          ...newColab,
           nome: nomeClean,
           created_at: new Date().toISOString()
         };
         await localDb.put("colaboradores", localItem);
         await localDb.addToQueue("colaborador", "create", localItem);
         
-        setNewColabName('');
+        setNewColab({ nome: '', matricula: '', tipo: 'MECÂNICO', cargo: '', local: '', status: 'Ativo' });
         window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
         setColaboradores(prev => [...prev, localItem].sort((a, b) => String(a.nome).localeCompare(String(b.nome))));
       }
@@ -218,8 +230,12 @@ export default function BaseFrotasPage() {
 
   const filteredColaboradores = React.useMemo(() => {
     const q = colabSearchTerm.toLowerCase();
-    return colaboradores.filter(c => !q || c.nome?.toLowerCase().includes(q));
-  }, [colaboradores, colabSearchTerm]);
+    return colaboradores.filter(c => {
+      const matchesSearch = !q || c.nome?.toLowerCase().includes(q) || c.matricula?.toLowerCase().includes(q);
+      const matchesTipo = colabFilterTipo === 'TODOS' || (c.tipo || 'MECÂNICO') === colabFilterTipo;
+      return matchesSearch && matchesTipo;
+    });
+  }, [colaboradores, colabSearchTerm, colabFilterTipo]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -563,6 +579,15 @@ export default function BaseFrotasPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <select
+                value={colabFilterTipo}
+                onChange={(e) => setColabFilterTipo(e.target.value)}
+                className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
+              >
+                <option value="TODOS">Todos</option>
+                <option value="MECÂNICO">Mecânicos</option>
+                <option value="MOTORISTA">Motoristas</option>
+              </select>
               <div className="relative w-full md:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input 
@@ -589,11 +614,50 @@ export default function BaseFrotasPage() {
                   <input 
                     type="text"
                     placeholder="Nome completo..."
-                    value={newColabName}
-                    onChange={(e) => setNewColabName(e.target.value)}
+                    value={newColab.nome}
+                    onChange={(e) => setNewColab({ ...newColab, nome: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400 font-bold"
                     required
                   />
+                  <input 
+                    type="text"
+                    placeholder="Matrícula"
+                    value={newColab.matricula}
+                    onChange={(e) => setNewColab({ ...newColab, matricula: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                  />
+                  <select
+                    value={newColab.tipo}
+                    onChange={(e) => setNewColab({ ...newColab, tipo: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white"
+                  >
+                    <option value="MECÂNICO">Mecânico</option>
+                    <option value="MOTORISTA">Motorista</option>
+                  </select>
+                  <input 
+                    type="text"
+                    placeholder="Cargo Básico / Função"
+                    value={newColab.cargo}
+                    onChange={(e) => setNewColab({ ...newColab, cargo: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                  />
+                  <input 
+                    type="text"
+                    placeholder="Local / Base"
+                    value={newColab.local}
+                    onChange={(e) => setNewColab({ ...newColab, local: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                  />
+                  <select
+                    value={newColab.status}
+                    onChange={(e) => setNewColab({ ...newColab, status: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-zinc-900 dark:text-white"
+                  >
+                    <option value="Ativo">Ativo</option>
+                    <option value="INSS">INSS</option>
+                    <option value="Férias">Férias</option>
+                    <option value="Inativo">Inativo</option>
+                  </select>
                   <button
                     type="submit"
                     disabled={colabSubmitting}
@@ -610,7 +674,11 @@ export default function BaseFrotasPage() {
               <table className="w-full text-sm text-left">
                 <thead className="text-[13px] text-slate-500 dark:text-slate-400 font-semibold bg-slate-50 border-b border-slate-100 dark:bg-slate-900/50 dark:border-slate-700/50">
                   <tr>
+                    <th className="py-3 px-5 font-semibold">Matrícula</th>
                     <th className="py-3 px-5 font-semibold">Nome do Colaborador</th>
+                    <th className="py-3 px-5 font-semibold">Tipo</th>
+                    <th className="py-3 px-5 font-semibold">Cargo</th>
+                    <th className="py-3 px-5 font-semibold">Local</th>
                     <th className="py-3 px-5 font-semibold">Status</th>
                     {!isVisitante && <th className="py-3 px-5 font-semibold text-right">Ações</th>}
                   </tr>
@@ -633,8 +701,22 @@ export default function BaseFrotasPage() {
                     </tr>
                   ) : filteredColaboradores.map((colab) => (
                     <tr key={colab.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-850/50 transition-colors">
+                      <td className="py-3 px-5 text-slate-500 dark:text-slate-400 font-mono text-xs">
+                        {colab.matricula || '-'}
+                      </td>
                       <td className="py-3 px-5 font-bold text-zinc-800 dark:text-zinc-200">
                         {colab.nome}
+                      </td>
+                      <td className="py-3 px-5">
+                        <span className={cn("px-2 py-1 text-[10px] font-bold rounded uppercase", (colab.tipo || 'MECÂNICO') === 'MOTORISTA' ? "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300" : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300")}>
+                          {colab.tipo || 'MECÂNICO'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-5 text-slate-500 dark:text-slate-400 text-xs">
+                        {colab.cargo || '-'}
+                      </td>
+                      <td className="py-3 px-5 text-slate-500 dark:text-slate-400 text-xs">
+                        {colab.local || '-'}
                       </td>
                       <td className="py-3 px-5">
                         {colab.id.startsWith('temp_') ? (
@@ -642,9 +724,17 @@ export default function BaseFrotasPage() {
                             <Loader2 className="w-2.5 h-2.5 animate-spin" />
                             Offline
                           </span>
-                        ) : (
+                        ) : colab.status === 'Ativo' || !colab.status ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/30">
                             Ativo
+                          </span>
+                        ) : colab.status === 'INSS' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-900/30">
+                            INSS
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                            {colab.status}
                           </span>
                         )}
                       </td>
