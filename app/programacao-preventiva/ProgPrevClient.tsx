@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo, useCallback } from "react"
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart,
+  CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart, LabelList
 } from "recharts"
 import { SearchableSelect } from '@/components/SearchableSelect'
 import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff } from "lucide-react"
@@ -438,7 +438,10 @@ function TabProgSemanal({
                 : { percentual: 0 }
               
               if (isOnline) {
-                await atualizarStatusProgSemanal(item.id, ns, extras)
+                const res = await atualizarStatusProgSemanal(item.id, ns, extras)
+                if (res?.error) {
+                  alert("Erro ao atualizar status:\\n" + res.error)
+                }
               } else {
                 const updated = { ...item, status: ns, ...extras, _isPendingSync: true }
                 await localDb.put("prev_prog_semanal", updated)
@@ -708,11 +711,12 @@ function TabPlanejamento({ mensaisComputado, anoAtivo, mesAtivo }: {
             <YAxis tick={{ fill: "#64748b", fontSize: 11 }} unit="%" domain={[0, 110]} />
             <ReTooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
-            <Bar dataKey="META" fill="#1e4d2b" radius={[3, 3, 0, 0]}>
-              {chartData.map((_, i) => <Cell key={i} fill={i + 1 === mesAtivo ? "#22c55e" : "#1e4d2b"} />)}
-            </Bar>
-            <Line type="monotone" dataKey="REALIZADO" stroke="#ef4444" strokeWidth={2.5}
-              dot={{ r: 5, fill: "#ef4444", strokeWidth: 0 }} connectNulls={false} />
+            <Line type="monotone" dataKey="META" stroke="#1e4d2b" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 4, fill: "#1e4d2b", strokeWidth: 0 }}>
+              <LabelList dataKey="META" position="top" formatter={(val: any) => val != null ? `${val}%` : ""} fill="#1e4d2b" fontSize={11} fontWeight="bold" />
+            </Line>
+            <Line type="monotone" dataKey="REALIZADO" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 5, fill: "#ef4444", strokeWidth: 0 }} connectNulls={false}>
+              <LabelList dataKey="REALIZADO" position="bottom" formatter={(val: any) => val != null ? `${val}%` : ""} fill="#ef4444" fontSize={11} fontWeight="bold" />
+            </Line>
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -1046,7 +1050,7 @@ function ProgSemanalForm({
   calendario: { mes: number; ano: number; data_inicio: string; data_fim: string }[]
   onClose: () => void
 }) {
-  const [, startT] = useTransition()
+  const [isPending, startT] = useTransition()
   const { isOnline } = useOffline()
 
   // ── Semana period (week range) ──────────────────────────────────────
@@ -1154,8 +1158,11 @@ function ProgSemanalForm({
     }
     startT(async () => {
       if (isOnline) {
-        if (item) await atualizarProgSemanal(item.id, payload)
-        else await criarProgSemanal(payload)
+        const res = item ? await atualizarProgSemanal(item.id, payload) : await criarProgSemanal(payload)
+        if (res?.error) {
+          alert("Erro ao salvar no banco de dados:\\n" + res.error)
+          return
+        }
       } else {
         const id = item?.id || `temp_${Date.now()}`
         const localData = { ...payload, id, _isPendingSync: true }
@@ -1320,9 +1327,12 @@ function ProgSemanalForm({
               className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition-colors">
               Cancelar
             </button>
-            <button type="submit"
-              className="px-5 py-2 text-sm rounded-lg bg-green-600 text-white font-bold hover:bg-green-500 transition-colors">
-              {item ? "💾 Salvar" : "➕ Criar"}
+            <button type="submit" disabled={isPending}
+              className={`px-5 py-2 text-sm rounded-lg font-bold transition-colors ${
+                isPending ? "bg-green-600/60 cursor-not-allowed text-white flex items-center gap-2" : "bg-green-600 text-white hover:bg-green-500"
+              }`}>
+              {isPending && <RefreshCw size={14} className="animate-spin" />}
+              {isPending ? "Salvando..." : item ? "💾 Salvar" : "➕ Criar"}
             </button>
           </div>
         </form>
