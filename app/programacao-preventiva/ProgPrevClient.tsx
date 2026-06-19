@@ -1041,6 +1041,7 @@ function ProgSemanalForm({
   onClose: () => void
 }) {
   const [, startT] = useTransition()
+  const { isOnline } = useOffline()
 
   // ── Semana period (week range) ──────────────────────────────────────
   const [semanaIsoForm, setSemanaIsoForm] = useState<string>(
