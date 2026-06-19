@@ -111,14 +111,14 @@ function ChartTooltip({ active, payload, label }: any) {
 
 const StatusBadge = ({ status }: { status: string }) => {
   const cl: Record<string, string> = {
-    "CONCLUÍDO":    "bg-emerald-900/40 text-emerald-300 border-emerald-700/40",
-    "PROGRAMADO":   "bg-white text-gray-600 border-gray-300",
-    "EM ANDAMENTO": "bg-blue-900/40 text-blue-300 border-blue-700/40",
-    "REPROGRAMADO": "bg-amber-900/40 text-amber-300 border-amber-700/40",
-    "CANCELADO":    "bg-red-900/40 text-red-400 border-red-700/40",
+    "CONCLUÍDO":    "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-sm",
+    "PROGRAMADO":   "bg-gray-100 text-gray-700 border-gray-300 shadow-sm",
+    "EM ANDAMENTO": "bg-blue-100 text-blue-700 border-blue-300 shadow-sm",
+    "REPROGRAMADO": "bg-amber-100 text-amber-700 border-amber-300 shadow-sm",
+    "CANCELADO":    "bg-red-100 text-red-700 border-red-300 shadow-sm",
   }
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cl[status] ?? "bg-white text-gray-600 border-gray-300"}`}>
+    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-wider ${cl[status] ?? "bg-gray-100 text-gray-700 border-gray-300 shadow-sm"}`}>
       {status}
     </span>
   )
@@ -344,8 +344,24 @@ function TabProgSemanal({
   const [editItem, setEditItem] = useState<ProgSemanal | null>(null)
   const [, startT] = useTransition()
 
-  const preventivas  = itensDaSemana.filter(p => p.tipo !== "DOCUMENTAÇÃO")
-  const documentos   = itensDaSemana.filter(p => p.tipo === "DOCUMENTAÇÃO")
+  const [filtroStatus, setFiltroStatus] = useState("")
+  const [filtroPlaca, setFiltroPlaca] = useState("")
+  const [filtroModulo, setFiltroModulo] = useState("")
+
+  const preventivasAll = itensDaSemana.filter(p => p.tipo !== "DOCUMENTAÇÃO")
+  const documentosAll = itensDaSemana.filter(p => p.tipo === "DOCUMENTAÇÃO")
+
+  const applyFilters = (list: ProgSemanal[]) => list.filter(p => 
+    (filtroStatus ? p.status === filtroStatus : true) &&
+    (filtroPlaca ? p.placa === filtroPlaca : true) &&
+    (filtroModulo ? String(p.modulo) === filtroModulo : true)
+  )
+
+  const preventivas = applyFilters(preventivasAll)
+  const documentos = applyFilters(documentosAll)
+
+  const placasUnicas = Array.from(new Set(progSemanais.map(p => p.placa).filter(Boolean)))
+  const modulosUnicos = Array.from(new Set(progSemanais.map(p => String(p.modulo)).filter(Boolean)))
 
   const pctColor = pctSemana >= 100 ? "#22c55e" : pctSemana >= 50 ? "#f59e0b" : "#ef4444"
   const ordLabel = weekInfo
@@ -538,6 +554,52 @@ function TabProgSemanal({
           <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-[11px] font-bold">
             <ShieldOff size={14} /> Somente Leitura
           </div>
+        )}
+      </div>
+
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mr-2">Filtros</span>
+        
+        <div className="w-36">
+          <select 
+            value={filtroStatus} 
+            onChange={e => setFiltroStatus(e.target.value)}
+            className="w-full px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-gray-200 bg-gray-50 text-gray-700 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer"
+          >
+            <option value="">TODOS STATUS</option>
+            {STATUS_OPT.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        <div className="w-40">
+          <SearchableSelect 
+            name="filtroPlaca"
+            value={filtroPlaca} 
+            onChange={setFiltroPlaca}
+            options={placasUnicas.map(p => ({ value: p, label: p }))}
+            placeholder="TODAS PLACAS"
+          />
+        </div>
+
+        <div className="w-36">
+          <select 
+            value={filtroModulo} 
+            onChange={e => setFiltroModulo(e.target.value)}
+            className="w-full px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-gray-200 bg-gray-50 text-gray-700 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer"
+          >
+            <option value="">TODOS MÓDULOS</option>
+            {modulosUnicos.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+
+        {(filtroStatus || filtroPlaca || filtroModulo) && (
+          <button 
+            onClick={() => { setFiltroStatus(""); setFiltroPlaca(""); setFiltroModulo("") }}
+            className="ml-auto text-[10px] font-bold text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+          >
+            <X size={12} /> Limpar
+          </button>
         )}
       </div>
 
