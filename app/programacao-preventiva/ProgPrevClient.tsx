@@ -343,14 +343,19 @@ function TabProgSemanal({
     const pctCl = pct >= 100 ? "text-emerald-400" : pct > 0 ? "text-amber-400" : "text-red-400"
 
     return (
-      <div className="grid text-xs border-b border-zinc-900/60 hover:bg-zinc-900/30 transition-colors group"
-        style={{ gridTemplateColumns: "7% 12% 10% 9% 1fr 14% 9% 9% 7% 5%" }}>
-        <div className={`px-3 py-2.5 font-black ${pctCl}`}>{pct}%</div>
-        <div className="px-3 py-2.5 text-zinc-300 font-medium truncate">{item.modulo ?? "—"}</div>
-        <div className="px-3 py-2.5 font-bold text-green-400">{item.categoria_operacional ?? "—"}</div>
-        <div className="px-3 py-2.5 font-black text-amber-400">{item.placa ?? "—"}</div>
-        <div className="px-3 py-2.5 text-zinc-400 truncate" title={item.mpbt ?? ""}>{item.mpbt ?? "—"}</div>
-        <div className="px-3 py-2.5">
+      <div className="grid text-[10px] border-b border-zinc-900/60 hover:bg-zinc-900/30 transition-colors group items-center"
+        style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
+        <div className="px-2 py-2 text-zinc-400">{item.ano}</div>
+        <div className="px-2 py-2 text-zinc-400">{MESES_A[item.mes_numero - 1]?.toUpperCase()}</div>
+        <div className="px-2 py-2 font-bold text-zinc-300">S{String(item.semana_iso).padStart(2, "0")}</div>
+        <div className="px-2 py-2 font-black text-amber-400">{item.placa ?? "—"}</div>
+        <div className="px-2 py-2 text-zinc-300 font-medium truncate">{item.modulo ?? "—"}</div>
+        <div className="px-2 py-2 font-bold text-green-400 truncate">{item.categoria_operacional ?? "—"}</div>
+        <div className="px-2 py-2 text-zinc-500 font-mono">{fmtBR(item.data_inicio_exec)}</div>
+        <div className="px-2 py-2 text-zinc-500 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
+        <div className="px-2 py-2 text-zinc-500 text-center">{item.dias ?? "—"}</div>
+        <div className="px-2 py-2 text-zinc-400 truncate" title={item.mpbt ?? ""}>{item.mpbt ?? "—"}</div>
+        <div className="px-2 py-2">
           {!isVisitante ? (
             <button onClick={() => startT(async () => {
               const ns = item.status === "CONCLUÍDO" ? "PROGRAMADO" : "CONCLUÍDO"
@@ -378,11 +383,10 @@ function TabProgSemanal({
             <StatusBadge status={item.status} />
           )}
         </div>
-        <div className="px-3 py-2.5 text-zinc-500 font-mono">{fmtBR(item.data_inicio_exec)}</div>
-        <div className="px-3 py-2.5 text-zinc-500 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
-        <div className="px-3 py-2.5 text-zinc-500">{item.dias ?? "—"}</div>
+        <div className={`px-2 py-2 font-black ${pctCl} text-center`}>{pct}%</div>
+        <div className="px-2 py-2 text-zinc-300 font-mono text-center">{item.horimetro_dia ?? "—"}</div>
         {!isVisitante && (
-          <div className="px-3 py-2.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="px-2 py-2 flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
             <button onClick={() => { setEditItem(item); setShowForm(true) }}
               className="p-1 text-zinc-600 hover:text-zinc-200 transition-colors"><Pencil size={11} /></button>
             <button onClick={() => {
@@ -407,13 +411,13 @@ function TabProgSemanal({
   }
 
   const TableHeader = ({ tipo }: { tipo: string }) => (
-    <div className={`grid text-[10px] font-black uppercase tracking-widest border-b ${
+    <div className={`grid text-[9px] font-black uppercase tracking-widest border-b ${
       tipo === "PREVENTIVA"
-        ? "bg-green-900/60 border-green-800 text-green-300"
+        ? "bg-green-950/40 border-green-900/50 text-green-400"
         : "bg-zinc-800 border-zinc-700 text-zinc-400"
-    }`} style={{ gridTemplateColumns: "7% 12% 10% 9% 1fr 14% 9% 9% 7% 5%" }}>
-      {["%","MÓDULO","C.O","PLACA", tipo === "PREVENTIVA" ? "MPBT: PREVENTIVAS PROGRAMADAS" : "DOCUMENTAÇÃO","STATUS","INÍCIO","TÉRMINO","DIAS",""].map((h, i) => (
-        <div key={i} className="px-3 py-2">{h}</div>
+    }`} style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
+      {["ANO","MÊS","SEM.","PLACA","MÓDULO","TIPO","DT. INICIAL","DT. FINAL","QTD DIA", tipo === "PREVENTIVA" ? "HORAS (MPBT)" : "DOCUMENTAÇÃO","STATUS","%","HORÍMETRO",""].map((h, i) => (
+        <div key={i} className="px-2 py-2.5">{h}</div>
       ))}
     </div>
   )
@@ -947,6 +951,7 @@ function ProgSemanalForm({
     data_inicio_exec:      item?.data_inicio_exec ?? "",
     data_fim_exec:         item?.data_fim_exec ?? item?.termino ?? "",
     dias:                  item?.dias != null ? String(item.dias) : "",
+    horimetro_dia:         item?.horimetro_dia ?? "",
     observacoes:           item?.observacoes ?? "",
   })
 
@@ -991,6 +996,7 @@ function ProgSemanalForm({
       termino:          form.data_fim_exec || null,
       dias:          form.dias ? parseInt(form.dias) : null,
       percentual:    form.percentual ? parseFloat(form.percentual) : null,
+      horimetro_dia: form.horimetro_dia || null,
       observacoes:   form.observacoes || null,
     }
     startT(async () => {
@@ -1140,11 +1146,18 @@ function ProgSemanalForm({
             </div>
           </div>
 
-          {/* Obs */}
-          <div>
-            <label className={lbl}>Observações (opcional)</label>
-            <input type="text" value={form.observacoes}
-              onChange={e => set("observacoes", e.target.value)} className={inp} />
+          {/* Horímetro + Obs */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Horímetro do Dia</label>
+              <input type="text" value={form.horimetro_dia}
+                onChange={e => set("horimetro_dia", e.target.value)} className={inp} placeholder="ex: 13.095" />
+            </div>
+            <div>
+              <label className={lbl}>Observações (opcional)</label>
+              <input type="text" value={form.observacoes}
+                onChange={e => set("observacoes", e.target.value)} className={inp} />
+            </div>
           </div>
 
           {/* Actions */}

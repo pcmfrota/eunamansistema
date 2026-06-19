@@ -26,6 +26,8 @@ export type ProgSemanal = {
   dias: number | null
   percentual: number | null
   observacoes: string | null
+  horimetro_dia: string | null
+  filial_id: string
   created_at: string
 }
 
@@ -42,11 +44,16 @@ export async function getProgPrevData(ano?: number) {
   const supabase = createClient()
   const anoRef = ano ?? new Date().getFullYear()
 
+  // Precisamos da filial do usuário ativo via cookie
+  const { cookies } = await import('next/headers')
+  const filialId = cookies().get('x-user-filial')?.value || 'MATRIZ'
+
   const [progRes, calRes] = await Promise.all([
     supabase
       .from("prev_prog_semanal")
       .select("*")
       .eq("ano", anoRef)
+      .eq("filial_id", filialId)
       .order("semana_iso", { ascending: true })
       .order("created_at", { ascending: true }),
     supabase
@@ -83,12 +90,16 @@ export async function criarProgSemanal(
     dias = Math.ceil((d2.getTime() - d1.getTime()) / 86400000) + 1
   }
 
+  const { cookies } = await import('next/headers')
+  const filialId = cookies().get('x-user-filial')?.value || 'MATRIZ'
+
   const { error } = await supabase.from("prev_prog_semanal").insert({
     ...data,
     semana_iso: semanaIso,
     percentual,
     dias,
     termino: data.data_fim_exec ?? data.termino ?? null,
+    filial_id: filialId
   })
 
   if (error) return { error: error.message }

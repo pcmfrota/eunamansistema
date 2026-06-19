@@ -55,6 +55,7 @@ const routes = [
   { name: "Calendário Suzano",        path: "/calendario",              icon: Calendar },
   { name: "Controle de Lavagens",     path: "/lavagens",                icon: ModernWaterIcon },
   { name: "Captação de Água",         path: "/captacao",                icon: ModernWaterIcon },
+  { name: "Documentos da Frota",      path: "/documentos",              icon: Clipboard },
   { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: User },
 ];
 
