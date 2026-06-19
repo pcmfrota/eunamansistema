@@ -91,17 +91,17 @@ function getSemanasDoMes(
 }
 
 // ─── Shared UI ───────────────────────────────────────────────────────────────
-const inp = "w-full px-3 py-2 text-sm rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-100 outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
-const lbl = "text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1 block"
+const inp = "w-full px-3 py-2 text-sm rounded-lg border border-gray-300 bg-gray-50 text-gray-900 outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+const lbl = "text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block"
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-[#0a0f1e] border border-zinc-800 rounded-xl px-4 py-2.5 shadow-xl">
-      <p className="text-[10px] font-bold text-zinc-500 mb-1">{label}</p>
+    <div className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-xl">
+      <p className="text-[10px] font-bold text-gray-500 mb-1">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color ?? p.fill ?? "#22c55e" }} className="text-sm font-bold">
-          {p.name}: <span className="text-zinc-200">{p.value != null ? `${p.value}%` : "—"}</span>
+          {p.name}: <span className="text-gray-800">{p.value != null ? `${p.value}%` : "—"}</span>
         </p>
       ))}
     </div>
@@ -111,13 +111,13 @@ function ChartTooltip({ active, payload, label }: any) {
 const StatusBadge = ({ status }: { status: string }) => {
   const cl: Record<string, string> = {
     "CONCLUÍDO":    "bg-emerald-900/40 text-emerald-300 border-emerald-700/40",
-    "PROGRAMADO":   "bg-zinc-800 text-zinc-400 border-zinc-700",
+    "PROGRAMADO":   "bg-white text-gray-600 border-gray-300",
     "EM ANDAMENTO": "bg-blue-900/40 text-blue-300 border-blue-700/40",
     "REPROGRAMADO": "bg-amber-900/40 text-amber-300 border-amber-700/40",
     "CANCELADO":    "bg-red-900/40 text-red-400 border-red-700/40",
   }
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cl[status] ?? "bg-zinc-800 text-zinc-400 border-zinc-700"}`}>
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cl[status] ?? "bg-white text-gray-600 border-gray-300"}`}>
       {status}
     </span>
   )
@@ -130,6 +130,21 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "planejamento",    label: "📊 Planejamento Mensal" },
   { id: "semanais",        label: "📈 Metas Semanais" },
   { id: "provisionamento", label: "🔧 Provisionamento" },
+]
+
+const ISO_CALENDAR_2026 = [
+  { mes: 1, data_inicio: "2025-12-29", data_fim: "2026-02-01" },
+  { mes: 2, data_inicio: "2026-02-02", data_fim: "2026-03-01" },
+  { mes: 3, data_inicio: "2026-03-02", data_fim: "2026-03-29" },
+  { mes: 4, data_inicio: "2026-03-30", data_fim: "2026-05-03" },
+  { mes: 5, data_inicio: "2026-05-04", data_fim: "2026-05-31" },
+  { mes: 6, data_inicio: "2026-06-01", data_fim: "2026-06-28" },
+  { mes: 7, data_inicio: "2026-06-29", data_fim: "2026-08-02" },
+  { mes: 8, data_inicio: "2026-08-03", data_fim: "2026-08-30" },
+  { mes: 9, data_inicio: "2026-08-31", data_fim: "2026-09-27" },
+  { mes: 10, data_inicio: "2026-09-28", data_fim: "2026-11-01" },
+  { mes: 11, data_inicio: "2026-11-02", data_fim: "2026-11-29" },
+  { mes: 12, data_inicio: "2026-11-30", data_fim: "2027-01-03" },
 ]
 
 // ════════════════════════════════════════════════════════════════════════
@@ -148,17 +163,25 @@ export default function ProgPrevClient({
   const isVisitante = profile?.role === 'visitante'
   const [tab, setTab] = useState<Tab>("prog-semanal")
 
-  // Mes operacional ativo (auto detecta pelo dia atual)
+  // Mes operacional ativo (auto detecta pelo dia atual usando ISO_CALENDAR para a preventiva)
   const [mesAtivo, setMesAtivo] = useState<number>(() => {
     const now = new Date()
-    const cal = calendario.find(c => {
+    const targetCal = anoAtivo === 2026 ? ISO_CALENDAR_2026 : calendario
+    const cal = targetCal.find(c => {
       const ini = toDate(c.data_inicio); const fim = toDate(c.data_fim + "T23:59:59")
       return now >= ini && now <= fim
     })
     return cal?.mes ?? (now.getMonth() + 1)
   })
 
-  const calMes = useMemo(() => calendario.find(c => c.mes === mesAtivo), [calendario, mesAtivo])
+  const calMes = useMemo(() => {
+    if (anoAtivo === 2026) {
+      const isoMonth = ISO_CALENDAR_2026.find(c => c.mes === mesAtivo)
+      if (isoMonth) return { ...isoMonth, ano: anoAtivo }
+    }
+    return calendario.find(c => c.mes === mesAtivo)
+  }, [calendario, mesAtivo, anoAtivo])
+  
   const semanasDoMes = useMemo(() => getSemanasDoMes(calMes, anoAtivo), [calMes, anoAtivo])
 
   // Semana ativa (ISO week)
@@ -245,24 +268,24 @@ export default function ProgPrevClient({
   return (
     <div className="flex flex-col w-full">
       {/* Tab bar */}
-      <div className="flex border-b border-zinc-800 bg-[#0a0f1e] overflow-x-auto">
+      <div className="flex border-b border-gray-200 bg-white overflow-x-auto">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-5 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${
-              tab === t.id ? "border-green-500 text-green-400" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>
+              tab === t.id ? "border-green-500 text-green-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
             {t.label}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 pr-4 shrink-0">
-          <Calendar size={13} className="text-zinc-500" />
+          <Calendar size={13} className="text-gray-500" />
           <select value={mesAtivo} onChange={e => handleMesChange(Number(e.target.value))}
-            className="px-2 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 outline-none">
+            className="px-2 py-1.5 text-xs rounded-lg border border-gray-300 bg-gray-50 text-gray-700 outline-none">
             {MESES.map((m, i) => <option key={i + 1} value={i + 1}>Mês Op.: {m}</option>)}
           </select>
         </div>
       </div>
 
-      <div className={`p-4 md:p-6 flex flex-col gap-6 ${tab !== "prog-semanal" ? "bg-[#060d0a]" : "bg-[#060d0a]"}`}>
+      <div className={`p-4 md:p-6 flex flex-col gap-6 ${tab !== "prog-semanal" ? "bg-gray-50" : "bg-gray-50"}`}>
         {tab === "prog-semanal" && (
           <TabProgSemanal
             itensDaSemana={itensDaSemana}
@@ -343,19 +366,52 @@ function TabProgSemanal({
     const pctCl = pct >= 100 ? "text-emerald-400" : pct > 0 ? "text-amber-400" : "text-red-400"
 
     return (
-      <div className="grid text-[10px] border-b border-zinc-900/60 hover:bg-zinc-900/30 transition-colors group items-center"
+      <div className="flex flex-col md:grid text-[10px] border-b border-gray-100 hover:bg-gray-50/30 transition-colors group items-start md:items-center p-3 md:p-0 gap-2 md:gap-0 relative"
         style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
-        <div className="px-2 py-2 text-zinc-400">{item.ano}</div>
-        <div className="px-2 py-2 text-zinc-400">{MESES_A[item.mes_numero - 1]?.toUpperCase()}</div>
-        <div className="px-2 py-2 font-bold text-zinc-300">S{String(item.semana_iso).padStart(2, "0")}</div>
-        <div className="px-2 py-2 font-black text-amber-400">{item.placa ?? "—"}</div>
-        <div className="px-2 py-2 text-zinc-300 font-medium truncate">{item.modulo ?? "—"}</div>
-        <div className="px-2 py-2 font-bold text-green-400 truncate">{item.categoria_operacional ?? "—"}</div>
-        <div className="px-2 py-2 text-zinc-500 font-mono">{fmtBR(item.data_inicio_exec)}</div>
-        <div className="px-2 py-2 text-zinc-500 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
-        <div className="px-2 py-2 text-zinc-500 text-center">{item.dias ?? "—"}</div>
-        <div className="px-2 py-2 text-zinc-400 truncate" title={item.mpbt ?? ""}>{item.mpbt ?? "—"}</div>
-        <div className="px-2 py-2">
+        
+        {/* Mobile Header: Placa, Módulo, Categoria */}
+        <div className="flex md:hidden items-center justify-between w-full mb-1">
+          <div className="flex items-center gap-2">
+            <span className="font-black text-amber-600 text-sm">{item.placa ?? "—"}</span>
+            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-bold">{item.modulo ?? "—"}</span>
+          </div>
+          <span className="font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{item.categoria_operacional ?? "—"}</span>
+        </div>
+
+        <div className="hidden md:block px-2 py-2 text-gray-600">{item.ano}</div>
+        <div className="hidden md:block px-2 py-2 text-gray-600">{MESES_A[item.mes_numero - 1]?.toUpperCase()}</div>
+        <div className="hidden md:block px-2 py-2 font-bold text-gray-700">S{String(item.semana_iso).padStart(2, "0")}</div>
+        <div className="hidden md:block px-2 py-2 font-black text-amber-400">{item.placa ?? "—"}</div>
+        <div className="hidden md:block px-2 py-2 text-gray-700 font-medium truncate">{item.modulo ?? "—"}</div>
+        <div className="hidden md:block px-2 py-2 font-bold text-green-400 truncate">{item.categoria_operacional ?? "—"}</div>
+        
+        {/* Mobile Dates */}
+        <div className="flex md:hidden w-full items-center justify-between bg-gray-50 rounded-lg p-2 text-[11px]">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-gray-400 font-bold text-[9px]">INÍCIO</span>
+            <span className="text-gray-700 font-mono">{fmtBR(item.data_inicio_exec)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-gray-400 font-bold text-[9px]">FIM</span>
+            <span className="text-gray-700 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-gray-400 font-bold text-[9px]">DIAS</span>
+            <span className="text-gray-700">{item.dias ?? "—"}</span>
+          </div>
+        </div>
+
+        <div className="hidden md:block px-2 py-2 text-gray-500 font-mono">{fmtBR(item.data_inicio_exec)}</div>
+        <div className="hidden md:block px-2 py-2 text-gray-500 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
+        <div className="hidden md:block px-2 py-2 text-gray-500 text-center">{item.dias ?? "—"}</div>
+        
+        <div className="md:px-2 md:py-2 text-gray-600 truncate flex items-center w-full md:w-auto" title={item.mpbt ?? ""}>
+          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">MPBT:</span>
+          <span className="truncate">{item.mpbt ?? "—"}</span>
+        </div>
+        
+        <div className="md:px-2 md:py-2 flex items-center w-full md:w-auto mt-1 md:mt-0">
+          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">STATUS:</span>
           {!isVisitante ? (
             <button onClick={() => startT(async () => {
               const ns = item.status === "CONCLUÍDO" ? "PROGRAMADO" : "CONCLUÍDO"
@@ -383,12 +439,21 @@ function TabProgSemanal({
             <StatusBadge status={item.status} />
           )}
         </div>
-        <div className={`px-2 py-2 font-black ${pctCl} text-center`}>{pct}%</div>
-        <div className="px-2 py-2 text-zinc-300 font-mono text-center">{item.horimetro_dia ?? "—"}</div>
+        
+        <div className={`md:px-2 md:py-2 font-black ${pctCl} md:text-center flex items-center w-full md:w-auto`}>
+          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">PROG:</span>
+          {pct}%
+        </div>
+        
+        <div className="md:px-2 md:py-2 text-gray-700 font-mono md:text-center flex items-center w-full md:w-auto">
+          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">HORÍM:</span>
+          {item.horimetro_dia ?? "—"}
+        </div>
+        
         {!isVisitante && (
-          <div className="px-2 py-2 flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="md:px-2 md:py-2 flex gap-3 md:gap-1 justify-end md:opacity-0 group-hover:opacity-100 transition-opacity absolute md:relative top-3 right-3 md:top-auto md:right-auto">
             <button onClick={() => { setEditItem(item); setShowForm(true) }}
-              className="p-1 text-zinc-600 hover:text-zinc-200 transition-colors"><Pencil size={11} /></button>
+              className="p-1.5 md:p-1 bg-white md:bg-transparent shadow-sm md:shadow-none border border-gray-100 md:border-transparent rounded-md text-gray-400 hover:text-gray-800 transition-colors"><Pencil size={12} className="md:w-[11px] md:h-[11px]" /></button>
             <button onClick={() => {
               if (confirm("Excluir este item?")) {
                 startT(async () => {
@@ -403,7 +468,7 @@ function TabProgSemanal({
                 })
               }
             }}
-              className="p-1 text-zinc-600 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+              className="p-1.5 md:p-1 bg-white md:bg-transparent shadow-sm md:shadow-none border border-gray-100 md:border-transparent rounded-md text-gray-400 hover:text-red-400 transition-colors"><Trash2 size={12} className="md:w-[11px] md:h-[11px]" /></button>
           </div>
         )}
       </div>
@@ -411,10 +476,10 @@ function TabProgSemanal({
   }
 
   const TableHeader = ({ tipo }: { tipo: string }) => (
-    <div className={`grid text-[9px] font-black uppercase tracking-widest border-b ${
+    <div className={`hidden md:grid text-[9px] font-black uppercase tracking-widest border-b ${
       tipo === "PREVENTIVA"
-        ? "bg-green-950/40 border-green-900/50 text-green-400"
-        : "bg-zinc-800 border-zinc-700 text-zinc-400"
+        ? "bg-green-50 border-green-200 text-green-700"
+        : "bg-white border-gray-300 text-gray-600"
     }`} style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
       {["ANO","MÊS","SEM.","PLACA","MÓDULO","TIPO","DT. INICIAL","DT. FINAL","QTD DIA", tipo === "PREVENTIVA" ? "HORAS (MPBT)" : "DOCUMENTAÇÃO","STATUS","%","HORÍMETRO",""].map((h, i) => (
         <div key={i} className="px-2 py-2.5">{h}</div>
@@ -430,14 +495,28 @@ function TabProgSemanal({
           {semanasDoMes.map(w => {
             const count = countPerWeek.get(w.semana_iso) ?? 0
             const isActive = w.semana_iso === semanaIsoAtiva
+            
+            const itensW = progSemanais.filter(p => p.mes_numero === mesAtivo && (p.semana_iso === w.semana_iso || p.semana_numero === w.semana_numero))
+            const conclW = itensW.filter(p => p.status === "CONCLUÍDO").length
+            const pctW = itensW.length > 0 ? Math.round((conclW / itensW.length) * 100) : 0
+            
             return (
               <button key={w.semana_iso} onClick={() => setSemanaIsoAtiva(w.semana_iso)}
                 title={`${fmtBR(w.data_inicio)} À ${fmtBR(w.data_fim)} — SEMANA ${w.semana_iso}`}
                 className={`relative flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                   isActive
                     ? "bg-green-600 text-white border-green-500 shadow-lg shadow-green-900/30"
-                    : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700 hover:text-zinc-200"}`}>
-                <span>{ORDINAL[w.semana_numero]} Sem</span>
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:text-gray-800"}`}>
+                <div className="flex items-center gap-1.5">
+                  <span>{ORDINAL[w.semana_numero]} Sem</span>
+                  {itensW.length > 0 && (
+                    <span className={`text-[10px] px-1 rounded-sm ${
+                      isActive ? "bg-white/20 text-white" : pctW >= 100 ? "bg-emerald-500/20 text-emerald-400" : pctW >= 50 ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+                    }`}>
+                      {pctW}%
+                    </span>
+                  )}
+                </div>
                 <span className="text-[9px] font-normal opacity-70">S{w.semana_iso}</span>
                 {count > 0 && (
                   <span className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[8px] font-black flex items-center justify-center ${
@@ -455,38 +534,38 @@ function TabProgSemanal({
             <Plus size={15} /> Adicionar
           </button>
         ) : (
-          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 text-[11px] font-bold">
+          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-[11px] font-bold">
             <ShieldOff size={14} /> Somente Leitura
           </div>
         )}
       </div>
 
       {/* Week card — matches Excel layout */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#090e0b] overflow-hidden shadow-2xl">
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="border-b border-zinc-800">
-          <div className="flex items-start justify-between px-6 py-4 bg-[#0d1f15]">
+        <div className="border-b border-gray-200">
+          <div className="flex flex-col md:flex-row items-start justify-between px-4 md:px-6 py-4 bg-white gap-4 md:gap-0">
             {/* Left: % + period */}
             <div>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">% Programação</span>
+              <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 mb-1">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">% Programação</span>
                 {weekInfo && (
                   <span className="text-red-400 font-black text-sm">
                     {fmtBR(weekInfo.data_inicio)} À {fmtBR(weekInfo.data_fim)}
-                    <span className="ml-2 text-zinc-500 font-normal text-[11px]">— SEMANA {semanaIsoAtiva}</span>
+                    <span className="ml-2 text-gray-500 font-normal text-[11px]">— SEMANA {semanaIsoAtiva}</span>
                   </span>
                 )}
               </div>
-              <p className="text-5xl font-black leading-none" style={{ color: pctColor }}>
+              <p className="text-4xl md:text-5xl font-black leading-none" style={{ color: pctColor }}>
                 {pctSemana}%
               </p>
             </div>
             {/* Right: title */}
-            <div className="text-right">
-              <p className="text-xl font-black text-zinc-100 uppercase tracking-wider leading-tight">
+            <div className="text-left md:text-right w-full md:w-auto pt-3 md:pt-0 border-t border-gray-100 md:border-0 mt-1 md:mt-0">
+              <p className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-wider leading-tight">
                 PROGRAMAÇÃO SEMANAL ({ordLabel})
               </p>
-              <p className="text-xs text-zinc-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 {ORDINAL[mesAtivo]?.replace("ª","°")} {MESES[mesAtivo - 1]} — {anoAtivo} &nbsp;·&nbsp; SEMANA {semanaIsoAtiva}
               </p>
             </div>
@@ -504,7 +583,7 @@ function TabProgSemanal({
           {/* Documentação section */}
           {documentos.length > 0 && (
             <>
-              <div className="h-px bg-zinc-800 mt-1" />
+              <div className="h-px bg-white mt-1" />
               <TableHeader tipo="DOCUMENTAÇÃO" />
               {documentos.map(item => <StatusRow key={item.id} item={item} />)}
             </>
@@ -541,16 +620,16 @@ function TabPlanejamento({ mensaisComputado, anoAtivo, mesAtivo }: {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-xl font-black text-zinc-100 uppercase text-center tracking-widest">
+      <p className="text-xl font-black text-gray-900 uppercase text-center tracking-widest">
         KPI de Manutenção — {anoAtivo}
       </p>
-      <p className="text-xs text-zinc-500 text-center -mt-4">
+      <p className="text-xs text-gray-500 text-center -mt-4">
         Calculado automaticamente a partir dos lançamentos da Programação Semanal
       </p>
 
       {/* Chart */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#0d1f15] p-5">
-        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 text-center">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <p className="text-xs font-bold text-gray-600 uppercase tracking-widest mb-4 text-center">
           Resultado Mensal de Programação Preventiva
         </p>
         <ResponsiveContainer width="100%" height={280}>
@@ -570,37 +649,38 @@ function TabPlanejamento({ mensaisComputado, anoAtivo, mesAtivo }: {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#0a0f1e] overflow-hidden">
-        <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Metas Mensais</p>
-          <span className="text-[10px] text-zinc-600">Calculado dos lançamentos semanais</span>
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">Metas Mensais</p>
+          <span className="text-[10px] text-gray-400">Calculado dos lançamentos semanais</span>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800">
-              {["Mês Operacional","Total OS","Concluídas","% Realizado","Status"].map(h => (
-                <th key={h} className={`px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase ${h === "Mês Operacional" ? "text-left" : "text-center"}`}>{h}</th>
-              ))}
-            </tr>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[500px] md:min-w-0">
+            <thead>
+              <tr className="border-b border-gray-200">
+                {["Mês Operacional","Total OS","Concluídas","% Realizado","Status"].map(h => (
+                  <th key={h} className={`px-4 py-3 text-[10px] font-bold text-gray-500 uppercase ${h === "Mês Operacional" ? "text-left" : "text-center"}`}>{h}</th>
+                ))}
+              </tr>
           </thead>
           <tbody className="divide-y divide-zinc-900">
             {mensaisComputado.map(m => {
               const ok = m.realizado != null && m.realizado >= m.meta
               return (
-                <tr key={m.mes} className={`transition-colors ${m.mes === mesAtivo ? "bg-green-900/10" : "hover:bg-zinc-900/40"}`}>
-                  <td className="px-4 py-3 font-semibold text-zinc-300">{ORDINAL[m.mes]} {MESES[m.mes - 1]}</td>
-                  <td className="px-4 py-3 text-center text-zinc-400">{m.realizado != null ? "—" : "—"}</td>
-                  <td className="px-4 py-3 text-center text-zinc-400">—</td>
+                <tr key={m.mes} className={`transition-colors ${m.mes === mesAtivo ? "bg-green-900/10" : "hover:bg-gray-50/40"}`}>
+                  <td className="px-4 py-3 font-semibold text-gray-700">{ORDINAL[m.mes]} {MESES[m.mes - 1]}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{m.realizado != null ? "—" : "—"}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">—</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`font-bold text-sm px-3 py-0.5 rounded-full ${
-                      m.realizado == null ? "text-zinc-600"
+                      m.realizado == null ? "text-gray-400"
                         : ok ? "text-emerald-400 bg-emerald-900/20"
                           : "text-red-400 bg-red-900/20"}`}>
                       {m.realizado != null ? `${m.realizado}%` : "—"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center text-[10px] font-bold">
-                    {m.realizado == null ? <span className="text-zinc-600">SEM DADOS</span>
+                    {m.realizado == null ? <span className="text-gray-400">SEM DADOS</span>
                       : ok ? <span className="text-emerald-400">✅ ATINGIU</span>
                            : <span className="text-red-400">❌ NÃO ATINGIU</span>}
                   </td>
@@ -609,6 +689,7 @@ function TabPlanejamento({ mensaisComputado, anoAtivo, mesAtivo }: {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )
@@ -632,11 +713,11 @@ function TabSemanais({ semanaisComputado, anoAtivo, mesAtivo }: {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-xl font-black text-zinc-100 uppercase text-center tracking-widest">
+      <p className="text-xl font-black text-gray-900 uppercase text-center tracking-widest">
         Acompanhamento Semanal — {MESES[mesAtivo - 1]} {anoAtivo}
       </p>
 
-      <div className="rounded-2xl border border-zinc-800 bg-[#0d1f15] p-5">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={chartData} margin={{ top: 24, right: 16, left: -20, bottom: 50 }}>
@@ -647,9 +728,9 @@ function TabSemanais({ semanaisComputado, anoAtivo, mesAtivo }: {
                 if (!active || !payload?.length) return null
                 const d = payload[0]?.payload
                 return (
-                  <div className="bg-[#0a0f1e] border border-zinc-800 rounded-xl px-4 py-2.5 shadow-xl">
-                    <p className="text-[10px] font-bold text-zinc-400 mb-1">{label}</p>
-                    <p className="text-[10px] text-zinc-500 mb-2">{d?.periodo}</p>
+                  <div className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-xl">
+                    <p className="text-[10px] font-bold text-gray-600 mb-1">{label}</p>
+                    <p className="text-[10px] text-gray-500 mb-2">{d?.periodo}</p>
                     {payload.map((p: any, i: number) => (
                       <p key={i} style={{ color: p.fill ?? p.color }} className="text-sm font-bold">
                         {p.name}: {p.value}%
@@ -668,43 +749,44 @@ function TabSemanais({ semanaisComputado, anoAtivo, mesAtivo }: {
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">
+          <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
             Nenhum lançamento em {MESES[mesAtivo - 1]}. Use a aba Programação Semanal para lançar.
           </div>
         )}
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#0a0f1e] overflow-hidden">
-        <div className="p-4 border-b border-zinc-800">
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Resumo por Semana</p>
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <div className="p-4 border-b border-gray-200">
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">Resumo por Semana</p>
         </div>
         {semanaisComputado.length === 0 ? (
-          <div className="py-10 text-center text-zinc-600 text-sm">Sem dados para {MESES[mesAtivo - 1]}</div>
+          <div className="py-10 text-center text-gray-400 text-sm">Sem dados para {MESES[mesAtivo - 1]}</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                {["Semana","N° ISO","Período","Total","Concluídas","% Realizado","Status"].map(h => (
-                  <th key={h} className={`px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase ${h === "Semana" || h === "Período" ? "text-left" : "text-center"}`}>{h}</th>
-                ))}
-              </tr>
-            </thead>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px] md:min-w-0">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  {["Semana","N° ISO","Período","Total","Concluídas","% Realizado","Status"].map(h => (
+                    <th key={h} className={`px-4 py-3 text-[10px] font-bold text-gray-500 uppercase ${h === "Semana" || h === "Período" ? "text-left" : "text-center"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
             <tbody className="divide-y divide-zinc-900">
               {semanaisComputado.map(s => {
                 const ok = s.realizado >= s.meta
                 return (
-                  <tr key={s.semana_iso} className="hover:bg-zinc-900/30 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-zinc-300">{s.fullLabel}</td>
+                  <tr key={s.semana_iso} className="hover:bg-gray-50/30 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-gray-700">{s.fullLabel}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold">
+                      <span className="bg-white text-gray-700 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold">
                         S{String(s.semana_iso).padStart(2, "0")}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 text-[11px] font-mono">
+                    <td className="px-4 py-3 text-gray-500 text-[11px] font-mono">
                       {s.data_inicio ? `${fmtBR(s.data_inicio)} À ${fmtBR(s.data_fim)}` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-center text-zinc-400">{s.total}</td>
+                    <td className="px-4 py-3 text-center text-gray-600">{s.total}</td>
                     <td className="px-4 py-3 text-center text-emerald-400 font-bold">{s.concluidos}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`font-bold text-sm px-3 py-0.5 rounded-full ${
@@ -720,6 +802,7 @@ function TabSemanais({ semanaisComputado, anoAtivo, mesAtivo }: {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
@@ -759,10 +842,10 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-black text-zinc-100 uppercase tracking-widest">
+        <h2 className="text-lg font-black text-gray-900 uppercase tracking-widest">
           Provisionamento das Preventivas — {MESES[mesAtivo - 1]}
         </h2>
-        <p className="text-xs text-zinc-500 mt-1">
+        <p className="text-xs text-gray-500 mt-1">
           Periodicidade: COMBOIO 550hr / RIPA – MUNCK – MULT 500hr · Dados da Programação Semanal
         </p>
         {calMes && (
@@ -780,9 +863,9 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
           { label: "Em Andamento", value: emAndamento, color: "#3b82f6" },
           { label: "% Execução", value: `${pct}%`, color: pct >= 100 ? "#22c55e" : "#f59e0b" },
         ].map(k => (
-          <div key={k.label} className="relative rounded-2xl border border-zinc-800 bg-[#0d1f15] p-4 overflow-hidden">
+          <div key={k.label} className="relative rounded-2xl border border-gray-200 bg-white p-4 overflow-hidden">
             <div className="absolute top-0 left-0 bottom-0 w-1 rounded-l-2xl" style={{ background: k.color }} />
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{k.label}</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{k.label}</p>
             <p className="text-3xl font-black mt-1" style={{ color: k.color }}>{k.value}</p>
           </div>
         ))}
@@ -790,8 +873,8 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-zinc-800 bg-[#0d1f15] p-5">
-          <p className="text-xs font-bold text-zinc-400 uppercase mb-4 text-center">Status</p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <p className="text-xs font-bold text-gray-600 uppercase mb-4 text-center">Status</p>
           {statusData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={statusData} margin={{ top: 20, right: 10, left: -20, bottom: 30 }}>
@@ -805,11 +888,11 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          ) : <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Sem dados</div>}
+          ) : <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Sem dados</div>}
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-[#0d1f15] p-5">
-          <p className="text-xs font-bold text-zinc-400 uppercase mb-4 text-center">Categoria Operacional</p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <p className="text-xs font-bold text-gray-600 uppercase mb-4 text-center">Categoria Operacional</p>
           {catData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={catData} margin={{ top: 20, right: 10, left: -20, bottom: 30 }}>
@@ -821,22 +904,22 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
                   label={{ position: "top", fill: "#e2e8f0", fontSize: 13, fontWeight: 700 }} />
               </BarChart>
             </ResponsiveContainer>
-          ) : <div className="flex items-center justify-center h-40 text-zinc-600 text-sm">Sem dados</div>}
+          ) : <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Sem dados</div>}
         </div>
       </div>
 
       {/* Detail table */}
-      <div className="rounded-2xl border border-zinc-800 bg-[#0a0f1e] overflow-hidden">
-        <div className="p-4 border-b border-zinc-800 flex justify-between">
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detalhe por Semana</p>
-          <span className="text-[10px] text-zinc-600">{provComputado.length} registros</span>
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <div className="p-4 border-b border-gray-200 flex justify-between">
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">Detalhe por Semana</p>
+          <span className="text-[10px] text-gray-400">{provComputado.length} registros</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-gray-200">
                 {["Semana","Período","Categoria","Placa","MPBT","Status","Início","Término","Dias"].map(h => (
-                  <th key={h} className="px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase text-left">{h}</th>
+                  <th key={h} className="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase text-left">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -844,13 +927,13 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
               {provComputado.map(p => {
                 const wi = semanasDoMes.find(w => w.semana_iso === (p.semana_iso ?? 0))
                 return (
-                  <tr key={p.id} className="hover:bg-zinc-900/30 transition-colors">
+                  <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold">
+                      <span className="bg-white text-gray-700 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold">
                         S{String(p.semana_iso ?? "—").padStart(2, "0")}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 text-[11px] font-mono">
+                    <td className="px-4 py-3 text-gray-500 text-[11px] font-mono">
                       {wi ? `${fmtBR(wi.data_inicio)} À ${fmtBR(wi.data_fim)}` : "—"}
                     </td>
                     <td className="px-4 py-3">
@@ -859,16 +942,16 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-black text-amber-400">{p.placa ?? "—"}</td>
-                    <td className="px-4 py-3 text-zinc-400 text-[11px] max-w-[200px] truncate" title={p.mpbt ?? ""}>{p.mpbt ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-600 text-[11px] max-w-[200px] truncate" title={p.mpbt ?? ""}>{p.mpbt ?? "—"}</td>
                     <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                    <td className="px-4 py-3 text-zinc-500 text-[11px] font-mono">{fmtBR(p.data_inicio_exec)}</td>
-                    <td className="px-4 py-3 text-zinc-500 text-[11px] font-mono">{fmtBR(p.data_fim_exec ?? p.termino)}</td>
-                    <td className="px-4 py-3 text-zinc-500 text-[11px]">{p.dias ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-500 text-[11px] font-mono">{fmtBR(p.data_inicio_exec)}</td>
+                    <td className="px-4 py-3 text-gray-500 text-[11px] font-mono">{fmtBR(p.data_fim_exec ?? p.termino)}</td>
+                    <td className="px-4 py-3 text-gray-500 text-[11px]">{p.dias ?? "—"}</td>
                   </tr>
                 )
               })}
               {provComputado.length === 0 && (
-                <tr><td colSpan={9} className="py-12 text-center text-zinc-600 text-sm">
+                <tr><td colSpan={9} className="py-12 text-center text-gray-400 text-sm">
                   Nenhum dado em {MESES[mesAtivo - 1]}. Lance dados na aba Programação Semanal.
                 </td></tr>
               )}
@@ -1021,24 +1104,24 @@ function ProgSemanalForm({
     : ""
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-[#0a0f1e] border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl my-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[95vh] flex flex-col my-auto">
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-zinc-800">
+        <div className="flex items-start justify-between p-5 border-b border-gray-200">
           <div>
-            <h3 className="font-bold text-zinc-100 text-lg">
+            <h3 className="font-bold text-gray-900 text-lg">
               {item ? "✏️ Editar" : "➕ Novo"} Lançamento
             </h3>
             {semanaLabel && (
               <p className="text-xs text-red-400 font-bold mt-1">{semanaLabel}</p>
             )}
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 mt-1"><X size={18} /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 mt-1"><X size={18} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4 overflow-y-auto">
           {/* Tipo + Status */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
             <div>
               <label className={lbl}>Tipo</label>
               <select value={form.tipo} onChange={e => set("tipo", e.target.value)} className={inp}>
@@ -1054,9 +1137,9 @@ function ProgSemanalForm({
           </div>
 
           {/* Semana ISO + Período */}
-          <div className="rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 flex flex-col gap-3">
+          <div className="rounded-xl border border-gray-300 bg-gray-50/60 p-4 flex flex-col gap-3">
             <p className={lbl}>Semana & Período</p>
-            <div className="flex gap-3 items-end flex-wrap">
+            <div className="flex flex-col md:flex-row gap-3 items-start md:items-end flex-wrap w-full">
               <div className="w-28">
                 <label className={lbl}>N° Semana (ISO)</label>
                 <input type="number" min={1} max={53} value={semanaIsoForm}
@@ -1065,7 +1148,7 @@ function ProgSemanalForm({
                   className={inp} placeholder="ex: 15" />
               </div>
               <button type="button" onClick={calcFromWeekNum}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-700 text-zinc-300 text-xs font-bold hover:bg-zinc-600 transition-colors mb-0.5">
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-xs font-bold hover:bg-zinc-600 transition-colors mb-0.5">
                 <RefreshCw size={12} /> Auto-preencher datas
               </button>
               <div className="flex-1 min-w-[180px]">
@@ -1087,7 +1170,7 @@ function ProgSemanalForm({
           </div>
 
           {/* Módulo + C.O + Placa */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="flex flex-col md:grid md:grid-cols-3 gap-3">
             <div>
               <label className={lbl}>Módulo</label>
               <input type="text" value={form.modulo}
@@ -1123,7 +1206,7 @@ function ProgSemanalForm({
           </div>
 
           {/* Execução */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="flex flex-col md:grid md:grid-cols-4 gap-3">
             <div>
               <label className={lbl}>% Realizado</label>
               <input type="number" min={0} max={100} step={1} value={form.percentual}
@@ -1147,7 +1230,7 @@ function ProgSemanalForm({
           </div>
 
           {/* Horímetro + Obs */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col md:grid md:grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Horímetro do Dia</label>
               <input type="text" value={form.horimetro_dia}
@@ -1161,9 +1244,9 @@ function ProgSemanalForm({
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2 border-t border-zinc-800">
+          <div className="flex justify-end gap-3 pt-2 border-t border-gray-200">
             <button type="button" onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:bg-zinc-800 transition-colors">
+              className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition-colors">
               Cancelar
             </button>
             <button type="submit"
