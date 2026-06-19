@@ -272,7 +272,7 @@ export default function ProgPrevClient({
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-5 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${
-              tab === t.id ? "border-green-500 text-green-400" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+              tab === t.id ? "border-green-600 text-green-700" : "border-transparent text-gray-700 hover:text-black"}`}>
             {t.label}
           </button>
         ))}
@@ -378,12 +378,12 @@ function TabProgSemanal({
           <span className="font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{item.categoria_operacional ?? "—"}</span>
         </div>
 
-        <div className="hidden md:block px-2 py-2 text-gray-600">{item.ano}</div>
-        <div className="hidden md:block px-2 py-2 text-gray-600">{MESES_A[item.mes_numero - 1]?.toUpperCase()}</div>
-        <div className="hidden md:block px-2 py-2 font-bold text-gray-700">S{String(item.semana_iso).padStart(2, "0")}</div>
-        <div className="hidden md:block px-2 py-2 font-black text-amber-400">{item.placa ?? "—"}</div>
-        <div className="hidden md:block px-2 py-2 text-gray-700 font-medium truncate">{item.modulo ?? "—"}</div>
-        <div className="hidden md:block px-2 py-2 font-bold text-green-400 truncate">{item.categoria_operacional ?? "—"}</div>
+        <div className="hidden md:block px-2 py-2 text-black">{item.ano}</div>
+        <div className="hidden md:block px-2 py-2 text-black">{MESES_A[item.mes_numero - 1]?.toUpperCase()}</div>
+        <div className="hidden md:block px-2 py-2 font-bold text-black">S{String(item.semana_iso).padStart(2, "0")}</div>
+        <div className="hidden md:block px-2 py-2 font-black text-amber-600">{item.placa ?? "—"}</div>
+        <div className="hidden md:block px-2 py-2 text-black font-medium truncate">{item.modulo ?? "—"}</div>
+        <div className="hidden md:block px-2 py-2 font-bold text-green-700 truncate">{item.categoria_operacional ?? "—"}</div>
         
         {/* Mobile Dates */}
         <div className="flex md:hidden w-full items-center justify-between bg-gray-50 rounded-lg p-2 text-[11px]">
@@ -401,12 +401,12 @@ function TabProgSemanal({
           </div>
         </div>
 
-        <div className="hidden md:block px-2 py-2 text-gray-500 font-mono">{fmtBR(item.data_inicio_exec)}</div>
-        <div className="hidden md:block px-2 py-2 text-gray-500 font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
-        <div className="hidden md:block px-2 py-2 text-gray-500 text-center">{item.dias ?? "—"}</div>
+        <div className="hidden md:block px-2 py-2 text-black font-mono">{fmtBR(item.data_inicio_exec)}</div>
+        <div className="hidden md:block px-2 py-2 text-black font-mono">{fmtBR(item.data_fim_exec ?? item.termino)}</div>
+        <div className="hidden md:block px-2 py-2 text-black text-center">{item.dias ?? "—"}</div>
         
-        <div className="md:px-2 md:py-2 text-gray-600 truncate flex items-center w-full md:w-auto" title={item.mpbt ?? ""}>
-          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">MPBT:</span>
+        <div className="md:px-2 md:py-2 text-black truncate flex items-center w-full md:w-auto" title={item.mpbt ?? ""}>
+          <span className="md:hidden font-bold text-gray-700 mr-2 w-16">MPBT:</span>
           <span className="truncate">{item.mpbt ?? "—"}</span>
         </div>
         
@@ -445,8 +445,8 @@ function TabProgSemanal({
           {pct}%
         </div>
         
-        <div className="md:px-2 md:py-2 text-gray-700 font-mono md:text-center flex items-center w-full md:w-auto">
-          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">HORÍM:</span>
+        <div className="md:px-2 md:py-2 text-black font-mono md:text-center flex items-center w-full md:w-auto">
+          <span className="md:hidden font-bold text-gray-700 mr-2 w-16">HORÍM:</span>
           {item.horimetro_dia ?? "—"}
         </div>
         
@@ -478,8 +478,8 @@ function TabProgSemanal({
   const TableHeader = ({ tipo }: { tipo: string }) => (
     <div className={`hidden md:grid text-[9px] font-black uppercase tracking-widest border-b ${
       tipo === "PREVENTIVA"
-        ? "bg-green-50 border-green-200 text-green-700"
-        : "bg-white border-gray-300 text-gray-600"
+        ? "bg-green-50 border-green-200 text-black"
+        : "bg-white border-gray-300 text-black"
     }`} style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
       {["ANO","MÊS","SEM.","PLACA","MÓDULO","TIPO","DT. INICIAL","DT. FINAL","QTD DIA", tipo === "PREVENTIVA" ? "HORAS (MPBT)" : "DOCUMENTAÇÃO","STATUS","%","HORÍMETRO",""].map((h, i) => (
         <div key={i} className="px-2 py-2.5">{h}</div>
@@ -548,11 +548,11 @@ function TabProgSemanal({
             {/* Left: % + period */}
             <div>
               <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 mb-1">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">% Programação</span>
+                <span className="text-[10px] font-bold text-black uppercase tracking-widest">% Programação</span>
                 {weekInfo && (
-                  <span className="text-red-400 font-black text-sm">
+                  <span className="text-red-500 font-black text-sm">
                     {fmtBR(weekInfo.data_inicio)} À {fmtBR(weekInfo.data_fim)}
-                    <span className="ml-2 text-gray-500 font-normal text-[11px]">— SEMANA {semanaIsoAtiva}</span>
+                    <span className="ml-2 text-black font-normal text-[11px]">— SEMANA {semanaIsoAtiva}</span>
                   </span>
                 )}
               </div>
@@ -562,10 +562,10 @@ function TabProgSemanal({
             </div>
             {/* Right: title */}
             <div className="text-left md:text-right w-full md:w-auto pt-3 md:pt-0 border-t border-gray-100 md:border-0 mt-1 md:mt-0">
-              <p className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-wider leading-tight">
+              <p className="text-lg md:text-xl font-black text-black uppercase tracking-wider leading-tight">
                 PROGRAMAÇÃO SEMANAL ({ordLabel})
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-black mt-1">
                 {ORDINAL[mesAtivo]?.replace("ª","°")} {MESES[mesAtivo - 1]} — {anoAtivo} &nbsp;·&nbsp; SEMANA {semanaIsoAtiva}
               </p>
             </div>

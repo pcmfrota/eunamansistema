@@ -88,14 +88,14 @@ export default function ProgramacaoPreventiva() {
   }
 
   return (
-    <div className="flex flex-col max-w-[96rem] mx-auto w-full min-h-screen bg-[#060d0a]">
-      <div className="flex items-center gap-4 px-6 py-5 border-b border-zinc-800">
-        <div className="p-3 bg-green-900/40 text-green-400 rounded-xl shadow">
+    <div className="flex flex-col max-w-[96rem] mx-auto w-full min-h-screen bg-gray-50">
+      <div className="flex items-center gap-4 px-6 py-5 border-b border-gray-200 bg-white">
+        <div className="p-3 bg-green-100 text-green-700 rounded-xl shadow-sm">
           <Settings2 size={24} />
         </div>
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-zinc-100">Programação Preventiva</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
+          <h1 className="text-2xl font-black tracking-tight text-black">Programação Preventiva</h1>
+          <p className="text-sm text-black mt-0.5 font-medium">
             Lançamentos pela aba Programação Semanal · Dashboards calculados automaticamente
           </p>
         </div>

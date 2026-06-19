@@ -457,8 +457,10 @@ function FullscreenChartModal({
       </div>
 
       {/* Área do gráfico sem rolagem, ocupando toda a tela restante */}
-      <div className="flex-1 min-h-0 w-full p-4 relative bg-white dark:bg-[#0f1115]">
-        {children}
+      <div className="flex-1 min-h-0 w-full p-4 relative bg-white dark:bg-[#0f1115] flex items-center justify-center">
+        <div className="w-full h-full max-h-[65vh] max-w-[1600px]">
+          {children}
+        </div>
       </div>
     </div>,
     document.body
