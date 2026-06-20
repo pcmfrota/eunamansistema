@@ -9,4 +9,9 @@
     <external-files-path
         name="eunaman_photos"
         path="Pictures/" />
+
+    <!-- Acesso para a pasta Downloads/ e outros caminhos externos (necessário para o FileProvider no Android 9 e inferior) -->
+    <external-path
+        name="external_storage"
+        path="." />
 </paths>

@@ -339,7 +339,22 @@ export default function PneusClient({
     const ws = XLSXLib.utils.json_to_sheet(rows);
     const wb = XLSXLib.utils.book_new();
     XLSXLib.utils.book_append_sheet(wb, ws, "Pneus");
-    XLSXLib.writeFile(wb, "Relatorio_Pneus.xlsx");
+
+    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
+    const filename = "Relatorio_Pneus.xlsx";
+
+    if (isAndroidApp) {
+      try {
+        const excelBase64 = XLSXLib.write(wb, { bookType: 'xlsx', type: 'base64' });
+        (window as any).EunamanApp.saveBase64File(excelBase64, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      } catch (err: any) {
+        console.error("Erro ao gerar Excel para App:", err);
+        alert("Erro ao salvar Excel: " + err.message);
+      }
+    } else {
+      XLSXLib.writeFile(wb, filename);
+      alert("Planilha Excel gerada e baixada com sucesso!");
+    }
   };
 
    const downloadBoletimPDF = (ins: Inspecao) => {

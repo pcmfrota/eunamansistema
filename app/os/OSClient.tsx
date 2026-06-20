@@ -842,7 +842,22 @@ export default function ControleOSClient({
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "OrdensServico");
-    XLSX.writeFile(workbook, "ordens_servico.xlsx");
+
+    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
+    const filename = "ordens_servico.xlsx";
+
+    if (isAndroidApp) {
+      try {
+        const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+        (window as any).EunamanApp.saveBase64File(excelBase64, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      } catch (err: any) {
+        console.error("Erro ao gerar Excel para App:", err);
+        alert("Erro ao salvar Excel: " + err.message);
+      }
+    } else {
+      XLSX.writeFile(workbook, filename);
+      alert("Planilha Excel gerada e baixada com sucesso!");
+    }
   }
 
   return (

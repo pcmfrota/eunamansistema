@@ -1070,8 +1070,22 @@ export default function CaptacaoClient({
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Controle Captação");
-    XLSX.writeFile(workbook, `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.xlsx`);
-    alert("Planilha Excel gerada e baixada com sucesso!");
+
+    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
+    const filename = `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.xlsx`;
+
+    if (isAndroidApp) {
+      try {
+        const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+        (window as any).EunamanApp.saveBase64File(excelBase64, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      } catch (err: any) {
+        console.error("Erro ao gerar Excel para App:", err);
+        alert("Erro ao salvar Excel: " + err.message);
+      }
+    } else {
+      XLSX.writeFile(workbook, filename);
+      alert("Planilha Excel gerada e baixada com sucesso!");
+    }
   };
 
   const handleExportPDF = () => {

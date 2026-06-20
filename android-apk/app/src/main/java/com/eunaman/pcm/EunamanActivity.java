@@ -495,6 +495,19 @@ public class EunamanActivity extends AppCompatActivity {
         }
     }
 
+    private void openDownloadedFile(Uri uri, String mimeType) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, mimeType);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Erro ao abrir o arquivo", e);
+            Toast.makeText(this, "Arquivo salvo. Instale um aplicativo para abrir arquivos do tipo " + mimeType, Toast.LENGTH_LONG).show();
+        }
+    }
+
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
@@ -518,6 +531,9 @@ public class EunamanActivity extends AppCompatActivity {
                         values.put(MediaStore.Downloads.IS_PENDING, 1);
                     }
 
+                    String formatName = (mimeType != null && mimeType.contains("pdf")) ? "PDF" : 
+                                      ((mimeType != null && (mimeType.contains("excel") || mimeType.contains("sheet"))) || filename.endsWith(".xlsx")) ? "Excel" : "Arquivo";
+
                     Uri uri = null;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
@@ -530,7 +546,8 @@ public class EunamanActivity extends AppCompatActivity {
                             values.clear();
                             values.put(MediaStore.Downloads.IS_PENDING, 0);
                             getContentResolver().update(uri, values, null, null);
-                            Toast.makeText(EunamanActivity.this, "PDF salvo na pasta Downloads: " + filename, Toast.LENGTH_LONG).show();
+                            Toast.makeText(EunamanActivity.this, formatName + " salvo na pasta Downloads: " + filename, Toast.LENGTH_LONG).show();
+                            openDownloadedFile(uri, mimeType);
                         } else {
                             Toast.makeText(EunamanActivity.this, "Erro ao salvar arquivo", Toast.LENGTH_SHORT).show();
                         }
@@ -548,7 +565,15 @@ public class EunamanActivity extends AppCompatActivity {
                         mediaScanIntent.setData(Uri.fromFile(file));
                         sendBroadcast(mediaScanIntent);
 
-                        Toast.makeText(EunamanActivity.this, "PDF salvo na pasta Downloads: " + filename, Toast.LENGTH_LONG).show();
+                        Toast.makeText(EunamanActivity.this, formatName + " salvo na pasta Downloads: " + filename, Toast.LENGTH_LONG).show();
+                        
+                        try {
+                            String authority = getPackageName() + ".provider";
+                            Uri contentUri = FileProvider.getUriForFile(EunamanActivity.this, authority, file);
+                            openDownloadedFile(contentUri, mimeType);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Erro ao obter URI do FileProvider para abrir o arquivo", e);
+                        }
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Erro ao salvar arquivo base64", e);
