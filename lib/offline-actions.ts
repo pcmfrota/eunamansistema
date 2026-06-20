@@ -63,6 +63,17 @@ import {
   excluirProgSemanal
 } from "@/app/programacao-preventiva/actions";
 
+import {
+  upsertTacografo,
+  deleteTacografo,
+  upsertCivCipp,
+  deleteCivCipp,
+  upsertLaudoEletro,
+  deleteLaudoEletro,
+  upsertLaudoImplemento,
+  deleteLaudoImplemento
+} from "@/app/documentos/actions";
+
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
 
@@ -258,6 +269,46 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirProgSemanal(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "docs_tacografo") {
+      if (action === "create" || action === "update") {
+        const formData = deserializeToFormData(payload);
+        const res = await upsertTacografo(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteTacografo(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "docs_civ_cipp") {
+      if (action === "create" || action === "update") {
+        const formData = deserializeToFormData(payload);
+        const res = await upsertCivCipp(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteCivCipp(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "docs_laudo_eletromecanico") {
+      if (action === "create" || action === "update") {
+        const formData = deserializeToFormData(payload);
+        const res = await upsertLaudoEletro(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteLaudoEletro(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "docs_laudo_implemento") {
+      if (action === "create" || action === "update") {
+        const formData = deserializeToFormData(payload);
+        const res = await upsertLaudoImplemento(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteLaudoImplemento(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

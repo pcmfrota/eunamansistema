@@ -178,6 +178,20 @@ export async function syncAllTables(): Promise<boolean> {
     supabase.from("prev_prog_semanal").select("*")
   );
 
+  // 14. Documentos da Frota
+  await syncTable("docs_tacografo", () =>
+    supabase.from("docs_tacografo").select("*")
+  );
+  await syncTable("docs_civ_cipp", () =>
+    supabase.from("docs_civ_cipp").select("*")
+  );
+  await syncTable("docs_laudo_eletromecanico", () =>
+    supabase.from("docs_laudo_eletromecanico").select("*")
+  );
+  await syncTable("docs_laudo_implemento", () =>
+    supabase.from("docs_laudo_implemento").select("*")
+  );
+
   console.log(`[Sync Engine] Sincronização robusta finalizada. Sucesso: ${successCount}, Falhas: ${failCount}`);
   return successCount > 0;
 }

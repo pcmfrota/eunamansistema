@@ -143,7 +143,8 @@ export async function upsertCivCipp(formData: FormData) {
   const local = formData.get('local') as string;
   const co = formData.get('co') as string;
   const placa = formData.get('placa') as string;
-  const data_vencimento = formData.get('data_vencimento') as string;
+  const rawDate = formData.get('data_vencimento') as string | null;
+  const data_vencimento = rawDate && rawDate.trim() !== "" ? rawDate : null;
 
   const payload = { local, co, placa, data_vencimento };
 

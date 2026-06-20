@@ -1,42 +1,89 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+"use client";
+
+import { useEffect, useState } from "react";
 import DocumentosClient from "./DocumentosClient";
-import { 
-  getTacografos, 
-  getCivCipps, 
-  getLaudosEletro, 
-  getLaudosImplemento 
-} from "./actions";
+import { localDb } from "@/lib/offline-db";
+import { useOffline } from "@/components/offline-provider";
+import { useAuth } from "@/components/auth-context";
+import { PremiumLoader } from "@/components/premium-loader";
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export default function DocumentosPage() {
+  const { isOnline } = useOffline();
+  const { isVisitante } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [tacografos, setTacografos] = useState<any[]>([]);
+  const [civCipps, setCivCipps] = useState<any[]>([]);
+  const [laudosEletro, setLaudosEletro] = useState<any[]>([]);
+  const [laudosImplemento, setLaudosImplemento] = useState<any[]>([]);
 
-export default async function DocumentosPage() {
-  const supabase = createClient();
+  useEffect(() => {
+    let active = true;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const loadData = async () => {
+      try {
+        // 1. Carrega local (Offline-First)
+        const localTac = await localDb.open().then(() => localDb.getAll("docs_tacografo"));
+        const localCiv = await localDb.getAll("docs_civ_cipp");
+        const localEletro = await localDb.getAll("docs_laudo_eletromecanico");
+        const localImpl = await localDb.getAll("docs_laudo_implemento");
 
-  if (!user) {
-    return redirect("/login");
+        if (active) {
+          setTacografos(localTac);
+          setCivCipps(localCiv);
+          setLaudosEletro(localEletro);
+          setLaudosImplemento(localImpl);
+          setLoading(false);
+        }
+
+        // 2. Se online, roda sync e atualiza do IndexedDB
+        if (isOnline) {
+          const { syncAllTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncAllTables();
+          if (syncSuccess) {
+            const freshTac = await localDb.getAll("docs_tacografo");
+            const freshCiv = await localDb.getAll("docs_civ_cipp");
+            const freshEletro = await localDb.getAll("docs_laudo_eletromecanico");
+            const freshImpl = await localDb.getAll("docs_laudo_implemento");
+            if (active) {
+              setTacografos(freshTac);
+              setCivCipps(freshCiv);
+              setLaudosEletro(freshEletro);
+              setLaudosImplemento(freshImpl);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar documentos:", err);
+        if (active) setLoading(false);
+      }
+    };
+
+    loadData();
+
+    window.addEventListener("offline-sync-completed", loadData);
+    // Também ouve atualizações locais de documentos
+    window.addEventListener("offline-db-updated-docs_tacografo", loadData);
+    window.addEventListener("offline-db-updated-docs_civ_cipp", loadData);
+    window.addEventListener("offline-db-updated-docs_laudo_eletromecanico", loadData);
+    window.addEventListener("offline-db-updated-docs_laudo_implemento", loadData);
+
+    return () => {
+      active = false;
+      window.removeEventListener("offline-sync-completed", loadData);
+      window.removeEventListener("offline-db-updated-docs_tacografo", loadData);
+      window.removeEventListener("offline-db-updated-docs_civ_cipp", loadData);
+      window.removeEventListener("offline-db-updated-docs_laudo_eletromecanico", loadData);
+      window.removeEventListener("offline-db-updated-docs_laudo_implemento", loadData);
+    };
+  }, [isOnline]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+        <PremiumLoader type="squares-sequential" text="Carregando Documentos da Frota" subtext="Buscando registros locais..." />
+      </div>
+    );
   }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  const isVisitante = profile?.role === 'visitante';
-
-  // Buscar todos os dados iniciais
-  const [tacografos, civCipps, laudosEletro, laudosImplemento] = await Promise.all([
-    getTacografos(),
-    getCivCipps(),
-    getLaudosEletro(),
-    getLaudosImplemento()
-  ]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950">

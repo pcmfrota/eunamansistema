@@ -58,16 +58,17 @@ const navigation = [
   { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
   { name: 'Controle de Lavagens',     path: '/lavagens',               icon: ModernWaterIcon },
   { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
+  { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {
   // Segurança: Admin sempre vê tudo
   if (role === 'admin') return navigation;
   
-  // Segurança: Visitante sempre vê as 4 abas obrigatórias (Dashboard, Horímetros, Backlog, Calendário)
+  // Segurança: Visitante sempre vê as 5 abas obrigatórias (Dashboard, Horímetros, Backlog, Calendário, Documentos)
   if (role === 'visitante') {
     return navigation.filter(item => 
-      ['/dashboard', '/preventivas', '/backlog', '/calendario'].includes(item.path)
+      ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'].includes(item.path)
     );
   }
 

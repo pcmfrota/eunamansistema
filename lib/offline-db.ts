@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento';
   action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal';
   payload: any;
   timestamp: number;
@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 6;
+  private dbVersion = 7;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
@@ -98,6 +98,20 @@ export class OfflineDB {
         // Programação Preventiva
         if (!db.objectStoreNames.contains('prev_prog_semanal')) {
           db.createObjectStore('prev_prog_semanal', { keyPath: 'id' });
+        }
+
+        // Documentos
+        if (!db.objectStoreNames.contains('docs_tacografo')) {
+          db.createObjectStore('docs_tacografo', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('docs_civ_cipp')) {
+          db.createObjectStore('docs_civ_cipp', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('docs_laudo_eletromecanico')) {
+          db.createObjectStore('docs_laudo_eletromecanico', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('docs_laudo_implemento')) {
+          db.createObjectStore('docs_laudo_implemento', { keyPath: 'id' });
         }
       };
     });
