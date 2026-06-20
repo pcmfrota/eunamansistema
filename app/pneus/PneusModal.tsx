@@ -246,7 +246,7 @@ export default function PneusModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 overflow-y-auto">
-      <div className="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-8 animate-in fade-in zoom-in duration-200">
+      <div className="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-4 max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
@@ -270,7 +270,7 @@ export default function PneusModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
           {error && (
             <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3 text-red-600 dark:text-red-400 animate-in slide-in-from-top-2">
               <AlertCircle size={20} className="shrink-0 mt-0.5" />

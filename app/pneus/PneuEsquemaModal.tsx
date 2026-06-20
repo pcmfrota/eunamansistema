@@ -143,7 +143,7 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-white dark:bg-zinc-950 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="relative bg-white dark:bg-zinc-950 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -175,7 +175,7 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
         </div>
 
         {/* Stats bar */}
-        <div className="px-6 py-3 bg-zinc-50/80 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-6 text-xs font-bold">
+        <div className="px-6 py-3 bg-zinc-50/80 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-6 text-xs font-bold shrink-0">
           {avgSulco != null && (
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${avgSulco >= 10 ? "bg-emerald-500" : avgSulco >= 6 ? "bg-yellow-400" : avgSulco >= 3 ? "bg-orange-400" : "bg-red-500"}`} />
@@ -196,7 +196,7 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
         </div>
 
         {/* Schematic */}
-        <div className="p-8">
+        <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
           <div className="flex flex-col items-center gap-6">
 
             {/* ── FRENTE label */}
@@ -303,7 +303,7 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
           <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
             <Clock size={11} />
             Inspeção: {fmtDate(ins.data_inspecao)}
