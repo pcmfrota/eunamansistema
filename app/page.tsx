@@ -184,10 +184,12 @@ export default function PortalPage() {
 
   const getFilteredItems = () => {
     if (!profile) return [];
-    if (profile.role === "admin") {
+    const normalizedRole = profile.role?.toLowerCase().trim();
+    const isUserAdmin = normalizedRole === 'admin' || normalizedRole === 'administrador';
+    if (isUserAdmin) {
       return [...portalItems, ...adminPortalItems];
     }
-    if (profile.role === "visitante") {
+    if (normalizedRole === 'visitante') {
       return portalItems.filter(item => 
         ["/dashboard", "/preventivas", "/backlog", "/calendario"].includes(item.path)
       );

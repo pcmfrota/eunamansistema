@@ -15,6 +15,8 @@ const MODULO_PERMISSOES: Record<string, string[]> = {
   '/base-dados':               ['admin', 'pcm', 'gestao'],
   '/calendario':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
   '/perfil':                   ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
+  '/checklist-mecanicos':      ['admin', 'pcm', 'gestao', 'mecanico'],
+  '/documentos':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
@@ -119,7 +121,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 4. Verifica autorização na rota
+  // 4. Normaliza role: qualquer variante de 'admin' ou 'administrador' vira 'admin'
+  if (userRole === 'administrador') userRole = 'admin'
+
+  // 5. Verifica autorização na rota
   const moduloBase = Object.keys(MODULO_PERMISSOES).find(route => pathname.startsWith(route))
   if (moduloBase) {
     const rolesPermitidos = MODULO_PERMISSOES[moduloBase]

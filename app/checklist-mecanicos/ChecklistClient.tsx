@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, X } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, X, Loader2 } from 'lucide-react'
 import { localDb } from '@/lib/offline-db'
 import { salvarChecklist, excluirChecklist } from './actions'
-import { PremiumLoader } from '@/components/premium-loader'
 // Removendo dependências não instaladas: sonner, jspdf, jspdf-autotable
 
 // Mock de perguntas por tipo de caminhão
@@ -144,7 +143,7 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
           <h1 className="text-2xl font-bold dark:text-white">Checklists Mecânicos</h1>
           <p className="text-zinc-500 text-sm">Inspeções de frota integradas a OS e Backlog.</p>
         </div>
-        {(userRole === 'admin' || userRole === 'mecanico' || userRole === 'gestao') && (
+        {((userRole === 'admin' || userRole === 'administrador') || userRole === 'mecanico' || userRole === 'gestao') && (
           <button
             onClick={() => {
               setTipo('')
@@ -195,7 +194,7 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
                     <button onClick={() => gerarPDF(item)} className="p-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200" title="Baixar PDF">
                       <Download size={16} />
                     </button>
-                    {(userRole === 'admin' || userRole === 'gestao') && (
+                    {((userRole === 'admin' || userRole === 'administrador') || userRole === 'gestao') && (
                       <button onClick={() => handleDelete(item.id)} className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200">
                         <X size={16} />
                       </button>
@@ -315,7 +314,7 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
                   Cancelar
                 </button>
                 <button type="submit" disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold flex items-center gap-2">
-                  {loading && <PremiumLoader type="spinner" size={16} />}
+                  {loading && <Loader2 className="animate-spin" size={16} />}
                   Salvar e Fechar Checklist
                 </button>
               </div>

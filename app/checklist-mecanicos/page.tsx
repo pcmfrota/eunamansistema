@@ -15,26 +15,20 @@ export default async function ChecklistMecanicosPage() {
     redirect('/login')
   }
 
-  // Obter permissões do usuário logado
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, allowed_tabs')
-    .eq('id', user.id)
-    .single()
-
-  const permissions = profile?.allowed_tabs || []
-  const role = profile?.role || 'visitante'
-
-  // Verifica acesso (Admin tem acesso livre, senão checa permissions)
-  if (role !== 'admin' && !permissions.includes('/checklist-mecanicos')) {
-    redirect('/')
-  }
-
-  // Carregar dados iniciais dos checklists
-  const { data: checklists } = await supabase
+  // Carregar dados iniciais dos checklists (sem verificação de permissão aqui - feita pelo auth-context no frontend)
+  const { data: checklists, error: checklistError } = await supabase
     .from('checklists_mecanicos')
     .select('*')
     .order('criado_em', { ascending: false })
+
+  // Obter role do usuário (apenas para passar ao cliente)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const role = (profile?.role || 'visitante').toLowerCase().trim()
 
   return (
     <div className="min-h-screen w-full flex flex-col pt-[70px] lg:pt-0 lg:pl-64 transition-all duration-300 relative overflow-hidden">
