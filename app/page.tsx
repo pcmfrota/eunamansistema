@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/auth-context";
 import { 
   LayoutDashboard, 
+  Clipboard,
   ClipboardList, 
   Calendar, 
   CircleDot, 
@@ -56,6 +57,13 @@ const portalItems = [
     desc: "Abertura, acompanhamento e histórico de Ordens de Serviço.", 
     icon: ClipboardList, 
     color: "from-amber-500 to-orange-600 bg-amber-500/10 text-amber-400 border-amber-500/20" 
+  },
+  { 
+    name: "Checklist Mecânicos", 
+    path: "/checklist-mecanicos", 
+    desc: "Inspeções e apontamentos de não-conformidades de frotas.", 
+    icon: ClipboardList, 
+    color: "from-green-500 to-emerald-600 bg-green-500/10 text-green-400 border-green-500/20" 
   },
   { 
     name: "Controle de Horímetros", 
@@ -119,6 +127,13 @@ const portalItems = [
     desc: "Controle de captação e lançamentos operacionais de água.", 
     icon: ModernWaterIcon, 
     color: "from-blue-500 to-sky-600 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25 dark:border-blue-400/20" 
+  },
+  { 
+    name: "Documentos da Frota", 
+    path: "/documentos", 
+    desc: "Gerenciamento de CIV/CIPP, Tacógrafo e Laudos.", 
+    icon: Clipboard, 
+    color: "from-orange-500 to-red-600 bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25 dark:border-orange-400/20" 
   }
 ];
 

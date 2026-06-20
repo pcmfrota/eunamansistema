@@ -191,6 +191,17 @@ export async function syncAllTables(): Promise<boolean> {
   await syncTable("docs_laudo_implemento", () =>
     supabase.from("docs_laudo_implemento").select("*")
   );
+  await syncTable("docs_crlve_pesados", () =>
+    supabase.from("docs_crlve_pesados").select("*")
+  );
+  await syncTable("docs_crlve_leve", () =>
+    supabase.from("docs_crlve_leve").select("*")
+  );
+
+  // 15. Checklists Mecânicos
+  await syncTable("checklists_mecanicos", () =>
+    supabase.from("checklists_mecanicos").select("*")
+  );
 
   console.log(`[Sync Engine] Sincronização robusta finalizada. Sucesso: ${successCount}, Falhas: ${failCount}`);
   return successCount > 0;

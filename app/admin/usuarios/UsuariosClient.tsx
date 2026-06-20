@@ -182,6 +182,8 @@ export default function UsuariosClient({
     { name: 'Base de Dados', path: '/base-dados' },
     { name: 'Calendário Suzano', path: '/calendario' },
     { name: 'Controle de Lavagens', path: '/lavagens' },
+    { name: 'Captação de Água', path: '/captacao' },
+    { name: 'Documentos da Frota', path: '/documentos' },
     { name: 'Gestão de Usuários', path: '/admin/usuarios' },
   ];
 

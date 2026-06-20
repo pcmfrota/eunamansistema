@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos';
   action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal';
   payload: any;
   timestamp: number;
@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 7;
+  private dbVersion = 9;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
@@ -101,18 +101,15 @@ export class OfflineDB {
         }
 
         // Documentos
-        if (!db.objectStoreNames.contains('docs_tacografo')) {
-          db.createObjectStore('docs_tacografo', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('docs_civ_cipp')) {
-          db.createObjectStore('docs_civ_cipp', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('docs_laudo_eletromecanico')) {
-          db.createObjectStore('docs_laudo_eletromecanico', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('docs_laudo_implemento')) {
-          db.createObjectStore('docs_laudo_implemento', { keyPath: 'id' });
-        }
+        if (!db.objectStoreNames.contains('docs_tacografo')) db.createObjectStore('docs_tacografo', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('docs_civ_cipp')) db.createObjectStore('docs_civ_cipp', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('docs_laudo_eletromecanico')) db.createObjectStore('docs_laudo_eletromecanico', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('docs_laudo_implemento')) db.createObjectStore('docs_laudo_implemento', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('docs_crlve_pesados')) db.createObjectStore('docs_crlve_pesados', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('docs_crlve_leve')) db.createObjectStore('docs_crlve_leve', { keyPath: 'id' });
+
+        // Checklists Mecânicos
+        if (!db.objectStoreNames.contains('checklists_mecanicos')) db.createObjectStore('checklists_mecanicos', { keyPath: 'id' });
       };
     });
   }

@@ -51,6 +51,19 @@ export type DocLaudoImplemento = {
   created_at?: string;
 };
 
+export type DocCrlve = {
+  id: string;
+  local: string;
+  co: string;
+  placa: string;
+  ano: string;
+  data_vencimento: string;
+  observacoes?: string;
+  anexo_url?: string;
+  filial_id: string;
+  created_at?: string;
+};
+
 // ── GET Functions ─────────────────────────────────────────────────────────────
 
 export async function getTacografos() {
@@ -60,7 +73,7 @@ export async function getTacografos() {
     console.error("Erro getTacografos:", error);
     return [];
   }
-  return data as DocTacografo[];
+  return data;
 }
 
 export async function getCivCipps() {
@@ -70,7 +83,7 @@ export async function getCivCipps() {
     console.error("Erro getCivCipps:", error);
     return [];
   }
-  return data as DocCivCipp[];
+  return data;
 }
 
 export async function getLaudosEletro() {
@@ -80,7 +93,7 @@ export async function getLaudosEletro() {
     console.error("Erro getLaudosEletro:", error);
     return [];
   }
-  return data as DocLaudoEletromecanico[];
+  return data;
 }
 
 export async function getLaudosImplemento() {
@@ -90,7 +103,27 @@ export async function getLaudosImplemento() {
     console.error("Erro getLaudosImplemento:", error);
     return [];
   }
-  return data as DocLaudoImplemento[];
+  return data;
+}
+
+export async function getCrlvePesados() {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('docs_crlve_pesados').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error("Erro getCrlvePesados:", error);
+    return [];
+  }
+  return data;
+}
+
+export async function getCrlveLeve() {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('docs_crlve_leve').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error("Erro getCrlveLeve:", error);
+    return [];
+  }
+  return data;
 }
 
 // ── CREATE / UPDATE / DELETE Functions ────────────────────────────────────────
@@ -104,8 +137,9 @@ export async function upsertTacografo(formData: FormData) {
   const co = formData.get('co') as string;
   const placa = formData.get('placa') as string;
   const data_vencimento = formData.get('data_vencimento') as string;
+  const anexo_url = formData.get('anexo_url') as string;
 
-  const payload = { local, co, placa, data_vencimento };
+  const payload = { local, co, placa, data_vencimento, anexo_url };
 
   if (id) {
     const { error } = await supabase.from('docs_tacografo').update(payload).eq('id', id);
@@ -145,8 +179,9 @@ export async function upsertCivCipp(formData: FormData) {
   const placa = formData.get('placa') as string;
   const rawDate = formData.get('data_vencimento') as string | null;
   const data_vencimento = rawDate && rawDate.trim() !== "" ? rawDate : null;
+  const anexo_url = formData.get('anexo_url') as string;
 
-  const payload = { local, co, placa, data_vencimento };
+  const payload = { local, co, placa, data_vencimento, anexo_url };
 
   if (id) {
     const { error } = await supabase.from('docs_civ_cipp').update(payload).eq('id', id);
@@ -182,8 +217,9 @@ export async function upsertLaudoEletro(formData: FormData) {
   const data_expedicao = formData.get('data_expedicao') as string;
   const data_vencimento = formData.get('data_vencimento') as string;
   const observacoes = formData.get('observacoes') as string;
+  const anexo_url = formData.get('anexo_url') as string;
 
-  const payload = { local, co, placa, periodo, data_expedicao, data_vencimento, observacoes };
+  const payload = { local, co, placa, periodo, data_expedicao, data_vencimento, observacoes, anexo_url };
 
   if (id) {
     const { error } = await supabase.from('docs_laudo_eletromecanico').update(payload).eq('id', id);
@@ -219,8 +255,9 @@ export async function upsertLaudoImplemento(formData: FormData) {
   const data_expedicao = formData.get('data_expedicao') as string;
   const data_vencimento = formData.get('data_vencimento') as string;
   const observacoes = formData.get('observacoes') as string;
+  const anexo_url = formData.get('anexo_url') as string;
 
-  const payload = { local, co, placa, periodo, data_expedicao, data_vencimento, observacoes };
+  const payload = { local, co, placa, periodo, data_expedicao, data_vencimento, observacoes, anexo_url };
 
   if (id) {
     const { error } = await supabase.from('docs_laudo_implemento').update(payload).eq('id', id);

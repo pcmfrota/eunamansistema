@@ -49,6 +49,7 @@ const ModernWaterIcon = (props: any) => (
 const navigation = [
   { name: 'Dashboard',                path: '/dashboard',              icon: LayoutDashboard },
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
+  { name: 'Checklist Mecânicos',      path: '/checklist-mecanicos',    icon: ClipboardList },
   { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
   { name: 'Boletim de Pneus',         path: '/pneus',                  icon: CircleDot },
   { name: 'Backlog',                  path: '/backlog',                icon: FileText },
