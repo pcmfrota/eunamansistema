@@ -66,7 +66,7 @@ export async function salvarChecklist(formData: FormData) {
         sistema: '',
         sub_sistema: '',
         horas_manutencao: null,
-        observacoes: 'Gerado automaticamente pelo fechamento de um checklist mecânico.',
+        observacoes: 'Gerado automaticamente pelo fechamento de um checklist mecânico detalhado.',
         horario_parada: null,
         qual_reserva: null,
         horas_reserva_chegou: null,
@@ -74,25 +74,34 @@ export async function salvarChecklist(formData: FormData) {
         assinatura_mecanico: null,
         fotos: [],
         numero_os: '',
-        aprovado: true, // Já cria aprovada ou pendente conforme lógica, aqui vamos por true
+        aprovado: true,
         mecanicos: []
       }
 
       await OSService.createOS(novaOs)
     }
 
-    // 3. Lançar pendências (NC e Extras) no Backlog
+    // 3. Lançar pendências (NC, F e Extras) no Backlog
     if (equipamento_id) {
       const backlogItems = []
 
-      // Lançar itens NC
+      // Lançar itens NC ou F (Pneus Fim de Vida)
       for (const key in respostas) {
-        if (respostas[key] === 'NC') {
-          const label = questionsLabels[key] || `Item ${key} não conforme`
+        if (respostas[key] === 'NC' || respostas[key] === 'F') {
+          // Extrair obs se houver
+          const baseKey = key.includes('pneu_') ? 'pneus' : (key.split('_obs')[0])
+          const obsKey = `${baseKey}_obs`
+          const obs = respostas[obsKey] ? ` (Obs: ${respostas[obsKey]})` : ''
+          
+          let label = questionsLabels[key] || key
+          if (key.startsWith('pneu_')) {
+            label = `Pneu ${key.replace('pneu_', '')} em Fim de Vida`
+          }
+
           backlogItems.push({
             equipamento_id,
-            falha: `[Checklist ${tipo_caminhao}] - ${label}`,
-            prioridade: 'Média',
+            falha: `[Checklist ${tipo_caminhao}] - ${label}${obs}`,
+            prioridade: 'Alta', // Fim de vida ou NC no checklist é prioridade alta
             relatado_por: user.id
           })
         }
@@ -104,7 +113,7 @@ export async function salvarChecklist(formData: FormData) {
         for (const linha of linhas) {
           backlogItems.push({
             equipamento_id,
-            falha: `[Checklist ${tipo_caminhao}] - ${linha.trim()}`,
+            falha: `[Checklist ${tipo_caminhao}] (Pendente/Imagem) - ${linha.trim()}`,
             prioridade: 'Média',
             relatado_por: user.id
           })

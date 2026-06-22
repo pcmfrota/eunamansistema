@@ -1,57 +1,17 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, X, Loader2 } from 'lucide-react'
 import { localDb } from '@/lib/offline-db'
 import { salvarChecklist, excluirChecklist } from './actions'
-// Removendo dependências não instaladas: sonner, jspdf, jspdf-autotable
-
-// Mock de perguntas por tipo de caminhão
-const getQuestionsByType = (type: string) => {
-  const common = [
-    { id: 'c1', label: 'Nível de óleo do motor' },
-    { id: 'c2', label: 'Nível de água do radiador' },
-    { id: 'c3', label: 'Condição das correias' },
-    { id: 'c4', label: 'Vazamentos no motor/transmissão' },
-    { id: 'c5', label: 'Funcionamento de luzes/painel' },
-    { id: 'c6', label: 'Condição dos pneus' }
-  ]
-  
-  if (type === 'Pipa') {
-    return [...common, 
-      { id: 'p1', label: 'Bomba d\'água (vazamento/ruído)' },
-      { id: 'p2', label: 'Mangotes e conexões' },
-      { id: 'p3', label: 'Canhão e aspersores' }
-    ]
-  } else if (type === 'Comboio') {
-    return [...common,
-      { id: 'cm1', label: 'Bombas de abastecimento' },
-      { id: 'cm2', label: 'Bicos, mangueiras e carretéis' },
-      { id: 'cm3', label: 'Compressores e manômetros' },
-      { id: 'cm4', label: 'Aterramento e segurança estática' }
-    ]
-  } else if (type === 'Munck') {
-    return [...common,
-      { id: 'm1', label: 'Sistema hidráulico (vazamentos)' },
-      { id: 'm2', label: 'Cilindros e patolas' },
-      { id: 'm3', label: 'Cabos de aço, ganchos e cintas' },
-      { id: 'm4', label: 'Comandos hidráulicos / Joystick' }
-    ]
-  } else if (type === 'Multifuncional') {
-    return [...common,
-      { id: 'mf1', label: 'Implementos de tração' },
-      { id: 'mf2', label: 'Tomada de força (PTO)' },
-      { id: 'mf3', label: 'Engates rápidos' }
-    ]
-  }
-  return common
-}
+import { getComboioConfig, getPipaConfig, getMultifuncionalConfig, getMunckConfig, ChecklistGroup, ChecklistItem } from './checklistConfig'
 
 export default function ChecklistClient({ initialChecklists, userRole, userId }: { initialChecklists: any[], userRole: string, userId: string }) {
   const [checklists, setChecklists] = useState(initialChecklists)
   const [frota, setFrota] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [viewChecklist, setViewChecklist] = useState<any>(null)
   
   // States do formulário
   const [tipo, setTipo] = useState('')
@@ -62,7 +22,6 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
   const [pendencias, setPendencias] = useState('')
 
   useEffect(() => {
-    // Carregar frota do indexedDB para o autocomplete da placa
     localDb.getAll('equipamentos').then(eqs => setFrota(eqs))
   }, [])
 
@@ -75,6 +34,16 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
     } else {
       setCo('')
       setLocal('')
+    }
+  }
+
+  const getConfig = () => {
+    switch (tipo) {
+      case 'Comboio': return getComboioConfig()
+      case 'Pipa': return getPipaConfig()
+      case 'Multifuncional': return getMultifuncionalConfig()
+      case 'Munck': return getMunckConfig()
+      default: return []
     }
   }
 
@@ -95,9 +64,18 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
     formData.append('pendencias_adicionais', pendencias)
 
     // Passar também os labels para criar o backlog bonitinho
-    const questions = getQuestionsByType(tipo)
-    const labelsMap: any = {}
-    questions.forEach(q => { labelsMap[q.id] = q.label })
+    const configGroups = getConfig()
+    const labelsMap: Record<string, string> = {}
+    configGroups.forEach(g => {
+      g.items.forEach(i => {
+        labelsMap[i.id] = i.label
+        if (i.subItems) {
+          i.subItems.forEach(si => {
+            labelsMap[`${i.id}_${si.id}`] = `${i.label} - ${si.label}`
+          })
+        }
+      })
+    })
     formData.append('questionsLabels', JSON.stringify(labelsMap))
 
     const result = await salvarChecklist(formData)
@@ -109,7 +87,6 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
       alert("Checklist Fechado! OS e Backlog gerados.")
       setChecklists([result.data, ...checklists])
       setIsModalOpen(false)
-      // reset
       setTipo('')
       setPlaca('')
       setCo('')
@@ -130,14 +107,182 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
   }
 
   const gerarPDF = (checklist: any) => {
-    alert("Função de PDF está sendo implementada usando a biblioteca padrão do sistema.")
-    // PDF Generation will use the system's standard html2pdf or window.print in the future.
+    setViewChecklist(checklist)
+    setTimeout(() => {
+      window.print()
+    }, 500)
   }
 
-  const questions = tipo ? getQuestionsByType(tipo) : []
+  const handleView = (checklist: any) => {
+    setViewChecklist(checklist)
+  }
+
+  const handleAnswer = (key: string, value: string) => {
+    setRespostas(prev => ({ ...prev, [key]: value }))
+  }
+
+  const renderItem = (item: ChecklistItem, readOnlyObj: Record<string, string> | null = null) => {
+    const isReadOnly = readOnlyObj !== null
+    const resps = readOnlyObj || respostas
+
+    if (item.type === 'pneus') {
+      const posicoes = ['DD', 'DE', 'TD1E', 'TD1I', 'TD2E', 'TD2I', 'TE1E', 'TE1I', 'TE2E', 'TE2I']
+      return (
+        <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full">
+          <span className="text-sm font-bold dark:text-zinc-200 block mb-3 border-b pb-1 border-zinc-200 dark:border-zinc-700">{item.label}</span>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {posicoes.map(pos => (
+              <div key={pos} className="flex flex-col items-center bg-white dark:bg-zinc-950 p-2 rounded border border-zinc-200 dark:border-zinc-800">
+                <span className="text-xs font-bold mb-1">{pos}</span>
+                <div className="flex gap-1">
+                  <label className={`text-[10px] flex flex-col items-center ${isReadOnly ? '' : 'cursor-pointer'}`}>
+                    <input type="radio" name={`pneu_${item.id}_${pos}`} checked={resps[`pneu_${pos}`] === 'N'} onChange={() => !isReadOnly && handleAnswer(`pneu_${pos}`, 'N')} disabled={isReadOnly} />
+                    <span className="mt-1 text-green-600 font-bold">N</span>
+                  </label>
+                  <label className={`text-[10px] flex flex-col items-center ${isReadOnly ? '' : 'cursor-pointer'}`}>
+                    <input type="radio" name={`pneu_${item.id}_${pos}`} checked={resps[`pneu_${pos}`] === 'M'} onChange={() => !isReadOnly && handleAnswer(`pneu_${pos}`, 'M')} disabled={isReadOnly} />
+                    <span className="mt-1 text-yellow-600 font-bold">M</span>
+                  </label>
+                  <label className={`text-[10px] flex flex-col items-center ${isReadOnly ? '' : 'cursor-pointer'}`}>
+                    <input type="radio" name={`pneu_${item.id}_${pos}`} checked={resps[`pneu_${pos}`] === 'F'} onChange={() => !isReadOnly && handleAnswer(`pneu_${pos}`, 'F')} disabled={isReadOnly} />
+                    <span className="mt-1 text-red-600 font-bold">F</span>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ''} onChange={(e) => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
+        </div>
+      )
+    }
+
+    if (item.type === 'barras') {
+      const lados = ['Lateral Direita', 'Lateral Esquerda', 'Traseira']
+      return (
+        <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full">
+          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
+          <div className="flex flex-wrap gap-4">
+            {lados.map(lado => {
+              const key = `barras_${lado.replace(' ', '_').toLowerCase()}`
+              return (
+                <div key={lado} className="flex items-center gap-2">
+                  <span className="text-xs w-24">{lado}:</span>
+                  <label className="text-xs"><input type="radio" checked={resps[key] === 'C'} onChange={() => !isReadOnly && handleAnswer(key, 'C')} disabled={isReadOnly} /> <span className="text-green-600 font-bold">C</span></label>
+                  <label className="text-xs"><input type="radio" checked={resps[key] === 'NC'} onChange={() => !isReadOnly && handleAnswer(key, 'NC')} disabled={isReadOnly} /> <span className="text-red-600 font-bold">NC</span></label>
+                  <label className="text-xs"><input type="radio" checked={resps[key] === 'NA'} onChange={() => !isReadOnly && handleAnswer(key, 'NA')} disabled={isReadOnly} /> <span className="text-zinc-500 font-bold">NA</span></label>
+                </div>
+              )
+            })}
+          </div>
+          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ''} onChange={(e) => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
+        </div>
+      )
+    }
+
+    if (item.type === 'cinto') {
+      const lados = ['Motorista', 'Passageiro']
+      return (
+        <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full">
+          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
+          <div className="flex flex-wrap gap-4">
+            {lados.map(lado => {
+              const key = `cinto_${lado.toLowerCase()}`
+              return (
+                <div key={lado} className="flex items-center gap-2">
+                  <span className="text-xs w-20">{lado}:</span>
+                  <label className="text-xs"><input type="radio" checked={resps[key] === 'C'} onChange={() => !isReadOnly && handleAnswer(key, 'C')} disabled={isReadOnly} /> <span className="text-green-600 font-bold">C</span></label>
+                  <label className="text-xs"><input type="radio" checked={resps[key] === 'NC'} onChange={() => !isReadOnly && handleAnswer(key, 'NC')} disabled={isReadOnly} /> <span className="text-red-600 font-bold">NC</span></label>
+                  <label className="text-xs"><input type="radio" checked={resps[key] === 'NA'} onChange={() => !isReadOnly && handleAnswer(key, 'NA')} disabled={isReadOnly} /> <span className="text-zinc-500 font-bold">NA</span></label>
+                </div>
+              )
+            })}
+          </div>
+          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ''} onChange={(e) => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
+        </div>
+      )
+    }
+
+    if (item.type === 'iluminacao') {
+      const luzes = ['Lado Direito Dianteiro', 'Lado Esquerdo Dianteiro', 'Lado Direito Traseiro', 'Lado Esquerdo Traseiro']
+      return (
+        <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full">
+          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {luzes.map(luz => {
+              const key = `luz_${luz.replace(/ /g, '_').toLowerCase()}`
+              return (
+                <div key={luz} className="flex justify-between items-center bg-white dark:bg-zinc-950 p-2 rounded border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-xs font-medium">{luz}</span>
+                  <div className="flex gap-2">
+                    <label className="text-xs"><input type="radio" checked={resps[key] === 'C'} onChange={() => !isReadOnly && handleAnswer(key, 'C')} disabled={isReadOnly} /> <span className="text-green-600 font-bold">C</span></label>
+                    <label className="text-xs"><input type="radio" checked={resps[key] === 'NC'} onChange={() => !isReadOnly && handleAnswer(key, 'NC')} disabled={isReadOnly} /> <span className="text-red-600 font-bold">NC</span></label>
+                    <label className="text-xs"><input type="radio" checked={resps[key] === 'NA'} onChange={() => !isReadOnly && handleAnswer(key, 'NA')} disabled={isReadOnly} /> <span className="text-zinc-500 font-bold">NA</span></label>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ''} onChange={(e) => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
+        </div>
+      )
+    }
+
+    if (item.type === 'multi' && item.subItems) {
+      return (
+        <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full">
+          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
+          <div className="flex flex-wrap gap-2 md:gap-4 mb-2">
+            {item.subItems.map(sub => {
+              const key = `${item.id}_${sub.id}`
+              return (
+                <div key={sub.id} className="flex items-center gap-2 bg-white dark:bg-zinc-950 p-1 px-2 rounded border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-[10px] uppercase font-semibold">{sub.label}:</span>
+                  <label className="text-[10px]"><input type="radio" checked={resps[key] === 'C'} onChange={() => !isReadOnly && handleAnswer(key, 'C')} disabled={isReadOnly} /> <span className="text-green-600 font-bold">C</span></label>
+                  <label className="text-[10px]"><input type="radio" checked={resps[key] === 'NC'} onChange={() => !isReadOnly && handleAnswer(key, 'NC')} disabled={isReadOnly} /> <span className="text-red-600 font-bold">NC</span></label>
+                  <label className="text-[10px]"><input type="radio" checked={resps[key] === 'NA'} onChange={() => !isReadOnly && handleAnswer(key, 'NA')} disabled={isReadOnly} /> <span className="text-zinc-500 font-bold">NA</span></label>
+                </div>
+              )
+            })}
+          </div>
+          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ''} onChange={(e) => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
+        </div>
+      )
+    }
+
+    // Standard
+    return (
+      <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full md:col-span-1 flex flex-col justify-between">
+        <span className="text-sm font-medium dark:text-zinc-200 mb-2 leading-tight">{item.label}</span>
+        <div className="flex items-center gap-3 mb-2">
+          <label className={`flex items-center gap-1 text-xs ${isReadOnly ? '' : 'cursor-pointer'}`}>
+            <input type="radio" name={item.id + (isReadOnly ? '_v' : '')} value="C" onChange={() => !isReadOnly && handleAnswer(item.id, 'C')} checked={resps[item.id] === 'C'} disabled={isReadOnly} /> <span className="text-green-600 font-bold">C</span>
+          </label>
+          <label className={`flex items-center gap-1 text-xs ${isReadOnly ? '' : 'cursor-pointer'}`}>
+            <input type="radio" name={item.id + (isReadOnly ? '_v' : '')} value="NC" onChange={() => !isReadOnly && handleAnswer(item.id, 'NC')} checked={resps[item.id] === 'NC'} disabled={isReadOnly} /> <span className="text-red-600 font-bold">NC</span>
+          </label>
+          <label className={`flex items-center gap-1 text-xs ${isReadOnly ? '' : 'cursor-pointer'}`}>
+            <input type="radio" name={item.id + (isReadOnly ? '_v' : '')} value="NA" onChange={() => !isReadOnly && handleAnswer(item.id, 'NA')} checked={resps[item.id] === 'NA'} disabled={isReadOnly} /> <span className="text-zinc-500 font-bold">NA</span>
+          </label>
+        </div>
+        <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ''} onChange={(e) => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
+      </div>
+    )
+  }
+
+  // Dynamic config for View Modal
+  const getViewConfig = (cType: string) => {
+    switch (cType) {
+      case 'Comboio': return getComboioConfig()
+      case 'Pipa': return getPipaConfig()
+      case 'Multifuncional': return getMultifuncionalConfig()
+      case 'Munck': return getMunckConfig()
+      default: return []
+    }
+  }
 
   return (
-    <div className="p-4 lg:p-6 w-full max-w-7xl mx-auto space-y-6">
+    <>
+    <div className="p-4 lg:p-6 w-full max-w-7xl mx-auto space-y-6 print:hidden">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold dark:text-white">Checklists Mecânicos</h1>
@@ -191,7 +336,10 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
                     </span>
                   </td>
                   <td className="px-4 py-3 flex items-center justify-center gap-2">
-                    <button onClick={() => gerarPDF(item)} className="p-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200" title="Baixar PDF">
+                    <button onClick={() => handleView(item)} className="p-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100" title="Ver Checklist">
+                      <FileText size={16} />
+                    </button>
+                    <button onClick={() => gerarPDF(item)} className="p-1.5 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100" title="Baixar PDF">
                       <Download size={16} />
                     </button>
                     {((userRole === 'admin' || userRole === 'administrador') || userRole === 'gestao') && (
@@ -214,38 +362,44 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-3xl shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold dark:text-white">Novo Checklist Mecânico</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-zinc-600"><X size={20} /></button>
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-4xl shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="sticky top-0 bg-white dark:bg-zinc-950 z-10 pb-4 mb-4 border-b dark:border-zinc-800 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold dark:text-white">Ficha de Inspeção</h2>
+                <p className="text-xs text-zinc-500">Preencha conforme o formulário físico</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 bg-zinc-100 dark:bg-zinc-900 p-2 rounded-full"><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
                 <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Tipo de Caminhão</label>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Tipo de Caminhão *</label>
                   <select 
                     value={tipo} 
-                    onChange={e => setTipo(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                    onChange={e => {
+                      setTipo(e.target.value)
+                      setRespostas({}) // Reset answers when changing type
+                    }}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                     required
                   >
                     <option value="">Selecione...</option>
-                    <option value="Multifuncional">Multifuncional</option>
                     <option value="Comboio">Comboio</option>
                     <option value="Pipa">Pipa</option>
+                    <option value="Multifuncional">Multifuncional</option>
                     <option value="Munck">Munck</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Placa (Auto-completar)</label>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Placa (Auto-completar) *</label>
                   <input 
                     list="frotas"
                     value={placa} 
                     onChange={e => handlePlacaChange(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                    placeholder="Digite a placa..."
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none uppercase"
+                    placeholder="ABC-1234"
                     required
                   />
                   <datalist id="frotas">
@@ -272,50 +426,42 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
               </div>
 
               {tipo && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-bold border-b pb-2 dark:border-zinc-800 dark:text-white">Itens de Inspeção</h3>
-                  <p className="text-xs text-zinc-500 mb-4">C: Conforme | NC: Não Conforme (Gera Backlog) | NA: Não se Aplica</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {questions.map((q) => (
-                      <div key={q.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg flex flex-col justify-between">
-                        <span className="text-sm font-medium dark:text-zinc-200 mb-2">{q.label}</span>
-                        <div className="flex items-center gap-2">
-                          <label className="flex items-center gap-1 text-xs cursor-pointer">
-                            <input type="radio" name={q.id} value="C" required onChange={() => setRespostas(r => ({...r, [q.id]: 'C'}))} checked={respostas[q.id] === 'C'} /> <span className="text-green-600 font-bold">C</span>
-                          </label>
-                          <label className="flex items-center gap-1 text-xs cursor-pointer">
-                            <input type="radio" name={q.id} value="NC" required onChange={() => setRespostas(r => ({...r, [q.id]: 'NC'}))} checked={respostas[q.id] === 'NC'} /> <span className="text-red-600 font-bold">NC</span>
-                          </label>
-                          <label className="flex items-center gap-1 text-xs cursor-pointer">
-                            <input type="radio" name={q.id} value="NA" required onChange={() => setRespostas(r => ({...r, [q.id]: 'NA'}))} checked={respostas[q.id] === 'NA'} /> <span className="text-zinc-500 font-bold">NA</span>
-                          </label>
-                        </div>
+                <div className="space-y-8">
+                  {getConfig().map(group => (
+                    <div key={group.id} className="space-y-3">
+                      <div className="bg-zinc-200 dark:bg-zinc-800 px-3 py-2 rounded">
+                        <h3 className="text-sm font-bold dark:text-white uppercase tracking-wider">{group.title}</h3>
                       </div>
-                    ))}
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {group.items.map(item => renderItem(item, null))}
+                      </div>
+                    </div>
+                  ))}
 
-                  <div className="mt-4">
-                    <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-1">Pendências Adicionais (Backlog extra)</label>
-                    <p className="text-xs text-zinc-500 mb-2">Digite uma pendência por linha. Cada linha irá gerar um item no Backlog.</p>
+                  <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800 mt-6">
+                    <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-1">Pendências Adicionais / Marcar Fotos</label>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      Anote aqui as pendências que você marcaria com 'X' na imagem da ficha impressa. 
+                      Cada linha gera um item no Backlog automático.
+                    </p>
                     <textarea 
                       value={pendencias}
                       onChange={e => setPendencias(e.target.value)}
                       rows={4}
-                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none resize-y"
-                      placeholder="Ex: Espelho retrovisor trincado&#10;Limpador de parabrisa não funciona"
+                      className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-3 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none resize-y"
+                      placeholder="Ex: Parachoque arranhado lado esquerdo&#10;Logo da empresa rasgado"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-4 border-t dark:border-zinc-800">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg font-bold">
+              <div className="sticky bottom-0 bg-white dark:bg-zinc-950 py-4 border-t dark:border-zinc-800 flex justify-end gap-3 z-10 mt-8">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg font-bold hover:bg-zinc-300">
                   Cancelar
                 </button>
-                <button type="submit" disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold flex items-center gap-2">
-                  {loading && <Loader2 className="animate-spin" size={16} />}
-                  Salvar e Fechar Checklist
+                <button type="submit" disabled={loading} className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-green-600/20">
+                  {loading && <Loader2 className="animate-spin" size={18} />}
+                  Salvar Inspeção e Gerar Backlog
                 </button>
               </div>
             </form>
@@ -323,5 +469,62 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
         </div>
       )}
     </div>
+
+    {/* VISUALIZADOR E ÁREA DE IMPRESSÃO */}
+    {viewChecklist && (
+      <div className="fixed inset-0 z-[100] flex justify-center bg-zinc-100 dark:bg-zinc-950 overflow-y-auto print:bg-white print:p-0">
+        <div className="w-full max-w-4xl bg-white p-8 print:p-2 min-h-screen print:min-h-0 print:h-auto shadow-xl print:shadow-none relative">
+          
+          <div className="absolute top-4 right-4 flex gap-2 print:hidden">
+            <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded font-bold text-sm shadow hover:bg-blue-700 flex items-center gap-2">
+              <Download size={16}/> Baixar PDF / Imprimir
+            </button>
+            <button onClick={() => setViewChecklist(null)} className="p-2 bg-zinc-200 text-zinc-600 rounded hover:bg-zinc-300 shadow">
+              <X size={20}/>
+            </button>
+          </div>
+
+          <div className="border-b-2 border-zinc-900 pb-4 mb-6">
+            <h1 className="text-2xl font-black text-center uppercase tracking-widest text-zinc-900">Checklist Mecânico - {viewChecklist.tipo_caminhao}</h1>
+            <div className="flex justify-between items-center mt-4 text-xs font-bold text-zinc-700">
+              <span>Data: {new Date(viewChecklist.criado_em).toLocaleDateString('pt-BR')}</span>
+              <span>ID: {String(viewChecklist.id).padStart(5,'0')}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-6 p-4 border rounded bg-zinc-50 border-zinc-300 text-zinc-800 text-sm">
+            <div><span className="font-bold">Placa:</span> {viewChecklist.placa}</div>
+            <div><span className="font-bold">C.O:</span> {viewChecklist.co}</div>
+            <div><span className="font-bold">Local:</span> {viewChecklist.local}</div>
+            <div><span className="font-bold">Status:</span> {viewChecklist.status}</div>
+          </div>
+
+          <div className="space-y-6 text-zinc-800">
+            {getViewConfig(viewChecklist.tipo_caminhao).map(group => (
+              <div key={group.id} className="space-y-2">
+                <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs">{group.title}</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.items.map(item => renderItem(item, viewChecklist.respostas))}
+                </div>
+              </div>
+            ))}
+
+            {viewChecklist.pendencias_adicionais && (
+              <div className="mt-8">
+                <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs mb-2">Pendências Adicionais / Observações</h3>
+                <div className="border border-zinc-300 p-3 whitespace-pre-wrap text-sm">
+                  {viewChecklist.pendencias_adicionais}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-12 text-center text-xs text-zinc-500 border-t pt-4 print:block">
+            Documento gerado automaticamente pelo EUNAMAN Sistema.
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
