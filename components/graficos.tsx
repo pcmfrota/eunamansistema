@@ -1338,7 +1338,7 @@ export function PainelFormulas() {
       <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-blue-500" /> Entenda os Indicadores (Fórmulas PCM Florestal)
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <div>
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Disponibilidade Operacional (DO)</strong>
           <p className="mb-2">Mede a proporção do tempo em que o veículo esteve operando ou apto, considerando apenas as horas da escala Suzano.</p>
@@ -1364,6 +1364,30 @@ export function PainelFormulas() {
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">D+1 (Ontem)</strong>
           <p className="mb-2">Todos os dados de hoje são consolidados apenas no dia seguinte. O dashboard reflete o fechamento de ontem.</p>
           <span className="text-[10px] text-zinc-400">Referência: Regra PCM Suzano</span>
+        </div>
+        <div>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">MTBF — Tempo Médio Entre Falhas</strong>
+          <p className="mb-2">
+            Indica a confiabilidade da frota: quanto maior, menos frequentes são as falhas corretivas. Calculado sobre as horas operacionais disponíveis no período.
+          </p>
+          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-indigo-600 dark:text-indigo-400 font-mono block w-fit mb-1">
+            MTBF = (Ht_DO - H.Indisp_DO) / Nº OS Corretivas
+          </code>
+          <span className="text-[10px] text-zinc-400 block">
+            Ex: 26 veículos × 720h = 18.720h planejadas. 4.680h indisponíveis e 93 OS corretivas → MTBF = (18.720 − 4.680) / 93 ≈ <strong className="text-indigo-500">150,9h</strong>
+          </span>
+        </div>
+        <div>
+          <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">MTTR — Tempo Médio Para Reparo</strong>
+          <p className="mb-2">
+            Mede a eficiência do time de manutenção: quanto menor, mais rápida é a resolução das OS corretivas. Baseado nas horas de indisponibilidade mecânica (DM).
+          </p>
+          <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-purple-600 dark:text-purple-400 font-mono block w-fit mb-1">
+            MTTR = H.Indisp_DM_Total / Nº OS Corretivas Fechadas
+          </code>
+          <span className="text-[10px] text-zinc-400 block">
+            Ex: 3.152h de indisp. mecânica e 81 OS fechadas → MTTR = 3.152 / 81 ≈ <strong className="text-purple-500">38,9h</strong>
+          </span>
         </div>
       </div>
     </div>
