@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
-  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, Edit3, Trash2, RefreshCw
+  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -429,14 +429,229 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   }
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 w-full text-zinc-800 dark:text-zinc-100">
+    <div className="flex flex-col gap-4 w-full text-zinc-800 dark:text-zinc-100">
       
-      {/* ─── COLUNA ESQUERDA (Gráficos Laterais) ─────────────────────────────────── */}
-      <div className="flex flex-col gap-6 w-full xl:w-[360px] shrink-0">
+      {/* ─── ROW 1: FILTROS & CRITICIDADE (Lado a Lado) ────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 w-full">
         
+        {/* CARD: FILTROS E STATUS (Painel de Etiquetas) */}
+        <div className="lg:col-span-3 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                PAINEL DE ETIQUETAS
+              </h2>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                ENCERRADOS X PENDÊNCIA
+              </p>
+            </div>
+            
+            {/* Stylized Suzano Logo */}
+            <div className="flex items-center gap-2 self-end lg:self-center">
+              <span className="text-xs font-black uppercase tracking-widest text-[#00a859] dark:text-[#2ecc71] italic">
+                suzano
+              </span>
+              <span className="w-4 h-4 bg-[#00a859] dark:bg-[#2ecc71] rounded-tl-full rounded-br-full" />
+            </div>
+          </div>
+
+          {/* Grid de Filtros */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            
+            {/* Filtro Status Multi-select */}
+            <div className="relative">
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Status</span>
+              <button 
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-left text-xs font-black uppercase tracking-wider flex items-center justify-between"
+              >
+                <span className="truncate">
+                  {filterStatuses.length === 0 ? 'Todos' : `${filterStatuses.length} Sel.`}
+                </span>
+                <ChevronDown size={14} className="opacity-40" />
+              </button>
+              
+              {showStatusDropdown && (
+                <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 shadow-2xl z-50 flex flex-col gap-2">
+                  {['PENDENTE', 'PROGRAMADO', 'ENCERRADO'].map(status => {
+                    const active = filterStatuses.includes(status)
+                    return (
+                      <label key={status} className="flex items-center gap-2.5 text-[10px] font-black text-zinc-600 dark:text-zinc-300 uppercase tracking-wider cursor-pointer hover:text-green-500 transition-colors">
+                        <input 
+                          type="checkbox"
+                          checked={active}
+                          onChange={() => {
+                            if (active) setFilterStatuses(filterStatuses.filter(s => s !== status))
+                            else setFilterStatuses([...filterStatuses, status])
+                          }}
+                          className="w-3.5 h-3.5 rounded border-zinc-300 text-green-600 focus:ring-green-500"
+                        />
+                        {status}
+                      </label>
+                    )
+                  })}
+                  <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2 mt-1 flex justify-between">
+                    <button 
+                      onClick={() => setFilterStatuses([])}
+                      className="text-[8px] font-bold text-red-500 hover:underline uppercase"
+                    >
+                      Limpar
+                    </button>
+                    <button 
+                      onClick={() => setFilterStatuses(['PENDENTE', 'PROGRAMADO', 'ENCERRADO'])}
+                      className="text-[8px] font-bold text-blue-500 hover:underline uppercase"
+                    >
+                      Todos
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Criticidade */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Criticidade</span>
+              <select
+                value={filterCriticidade}
+                onChange={e => setFilterCriticidade(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                <option value="A">A - Crítico</option>
+                <option value="B">B - Normal</option>
+              </select>
+            </div>
+
+            {/* Fornecedor */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Fornecedor</span>
+              <select
+                value={filterFornecedor}
+                onChange={e => setFilterFornecedor(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {filterOptions.fornecedores.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Área */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Área</span>
+              <select
+                value={filterArea}
+                onChange={e => setFilterArea(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {filterOptions.areas.map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Módulo */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Módulo</span>
+              <select
+                value={filterModulo}
+                onChange={e => setFilterModulo(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {filterOptions.modulos.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ano */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Ano</span>
+              <select
+                value={filterAno}
+                onChange={e => setFilterAno(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {filterOptions.anos.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mês */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Mês</span>
+              <select
+                value={filterMes}
+                onChange={e => setFilterMes(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {MONTHS_PT.map(m => (
+                  <option key={m} value={m}>{m.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mecânico */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Mecânico</span>
+              <select
+                value={filterMecanico}
+                onChange={e => setFilterMecanico(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {filterOptions.mecanicos.map(mec => (
+                  <option key={mec} value={mec}>{mec}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* De (Data) */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">De</span>
+              <input 
+                type="date"
+                value={filterDataInicio}
+                onChange={e => setFilterDataInicio(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              />
+            </div>
+
+            {/* Até (Data) */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Até</span>
+              <input 
+                type="date"
+                value={filterDataFim}
+                onChange={e => setFilterDataFim(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              />
+            </div>
+
+          </div>
+
+          {/* Barra de Pesquisa Rápida */}
+          <div className="relative mt-4 group">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-green-500 transition-colors" />
+            <input
+              type="text"
+              placeholder="BUSCAR BACKLOG POR PLACA, DESCRIÇÃO OU TAG..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-10 pr-6 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all shadow-sm"
+            />
+          </div>
+        </div>
+
         {/* Card: ETIQUETA POR CRITICIDADE */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
-          <div className="border-l-4 border-cyan-500 pl-3 mb-4">
+        <div className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+          <div className="border-l-4 border-cyan-500 pl-3">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
               ETIQUETA POR CRITICIDADE
             </h3>
@@ -450,15 +665,15 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </div>
           </div>
 
-          <div className="h-[240px] w-full relative flex items-center justify-center">
+          <div className="h-[180px] w-full relative flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={donutData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={85}
+                  innerRadius={50}
+                  outerRadius={70}
                   paddingAngle={3}
                   dataKey="value"
                   nameKey="name"
@@ -488,16 +703,75 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
+      {/* ─── ROW 2: FILA DE CARDS DE KPI ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+        {/* Card: CONCLUÍDAS */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
+          <div className="w-1.5 bg-blue-600 rounded-full shrink-0" />
+          <div className="flex flex-col justify-between py-1">
+            <div>
+              <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Concluídas</p>
+              <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiConcluidas}</p>
+            </div>
+            <div className="h-4" />
+          </div>
+        </div>
+
+        {/* Card: PENDENTES */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
+          <div className="w-1.5 bg-[#00a859] rounded-full shrink-0" />
+          <div className="flex flex-col justify-between py-1">
+            <div>
+              <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Pendentes</p>
+              <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiPendentes}</p>
+            </div>
+            <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wide mt-2">
+              Média Criação &gt; Progr <span className="font-black text-zinc-600 dark:text-zinc-400">{avgCriacaoProg}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Card: PROGRAMADO */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
+          <div className="w-1.5 bg-blue-600 rounded-full shrink-0" />
+          <div className="flex flex-col justify-between py-1">
+            <div>
+              <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Programado</p>
+              <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiProgramados}</p>
+            </div>
+            <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wide mt-2">
+              Média Prog &gt; Encerr <span className="font-black text-zinc-600 dark:text-zinc-400">{avgProgEncerr}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Card: TOTAL */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
+          <div className="w-1.5 bg-[#00a859] rounded-full shrink-0" />
+          <div className="flex flex-col justify-between py-1">
+            <div>
+              <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Total</p>
+              <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiTotal}</p>
+            </div>
+            <div className="h-4" />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── ROW 3: GRÁFICOS (Área, Módulos, Tendência) ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        
         {/* Card: ETIQUETA POR ÁREA */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="border-l-4 border-blue-600 pl-3 mb-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
               ETIQUETA POR ÁREA
             </h3>
           </div>
 
-          <div className="h-[280px] w-full">
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={barAreaData}
@@ -539,14 +813,14 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </div>
 
         {/* Card: ETIQUETA POR MÓDULOS */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="border-l-4 border-[#00a859] pl-3 mb-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
               ETIQUETA POR MÓDULOS
             </h3>
           </div>
 
-          <div className="h-[280px] w-full">
+          <div className="h-[200px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={barModuloData}
@@ -587,276 +861,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           </div>
         </div>
 
-      </div>
-
-      {/* ─── COLUNA DIREITA (KPIs, Filtros, Tendência e Tabela) ─────────────────── */}
-      <div className="flex-1 flex flex-col gap-6">
-
-        {/* ── FILTROS E CABEÇALHO DO PAINEL ── */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                PAINEL DE ETIQUETAS
-              </h2>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
-                ENCERRADOS X PENDÊNCIA
-              </p>
-            </div>
-            
-            {/* Stylized Suzano Logo */}
-            <div className="flex items-center gap-2 self-end lg:self-center">
-              <span className="text-xs font-black uppercase tracking-widest text-[#00a859] dark:text-[#2ecc71] italic">
-                suzano
-              </span>
-              <span className="w-4 h-4 bg-[#00a859] dark:bg-[#2ecc71] rounded-tl-full rounded-br-full" />
-            </div>
-          </div>
-
-          {/* Grid de Filtros */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            
-            {/* Filtro Status Multi-select */}
-            <div className="relative">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Status</label>
-              <button
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black text-left flex justify-between items-center outline-none"
-              >
-                <span className="truncate">
-                  {filterStatuses.length === 3 ? 'Todos' : filterStatuses.length > 0 ? `${filterStatuses.length} selecionados` : 'Nenhum'}
-                </span>
-                <ChevronRight size={14} className={cn("transform transition-transform text-zinc-400", showStatusDropdown && "rotate-90")} />
-              </button>
-
-              {showStatusDropdown && (
-                <div className="absolute left-0 right-0 mt-1.5 bg-white dark:bg-[#181a20] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-2.5 shadow-2xl z-50 flex flex-col gap-1.5">
-                  {['PENDENTE', 'PROGRAMADO', 'ENCERRADO'].map(st => (
-                    <label key={st} className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-300 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 p-1 rounded-lg">
-                      <input
-                        type="checkbox"
-                        checked={filterStatuses.includes(st)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFilterStatuses([...filterStatuses, st])
-                          } else {
-                            setFilterStatuses(filterStatuses.filter(s => s !== st))
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-zinc-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                      />
-                      {st}
-                    </label>
-                  ))}
-                  <div className="border-t border-zinc-100 dark:border-zinc-800 pt-1.5 mt-0.5 flex justify-between text-[8px] font-black uppercase tracking-widest">
-                    <button onClick={() => setFilterStatuses(['PENDENTE', 'PROGRAMADO', 'ENCERRADO'])} className="text-blue-500">TODOS</button>
-                    <button onClick={() => setFilterStatuses([])} className="text-red-500">LIMPAR</button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Criticidade */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Criticidade</label>
-              <select
-                value={filterCriticidade}
-                onChange={e => setFilterCriticidade(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {Object.keys(CRITICIDADE_COLORS).map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Fornecedor */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Fornecedor</label>
-              <select
-                value={filterFornecedor}
-                onChange={e => setFilterFornecedor(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.fornecedores.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Área */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Área</label>
-              <select
-                value={filterArea}
-                onChange={e => setFilterArea(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.areas.map(a => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Módulo */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Módulo</label>
-              <select
-                value={filterModulo}
-                onChange={e => setFilterModulo(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer font-bold"
-              >
-                <option value="">Todos</option>
-                {filterOptions.modulos.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Data (Ano) */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Ano</label>
-              <select
-                value={filterAno}
-                onChange={e => setFilterAno(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.anos.map(a => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Mês */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Mês</label>
-              <select
-                value={filterMes}
-                onChange={e => setFilterMes(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map(m => (
-                  <option key={m} value={m}>{m.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Mecânico */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Mecânico</label>
-              <select
-                value={filterMecanico}
-                onChange={e => setFilterMecanico(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer font-bold"
-              >
-                <option value="">Todos</option>
-                {filterOptions.mecanicos.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Data Início */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">De</label>
-              <input
-                type="date"
-                value={filterDataInicio}
-                onChange={e => setFilterDataInicio(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              />
-            </div>
-
-            {/* Data Fim */}
-            <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Até</label>
-              <input
-                type="date"
-                value={filterDataFim}
-                onChange={e => setFilterDataFim(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              />
-            </div>
-
-          </div>
-
-          {/* Barra de Pesquisa Rápida */}
-          <div className="relative mt-4 group">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-green-500 transition-colors" />
-            <input
-              type="text"
-              placeholder="BUSCAR BACKLOG POR PLACA, DESCRIÇÃO OU TAG..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-6 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* ── FILA DE CARDS DE KPI ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Card: CONCLUÍDAS */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
-            <div className="w-1.5 bg-blue-600 rounded-full shrink-0" />
-            <div className="flex flex-col justify-between py-1">
-              <div>
-                <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Concluídas</p>
-                <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiConcluidas}</p>
-              </div>
-              <div className="h-4" />
-            </div>
-          </div>
-
-          {/* Card: PENDENTES */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
-            <div className="w-1.5 bg-[#00a859] rounded-full shrink-0" />
-            <div className="flex flex-col justify-between py-1">
-              <div>
-                <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Pendentes</p>
-                <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiPendentes}</p>
-              </div>
-              <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wide mt-2">
-                Média Criação &gt; Progr <span className="font-black text-zinc-600 dark:text-zinc-400">{avgCriacaoProg}</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Card: PROGRAMADO */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
-            <div className="w-1.5 bg-blue-600 rounded-full shrink-0" />
-            <div className="flex flex-col justify-between py-1">
-              <div>
-                <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Programado</p>
-                <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiProgramados}</p>
-              </div>
-              <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wide mt-2">
-                Média Prog &gt; Encerr <span className="font-black text-zinc-600 dark:text-zinc-400">{avgProgEncerr}</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Card: TOTAL */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
-            <div className="w-1.5 bg-[#00a859] rounded-full shrink-0" />
-            <div className="flex flex-col justify-between py-1">
-              <div>
-                <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Total</p>
-                <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight mt-1">{kpiTotal}</p>
-              </div>
-              <div className="h-4" />
-            </div>
-          </div>
-
-        </div>
-
-        {/* ── CARD: TENDÊNCIA DE ETIQUETAS (MoM %) ── */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
+        {/* Card: TENDÊNCIA DE ETIQUETAS */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="border-l-4 border-[#0055b8] pl-3 mb-6">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
               TENDÊNCIA DE ETIQUETAS
@@ -900,260 +906,258 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
-        {/* ── SEÇÃO: BACKLOG POR MECÂNICO ── */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-6">
-          <div className="border-l-4 border-indigo-600 pl-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                DISTRIBUIÇÃO DE ETIQUETAS POR MECÂNICO
-              </h3>
-              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
-                Visão de Pendentes, Programados e Encerrados
-              </p>
-            </div>
-            {filterMecanico && (
-              <button 
-                onClick={() => setFilterMecanico('')}
-                className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest border border-red-500/20 px-3 py-1 rounded-xl bg-red-500/5 transition-colors"
-              >
-                ✕ Limpar Filtro
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Gráfico Recharts de Barras Empilhadas */}
-            <div className="lg:col-span-2 h-[320px] bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl p-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={topMechanicChartData}
-                  margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload?.length) return null
-                      const data = payload[0].payload
-                      return (
-                        <div className="bg-zinc-950/95 text-white p-4 rounded-2xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider flex flex-col gap-1.5 shadow-2xl">
-                          <span className="text-indigo-400 border-b border-zinc-800 pb-1 mb-1 font-extrabold">{data.name}</span>
-                          <span className="flex items-center justify-between gap-4">Pendentes: <span className="text-yellow-400 font-extrabold">{data.pendente}</span></span>
-                          <span className="flex items-center justify-between gap-4">Programados: <span className="text-green-400 font-extrabold">{data.programado}</span></span>
-                          <span className="flex items-center justify-between gap-4">Encerrados: <span className="text-zinc-400 font-extrabold">{data.encerrado}</span></span>
-                          <span className="flex items-center justify-between gap-4 text-orange-400 border-t border-zinc-800 pt-1 mt-1 font-extrabold">Média Aging: <span>{data.avgAging} dias</span></span>
-                        </div>
-                      )
-                    }}
-                  />
-                  <Legend 
-                    verticalAlign="top"
-                    height={36}
-                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }} 
-                  />
-                  <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#ca8a04" />
-                  <Bar dataKey="programado" name="Programado" stackId="a" fill="#16a34a" />
-                  <Bar dataKey="encerrado" name="Encerrado" stackId="a" fill="#475569" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Listagem de cards de mecânicos */}
-            <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
-              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Selecione para Filtrar</span>
-              {mechanicStats.map(s => {
-                const isSelected = filterMecanico === s.name;
-                return (
-                  <div
-                    key={s.name}
-                    onClick={() => setFilterMecanico(isSelected ? '' : s.name)}
-                    className={cn(
-                      "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between hover:scale-[1.02] shadow-sm select-none",
-                      isSelected
-                        ? "bg-indigo-600 border-indigo-500 text-white shadow-indigo-600/20"
-                        : "bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-150 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300"
-                    )}
-                  >
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-tight">{s.name}</p>
-                      <p className={cn("text-[8px] font-bold mt-0.5", isSelected ? "text-indigo-200" : "text-zinc-400")}>
-                        Média de Pendências: <span className="font-extrabold">{s.avgAging} dias em aberto</span>
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", isSelected ? "bg-white/10 text-white" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500")}>
-                        Total: {s.total}
-                      </span>
-                      <div className="flex gap-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title={`Pendentes: ${s.pendente}`} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" title={`Programados: ${s.programado}`} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" title={`Encerrados: ${s.encerrado}`} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* ── CARD: DETALHAMENTO DO BACKLOG (Tabela PBI) ── */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden flex flex-col">
-          <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex items-center justify-between">
+      {/* ─── ROW 4: MECÂNICOS ─────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-4 w-full">
+        <div className="flex items-center justify-between border-l-4 border-indigo-600 pl-3">
+          <div>
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              DETALHAMENTO DO BACKLOG
+              DISTRIBUIÇÃO DE ETIQUETAS POR MECÂNICO
             </h3>
-            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
-              {filtered.length} itens listados
-            </span>
+            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+              Visão de Pendentes, Programados e Encerrados
+            </p>
           </div>
-
-          <div className="overflow-x-auto custom-scrollbar max-h-[360px]">
-            <table className="w-full text-left border-collapse text-[10px] font-semibold">
-              <thead>
-                <tr className="bg-zinc-50 dark:bg-[#161822] text-zinc-400 border-b border-zinc-100 dark:border-zinc-800 font-bold uppercase tracking-wider">
-                  <th className="px-4 py-3">Placa / TAG</th>
-                  <th className="px-4 py-3">Módulo</th>
-                  <th className="px-4 py-3">Motivo do Status</th>
-                  <th className="px-4 py-3 text-center">Criticidade</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-center">Abertura</th>
-                  <th className="px-4 py-3 text-center">Fechamento</th>
-                  <th className="px-4 py-3 text-right">Dias Fechado</th>
-                  <th className="px-4 py-3 text-right">Dias Pendente</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-zinc-400 font-bold uppercase tracking-widest italic">
-                      Nenhum backlog correspondente aos filtros ativos.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedFiltered.map((item) => {
-                    const prioColor = CRITICIDADE_COLORS[item.mappedCriticidade] || { bg: 'bg-zinc-100', text: 'text-zinc-500' }
-                    const statColor = STATUS_COLORS[item.mappedStatus] || { bg: 'bg-zinc-100 border-zinc-200', text: 'text-zinc-500' }
-
-                    // Aging color scale for pending items
-                    let agingBg = 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
-                    if (item.diasPendente !== null) {
-                      if (item.diasPendente > 30) {
-                        agingBg = 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
-                      } else if (item.diasPendente > 15) {
-                        agingBg = 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400'
-                      }
-                    }
-
-                    return (
-                      <tr 
-                        key={item.id} 
-                        className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-all cursor-pointer group"
-                        onClick={() => onEdit(item)}
-                      >
-                        <td className="px-4 py-3 font-black text-zinc-900 dark:text-zinc-50">
-                          <span className="flex items-center gap-1.5">
-                            {item.frota}
-                            {item._isPendingSync && (
-                              <span className="inline-flex items-center gap-1 text-[8px] text-amber-500 font-bold" title="Pendente de sincronização offline">
-                                <RefreshCw size={8} className="animate-spin" />
-                              </span>
-                            )}
-                          </span>
-                          {item.tag && <span className="block text-[8px] text-zinc-400 font-bold mt-0.5">{item.tag}</span>}
-                        </td>
-                        <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 uppercase font-bold">
-                          {item.modulo || 'N/A'}
-                        </td>
-                        <td className="px-4 py-3 max-w-[200px] truncate text-zinc-600 dark:text-zinc-400 font-bold">
-                          {item.descricao || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={cn("px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest", prioColor.bg, prioColor.text)}>
-                            {item.mappedCriticidade}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={cn("px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest", statColor.bg, statColor.text)}>
-                            {item.mappedStatus}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
-                          {item.data_evidencia ? item.data_evidencia.split('T')[0].split('-').reverse().join('/') : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
-                          {item.data_conclusao ? item.data_conclusao.split('T')[0].split('-').reverse().join('/') : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono">
-                          {item.diasFechado !== null ? (
-                            <span className="px-2 py-0.5 rounded font-black bg-zinc-150 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 text-[9px]">
-                              {item.diasFechado} d
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono">
-                          {item.diasPendente !== null ? (
-                            <span className={cn("px-2 py-0.5 rounded font-black text-[9px]", agingBg)}>
-                              {item.diasPendente} d
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                          <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => onEdit(item)}
-                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-blue-500 rounded transition-colors"
-                              title="Editar"
-                            >
-                              <Edit3 size={12} />
-                            </button>
-                            <button
-                              onClick={() => onDelete(item.id)}
-                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-red-500 rounded transition-colors"
-                              title="Excluir"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Footer */}
-          {totalPages > 1 && (
-            <div className="p-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between bg-zinc-50/30 dark:bg-zinc-900/10">
-              <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
-                Página {currentPage} de {totalPages}
-              </p>
-              <div className="flex gap-1.5">
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-1 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
+          {filterMecanico && (
+            <button 
+              onClick={() => setFilterMecanico('')}
+              className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest border border-red-500/20 px-3 py-1 rounded-xl bg-red-500/5 transition-colors"
+            >
+              ✕ Limpar Filtro
+            </button>
           )}
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Gráfico Recharts de Barras Empilhadas */}
+          <div className="lg:col-span-2 h-[320px] bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={topMechanicChartData}
+                margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/95 text-white p-4 rounded-2xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider flex flex-col gap-1.5 shadow-2xl">
+                        <span className="text-indigo-400 border-b border-zinc-800 pb-1 mb-1 font-extrabold">{data.name}</span>
+                        <span className="flex items-center justify-between gap-4">Pendentes: <span className="text-yellow-400 font-extrabold">{data.pendente}</span></span>
+                        <span className="flex items-center justify-between gap-4">Programados: <span className="text-green-400 font-extrabold">{data.programado}</span></span>
+                        <span className="flex items-center justify-between gap-4">Encerrados: <span className="text-zinc-400 font-extrabold">{data.encerrado}</span></span>
+                        <span className="flex items-center justify-between gap-4 text-orange-400 border-t border-zinc-800 pt-1 mt-1 font-extrabold">Média Aging: <span>{data.avgAging} dias</span></span>
+                      </div>
+                    )
+                  }}
+                />
+                <Legend 
+                  verticalAlign="top"
+                  height={36}
+                  wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }} 
+                />
+                <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#ca8a04" />
+                <Bar dataKey="programado" name="Programado" stackId="a" fill="#16a34a" />
+                <Bar dataKey="encerrado" name="Encerrado" stackId="a" fill="#475569" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Listagem de cards de mecânicos */}
+          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
+            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Selecione para Filtrar</span>
+            {mechanicStats.map(s => {
+              const isSelected = filterMecanico === s.name;
+              return (
+                <div
+                  key={s.name}
+                  onClick={() => setFilterMecanico(isSelected ? '' : s.name)}
+                  className={cn(
+                    "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between hover:scale-[1.02] shadow-sm select-none",
+                    isSelected
+                      ? "bg-indigo-600 border-indigo-500 text-white shadow-indigo-600/20"
+                      : "bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-150 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300"
+                  )}
+                >
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-tight">{s.name}</p>
+                    <p className={cn("text-[8px] font-bold mt-0.5", isSelected ? "text-indigo-200" : "text-zinc-400")}>
+                      Média de Pendências: <span className="font-extrabold">{s.avgAging} dias em aberto</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", isSelected ? "bg-white/10 text-white" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500")}>
+                      Total: {s.total}
+                    </span>
+                    <div className="flex gap-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title={`Pendentes: ${s.pendente}`} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" title={`Programados: ${s.programado}`} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500" title={`Encerrados: ${s.encerrado}`} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ─── ROW 5: DETALHAMENTO DO BACKLOG ─────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden flex flex-col w-full">
+        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex items-center justify-between">
+          <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+            DETALHAMENTO DO BACKLOG
+          </h3>
+          <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
+            {filtered.length} itens listados
+          </span>
+        </div>
+
+        <div className="overflow-x-auto custom-scrollbar max-h-[360px]">
+          <table className="w-full text-left border-collapse text-[10px] font-semibold">
+            <thead>
+              <tr className="bg-zinc-50 dark:bg-[#161822] text-zinc-400 border-b border-zinc-100 dark:border-zinc-800 font-bold uppercase tracking-wider">
+                <th className="px-4 py-3">Placa / TAG</th>
+                <th className="px-4 py-3">Módulo</th>
+                <th className="px-4 py-3">Motivo do Status</th>
+                <th className="px-4 py-3 text-center">Criticidade</th>
+                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-center">Abertura</th>
+                <th className="px-4 py-3 text-center">Fechamento</th>
+                <th className="px-4 py-3 text-right">Dias Fechado</th>
+                <th className="px-4 py-3 text-right">Dias Pendente</th>
+                <th className="px-4 py-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-12 text-center text-zinc-400 font-bold uppercase tracking-widest italic">
+                    Nenhum backlog correspondente aos filtros ativos.
+                  </td>
+                </tr>
+              ) : (
+                paginatedFiltered.map((item) => {
+                  const prioColor = CRITICIDADE_COLORS[item.mappedCriticidade] || { bg: 'bg-zinc-100', text: 'text-zinc-500' }
+                  const statColor = STATUS_COLORS[item.mappedStatus] || { bg: 'bg-zinc-100 border-zinc-200', text: 'text-zinc-500' }
+
+                  let agingBg = 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
+                  if (item.diasPendente !== null) {
+                    if (item.diasPendente > 30) {
+                      agingBg = 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
+                    } else if (item.diasPendente > 15) {
+                      agingBg = 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400'
+                    }
+                  }
+
+                  return (
+                    <tr 
+                      key={item.id} 
+                      className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-all cursor-pointer group"
+                      onClick={() => onEdit(item)}
+                    >
+                      <td className="px-4 py-3 font-black text-zinc-900 dark:text-zinc-50">
+                        <span className="flex items-center gap-1.5">
+                          {item.frota}
+                          {item._isPendingSync && (
+                            <span className="inline-flex items-center gap-1 text-[8px] text-amber-500 font-bold" title="Pendente de sincronização offline">
+                              <RefreshCw size={8} className="animate-spin" />
+                            </span>
+                          )}
+                        </span>
+                        {item.tag && <span className="block text-[8px] text-zinc-400 font-bold mt-0.5">{item.tag}</span>}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 uppercase font-bold">
+                        {item.modulo || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 max-w-[200px] truncate text-zinc-600 dark:text-zinc-400 font-bold">
+                        {item.descricao || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={cn("px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest", prioColor.bg, prioColor.text)}>
+                          {item.mappedCriticidade}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={cn("px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest", statColor.bg, statColor.text)}>
+                          {item.mappedStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
+                        {item.data_evidencia ? item.data_evidencia.split('T')[0].split('-').reverse().join('/') : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
+                        {item.data_conclusao ? item.data_conclusao.split('T')[0].split('-').reverse().join('/') : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono">
+                        {item.diasFechado !== null ? (
+                          <span className="px-2 py-0.5 rounded font-black bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 text-[9px]">
+                            {item.diasFechado} d
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono">
+                        {item.diasPendente !== null ? (
+                          <span className={cn("px-2 py-0.5 rounded font-black text-[9px]", agingBg)}>
+                            {item.diasPendente} d
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => onEdit(item)}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-blue-500 rounded transition-colors"
+                            title="Editar"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            onClick={() => onDelete(item.id)}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-red-500 rounded transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="p-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between bg-zinc-50/30 dark:bg-zinc-900/10">
+            <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+              Página {currentPage} de {totalPages}
+            </p>
+            <div className="flex gap-1.5">
+              <button 
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-1 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button 
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-white dark:hover:bg-zinc-900 disabled:opacity-50 transition-all font-bold text-zinc-600 dark:text-zinc-400"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

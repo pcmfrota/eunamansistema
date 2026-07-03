@@ -365,18 +365,18 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   };
 
   return (
-    <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[120rem] mx-auto w-full h-full animate-in fade-in duration-700">
+    <div className="p-3 md:p-5 flex flex-col gap-4 w-full h-full animate-in fade-in duration-700">
       
       {/* Premium Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-zinc-950 p-6 md:p-10 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-xl relative overflow-hidden group">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-zinc-950 p-4 md:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl relative overflow-hidden group">
          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] rounded-full -mr-32 -mt-32 group-hover:bg-indigo-500/10 transition-all duration-700" />
          
          <div className="flex items-center gap-6 relative z-10">
-            <div className="p-5 bg-indigo-600 text-white rounded-[2rem] shadow-2xl shadow-indigo-500/40 scale-100 group-hover:scale-105 transition-all">
-              <Layers size={32} />
+            <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-2xl shadow-indigo-500/40 scale-100 group-hover:scale-105 transition-all">
+              <Layers size={24} />
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 uppercase italic">Backlog Geral</h1>
+              <h1 className="text-xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 uppercase italic">Backlog Geral</h1>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 font-black flex items-center gap-2 tracking-widest mt-1">
                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                  PCM • PLANEJAMENTO E CONTROLE
