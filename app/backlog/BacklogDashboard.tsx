@@ -123,6 +123,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
       // 5. Calculate aging (Dias em Aberto)
       let diasAberto = 0
+      let diasFechado: number | null = null
+      let diasPendente: number | null = null
       if (item.data_evidencia) {
         const start = new Date(item.data_evidencia.split('T')[0])
         const end = mappedStatus === 'ENCERRADO' && item.data_conclusao
@@ -130,6 +132,11 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           : new Date() // Today
         const diff = end.getTime() - start.getTime()
         diasAberto = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+        if (mappedStatus === 'ENCERRADO') {
+          diasFechado = diasAberto
+        } else {
+          diasPendente = diasAberto
+        }
       }
 
       return {
@@ -139,7 +146,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         mappedArea,
         mappedMonth,
         mappedYear,
-        diasAberto
+        diasAberto,
+        diasFechado,
+        diasPendente
       }
     })
   }, [items, placas])
@@ -169,8 +178,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     }
   }, [mappedItems])
 
-  // Apply filters
-  const filtered = useMemo(() => {
+  // Apply all filters except Mechanic
+  const filteredWithoutMechanic = useMemo(() => {
     return mappedItems.filter(item => {
       // 1. Status Multi-select
       if (filterStatuses.length > 0 && !filterStatuses.includes(item.mappedStatus)) return false
@@ -201,9 +210,6 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         if (filterDataFim && itemDate > filterDataFim) return false;
       }
 
-      // 7. Mecanico
-      if (filterMecanico && item.colaborador !== filterMecanico) return false
-
       // 8. Search text
       if (search) {
         const q = search.toLowerCase()
@@ -215,7 +221,13 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
       return true
     })
-  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterMecanico, filterDataInicio, filterDataFim, search])
+  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterDataInicio, filterDataFim, search])
+
+  // Apply all filters including Mechanic
+  const filtered = useMemo(() => {
+    if (!filterMecanico) return filteredWithoutMechanic
+    return filteredWithoutMechanic.filter(item => (item.colaborador || 'Sem Mecânico') === filterMecanico)
+  }, [filteredWithoutMechanic, filterMecanico])
 
   // Reset pagination to first page on filter changes
   useEffect(() => {
@@ -325,8 +337,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       agingCount: number;
     }> = {}
 
-    // Aggregate from the fully mapped items list
-    mappedItems.forEach(i => {
+    // Aggregate from the filtered list (except mechanic filter)
+    filteredWithoutMechanic.forEach(i => {
       const name = i.colaborador || 'Sem Mecânico'
       if (!statsMap[name]) {
         statsMap[name] = {
@@ -357,7 +369,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         avgAging: s.agingCount > 0 ? Math.round(s.totalAging / s.agingCount) : 0
       }))
       .sort((a, b) => b.total - a.total) // most backlogs first
-  }, [mappedItems])
+  }, [filteredWithoutMechanic])
 
   // Get top 8 mechanics for the chart
   const topMechanicChartData = useMemo(() => {
@@ -602,7 +614,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           </div>
 
           {/* Grid de Filtros */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             
             {/* Filtro Status Multi-select */}
             <div className="relative">
@@ -1008,14 +1020,17 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                   <th className="px-4 py-3">Motivo do Status</th>
                   <th className="px-4 py-3 text-center">Criticidade</th>
                   <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-right">Dias em Aberto</th>
+                  <th className="px-4 py-3 text-center">Abertura</th>
+                  <th className="px-4 py-3 text-center">Fechamento</th>
+                  <th className="px-4 py-3 text-right">Dias Fechado</th>
+                  <th className="px-4 py-3 text-right">Dias Pendente</th>
                   <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-zinc-400 font-bold uppercase tracking-widest italic">
+                    <td colSpan={10} className="px-4 py-12 text-center text-zinc-400 font-bold uppercase tracking-widest italic">
                       Nenhum backlog correspondente aos filtros ativos.
                     </td>
                   </tr>
@@ -1024,12 +1039,14 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                     const prioColor = CRITICIDADE_COLORS[item.mappedCriticidade] || { bg: 'bg-zinc-100', text: 'text-zinc-500' }
                     const statColor = STATUS_COLORS[item.mappedStatus] || { bg: 'bg-zinc-100 border-zinc-200', text: 'text-zinc-500' }
 
-                    // Aging color scale
+                    // Aging color scale for pending items
                     let agingBg = 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
-                    if (item.diasAberto > 30) {
-                      agingBg = 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
-                    } else if (item.diasAberto > 15) {
-                      agingBg = 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400'
+                    if (item.diasPendente !== null) {
+                      if (item.diasPendente > 30) {
+                        agingBg = 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
+                      } else if (item.diasPendente > 15) {
+                        agingBg = 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400'
+                      }
                     }
 
                     return (
@@ -1065,10 +1082,25 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                             {item.mappedStatus}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className={cn("px-2 py-0.5 rounded font-mono font-black text-[9px]", agingBg)}>
-                            {item.diasAberto}
-                          </span>
+                        <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
+                          {item.data_evidencia ? item.data_evidencia.split('T')[0].split('-').reverse().join('/') : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
+                          {item.data_conclusao ? item.data_conclusao.split('T')[0].split('-').reverse().join('/') : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {item.diasFechado !== null ? (
+                            <span className="px-2 py-0.5 rounded font-black bg-zinc-150 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 text-[9px]">
+                              {item.diasFechado} d
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {item.diasPendente !== null ? (
+                            <span className={cn("px-2 py-0.5 rounded font-black text-[9px]", agingBg)}>
+                              {item.diasPendente} d
+                            </span>
+                          ) : '—'}
                         </td>
                         <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1089,7 +1121,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                           </div>
                         </td>
                       </tr>
-                    )
+                    );
                   })
                 )}
               </tbody>

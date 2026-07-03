@@ -466,160 +466,163 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
         {/* Row 2: Search + Filters */}
         {view !== 'Dashboard' && (
-          <div className="flex flex-wrap gap-3 items-center">
-          {/* Text search */}
-          <div className="relative flex-1 group">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-            <input
-              type="text"
-              placeholder="BUSCAR POR FROTA OU DESCRIÇÃO..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-12 pr-6 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
-            />
+          <div className="flex flex-col gap-4">
+            {/* Search Input (Full Width) */}
+            <div className="relative group w-full">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
+              <input
+                type="text"
+                placeholder="BUSCAR POR FROTA OU DESCRIÇÃO..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-12 pr-6 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+              />
+            </div>
+
+            {/* Filters Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* Placa filter */}
+              <select
+                value={filterPlaca}
+                onChange={e => setFilterPlaca(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterPlaca
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">🚛 TODAS AS PLACAS</option>
+                {placaOptions.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+
+              {/* Módulo filter */}
+              <select
+                value={filterModulo}
+                onChange={e => setFilterModulo(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterModulo
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">📍 TODOS OS MÓDULOS</option>
+                {moduloOptions.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+
+              {/* Área filter */}
+              <select
+                value={filterArea}
+                onChange={e => setFilterArea(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterArea
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">🏢 TODAS AS ÁREAS</option>
+                {areaOptions.map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+
+              {/* Status filter */}
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterStatus
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">📋 TODOS OS STATUS</option>
+                {statusOptions.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+
+              {/* Criticidade filter */}
+              <select
+                value={filterCriticidade}
+                onChange={e => setFilterCriticidade(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterCriticidade
+                    ? "bg-orange-600 text-white border-orange-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">⚠️ TODA CRITICIDADE</option>
+                {criticidadeOptions.map(c => (
+                  <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>
+                ))}
+              </select>
+
+              {/* Mês filter */}
+              <select
+                value={filterMes}
+                onChange={e => setFilterMes(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterMes
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">📅 TODOS OS MESES</option>
+                {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map(m => (
+                  <option key={m} value={m}>{m.toUpperCase()}</option>
+                ))}
+              </select>
+
+              {/* Ano filter */}
+              <select
+                value={filterAno}
+                onChange={e => setFilterAno(e.target.value)}
+                className={cn(
+                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
+                  filterAno
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                )}
+              >
+                <option value="">📅 TODOS OS ANOS</option>
+                {anoOptions.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+
+              {/* Data Início */}
+              <div className="flex items-center justify-between gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm w-full">
+                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">De:</span>
+                <input 
+                  type="date" 
+                  value={filterDataInicio} 
+                  onChange={e => setFilterDataInicio(e.target.value)}
+                  className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer w-full text-right"
+                />
+              </div>
+
+              {/* Data Fim */}
+              <div className="flex items-center justify-between gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm w-full">
+                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Até:</span>
+                <input 
+                  type="date" 
+                  value={filterDataFim} 
+                  onChange={e => setFilterDataFim(e.target.value)}
+                  className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer w-full text-right"
+                />
+              </div>
+            </div>
           </div>
-
-          {/* Placa filter */}
-          <select
-            value={filterPlaca}
-            onChange={e => setFilterPlaca(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[160px]",
-              filterPlaca
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">🚛 TODAS AS PLACAS</option>
-            {placaOptions.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-
-          {/* Módulo filter */}
-          <select
-            value={filterModulo}
-            onChange={e => setFilterModulo(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[170px]",
-              filterModulo
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">📍 TODOS OS MÓDULOS</option>
-            {moduloOptions.map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-
-          {/* Área filter */}
-          <select
-            value={filterArea}
-            onChange={e => setFilterArea(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[170px]",
-              filterArea
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">🏢 TODAS AS ÁREAS</option>
-            {areaOptions.map(a => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-
-          {/* Status filter */}
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[160px]",
-              filterStatus
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">📋 TODOS OS STATUS</option>
-            {statusOptions.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-
-          {/* Criticidade filter */}
-          <select
-            value={filterCriticidade}
-            onChange={e => setFilterCriticidade(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[180px]",
-              filterCriticidade
-                ? "bg-orange-600 text-white border-orange-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">⚠️ TODA CRITICIDADE</option>
-            {criticidadeOptions.map(c => (
-              <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>
-            ))}
-          </select>
-
-          {/* Mês filter */}
-          <select
-            value={filterMes}
-            onChange={e => setFilterMes(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[150px]",
-              filterMes
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">📅 TODOS OS MESES</option>
-            {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map(m => (
-              <option key={m} value={m}>{m.toUpperCase()}</option>
-            ))}
-          </select>
-
-          {/* Ano filter */}
-          <select
-            value={filterAno}
-            onChange={e => setFilterAno(e.target.value)}
-            className={cn(
-              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[120px]",
-              filterAno
-                ? "bg-indigo-600 text-white border-indigo-500"
-                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-            )}
-          >
-            <option value="">📅 TODOS OS ANOS</option>
-            {anoOptions.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-
-          {/* Data Início */}
-          <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm">
-            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">De:</span>
-            <input 
-              type="date" 
-              value={filterDataInicio} 
-              onChange={e => setFilterDataInicio(e.target.value)}
-              className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer"
-            />
-          </div>
-
-          {/* Data Fim */}
-          <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm">
-            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Até:</span>
-            <input 
-              type="date" 
-              value={filterDataFim} 
-              onChange={e => setFilterDataFim(e.target.value)}
-              className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer"
-            />
-          </div>
-        </div>
         )}
       </div>
 
