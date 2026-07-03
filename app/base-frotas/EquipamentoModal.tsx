@@ -15,7 +15,7 @@ const todayStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const TIPOS = ['COMBOIO', 'MUNCK', 'MULTIFUNCIONAL', 'PIPA', 'ESCAVADEIRA', 'CARRETAGEM', 'SAVEIRO', 'ESTRADA', 'C3', 'SKID', 'OUTROS']
+const TIPOS = ['COMBOIO', 'MUNCK', 'MULTIFUNCIONAL', 'PIPA', 'ESCAVADEIRA', 'CARRETAGEM', 'SAVEIRO', 'STRADA', 'C3', 'SKID', 'OUTROS']
 
 export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: EquipamentoModalProps) {
   const [loading, setLoading] = useState(false)

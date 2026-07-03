@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Clipboard, ShieldCheck, Truck, Zap, Plus, AlertCircle, Edit2, Trash2, X, ChevronDown, Calendar as CalendarIcon, Search, Eye, Download, FileText } from "lucide-react";
+import { Clipboard, ShieldCheck, Truck, Zap, Plus, AlertCircle, Edit2, Trash2, X, ChevronDown, Calendar as CalendarIcon, Search, Eye, Download, FileText, Upload, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
@@ -15,6 +15,7 @@ import {
   upsertCrlveLeve, deleteCrlveLeve
 } from "./actions";
 import { createClient } from "@/utils/supabase/client";
+import Script from "next/script";
 
 // --- Utilitários ---
 
@@ -134,7 +135,6 @@ export default function DocumentosClient({
   const [filterStatus, setFilterStatus] = useState("todos"); // "todos", "vencidos", "proximos", "em_dias"
   const [showFilters, setShowFilters] = useState(false);
 
-  // Estados dos modais
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -142,6 +142,106 @@ export default function DocumentosClient({
   const openModal = (data: any = null) => {
     setEditingData(data);
     setModalOpen(true);
+  };
+
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportExcel = () => {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("A biblioteca do Excel ainda está carregando.");
+      return;
+    }
+
+    let data: any[] = [];
+    let nomeAba = "";
+    if (activeTab === "tacografo") { data = initialTacografos; nomeAba = "Tacógrafo"; }
+    if (activeTab === "civ_cipp") { data = initialCivCipps; nomeAba = "CIV-CIPP"; }
+    if (activeTab === "laudo_eletromecanico") { data = initialLaudosEletro; nomeAba = "Laudo Eletromecânico"; }
+    if (activeTab === "laudo_implemento") { data = initialLaudosImplemento; nomeAba = "Laudo Implemento"; }
+    if (activeTab === "crlve_pesados") { data = initialCrlvePesados; nomeAba = "CRLVE Pesados"; }
+    if (activeTab === "crlve_leve") { data = initialCrlveLeves; nomeAba = "CRLVE Leve"; }
+
+    const exportRows = data.map(item => {
+      const row: any = {
+        'Local': item.local,
+        'C.O': item.co,
+        'Placa': item.placa,
+        'Data Vencimento': item.data_vencimento
+      };
+      if (activeTab === 'laudo_eletromecanico' || activeTab === 'laudo_implemento') {
+        row['Período'] = item.periodo;
+        row['Data Expedição'] = item.data_expedicao;
+        row['Observações'] = item.observacoes || '';
+      }
+      if (activeTab === 'crlve_pesados' || activeTab === 'crlve_leve') {
+        row['Ano'] = item.ano;
+        row['Observações'] = item.observacoes || '';
+      }
+      return row;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, nomeAba.slice(0, 30));
+    XLSX.writeFile(workbook, `documentos_${nomeAba.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_')}.xlsx`);
+  };
+
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("A biblioteca do Excel ainda está carregando.");
+      return;
+    }
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const fileData = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(fileData, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        let dbTable = "";
+        let storeName = "";
+        if (activeTab === "tacografo") { dbTable = "docs_tacografo"; storeName = "docs_tacografo"; }
+        if (activeTab === "civ_cipp") { dbTable = "docs_civ_cipp"; storeName = "docs_civ_cipp"; }
+        if (activeTab === "laudo_eletromecanico") { dbTable = "docs_laudo_eletromecanico"; storeName = "docs_laudo_eletromecanico"; }
+        if (activeTab === "laudo_implemento") { dbTable = "docs_laudo_implemento"; storeName = "docs_laudo_implemento"; }
+        if (activeTab === "crlve_pesados") { dbTable = "docs_crlve_pesados"; storeName = "docs_crlve_pesados"; }
+        if (activeTab === "crlve_leve") { dbTable = "docs_crlve_leve"; storeName = "docs_crlve_leve"; }
+
+        if (isOnline) {
+          const { importarDocumentos } = await import("./actions");
+          const res = await importarDocumentos(dbTable, json);
+          if (res && 'error' in res) {
+            alert(`Erro na importação: ${res.error}`);
+          } else {
+            alert(`Importação concluída com sucesso! ${res.count} registros processados.`);
+            
+            const { syncAllTables } = await import("@/lib/offline-sync");
+            await syncAllTables();
+            
+            window.dispatchEvent(new CustomEvent(`offline-db-updated-${storeName}`));
+          }
+        } else {
+          alert("A importação de planilhas exige uma conexão ativa com a internet.");
+        }
+      } catch (err: any) {
+        console.error(err);
+        alert("Erro ao processar arquivo Excel: " + (err.message || String(err)));
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    if (importFileInputRef.current) importFileInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -597,15 +697,36 @@ export default function DocumentosClient({
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Gestão de CIV/CIPP, Tacógrafo e Laudos</p>
         </div>
-        
-        {!isVisitante && (
-          <button
-            onClick={() => openModal(null)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+        <div className="flex flex-wrap items-center gap-3">
+          {!isVisitante && (
+            <>
+              <input type="file" accept=".xlsx,.xls,.csv" ref={importFileInputRef} onChange={handleImportExcel} className="hidden" />
+              <button 
+                onClick={() => importFileInputRef.current?.click()} 
+                disabled={isImporting}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm",
+                  isImporting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                )}
+              >
+                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload size={16} />}
+                {isImporting ? "Importando..." : "Importar Excel"}
+              </button>
+              <button
+                onClick={() => openModal(null)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+              >
+                <Plus size={18} /> Novo Registro
+              </button>
+            </>
+          )}
+          <button 
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors shadow-sm active:scale-95"
           >
-            <Plus size={18} /> Novo Registro
+            <Download size={16} /> Exportar Excel
           </button>
-        )}
+        </div>
       </div>
 
       {/* Control Area: Tabs & Search */}
@@ -718,6 +839,7 @@ export default function DocumentosClient({
       >
         {renderFormContent()}
       </ModalBase>
+      <Script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" strategy="lazyOnload" />
     </div>
   );
 }

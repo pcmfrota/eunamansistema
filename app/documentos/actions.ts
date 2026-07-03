@@ -280,3 +280,180 @@ export async function deleteLaudoImplemento(id: string) {
   revalidatePath('/documentos');
   return { success: true };
 }
+
+// CRLVE Pesados
+export async function upsertCrlvePesados(formData: FormData) {
+  const supabase = createClient();
+  
+  const id = formData.get('id') as string | null;
+  const local = formData.get('local') as string;
+  const co = formData.get('co') as string;
+  const placa = formData.get('placa') as string;
+  const rawDate = formData.get('data_vencimento') as string | null;
+  const data_vencimento = rawDate && rawDate.trim() !== "" ? rawDate : null;
+  const ano = formData.get('ano') as string;
+  const observacoes = formData.get('observacoes') as string;
+  const anexo_url = formData.get('anexo_url') as string;
+
+  const payload = { local, co, placa, data_vencimento, ano, observacoes, anexo_url };
+
+  if (id) {
+    const { error } = await supabase.from('docs_crlve_pesados').update(payload).eq('id', id);
+    if (error) return { error: error.message };
+  } else {
+    const { cookies } = await import('next/headers');
+    const filialId = cookies().get('x-user-filial')?.value || 'MATRIZ';
+    const { error } = await supabase.from('docs_crlve_pesados').insert({ ...payload, filial_id: filialId });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath('/documentos');
+  return { success: true };
+}
+
+export async function deleteCrlvePesados(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from('docs_crlve_pesados').delete().eq('id', id);
+  if (error) return { error: error.message };
+  revalidatePath('/documentos');
+  return { success: true };
+}
+
+// CRLVE Leve
+export async function upsertCrlveLeve(formData: FormData) {
+  const supabase = createClient();
+  
+  const id = formData.get('id') as string | null;
+  const local = formData.get('local') as string;
+  const co = formData.get('co') as string;
+  const placa = formData.get('placa') as string;
+  const rawDate = formData.get('data_vencimento') as string | null;
+  const data_vencimento = rawDate && rawDate.trim() !== "" ? rawDate : null;
+  const ano = formData.get('ano') as string;
+  const observacoes = formData.get('observacoes') as string;
+  const anexo_url = formData.get('anexo_url') as string;
+
+  const payload = { local, co, placa, data_vencimento, ano, observacoes, anexo_url };
+
+  if (id) {
+    const { error } = await supabase.from('docs_crlve_leve').update(payload).eq('id', id);
+    if (error) return { error: error.message };
+  } else {
+    const { cookies } = await import('next/headers');
+    const filialId = cookies().get('x-user-filial')?.value || 'MATRIZ';
+    const { error } = await supabase.from('docs_crlve_leve').insert({ ...payload, filial_id: filialId });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath('/documentos');
+  return { success: true };
+}
+
+export async function deleteCrlveLeve(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from('docs_crlve_leve').delete().eq('id', id);
+  if (error) return { error: error.message };
+  revalidatePath('/documentos');
+  return { success: true };
+}
+
+// Importador unificado de planilhas para Documentos da Frota
+export async function importarDocumentos(tabela: string, rows: any[]) {
+  try {
+    const supabase = createClient();
+    const { cookies } = await import('next/headers');
+    const filialId = cookies().get('x-user-filial')?.value || 'MATRIZ';
+
+    const mapped = rows.map(row => {
+      const getVal = (aliases: string[]) => {
+        for (const alias of aliases) {
+          const val = row[alias];
+          if (val !== undefined && val !== null && val !== '') return val;
+          const key = Object.keys(row).find(k => k.toLowerCase().trim() === alias.toLowerCase().trim());
+          if (key && row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key];
+        }
+        return null;
+      };
+
+      const placaVal = String(getVal(['placa', 'veiculo', 'veículo', 'equipamento', 'placa_veiculo']) || '').toUpperCase().trim();
+      if (!placaVal) return null;
+
+      const dataVencRaw = getVal(['data_vencimento', 'vencimento', 'validade', 'venc', 'data vencimento']);
+      let data_vencimento: string | null = null;
+      if (dataVencRaw) {
+        if (typeof dataVencRaw === 'number') {
+          const date = new Date((dataVencRaw - 25569) * 86400 * 1000);
+          data_vencimento = date.toISOString().slice(0, 10);
+        } else {
+          const str = String(dataVencRaw).trim();
+          if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length === 3) {
+              data_vencimento = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+          } else if (str.includes('-')) {
+            data_vencimento = str.slice(0, 10);
+          }
+        }
+      }
+
+      const baseRow: any = {
+        placa: placaVal,
+        local: String(getVal(['local', 'setor', 'modulo', 'módulo', 'area', 'área']) || 'BASE').toUpperCase().trim(),
+        co: String(getVal(['co', 'c.o', 'tipo', 'descricao', 'descrição', 'categoria']) || 'OUTROS').toUpperCase().trim(),
+        filial_id: filialId,
+        data_vencimento: data_vencimento
+      };
+
+      if (tabela === 'docs_laudo_eletromecanico' || tabela === 'docs_laudo_implemento') {
+        const dataExpRaw = getVal(['data_expedicao', 'expedicao', 'expedição', 'data_exp', 'data expedicao']);
+        let data_expedicao = new Date().toISOString().slice(0, 10);
+        if (dataExpRaw) {
+          if (typeof dataExpRaw === 'number') {
+            const date = new Date((dataExpRaw - 25569) * 86400 * 1000);
+            data_expedicao = date.toISOString().slice(0, 10);
+          } else {
+            const str = String(dataExpRaw).trim();
+            if (str.includes('/')) {
+              const parts = str.split('/');
+              if (parts.length === 3) {
+                data_expedicao = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              }
+            } else if (str.includes('-')) {
+              data_expedicao = str.slice(0, 10);
+            }
+          }
+        }
+        baseRow.data_expedicao = data_expedicao;
+        baseRow.periodo = String(getVal(['periodo', 'período', 'vigencia', 'vigência']) || '6 MESES').toUpperCase().trim();
+        baseRow.observacoes = getVal(['observacoes', 'observação', 'obs']) ? String(getVal(['observacoes', 'observação', 'obs'])).trim() : null;
+      }
+
+      if (tabela === 'docs_crlve_pesados' || tabela === 'docs_crlve_leve') {
+        baseRow.ano = getVal(['ano', 'exercicio', 'exercício']) ? String(getVal(['ano', 'exercicio', 'exercício'])).trim() : new Date().getFullYear().toString();
+        baseRow.observacoes = getVal(['observacoes', 'observação', 'obs']) ? String(getVal(['observacoes', 'observação', 'obs'])).trim() : null;
+      }
+
+      return baseRow;
+    }).filter(Boolean);
+
+    if (mapped.length === 0) {
+      return { error: 'Nenhum registro válido encontrado para importação.' };
+    }
+
+    // Para evitar duplicidade de registros ativos, deletamos placas que já constam na lista
+    const placas = mapped.map(m => m.placa);
+    if (placas.length > 0) {
+      await supabase.from(tabela).delete().in('placa', placas);
+    }
+
+    const { error } = await supabase.from(tabela).insert(mapped);
+    if (error) return { error: error.message };
+
+    revalidatePath('/documentos');
+    return { success: true, count: mapped.length };
+  } catch (err: any) {
+    return { error: err.message || String(err) };
+  }
+}
+

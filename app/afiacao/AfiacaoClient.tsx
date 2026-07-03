@@ -3,97 +3,99 @@
 import { useState } from "react";
 import AfiacaoForm from "./AfiacaoForm";
 import PlanilhaLancamentos from "./PlanilhaLancamentos";
+import BancoDadosAfiacao from "./BancoDadosAfiacao";
+import BaseAuxiliarAfiacao from "./BaseAuxiliarAfiacao";
+import { buscarAuxiliaresAfiacao } from "./actions";
 
-export default function AfiacaoClient({ initialAfiacoes }: { initialAfiacoes: any[] }) {
-  const [activeTab, setActiveTab] = useState<"banco" | "formulario" | "planilha">("formulario");
+export default function AfiacaoClient({
+  initialAfiacoes,
+  initialAuxiliares,
+}: {
+  initialAfiacoes: any[];
+  initialAuxiliares: any[];
+}) {
+  const [activeTab, setActiveTab] = useState<"banco" | "formulario" | "planilha" | "auxiliares">("banco");
   const [afiacoes, setAfiacoes] = useState(initialAfiacoes);
+  const [auxiliares, setAuxiliares] = useState(initialAuxiliares);
+
+  const handleUpdate = (updated: any) => {
+    setAfiacoes((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+  };
+
+  const handleDelete = (id: string) => {
+    setAfiacoes((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleInsert = (newAfiacao: any) => {
+    if (newAfiacao) {
+      setAfiacoes((prev) => [newAfiacao, ...prev]);
+    }
+    setActiveTab("banco");
+  };
+
+  const atualizarListaAuxiliares = async () => {
+    const fresh = await buscarAuxiliaresAfiacao();
+    setAuxiliares(fresh);
+  };
+
+  const tabs: { key: "banco" | "formulario" | "planilha" | "auxiliares"; label: string; icon: string }[] = [
+    { key: "banco",      label: "BANCO DE DADOS",       icon: "🗄️" },
+    { key: "formulario", label: "FORMULÁRIO AFIAÇÃO",   icon: "📝" },
+    { key: "planilha",   label: "PLANILHA LANÇAMENTOS", icon: "📊" },
+    { key: "auxiliares", label: "BASE AUXILIAR",        icon: "⚙️" },
+  ];
 
   return (
     <div className="w-full">
-      {/* Tabs List */}
-      <div className="flex border-b border-gray-200">
-        <button
-          className={`py-2 px-4 text-sm font-medium ${
-            activeTab === "banco"
-              ? "border-b-2 border-blue-500 text-blue-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-          onClick={() => setActiveTab("banco")}
-        >
-          BANCO DE DADOS
-        </button>
-        <button
-          className={`py-2 px-4 text-sm font-medium ${
-            activeTab === "formulario"
-              ? "border-b-2 border-blue-500 text-blue-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-          onClick={() => setActiveTab("formulario")}
-        >
-          FORMULÁRIO AFIAÇÃO
-        </button>
-        <button
-          className={`py-2 px-4 text-sm font-medium ${
-            activeTab === "planilha"
-              ? "border-b-2 border-blue-500 text-blue-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-          onClick={() => setActiveTab("planilha")}
-        >
-          PLANILHA LANÇAMENTOS
-        </button>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`flex items-center gap-1.5 py-2.5 px-5 text-sm font-semibold transition-all border-b-2 ${
+              activeTab === t.key
+                ? "border-blue-600 text-blue-700 bg-blue-50/50"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span>{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tabs Content */}
+      {/* Conteúdo */}
       <div className="pt-4">
         {activeTab === "banco" && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 border">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Afiador</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Módulo</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Máquina</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Letra</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kit</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Detalhes</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {afiacoes.map((a: any, i) => (
-                  <tr key={a.id || i}>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.data}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.afiador}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.modulo}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.maquina}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.letra}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.kit}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm">{a.tipo_formulario}</td>
-                    <td className="px-4 py-2 text-sm">{JSON.stringify(a.detalhes)}</td>
-                  </tr>
-                ))}
-                {afiacoes.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-4 text-center text-sm text-gray-500">
-                      Nenhum registro encontrado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <BancoDadosAfiacao
+            afiacoes={afiacoes}
+            auxiliares={auxiliares}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+          />
         )}
-        
+
         {activeTab === "formulario" && (
-          <AfiacaoForm onSuccess={(newAfiacao: any) => setAfiacoes([newAfiacao, ...afiacoes])} />
+          <AfiacaoForm
+            onSuccess={handleInsert}
+            auxiliares={auxiliares}
+          />
         )}
 
         {activeTab === "planilha" && (
           <PlanilhaLancamentos afiacoes={afiacoes} />
         )}
+
+        {activeTab === "auxiliares" && (
+          <BaseAuxiliarAfiacao
+            auxiliares={auxiliares}
+            onAdd={atualizarListaAuxiliares}
+            onDelete={atualizarListaAuxiliares}
+          />
+        )}
       </div>
     </div>
   );
 }
+
