@@ -164,21 +164,35 @@ export default function DocumentosClient({
     if (activeTab === "crlve_leve") { data = initialCrlveLeves; nomeAba = "CRLVE Leve"; }
 
     const exportRows = data.map(item => {
+      const isDateNull = !item.data_vencimento || item.data_vencimento === "-" || item.data_vencimento === "";
+      const dias = isDateNull ? "-" : calcularDias(item.data_vencimento);
+
       const row: any = {
-        'Local': item.local,
-        'C.O': item.co,
-        'Placa': item.placa,
-        'Data Vencimento': item.data_vencimento
+        'Local': item.local ? String(item.local).toUpperCase() : '',
+        'C.O': item.co ? String(item.co).toUpperCase() : '',
+        'Placa': item.placa ? String(item.placa).toUpperCase() : '',
       };
-      if (activeTab === 'laudo_eletromecanico' || activeTab === 'laudo_implemento') {
-        row['Período'] = item.periodo;
-        row['Data Expedição'] = item.data_expedicao;
-        row['Observações'] = item.observacoes || '';
-      }
+
       if (activeTab === 'crlve_pesados' || activeTab === 'crlve_leve') {
-        row['Ano'] = item.ano;
+        row['Ano'] = item.ano || '';
+      }
+      if (activeTab === 'laudo_eletromecanico' || activeTab === 'laudo_implemento') {
+        row['Período'] = item.periodo || '';
+        row['Data Expedição'] = formatarData(item.data_expedicao);
+      }
+
+      // Nome da coluna de vencimento idêntico ao do sistema
+      let labelVenc = 'Data Vencimento';
+      if (activeTab === 'tacografo') labelVenc = 'Tacógrafo (Venc)';
+      else if (activeTab === 'civ_cipp') labelVenc = 'CIV e CIPP (Venc)';
+
+      row[labelVenc] = formatarData(item.data_vencimento);
+      row['Status'] = dias;
+
+      if (activeTab === 'laudo_eletromecanico' || activeTab === 'laudo_implemento' || activeTab === 'crlve_pesados' || activeTab === 'crlve_leve') {
         row['Observações'] = item.observacoes || '';
       }
+
       return row;
     });
 

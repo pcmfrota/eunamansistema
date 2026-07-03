@@ -378,7 +378,10 @@ export async function importarDocumentos(tabela: string, rows: any[]) {
       const placaVal = String(getVal(['placa', 'veiculo', 'veículo', 'equipamento', 'placa_veiculo']) || '').toUpperCase().trim();
       if (!placaVal) return null;
 
-      const dataVencRaw = getVal(['data_vencimento', 'vencimento', 'validade', 'venc', 'data vencimento']);
+      const dataVencRaw = getVal([
+        'data_vencimento', 'vencimento', 'validade', 'venc', 'data vencimento',
+        'tacografo (venc)', 'tacógrafo (venc)', 'civ e cipp (venc)', 'civ/cipp (venc)', 'civ e cipp', 'tacógrafo', 'tacografo'
+      ]);
       let data_vencimento: string | null = null;
       if (dataVencRaw) {
         if (typeof dataVencRaw === 'number') {
