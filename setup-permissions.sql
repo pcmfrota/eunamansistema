@@ -24,10 +24,10 @@ CREATE POLICY "Only admins can update role permissions" ON public.role_permissio
 
 -- Inicializa as permissões padrão
 INSERT INTO public.role_permissions (role, allowed_tabs) VALUES
-('admin', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/admin/usuarios']),
-('pcm', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens']),
-('gestao', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens']),
-('visitante', ARRAY['/', '/preventivas', '/backlog']),
-('mecanico', ARRAY['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario']),
-('motorista', ARRAY['/', '/pneus', '/calendario', '/lavagens'])
+('admin', ARRAY['/', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/admin/usuarios']),
+('pcm', ARRAY['/', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos']),
+('gestao', ARRAY['/', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos']),
+('visitante', ARRAY['/', '/preventivas', '/backlog', '/calendario', '/documentos']),
+('mecanico', ARRAY['/', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos']),
+('motorista', ARRAY['/', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'])
 ON CONFLICT (role) DO UPDATE SET allowed_tabs = EXCLUDED.allowed_tabs;

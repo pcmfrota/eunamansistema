@@ -46,6 +46,12 @@ export default function BacklogPage() {
 
         // 2. Se online, roda sync e atualiza do IndexedDB
         if (isOnline) {
+          try {
+            const { syncRolePermissions } = await import("./actions");
+            await syncRolePermissions();
+          } catch (e) {
+            console.error("Erro ao rodar syncRolePermissions:", e);
+          }
           const { syncAllTables } = await import("@/lib/offline-sync");
           const syncSuccess = await syncAllTables();
           if (syncSuccess) {

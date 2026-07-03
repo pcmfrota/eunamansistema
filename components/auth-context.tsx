@@ -213,13 +213,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const rolePerm = allPerms.find(p => p.role === finalRole);
       let finalPerms: string[] = [];
 
-      const allTabs = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/admin/usuarios'];
+      const allTabs = ['/', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/admin/usuarios'];
       if (rolePerm?.allowed_tabs && rolePerm.allowed_tabs.length > 0) {
         finalPerms = rolePerm.allowed_tabs;
       } else {
         if (finalRole === 'admin') finalPerms = allTabs;
         else if (finalRole === 'visitante') finalPerms = ['/', '/preventivas', '/backlog', '/calendario', '/documentos'];
-        else if (finalRole === 'mecanico') finalPerms = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
+        else if (finalRole === 'mecanico') finalPerms = ['/', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
         else if (finalRole === 'motorista') finalPerms = ['/', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
         else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
       }

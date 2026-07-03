@@ -66,3 +66,60 @@ export async function encerrarBacklogs(ids: string[], osNumero: string, dataConc
   }
 }
 
+export async function syncRolePermissions() {
+  try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+    
+    const { data: permissionsList, error: getError } = await supabase
+      .from('role_permissions')
+      .select('role, allowed_tabs');
+      
+    if (getError) throw new Error(getError.message);
+    
+    if (permissionsList && permissionsList.length > 0) {
+      for (const row of permissionsList) {
+        let changed = false;
+        const tabs = row.allowed_tabs || [];
+        
+        if (['admin', 'pcm', 'gestao', 'mecanico'].includes(row.role)) {
+          if (!tabs.includes('/afiacao')) {
+            tabs.push('/afiacao');
+            changed = true;
+          }
+        }
+        
+        if (['admin', 'pcm', 'gestao', 'mecanico', 'motorista'].includes(row.role)) {
+          if (!tabs.includes('/captacao')) {
+            tabs.push('/captacao');
+            changed = true;
+          }
+          if (!tabs.includes('/documentos')) {
+            tabs.push('/documentos');
+            changed = true;
+          }
+        }
+        
+        if (['admin', 'pcm', 'gestao', 'mecanico'].includes(row.role)) {
+          if (!tabs.includes('/checklist-mecanicos')) {
+            tabs.push('/checklist-mecanicos');
+            changed = true;
+          }
+        }
+        
+        if (changed) {
+          await supabase
+            .from('role_permissions')
+            .update({ allowed_tabs: tabs })
+            .eq('role', row.role);
+        }
+      }
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao sincronizar permissões:", error);
+    return { error: error.message };
+  }
+}
+
