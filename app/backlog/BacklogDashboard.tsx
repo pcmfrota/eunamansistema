@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 interface Props {
   items: any[]
   placas: any[]
+  calendario?: any[]
   onEdit: (item: any) => void
   onDelete: (id: string) => void
 }
@@ -34,14 +35,39 @@ const MONTHS_PT = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ]
 
-export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Props) {
+export default function BacklogDashboard({ items, placas, calendario = [], onEdit, onDelete }: Props) {
+  const currentPeriod = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
+    if (period) return period;
+    
+    const now = new Date();
+    return {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1
+    };
+  }, [calendario]);
+
+  const defaultMonthName = useMemo(() => {
+    const months = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+    return months[Number(currentPeriod.mes) - 1] || 'janeiro';
+  }, [currentPeriod]);
+
+  const defaultYearString = useMemo(() => {
+    return String(currentPeriod.ano);
+  }, [currentPeriod]);
+
   // Global Filters
   const [filterStatuses, setFilterStatuses] = useState<string[]>(['PENDENTE', 'PROGRAMADO', 'ENCERRADO'])
   const [filterCriticidade, setFilterCriticidade] = useState('')
   const [filterFornecedor, setFilterFornecedor] = useState('')
   const [filterArea, setFilterArea] = useState('')
   const [filterModulo, setFilterModulo] = useState('')
-  const [filterAno, setFilterAno] = useState('2026')
+  const [filterAno, setFilterAno] = useState(defaultYearString)
+  const [filterMes, setFilterMes] = useState(defaultMonthName)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -50,6 +76,8 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
   const itemsPerPage = 10
 
   const [filterMecanico, setFilterMecanico] = useState('')
+  const [filterDataInicio, setFilterDataInicio] = useState('')
+  const [filterDataFim, setFilterDataFim] = useState('')
 
   // Map database status and criticidade to target dashboard schema
   const mappedItems = useMemo(() => {
@@ -162,6 +190,17 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
       // 6. Ano (Data)
       if (filterAno && item.mappedYear !== filterAno) return false
 
+      // 6c. Mês (Data)
+      if (filterMes && item.mappedMonth !== filterMes) return false
+
+      // 6b. Date Range Filter
+      if (filterDataInicio || filterDataFim) {
+        if (!item.data_evidencia) return false;
+        const itemDate = item.data_evidencia.split('T')[0];
+        if (filterDataInicio && itemDate < filterDataInicio) return false;
+        if (filterDataFim && itemDate > filterDataFim) return false;
+      }
+
       // 7. Mecanico
       if (filterMecanico && item.colaborador !== filterMecanico) return false
 
@@ -176,7 +215,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
 
       return true
     })
-  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMecanico, search])
+  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterMecanico, filterDataInicio, filterDataFim, search])
 
   // Reset pagination to first page on filter changes
   useEffect(() => {
@@ -563,7 +602,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
           </div>
 
           {/* Grid de Filtros */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-3">
             
             {/* Filtro Status Multi-select */}
             <div className="relative">
@@ -667,7 +706,7 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
 
             {/* Data (Ano) */}
             <div>
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Data</label>
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Ano</label>
               <select
                 value={filterAno}
                 onChange={e => setFilterAno(e.target.value)}
@@ -676,6 +715,21 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                 <option value="">Todos</option>
                 {filterOptions.anos.map(a => (
                   <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mês */}
+            <div>
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Mês</label>
+              <select
+                value={filterMes}
+                onChange={e => setFilterMes(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              >
+                <option value="">Todos</option>
+                {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map(m => (
+                  <option key={m} value={m}>{m.toUpperCase()}</option>
                 ))}
               </select>
             </div>
@@ -693,6 +747,28 @@ export default function BacklogDashboard({ items, placas, onEdit, onDelete }: Pr
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Data Início */}
+            <div>
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">De</label>
+              <input
+                type="date"
+                value={filterDataInicio}
+                onChange={e => setFilterDataInicio(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              />
+            </div>
+
+            {/* Data Fim */}
+            <div>
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-1">Até</label>
+              <input
+                type="date"
+                value={filterDataFim}
+                onChange={e => setFilterDataFim(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
+              />
             </div>
 
           </div>

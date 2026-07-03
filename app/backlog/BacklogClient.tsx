@@ -30,7 +30,7 @@ import { localDb } from '@/lib/offline-db';
 type Placa = { id: string; placa: string; modulo: string | null; area: string | null };
 type Colaborador = { id: string; nome: string };
 
-export default function BacklogClient({ placas, colaboradores }: { placas: Placa[], colaboradores: Colaborador[] }) {
+export default function BacklogClient({ placas, colaboradores, calendario = [] }: { placas: Placa[], colaboradores: Colaborador[], calendario?: any[] }) {
   const { profile } = useAuth();
   const isVisitante = profile?.role === 'visitante';
   const { isOnline } = useOffline();
@@ -225,14 +225,42 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
     }
   };
 
+  const currentPeriod = React.useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
+    if (period) return period;
+    
+    const now = new Date();
+    return {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1
+    };
+  }, [calendario]);
+
+  const defaultMonthName = React.useMemo(() => {
+    const months = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+    return months[Number(currentPeriod.mes) - 1] || 'janeiro';
+  }, [currentPeriod]);
+
+  const defaultYearString = React.useMemo(() => {
+    return String(currentPeriod.ano);
+  }, [currentPeriod]);
+
   // Filter States
   const [filterPlaca, setFilterPlaca] = useState("");
   const [filterModulo, setFilterModulo] = useState("");
   const [filterArea, setFilterArea] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCriticidade, setFilterCriticidade] = useState("");
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
+  const [filterMes, setFilterMes] = useState(defaultMonthName);
+  const [filterAno, setFilterAno] = useState(defaultYearString);
 
-  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatus || filterCriticidade;
+  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatus || filterCriticidade || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
 
   const clearFilters = () => {
     setSearch("");
@@ -241,6 +269,10 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
     setFilterArea("");
     setFilterStatus("");
     setFilterCriticidade("");
+    setFilterDataInicio("");
+    setFilterDataFim("");
+    setFilterMes("");
+    setFilterAno("");
   };
 
   // Dynamic options from data - MEMOIZED
@@ -249,6 +281,19 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
   const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
   const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
+
+  const anoOptions = React.useMemo(() => {
+    const years = new Set<string>();
+    items.forEach(i => {
+      if (i.data_evidencia) {
+        const d = new Date(i.data_evidencia);
+        if (!isNaN(d.getTime())) years.add(String(d.getFullYear()));
+      } else if (i.ano) {
+        years.add(String(i.ano));
+      }
+    });
+    return Array.from(years).sort();
+  }, [items]);
 
   const filteredItems = React.useMemo(() => {
     const placasMap = new Map(localPlacas.map(p => [p.placa, p]));
@@ -268,9 +313,49 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
 
       const matchStatus = !filterStatus || i.status === filterStatus;
       const matchCriticidade = !filterCriticidade || i.criticidade === filterCriticidade;
-      return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade;
+
+      let matchData = true;
+      if (filterDataInicio || filterDataFim) {
+        if (!i.data_evidencia) {
+          matchData = false;
+        } else {
+          const itemDate = i.data_evidencia.split('T')[0];
+          if (filterDataInicio && itemDate < filterDataInicio) matchData = false;
+          if (filterDataFim && itemDate > filterDataFim) matchData = false;
+        }
+      }
+
+      let matchMonth = true;
+      let matchYear = true;
+      
+      let itemMonth = '';
+      let itemYear = '';
+      if (i.data_evidencia) {
+        const d = new Date(i.data_evidencia);
+        if (!isNaN(d.getTime())) {
+          const months = [
+            'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+            'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+          ];
+          itemMonth = months[d.getMonth()];
+          itemYear = String(d.getFullYear());
+        }
+      } else if (i.mes) {
+        const months = [
+          'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+          'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+        ];
+        const mIdx = parseInt(i.mes) - 1;
+        if (mIdx >= 0 && mIdx < 12) itemMonth = months[mIdx];
+        if (i.ano) itemYear = String(i.ano);
+      }
+
+      if (filterMes && itemMonth !== filterMes) matchMonth = false;
+      if (filterAno && itemYear !== filterAno) matchYear = false;
+
+      return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade && matchData && matchMonth && matchYear;
     });
-  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, localPlacas]);
+  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -381,7 +466,7 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
 
         {/* Row 2: Search + Filters */}
         {view !== 'Dashboard' && (
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <div className="flex flex-wrap gap-3 items-center">
           {/* Text search */}
           <div className="relative flex-1 group">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
@@ -478,6 +563,62 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
               <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>
             ))}
           </select>
+
+          {/* Mês filter */}
+          <select
+            value={filterMes}
+            onChange={e => setFilterMes(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[150px]",
+              filterMes
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">📅 TODOS OS MESES</option>
+            {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map(m => (
+              <option key={m} value={m}>{m.toUpperCase()}</option>
+            ))}
+          </select>
+
+          {/* Ano filter */}
+          <select
+            value={filterAno}
+            onChange={e => setFilterAno(e.target.value)}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none min-w-[120px]",
+              filterAno
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+            )}
+          >
+            <option value="">📅 TODOS OS ANOS</option>
+            {anoOptions.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+
+          {/* Data Início */}
+          <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm">
+            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">De:</span>
+            <input 
+              type="date" 
+              value={filterDataInicio} 
+              onChange={e => setFilterDataInicio(e.target.value)}
+              className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer"
+            />
+          </div>
+
+          {/* Data Fim */}
+          <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm">
+            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Até:</span>
+            <input 
+              type="date" 
+              value={filterDataFim} 
+              onChange={e => setFilterDataFim(e.target.value)}
+              className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer"
+            />
+          </div>
         </div>
         )}
       </div>
@@ -488,7 +629,7 @@ export default function BacklogClient({ placas, colaboradores }: { placas: Placa
         </div>
       ) : view === 'Dashboard' ? (
         /* Dashboard View */
-        <BacklogDashboard items={items} placas={localPlacas} onEdit={handleEdit} onDelete={handleDelete} />
+        <BacklogDashboard items={items} placas={localPlacas} calendario={calendario} onEdit={handleEdit} onDelete={handleDelete} />
       ) : (
         <>
           {/* Multi-Select Floating Bar */}

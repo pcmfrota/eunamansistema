@@ -11,6 +11,7 @@ export default function BacklogPage() {
   const [loading, setLoading] = useState(true);
   const [placas, setPlacas] = useState<any[]>([]);
   const [colaboradores, setColaboradores] = useState<any[]>([]);
+  const [calendario, setCalendario] = useState<any[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -20,6 +21,7 @@ export default function BacklogPage() {
         // 1. Carrega local (Offline-First)
         const localEq = await localDb.getAll("equipamentos");
         const localCol = await localDb.getAll("colaboradores");
+        const localCal = await localDb.getAll("calendario_suzano");
 
         const pl = localEq.map(e => ({
           id: e.id,
@@ -38,6 +40,7 @@ export default function BacklogPage() {
         if (active) {
           setPlacas(pl);
           setColaboradores(col);
+          setCalendario(localCal || []);
           setLoading(false);
         }
 
@@ -48,6 +51,7 @@ export default function BacklogPage() {
           if (syncSuccess) {
             const freshEq = await localDb.getAll("equipamentos");
             const freshCol = await localDb.getAll("colaboradores");
+            const freshCal = await localDb.getAll("calendario_suzano");
 
             const freshPl = freshEq.map(e => ({
               id: e.id,
@@ -66,6 +70,7 @@ export default function BacklogPage() {
             if (active) {
               setPlacas(freshPl);
               setColaboradores(freshColData);
+              setCalendario(freshCal || []);
             }
           }
         }
@@ -92,5 +97,5 @@ export default function BacklogPage() {
     );
   }
 
-  return <BacklogClient placas={placas} colaboradores={colaboradores} />;
+  return <BacklogClient placas={placas} colaboradores={colaboradores} calendario={calendario} />;
 }
