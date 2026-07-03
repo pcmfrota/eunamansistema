@@ -60,6 +60,7 @@ const navigation = [
   { name: 'Controle de Lavagens',     path: '/lavagens',               icon: ModernWaterIcon },
   { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
   { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
+  { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {
