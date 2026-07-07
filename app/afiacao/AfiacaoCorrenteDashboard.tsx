@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { Calendar, RefreshCw } from "lucide-react";
-import { extrairLinhas } from "./PlanilhaLancamentos";
+import { extrairLinhas } from "./afiacaoUtils";
 
 interface CorrenteDashboardProps {
   afiacoes: any[];

@@ -4,7 +4,11 @@ import React, { useState, useMemo, useRef } from "react";
 import { Plus, Trash2, Search, X, Calendar } from "lucide-react";
 import { salvarAfiacao, deletarAfiacao } from "./actions";
 import { MATERIAIS_DB, buscarMaterialPorCodigo } from "./materiaisDB";
-import { AFIADORES } from "./AfiacaoForm";
+
+const AFIADORES = [
+  "KHAYNAN FERNANDES FERREIRA","FELYPE DANIEL MACEDO VIEIRA","JOSIEL DA SILVA RIBEIRO",
+  "GEOVANE DE ARAUJO MORAES","LUCAS PEREIRA ALVES",
+];
 
 interface TransferenciasProps {
   afiacoes: any[];

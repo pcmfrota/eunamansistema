@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { Filter, Calendar, ChevronUp, ChevronDown, RefreshCw, BarChart2 } from "lucide-react";
-import { extrairLinhas } from "./PlanilhaLancamentos";
+import { extrairLinhas } from "./afiacaoUtils";
 
 interface DashboardProps {
   afiacoes: any[];

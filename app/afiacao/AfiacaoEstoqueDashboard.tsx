@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
-import { extrairLinhas } from "./PlanilhaLancamentos";
+import { extrairLinhas } from "./afiacaoUtils";
 
 interface EstoqueDashboardProps {
   afiacoes: any[];
