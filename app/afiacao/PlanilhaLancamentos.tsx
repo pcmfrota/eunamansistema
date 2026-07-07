@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { MATERIAIS_DB, ESTADO_RECEBIMENTO, TIPO_DESCARTE, buscarMaterialPorCodigo } from "./materiaisDB";
 import { importarAfiacoes, excluirTodasAfiacoes, deletarAfiacao } from "./actions";
 
 // Função para obter o número da semana a partir da data
-function getWeekNumber(d: Date) {
+export function getWeekNumber(d: Date) {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -14,7 +14,7 @@ function getWeekNumber(d: Date) {
 }
 
 // Helper para obter Centro de Custo (CC) a partir da máquina
-function obterCCPorEquipamento(maquina: string): string {
+export function obterCCPorEquipamento(maquina: string): string {
   const clean = String(maquina || "").toUpperCase().trim();
   const numPart = clean.replace(/[^\d]/g, "");
   const mapping: Record<string, string> = {
@@ -30,7 +30,7 @@ function obterCCPorEquipamento(maquina: string): string {
 }
 
 // Extrair e mapear os dados da afiação para linhas da planilha
-function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
+export function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
   const detalhes = afiacao.detalhes || {};
   let semana: number | string = "";
   let dataFormatada = "";
@@ -165,33 +165,78 @@ export default function PlanilhaLancamentos({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   // ── Filtros de data ──────────────────────────────────────────────────────────
   const [filtroDia, setFiltroDia] = useState("");
   const [filtroMes, setFiltroMes] = useState("");
   const [filtroAno, setFiltroAno] = useState("");
+  const [filtroDataInicio, setFiltroDataInicio] = useState("");
+  const [filtroDataFim, setFiltroDataFim] = useState("");
 
-  const todasLinhas = afiacoes.flatMap(a => extrairLinhas(a, auxiliares));
+  const todasLinhas = useMemo(() => {
+    return afiacoes.flatMap(a => extrairLinhas(a, auxiliares));
+  }, [afiacoes, auxiliares]);
 
   // Extrair anos disponíveis para o filtro
-  const anosDisponiveis = Array.from(
-    new Set(todasLinhas.map(r => r.data.split("/")[2]).filter(Boolean))
-  ).sort((a, b) => Number(b) - Number(a));
+  const anosDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(todasLinhas.map(r => r.data.split("/")[2]).filter(Boolean))
+    ).sort((a, b) => Number(b) - Number(a));
+  }, [todasLinhas]);
+
+  // Encontrar o período inicial (min/max das datas)
+  const defaultDates = useMemo(() => {
+    if (todasLinhas.length === 0) return { min: "", max: "" };
+    const dates = todasLinhas.map((r) => {
+      if (!r.data) return "";
+      const [d, m, a] = r.data.split("/");
+      return `${a}-${m}-${d}`;
+    }).filter(Boolean);
+    if (dates.length === 0) return { min: "", max: "" };
+    return {
+      min: dates.reduce((min, d) => (d < min ? d : min), dates[0]),
+      max: dates.reduce((max, d) => (d > max ? d : max), dates[0])
+    };
+  }, [todasLinhas]);
+
+  // Inicializar datas com min/max das datas disponíveis
+  useEffect(() => {
+    if (defaultDates.min && defaultDates.max) {
+      setFiltroDataInicio(defaultDates.min);
+      setFiltroDataFim(defaultDates.max);
+    }
+  }, [defaultDates]);
 
   // Aplicar filtros
-  const linhas = todasLinhas.filter(row => {
-    if (!row.data) return true;
-    const [d, m, a] = row.data.split("/");
-    if (filtroDia  && d !== filtroDia.padStart(2, "0"))  return false;
-    if (filtroMes  && m !== filtroMes.padStart(2, "0"))  return false;
-    if (filtroAno  && a !== filtroAno)                   return false;
-    return true;
-  });
+  const linhas = useMemo(() => {
+    return todasLinhas.filter(row => {
+      if (!row.data) return true;
+      const [d, m, a] = row.data.split("/");
+      const rowIso = `${a}-${m}-${d}`; // YYYY-MM-DD
+  
+      if (filtroDia  && d !== filtroDia.padStart(2, "0"))  return false;
+      if (filtroMes  && m !== filtroMes.padStart(2, "0"))  return false;
+      if (filtroAno  && a !== filtroAno)                   return false;
+      if (filtroDataInicio && rowIso < filtroDataInicio) return false;
+      if (filtroDataFim && rowIso > filtroDataFim) return false;
+      
+      return true;
+    });
+  }, [todasLinhas, filtroDia, filtroMes, filtroAno, filtroDataInicio, filtroDataFim]);
 
-  const temFiltro = filtroDia || filtroMes || filtroAno;
-  const limparFiltros = () => { setFiltroDia(""); setFiltroMes(""); setFiltroAno(""); };
+  const temFiltro = 
+    filtroDia || 
+    filtroMes || 
+    filtroAno || 
+    (filtroDataInicio && filtroDataInicio !== defaultDates.min) || 
+    (filtroDataFim && filtroDataFim !== defaultDates.max);
 
-  // ── Exportar para Excel ─────────────────────────────────────────────────────
+  const limparFiltros = () => { 
+    setFiltroDia(""); 
+    setFiltroMes(""); 
+    setFiltroAno(""); 
+    setFiltroDataInicio(defaultDates.min);
+    setFiltroDataFim(defaultDates.max);
+  };  // ── Exportar para Excel ─────────────────────────────────────────────────────
   const exportToExcel = () => {
     const dataToExport = linhas.map(row => ({
       "CÓD": row.codigo,
@@ -368,6 +413,26 @@ export default function PlanilhaLancamentos({
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
+        </div>
+
+        {/* Período */}
+        <div className="flex items-center gap-1.5 border-l pl-3 border-gray-200">
+          <label className="text-xs text-gray-500 font-semibold">Período</label>
+          <div className="flex items-center gap-1 flex-wrap sm:flex-nowrap">
+            <input
+              type="date"
+              className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-400 outline-none w-[115px] sm:w-[120px] text-center font-mono cursor-pointer bg-white"
+              value={filtroDataInicio}
+              onChange={e => setFiltroDataInicio(e.target.value)}
+            />
+            <span className="text-gray-400 text-xs font-semibold">até</span>
+            <input
+              type="date"
+              className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-400 outline-none w-[115px] sm:w-[120px] text-center font-mono cursor-pointer bg-white"
+              value={filtroDataFim}
+              onChange={e => setFiltroDataFim(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Resultado e limpar */}

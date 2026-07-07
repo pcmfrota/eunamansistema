@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import AfiacaoDashboard from "./AfiacaoDashboard";
+import AfiacaoCorrenteDashboard from "./AfiacaoCorrenteDashboard";
+import AfiacaoSabreDashboard from "./AfiacaoSabreDashboard";
+import AfiacaoRolltopDashboard from "./AfiacaoRolltopDashboard";
 import AfiacaoForm from "./AfiacaoForm";
 import PlanilhaLancamentos from "./PlanilhaLancamentos";
 import BancoDadosAfiacao from "./BancoDadosAfiacao";
@@ -14,7 +18,7 @@ export default function AfiacaoClient({
   initialAfiacoes: any[];
   initialAuxiliares: any[];
 }) {
-  const [activeTab, setActiveTab] = useState<"banco" | "formulario" | "planilha" | "auxiliares">("banco");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "corrente" | "sabre" | "rolltop" | "banco" | "formulario" | "planilha" | "auxiliares">("dashboard");
   const [afiacoes, setAfiacoes] = useState(initialAfiacoes);
   const [auxiliares, setAuxiliares] = useState(initialAuxiliares);
 
@@ -38,7 +42,11 @@ export default function AfiacaoClient({
     setAuxiliares(fresh);
   };
 
-  const tabs: { key: "banco" | "formulario" | "planilha" | "auxiliares"; label: string; icon: string }[] = [
+  const tabs: { key: "dashboard" | "corrente" | "sabre" | "rolltop" | "banco" | "formulario" | "planilha" | "auxiliares"; label: string; icon: string }[] = [
+    { key: "dashboard",  label: "DASHBOARD",            icon: "📈" },
+    { key: "corrente",   label: "CORRENTE",             icon: "⛓️" },
+    { key: "sabre",      label: "SABRE",                icon: "🪚" },
+    { key: "rolltop",    label: "ROLLTOP",              icon: "⭐" },
     { key: "banco",      label: "BANCO DE DADOS",       icon: "🗄️" },
     { key: "formulario", label: "FORMULÁRIO AFIAÇÃO",   icon: "📝" },
     { key: "planilha",   label: "PLANILHA LANÇAMENTOS", icon: "📊" },
@@ -67,6 +75,30 @@ export default function AfiacaoClient({
 
       {/* Conteúdo */}
       <div className="pt-4">
+        {activeTab === "dashboard" && (
+          <AfiacaoDashboard
+            afiacoes={afiacoes}
+            auxiliares={auxiliares}
+          />
+        )}
+        {activeTab === "corrente" && (
+          <AfiacaoCorrenteDashboard
+            afiacoes={afiacoes}
+            auxiliares={auxiliares}
+          />
+        )}
+        {activeTab === "sabre" && (
+          <AfiacaoSabreDashboard
+            afiacoes={afiacoes}
+            auxiliares={auxiliares}
+          />
+        )}
+        {activeTab === "rolltop" && (
+          <AfiacaoRolltopDashboard
+            afiacoes={afiacoes}
+            auxiliares={auxiliares}
+          />
+        )}
         {activeTab === "banco" && (
           <BancoDadosAfiacao
             afiacoes={afiacoes}
