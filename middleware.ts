@@ -124,23 +124,67 @@ export async function middleware(request: NextRequest) {
   // 4. Normaliza role: qualquer variante de 'admin' ou 'administrador' vira 'admin'
   if (userRole === 'administrador') userRole = 'admin'
 
-  // 5. Verifica autorização na rota
-  const moduloBase = Object.keys(MODULO_PERMISSOES).find(route => pathname.startsWith(route))
-  if (moduloBase) {
-    const rolesPermitidos = MODULO_PERMISSOES[moduloBase]
-    if (!rolesPermitidos.includes(userRole)) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/'
-      return NextResponse.redirect(url)
+  // 5. Verifica autorização na rota de forma dinâmica usando banco/cookie de permissões
+  let userPerms: string[] = []
+  const currentRoleCookie = request.cookies.get('x-user-role')?.value;
+  // Só usa o cookie se o cargo não mudou nesta requisição
+  const permsCookie = currentRoleCookie === userRole ? request.cookies.get('x-user-permissions')?.value : null
+
+  if (permsCookie) {
+    userPerms = permsCookie.split(',')
+  } else if (userRole !== 'admin') {
+    // Busca do banco se o cookie não estiver presente e não for admin
+    try {
+      const { data: rolePerm } = await supabase
+        .from('role_permissions')
+        .select('allowed_tabs')
+        .eq('role', userRole)
+        .single()
+      
+      if (rolePerm?.allowed_tabs) {
+        userPerms = rolePerm.allowed_tabs.map((t: string) => t === '/' ? '/dashboard' : t)
+        response.cookies.set('x-user-permissions', userPerms.join(','), {
+          maxAge: 3600, httpOnly: false, sameSite: 'lax', path: '/',
+        })
+      }
+    } catch {
+      // Fallbacks locais de segurança se der erro de conexão
+      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos'];
+      if (userRole === 'visitante') userPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
+      else if (userRole === 'mecanico') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
+      else if (userRole === 'motorista') userPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
+      else userPerms = allTabs;
     }
   }
 
-  // Sincroniza os cookies x-user-role e x-user-filial
-  const currentRoleCookie = request.cookies.get('x-user-role')?.value;
+  // Se for admin, pula verificação de rotas (acesso total)
+  if (userRole !== 'admin') {
+    // Rotas sempre permitidas para qualquer autenticado
+    const routesSemprePermitidas = ['/', '/perfil'];
+    const isPublicOrProfile = routesSemprePermitidas.some(route => pathname === route || pathname.startsWith('/perfil'));
+    
+    if (!isPublicOrProfile) {
+      // Verifica se a rota requisitada começa com alguma das rotas permitidas do usuário
+      const hasAccess = userPerms.some(allowedRoute => {
+        if (allowedRoute === '/') return pathname === '/';
+        return pathname.startsWith(allowedRoute);
+      });
+
+      if (!hasAccess) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        return NextResponse.redirect(url)
+      }
+    }
+  }
+
+  // Sincroniza os cookies x-user-role, x-user-filial e limpa/atualiza permissões se mudou o cargo
   if (currentRoleCookie !== userRole) {
     response.cookies.set('x-user-role', userRole, {
       maxAge: 3600, httpOnly: true, sameSite: 'lax', path: '/',
     })
+    // Força limpeza do cookie de permissões antigas
+    response.cookies.delete('x-user-permissions')
   }
   const currentFilialCookie = request.cookies.get('x-user-filial')?.value;
   if (currentFilialCookie !== userFilial) {

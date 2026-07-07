@@ -44,10 +44,10 @@ export default function CaptacaoPage() {
           setLoading(false);
         }
 
-        // 2. Se online, roda sync e atualiza do IndexedDB
+        // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
-          const { syncAllTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncAllTables();
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["fichas_captacao", "lancamentos_captacao", "equipamentos", "colaboradores", "calendario_suzano"]);
           if (syncSuccess) {
             const freshFichas = await localDb.getAll("fichas_captacao");
             const freshLancamentos = await localDb.getAll("lancamentos_captacao");

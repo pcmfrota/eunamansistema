@@ -67,10 +67,18 @@ export default function ControleOSPage() {
           setLoading(false);
         }
 
-        // 2. Se online, faz o sync all tables em background (que preenche localDb)
+        // 2. Se online, faz o sync seletivo em background (que preenche localDb)
         if (isOnline) {
-          const { syncAllTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncAllTables();
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables([
+            "ordens_servico",
+            "equipamentos",
+            "catalogo_manutencao",
+            "aux_config",
+            "calendario_suzano",
+            "backlog",
+            "colaboradores"
+          ]);
           if (syncSuccess) {
             // Se mudou o banco remoto, relemos
             const freshOrdens = await localDb.getAll("ordens_servico");

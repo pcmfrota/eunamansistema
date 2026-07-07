@@ -33,68 +33,36 @@ async function safeSyncStore(
   }
 }
 
-export async function syncAllTables(): Promise<boolean> {
-  if (typeof window === "undefined") return false;
+// Registro de promessas de sincronização ativas por tabela para evitar concorrência
+const activeSyncs: Record<string, Promise<void> | null> = {};
 
-  // Verifica se o navegador está online antes de começar
-  if (!navigator.onLine) {
-    console.log("[Sync Engine] Dispositivo offline. Sincronização em lote abortada.");
-    return false;
-  }
+// Mapeamento de nomes de tabelas para seus respectivos ID do IndexedDB se for diferente
+const storeNames: Record<string, string> = {
+  inspecoes_pneus: "pneus_inspecao",
+};
 
-  const supabase = createClient();
-  console.log("[Sync Engine] Iniciando sincronização em lote isolada de todas as tabelas...");
-
-  let successCount = 0;
-  let failCount = 0;
-
-  const syncTable = async (
-    name: string,
-    fetchFn: () => Promise<{ data: any[] | null; error: any }>,
-    storeName: string = name,
-    idField: string = "id"
-  ) => {
-    try {
-      console.log(`[Sync Engine] Sincronizando tabela: ${name}...`);
-      const { data, error } = await fetchFn();
-      if (error) throw error;
-      if (data) {
-        await safeSyncStore(storeName, data, idField);
-        console.log(`[Sync Engine] Tabela ${name} sincronizada com sucesso! (${data.length} itens)`);
-        successCount++;
-      } else {
-        console.log(`[Sync Engine] Tabela ${name} retornou dados vazios.`);
-      }
-    } catch (err: any) {
-      console.error(`[Sync Engine] Falha ao sincronizar tabela ${name}:`, err?.message || err);
-      failCount++;
-    }
-  };
-
-  // 1. Equipamentos
-  await syncTable("equipamentos", () =>
+// Funções de busca individuais por tabela
+const syncTasks: Record<
+  string,
+  (supabase: any) => Promise<{ data: any[] | null; error: any }>
+> = {
+  equipamentos: (supabase) =>
     supabase
       .from("equipamentos")
       .select("id, placa, modulo, area, tipo, categoria, status, created_at, deleted_at")
-      .is("deleted_at", null)
-  );
+      .is("deleted_at", null),
 
-  // 2. Escala Frota
-  await syncTable("escala_frota", () =>
-    supabase.from("escala_frota").select("*")
-  );
+  escala_frota: (supabase) =>
+    supabase.from("escala_frota").select("*"),
 
-  // 3. Calendário Suzano
-  await syncTable("calendario_suzano", () =>
+  calendario_suzano: (supabase) =>
     supabase
       .from("calendario_suzano")
       .select("*")
       .order("ano", { ascending: true })
-      .order("mes", { ascending: true })
-  );
+      .order("mes", { ascending: true }),
 
-  // 4. Ordens de Serviço
-  await syncTable("ordens_servico", () =>
+  ordens_servico: (supabase) =>
     supabase
       .from("ordens_servico")
       .select(`
@@ -107,19 +75,15 @@ export async function syncAllTables(): Promise<boolean> {
       `)
       .not("equipamento_id", "is", null)
       .order("data_abertura", { ascending: false })
-      .limit(1000)
-  );
+      .limit(1000),
 
-  // 5. Preventivas
-  await syncTable("preventivas", () =>
+  preventivas: (supabase) =>
     supabase
       .from("preventivas")
       .select("*, equipamentos(placa, tipo, categoria, modulo)")
-      .order("data_atualizacao", { ascending: false })
-  );
+      .order("data_atualizacao", { ascending: false }),
 
-  // 6. Inspeções Pneus
-  await syncTable("inspecoes_pneus", () =>
+  inspecoes_pneus: (supabase) =>
     supabase
       .from("inspecoes_pneus")
       .select(`
@@ -129,80 +93,119 @@ export async function syncAllTables(): Promise<boolean> {
       `)
       .order("data_inspecao", { ascending: false })
       .order("created_at", { ascending: false }),
-    "pneus_inspecao"
-  );
 
-  // 7. Backlog
-  await syncTable("backlog", () =>
+  backlog: (supabase) =>
     supabase
       .from("backlog")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(2000)
-  );
+      .limit(2000),
 
-  // 8. Catálogo Manutenção
-  await syncTable("catalogo_manutencao", () =>
-    supabase.from("catalogo_manutencao").select("*").order("sistema_codigo")
-  );
+  catalogo_manutencao: (supabase) =>
+    supabase.from("catalogo_manutencao").select("*").order("sistema_codigo"),
 
-  // 9. Configurações Auxiliares
-  await syncTable("aux_config", () =>
-    supabase.from("aux_config").select("*")
-  );
+  aux_config: (supabase) =>
+    supabase.from("aux_config").select("*"),
 
-  // 10. Colaboradores
-  await syncTable("colaboradores", () =>
-    supabase.from("colaboradores").select("*").order("nome")
-  );
+  colaboradores: (supabase) =>
+    supabase.from("colaboradores").select("*").order("nome"),
 
-  // 11. Captação de Água (Fichas e Lançamentos)
-  await syncTable("fichas_captacao", () =>
+  fichas_captacao: (supabase) =>
     supabase
       .from("fichas_captacao")
       .select("*")
-      .order("created_at", { ascending: false })
-  );
+      .order("created_at", { ascending: false }),
 
-  await syncTable("lancamentos_captacao", () =>
-    supabase.from("lancamentos_captacao").select("*")
-  );
+  lancamentos_captacao: (supabase) =>
+    supabase.from("lancamentos_captacao").select("*"),
 
-  // 12. Lavagens
-  await syncTable("lavagens", () =>
-    supabase.from("lavagens").select("*")
-  );
+  lavagens: (supabase) =>
+    supabase.from("lavagens").select("*"),
 
-  // 13. Programação Preventiva
-  await syncTable("prev_prog_semanal", () =>
-    supabase.from("prev_prog_semanal").select("*")
-  );
+  prev_prog_semanal: (supabase) =>
+    supabase.from("prev_prog_semanal").select("*"),
 
-  // 14. Documentos da Frota
-  await syncTable("docs_tacografo", () =>
-    supabase.from("docs_tacografo").select("*")
-  );
-  await syncTable("docs_civ_cipp", () =>
-    supabase.from("docs_civ_cipp").select("*")
-  );
-  await syncTable("docs_laudo_eletromecanico", () =>
-    supabase.from("docs_laudo_eletromecanico").select("*")
-  );
-  await syncTable("docs_laudo_implemento", () =>
-    supabase.from("docs_laudo_implemento").select("*")
-  );
-  await syncTable("docs_crlve_pesados", () =>
-    supabase.from("docs_crlve_pesados").select("*")
-  );
-  await syncTable("docs_crlve_leve", () =>
-    supabase.from("docs_crlve_leve").select("*")
-  );
+  docs_tacografo: (supabase) =>
+    supabase.from("docs_tacografo").select("*"),
 
-  // 15. Checklists Mecânicos
-  await syncTable("checklists_mecanicos", () =>
-    supabase.from("checklists_mecanicos").select("*")
-  );
+  docs_civ_cipp: (supabase) =>
+    supabase.from("docs_civ_cipp").select("*"),
 
-  console.log(`[Sync Engine] Sincronização robusta finalizada. Sucesso: ${successCount}, Falhas: ${failCount}`);
-  return successCount > 0;
+  docs_laudo_eletromecanico: (supabase) =>
+    supabase.from("docs_laudo_eletromecanico").select("*"),
+
+  docs_laudo_implemento: (supabase) =>
+    supabase.from("docs_laudo_implemento").select("*"),
+
+  docs_crlve_pesados: (supabase) =>
+    supabase.from("docs_crlve_pesados").select("*"),
+
+  docs_crlve_leve: (supabase) =>
+    supabase.from("docs_crlve_leve").select("*"),
+
+  checklists_mecanicos: (supabase) =>
+    supabase.from("checklists_mecanicos").select("*"),
+};
+
+/**
+ * Sincroniza apenas as tabelas selecionadas de forma paralela e sem concorrência duplicada.
+ */
+export async function syncTables(tableNames: string[]): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  if (!navigator.onLine) {
+    console.log("[Sync Engine] Dispositivo offline. Sincronização seletiva abortada.");
+    return false;
+  }
+
+  const supabase = createClient();
+  console.log(`[Sync Engine] Iniciando sincronização paralela das tabelas: ${tableNames.join(", ")}...`);
+
+  let success = false;
+
+  const promises = tableNames.map(async (name) => {
+    const fetchFn = syncTasks[name];
+    if (!fetchFn) {
+      console.warn(`[Sync Engine] Tabela desconhecida para sincronização: ${name}`);
+      return;
+    }
+
+    // Se já houver um sync ativo para esta tabela específica, reutiliza a mesma promessa
+    if (activeSyncs[name]) {
+      console.log(`[Sync Engine] Tabela ${name} já está sendo sincronizada. Reutilizando promessa...`);
+      return activeSyncs[name];
+    }
+
+    activeSyncs[name] = (async () => {
+      try {
+        console.log(`[Sync Engine] Buscando dados da tabela: ${name}...`);
+        const { data, error } = await fetchFn(supabase);
+        if (error) throw error;
+        
+        if (data) {
+          const storeName = storeNames[name] || name;
+          await safeSyncStore(storeName, data, "id");
+          console.log(`[Sync Engine] Tabela ${name} sincronizada com sucesso! (${data.length} itens)`);
+          success = true;
+        }
+      } catch (err: any) {
+        console.error(`[Sync Engine] Falha ao sincronizar tabela ${name}:`, err?.message || err);
+      } finally {
+        activeSyncs[name] = null;
+      }
+    })();
+
+    return activeSyncs[name];
+  });
+
+  await Promise.all(promises);
+  return success;
+}
+
+/**
+ * Sincroniza todas as tabelas (mantém retrocompatibilidade)
+ */
+export async function syncAllTables(): Promise<boolean> {
+  const allTables = Object.keys(syncTasks);
+  return syncTables(allTables);
 }

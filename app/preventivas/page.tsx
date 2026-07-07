@@ -43,10 +43,10 @@ export default function ControleHorimetrosPage() {
           setLoading(false);
         }
 
-        // 2. Se online, roda sync e atualiza do IndexedDB
+        // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
-          const { syncAllTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncAllTables();
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["equipamentos", "preventivas"]);
           if (syncSuccess) {
             const freshEq = await localDb.getAll("equipamentos");
             const freshPrev = await localDb.getAll("preventivas");

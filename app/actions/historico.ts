@@ -17,9 +17,10 @@ export async function getHistoricoMensal(categoria: string = "PESADA") {
   const result = [];
   const hoje = new Date();
   
-  // Pegar os últimos 6 meses (incluindo o atual)
+  // Pegar todos os meses do ano atual (conforme vão passando)
+  const currentMonthIdx = hoje.getMonth();
   const monthsToFetch = [];
-  for (let i = 5; i >= 0; i--) {
+  for (let i = currentMonthIdx; i >= 0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     monthsToFetch.push({ mes: d.getMonth() + 1, ano: d.getFullYear() });
   }

@@ -355,11 +355,11 @@ export async function getOfflineDashboardData(filtros?: {
 
   placasFiltradas.forEach(placa => {
     const osDoVeiculo = osPorPlaca.get(placa) || [];
-    const escala = escalaMap.get(placa);
-    
+
     const diasUteisNoPeriodo = diasReferencia > 0 ? diasReferencia : 1;
     const hPlanejadasDM = 24 * diasUteisNoPeriodo;
-    const hPlanejadasDO_TotalMensal = escala ? Number(escala.carga_horaria) * diasUteisNoPeriodo : 24 * diasUteisNoPeriodo;
+    // DO agora é calculada sobre 24h/dia por veículo (antes usava a carga_horaria da escala)
+    const hPlanejadasDO_TotalMensal = 24 * diasUteisNoPeriodo;
 
     if (osDoVeiculo.length === 0) {
       veiculos.push({
@@ -375,8 +375,8 @@ export async function getOfflineDashboardData(filtros?: {
         horasDisponiveisOperacional: hPlanejadasDO_TotalMensal,
         falhas: 0,
         historicoDiario: diasMesInfo.map(d => ({
-          data: d.dStr, hTotalDM: 24, hIndispDM: 0, hTotalDO: escala ? Number(escala.carga_horaria) : 24, 
-          hIndispDO: 0, disponibilidadeDM: 100, disponibilidadeDO: 100 
+          data: d.dStr, hTotalDM: 24, hIndispDM: 0, hTotalDO: 24,
+          hIndispDO: 0, disponibilidadeDM: 100, disponibilidadeDO: 100
         })),
         osImpactantes: []
       } as any);
@@ -406,15 +406,15 @@ export async function getOfflineDashboardData(filtros?: {
 
     diasMesInfo.forEach(dia => {
       const { d0, d24, dStr } = dia;
-      const cargaHorariaDia = escala ? Number(escala.carga_horaria) : 24;
+      // DO agora é calculada sobre 24h/dia por veículo (antes usava a carga_horaria da escala)
+      const cargaHorariaDia = 24;
 
       const intervalosDM: Array<{start: number, end: number}> = [];
       const intervalosDO: Array<{start: number, end: number}> = [];
 
-      let shiftStart = d0 + (escala?.startOffset || 0);
-      let shiftEnd = d0 + (escala?.endOffset || 0);
-      if (escala?.isOvernight) shiftEnd += 86400000;
-      if (!escala) shiftEnd = d24;
+      // Janela da DO agora é o dia inteiro (24h); o corte por chegada de reserva continua via endDO
+      let shiftStart = d0;
+      let shiftEnd = d24;
 
       osProcessed.forEach(os => {
         const intDMini = os.start > d0 ? os.start : d0;
@@ -821,8 +821,10 @@ export async function getOfflineHistoricoMensal(categoria: string = "PESADA"): P
   const result = [];
   const hoje = new Date();
   
+  // Pegar todos os meses do ano atual (conforme vão passando)
+  const currentMonthIdx = hoje.getMonth();
   const monthsToFetch = [];
-  for (let i = 5; i >= 0; i--) {
+  for (let i = currentMonthIdx; i >= 0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     monthsToFetch.push({ mes: d.getMonth() + 1, ano: d.getFullYear() });
   }

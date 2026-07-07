@@ -1967,7 +1967,7 @@ export function GraficoDMMensal({ dados, loading }: GraficoDMMensalProps) {
       <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
         <div>
           <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">DM POR MÊS</h3>
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Disponibilidade Mecânica — últimos 6 meses</p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Disponibilidade Mecânica — ano atual</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">

@@ -172,10 +172,12 @@ export default function UsuariosClient({
   };
 
   const availableTabs = [
-    { name: 'Dashboard', path: '/' },
+    { name: 'Dashboard', path: '/dashboard' },
     { name: 'Controle de OS', path: '/os' },
     { name: 'Controle de Horímetros', path: '/preventivas' },
+    { name: 'Checklist Mecânicos', path: '/checklist-mecanicos' },
     { name: 'Boletim de Pneus', path: '/pneus' },
+    { name: 'Afiação', path: '/afiacao' },
     { name: 'Backlog', path: '/backlog' },
     { name: 'Prog. Preventiva', path: '/programacao-preventiva' },
     { name: 'Base de Frotas', path: '/base-frotas' },

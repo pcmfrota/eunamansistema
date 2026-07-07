@@ -52,8 +52,8 @@ export default function BacklogPage() {
           } catch (e) {
             console.error("Erro ao rodar syncRolePermissions:", e);
           }
-          const { syncAllTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncAllTables();
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["equipamentos", "colaboradores", "calendario_suzano", "backlog"]);
           if (syncSuccess) {
             const freshEq = await localDb.getAll("equipamentos");
             const freshCol = await localDb.getAll("colaboradores");

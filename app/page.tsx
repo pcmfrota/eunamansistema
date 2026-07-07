@@ -196,11 +196,6 @@ export default function PortalPage() {
     if (isUserAdmin) {
       return [...portalItems, ...adminPortalItems];
     }
-    if (normalizedRole === 'visitante') {
-      return portalItems.filter(item => 
-        ["/dashboard", "/preventivas", "/backlog", "/calendario"].includes(item.path)
-      );
-    }
     if (!permissions || permissions.length === 0) {
       return [portalItems[0]]; // Default a ver pelo menos o dashboard
     }

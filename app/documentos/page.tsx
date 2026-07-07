@@ -41,10 +41,10 @@ export default function DocumentosPage() {
           setLoading(false);
         }
 
-        // 2. Se online, roda sync e atualiza do IndexedDB
+        // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
-          const { syncAllTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncAllTables();
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["docs_tacografo", "docs_civ_cipp", "docs_laudo_eletromecanico", "docs_laudo_implemento", "docs_crlve_pesados", "docs_crlve_leve"]);
           if (syncSuccess) {
             const freshTac = await localDb.getAll("docs_tacografo");
             const freshCiv = await localDb.getAll("docs_civ_cipp");

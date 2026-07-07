@@ -40,10 +40,10 @@ export default function ProgramacaoPreventiva() {
           setLoading(false);
         }
 
-        // 2. Se online, roda sync e atualiza do IndexedDB
+        // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
-          const { syncAllTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncAllTables();
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["prev_prog_semanal", "calendario_suzano", "equipamentos"]);
           if (syncSuccess) {
             const freshProg = await localDb.getAll("prev_prog_semanal");
             const freshCal = await localDb.getAll("calendario_suzano");
