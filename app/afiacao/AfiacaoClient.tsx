@@ -6,6 +6,7 @@ import AfiacaoCorrenteDashboard from "./AfiacaoCorrenteDashboard";
 import AfiacaoSabreDashboard from "./AfiacaoSabreDashboard";
 import AfiacaoRolltopDashboard from "./AfiacaoRolltopDashboard";
 import AfiacaoEstoqueDashboard from "./AfiacaoEstoqueDashboard";
+import AfiacaoTransferencias from "./AfiacaoTransferencias";
 import AfiacaoForm from "./AfiacaoForm";
 import PlanilhaLancamentos from "./PlanilhaLancamentos";
 import BancoDadosAfiacao from "./BancoDadosAfiacao";
@@ -19,7 +20,7 @@ export default function AfiacaoClient({
   initialAfiacoes: any[];
   initialAuxiliares: any[];
 }) {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "corrente" | "sabre" | "rolltop" | "estoque" | "banco" | "formulario" | "planilha" | "auxiliares">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "corrente" | "sabre" | "rolltop" | "estoque" | "transferencias" | "banco" | "formulario" | "planilha" | "auxiliares">("dashboard");
   const [afiacoes, setAfiacoes] = useState(initialAfiacoes);
   const [auxiliares, setAuxiliares] = useState(initialAuxiliares);
 
@@ -35,7 +36,6 @@ export default function AfiacaoClient({
     if (newAfiacao) {
       setAfiacoes((prev) => [newAfiacao, ...prev]);
     }
-    setActiveTab("banco");
   };
 
   const atualizarListaAuxiliares = async () => {
@@ -43,12 +43,13 @@ export default function AfiacaoClient({
     setAuxiliares(fresh);
   };
 
-  const tabs: { key: "dashboard" | "corrente" | "sabre" | "rolltop" | "estoque" | "banco" | "formulario" | "planilha" | "auxiliares"; label: string; icon: string }[] = [
+  const tabs: { key: "dashboard" | "corrente" | "sabre" | "rolltop" | "estoque" | "transferencias" | "banco" | "formulario" | "planilha" | "auxiliares"; label: string; icon: string }[] = [
     { key: "dashboard",  label: "DASHBOARD",            icon: "📈" },
     { key: "corrente",   label: "CORRENTE",             icon: "⛓️" },
     { key: "sabre",      label: "SABRE",                icon: "🪚" },
     { key: "rolltop",    label: "ROLLTOP",              icon: "⭐" },
     { key: "estoque",    label: "CONTROLE DE ESTOQUE EUNAMAN", icon: "📦" },
+    { key: "transferencias", label: "TRANSFERÊNCIAS",     icon: "🔄" },
     { key: "banco",      label: "BANCO DE DADOS",       icon: "🗄️" },
     { key: "formulario", label: "FORMULÁRIO AFIAÇÃO",   icon: "📝" },
     { key: "planilha",   label: "PLANILHA LANÇAMENTOS", icon: "📊" },
@@ -58,12 +59,12 @@ export default function AfiacaoClient({
   return (
     <div className="w-full">
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mb-1">
+      <div className="flex gap-1 border-b border-gray-200 mb-1 flex-wrap">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-1.5 py-2.5 px-5 text-sm font-semibold transition-all border-b-2 ${
+            className={`flex items-center gap-1.5 py-2.5 px-4 text-xs font-bold transition-all border-b-2 ${
               activeTab === t.key
                 ? "border-blue-600 text-blue-700 bg-blue-50/50"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
@@ -105,6 +106,14 @@ export default function AfiacaoClient({
           <AfiacaoEstoqueDashboard
             afiacoes={afiacoes}
             auxiliares={auxiliares}
+          />
+        )}
+        {activeTab === "transferencias" && (
+          <AfiacaoTransferencias
+            afiacoes={afiacoes}
+            auxiliares={auxiliares}
+            onInsert={handleInsert}
+            onDelete={handleDelete}
           />
         )}
         {activeTab === "banco" && (
