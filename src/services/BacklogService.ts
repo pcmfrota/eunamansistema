@@ -1,6 +1,36 @@
 import { BacklogRepository } from '../repositories/BacklogRepository';
 import { BacklogItemInsert, BacklogItemUpdate } from '../models/backlog';
 
+const VALID_COLUMNS = new Set([
+  'id',
+  'semana',
+  'mes',
+  'ano',
+  'data_evidencia',
+  'modulo',
+  'regiao_programa',
+  'frota',
+  'tag',
+  'tipo',
+  'descricao',
+  'origem',
+  'colaborador',
+  'criticidade',
+  'tempo_execucao',
+  'campo_base',
+  'os',
+  'material',
+  'nr_rc',
+  'nr_ordem',
+  'fornecedor',
+  'status',
+  'data_conclusao',
+  'data_programacao',
+  'status_programacao',
+  'observacao',
+  'created_at'
+]);
+
 export class BacklogService {
   static async getAll(limit: number = 5000) {
     const { data, error } = await BacklogRepository.list(limit);
@@ -38,9 +68,14 @@ export class BacklogService {
   }
 
   static async upsert(item: any) {
+    // Keep only valid database columns
+    const filteredItem = Object.fromEntries(
+      Object.entries(item).filter(([k]) => VALID_COLUMNS.has(k))
+    );
+
     // Sanitize all fields: '' -> null
     const sanitized = Object.fromEntries(
-      Object.entries(item).map(([k, v]) => [k, v === '' ? null : v])
+      Object.entries(filteredItem).map(([k, v]) => [k, v === '' ? null : v])
     );
 
     if (sanitized.id && String(sanitized.id).startsWith('temp_')) {

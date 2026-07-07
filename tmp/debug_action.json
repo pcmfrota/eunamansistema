@@ -1,18 +1,13 @@
 {
-  "timestamp": "2026-05-22T12:38:41.744Z",
+  "timestamp": "2026-07-07T00:58:39.707Z",
   "inputs": {
-    "categoria": "PIPA",
-    "mes": 5,
-    "ano": 2026
+    "categoria": "MUNCK",
+    "mes": 7,
+    "ano": 2026,
+    "dataInicio": "2026-06-16",
+    "dataFim": "2026-07-22"
   },
-  "allEquipsCount": 37,
+  "allEquipsCount": 44,
   "eqError": null,
-  "filteredEquipsCount": 7,
-  "inicioFiltro": "2026-04-22T00:00:00",
-  "fimFiltro": "2026-05-21T23:59:59",
-  "allOsInDatabaseCount": 93,
-  "osError": null,
-  "escalasError": null,
-  "osFiltradasDataCount": 16,
-  "finalResultCount": 16
+  "globalError": "Cannot access 'fimTime' before initialization"
 }

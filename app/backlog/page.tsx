@@ -28,6 +28,10 @@ export default function BacklogPage() {
           placa: e.placa,
           modulo: e.modulo,
           area: e.area,
+          categoria: e.categoria,
+          status: e.status,
+          created_at: e.created_at,
+          deleted_at: e.deleted_at,
         }));
 
         const col = localCol
@@ -64,6 +68,10 @@ export default function BacklogPage() {
               placa: e.placa,
               modulo: e.modulo,
               area: e.area,
+              categoria: e.categoria,
+              status: e.status,
+              created_at: e.created_at,
+              deleted_at: e.deleted_at,
             }));
 
             const freshColData = freshCol

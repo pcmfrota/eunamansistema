@@ -84,7 +84,7 @@ export default function AfiacaoClient({
         )}
 
         {activeTab === "planilha" && (
-          <PlanilhaLancamentos afiacoes={afiacoes} />
+          <PlanilhaLancamentos afiacoes={afiacoes} auxiliares={auxiliares} />
         )}
 
         {activeTab === "auxiliares" && (

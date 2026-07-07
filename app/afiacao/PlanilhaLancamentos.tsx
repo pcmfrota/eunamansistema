@@ -9,8 +9,29 @@ function getWeekNumber(d: Date) {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
+// Helper para buscar material de forma dinâmica ou estática
+function buscarMaterial(codigoOuDescricao: string, auxiliares: any[]) {
+  const encontrado = auxiliares.find(
+    (item) =>
+      item.category === "material" &&
+      (String(item.metadata?.codigo) === String(codigoOuDescricao) ||
+        item.value.toUpperCase() === codigoOuDescricao.toUpperCase())
+  );
+
+  if (encontrado) {
+    return {
+      material: encontrado.value,
+      ni: encontrado.metadata?.ni || "-",
+      custo: parseFloat(encontrado.metadata?.custo) || 0,
+      cod: encontrado.metadata?.codigo || ""
+    };
+  }
+
+  return buscarMaterialPorCodigo(codigoOuDescricao);
+}
+
 // Extrair e mapear os dados da afiação para linhas da planilha
-function extrairLinhas(afiacao: any) {
+function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
   const detalhes = afiacao.detalhes || {};
   // Parsear data sem conversão de timezone: "2026-06-25" -> [2026, 6, 25]
   let mes: number | string = "";
@@ -74,26 +95,49 @@ function extrairLinhas(afiacao: any) {
     codigos = ["40"];
   } else if (tipoFormulario === "BAIXAS DE EMENDAS E BOLSAS") {
     numCorrenteCabecote = detalhes.quantidade || "1";
-    if (detalhes.tipo_material === "EMENDA MACHO") codigos = ["2"];
-    else if (detalhes.tipo_material === "EMENDA FEMEA") codigos = ["3"];
-    else if (detalhes.tipo_material === "BOLSAS") codigos = ["10"];
-    else if (detalhes.tipo_material === "REBITE") codigos = ["22"];
+    // Tenta encontrar o material pelo nome na base dinâmica
+    const matAux = auxiliares.find(
+      (item) =>
+        item.category === "material" &&
+        item.value.toUpperCase() === (detalhes.tipo_material || "").toUpperCase()
+    );
+    if (matAux && matAux.metadata?.codigo) {
+      codigos = [matAux.metadata.codigo];
+    } else {
+      // Fallback estático
+      if (detalhes.tipo_material === "EMENDA MACHO") codigos = ["2"];
+      else if (detalhes.tipo_material === "EMENDA FEMEA") codigos = ["3"];
+      else if (detalhes.tipo_material === "BOLSAS") codigos = ["10"];
+      else if (detalhes.tipo_material === "REBITE") codigos = ["22"];
+      else codigos = ["2"];
+    }
   }
 
   // Tentar encontrar o COD MOTIVO (letra)
-  if (isRecebimento) {
-    const entry = Object.entries(ESTADO_RECEBIMENTO).find(([k, v]) => v === motivoStr);
-    if (entry) codMotivoStr = entry[0];
+  const motivoAux = auxiliares.find(
+    (item) =>
+      (item.category === "estado_recebimento" || item.category === "tipo_descarte") &&
+      item.value.toUpperCase() === motivoStr.toUpperCase()
+  );
+
+  if (motivoAux && motivoAux.metadata?.codigo) {
+    codMotivoStr = motivoAux.metadata.codigo;
   } else {
-    const entry = Object.entries(TIPO_DESCARTE).find(([k, v]) => v === motivoStr);
-    if (entry) codMotivoStr = entry[0];
+    // Fallback estático
+    if (isRecebimento) {
+      const entry = Object.entries(ESTADO_RECEBIMENTO).find(([k, v]) => v === motivoStr);
+      if (entry) codMotivoStr = entry[0];
+    } else {
+      const entry = Object.entries(TIPO_DESCARTE).find(([k, v]) => v === motivoStr);
+      if (entry) codMotivoStr = entry[0];
+    }
   }
 
   // Gerar linhas
   const linhas = [];
   // Se não mapeamos um código perfeitamente, usa o primeiro como fallback
   const codigoUsado = codigos[0] || "1";
-  const materialInfo = buscarMaterialPorCodigo(codigoUsado);
+  const materialInfo = buscarMaterial(codigoUsado, auxiliares);
 
   const qtdRecebida = isRecebimento ? 1 : 0;
   const qtdBaixa = !isRecebimento ? (afiacao.tipo_formulario === "BAIXAS DE EMENDAS E BOLSAS" ? (parseInt(detalhes.quantidade) || 1) : 1) : 0;
@@ -125,9 +169,9 @@ function extrairLinhas(afiacao: any) {
   return linhas;
 }
 
-export default function PlanilhaLancamentos({ afiacoes }: { afiacoes: any[] }) {
+export default function PlanilhaLancamentos({ afiacoes, auxiliares = [] }: { afiacoes: any[]; auxiliares?: any[] }) {
   // Gerar todas as linhas
-  const linhas = afiacoes.flatMap(a => extrairLinhas(a));
+  const linhas = afiacoes.flatMap(a => extrairLinhas(a, auxiliares));
 
   return (
     <div className="overflow-x-auto w-full">

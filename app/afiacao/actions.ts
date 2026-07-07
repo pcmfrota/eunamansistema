@@ -108,7 +108,7 @@ export async function buscarAuxiliaresAfiacao() {
   }
 }
 
-export async function salvarAuxiliarAfiacao(category: string, value: string, modulo?: string) {
+export async function salvarAuxiliarAfiacao(category: string, value: string, modulo?: string, metadata?: any) {
   try {
     const val = value.trim().toUpperCase();
     if (!val) return { error: "Valor não pode ser vazio" };
@@ -116,7 +116,12 @@ export async function salvarAuxiliarAfiacao(category: string, value: string, mod
     const { error } = await supabase
       .from("aux_afiacao")
       .upsert(
-        { category, value: val, modulo: modulo || null },
+        { 
+          category, 
+          value: val, 
+          modulo: modulo || null,
+          metadata: metadata || {} 
+        },
         { onConflict: "category, modulo, value" }
       );
 

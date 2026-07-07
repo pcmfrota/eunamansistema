@@ -130,6 +130,7 @@ export default function BacklogTable({
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Evidência</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Descrição</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">TAG</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Tempo Est.</th>
                 </>
               ) : (
                 <>
@@ -137,6 +138,7 @@ export default function BacklogTable({
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Local / Módulo</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">RC / Ordem</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Prog. Prevista</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Tempo Est.</th>
                 </>
               )}
               {!isVisitante && (
@@ -203,6 +205,9 @@ export default function BacklogTable({
                     <td className="px-4 py-4">
                        <span className="text-[10px] px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded font-black text-zinc-500 dark:text-zinc-400">{item.tag || '---'}</span>
                     </td>
+                    <td className="px-4 py-4">
+                       <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{item.tempo_execucao || '—'}</span>
+                    </td>
                   </>
                 ) : (
                   <>
@@ -252,6 +257,9 @@ export default function BacklogTable({
                        ) : (
                          <span className="text-[9px] font-black text-zinc-300 dark:text-zinc-800 uppercase tracking-widest italic">Não Programado</span>
                        )}
+                    </td>
+                    <td className="px-4 py-4">
+                       <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{item.tempo_execucao || '—'}</span>
                     </td>
                   </>
                 )}

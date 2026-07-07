@@ -542,6 +542,7 @@ export async function getOfflineDashboardData(filtros?: {
           const currentUnavail = 100 - currentAvg;
           const targetUnavail = 100 - targetDM;
 
+          // Trava apenas a DM. A DO fica livre (cálculo real de 24h + corte de reserva).
           if (currentUnavail > 0) {
             const factor = targetUnavail / currentUnavail;
             veiculos.forEach(v => {
@@ -549,12 +550,6 @@ export async function getOfflineDashboardData(filtros?: {
               const newDM = Math.max(0, Math.min(100, Math.round((100 - u * factor) * 10) / 10));
               v.disponibilidade = newDM;
               v.horasManut = Math.round((v.hTotalDM * (100 - newDM) / 100) * 10) / 10;
-              
-              const uDO = 100 - v.disponibilidade_operacional;
-              const newDO = Math.max(0, Math.min(100, Math.round((100 - uDO * factor) * 10) / 10));
-              v.disponibilidade_operacional = newDO;
-              v.horasOperacional = Math.round((v.hTotalDO * (100 - newDO) / 100) * 10) / 10;
-              v.horasDisponiveisOperacional = Math.round((v.hTotalDO * newDO / 100) * 10) / 10;
             });
           } else {
             const diff = 100 - targetDM;
@@ -562,9 +557,6 @@ export async function getOfflineDashboardData(filtros?: {
               const newDM = Math.max(0, Math.min(100, Math.round((100 - diff) * 10) / 10));
               v.disponibilidade = newDM;
               v.horasManut = Math.round((v.hTotalDM * (100 - newDM) / 100) * 10) / 10;
-              v.disponibilidade_operacional = newDM;
-              v.horasOperacional = Math.round((v.hTotalDO * (100 - newDM) / 100) * 10) / 10;
-              v.horasDisponiveisOperacional = Math.round((v.hTotalDO * newDM / 100) * 10) / 10;
             });
           }
         }

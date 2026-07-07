@@ -27,7 +27,16 @@ import { PremiumLoader } from '@/components/premium-loader';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 
-type Placa = { id: string; placa: string; modulo: string | null; area: string | null };
+type Placa = { 
+  id: string; 
+  placa: string; 
+  modulo: string | null; 
+  area: string | null;
+  categoria?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  deleted_at?: string | null;
+};
 type Colaborador = { id: string; nome: string };
 
 export default function BacklogClient({ placas, colaboradores, calendario = [] }: { placas: Placa[], colaboradores: Colaborador[], calendario?: any[] }) {

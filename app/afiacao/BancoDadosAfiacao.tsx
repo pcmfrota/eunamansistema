@@ -312,7 +312,7 @@ function ModalEdicao({
           </div>
 
           {/* Campos específicos do tipo — reutiliza a mesma função do AfiacaoForm */}
-          {renderCamposDetalhes(form.tipo_formulario, form.detalhes, setDetalhes)}
+          {renderCamposDetalhes(form.tipo_formulario, form.detalhes, setDetalhes, auxiliares)}
         </div>
 
         {/* Footer fixo */}

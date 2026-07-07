@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
-  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw
+  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw, Clock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +34,45 @@ const MONTHS_PT = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ]
+
+function parseHours(val: any): number {
+  if (!val) return 0;
+  const str = String(val).toLowerCase().trim();
+  const cleaned = str.replace(/[^\d.,]/g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+
+function formatAIMarkdown(text: string) {
+  return text.split('\n').map((line, i) => {
+    let isBullet = false;
+    let cleanLine = line;
+    if (line.trim().startsWith('- ')) {
+      isBullet = true;
+      cleanLine = line.trim().substring(2);
+    }
+    const parts = cleanLine.split('**');
+    const formattedParts = parts.map((part, j) => {
+      if (j % 2 === 1) {
+        return <strong key={j} className="text-emerald-400 font-extrabold">{part}</strong>;
+      }
+      return part;
+    });
+    if (isBullet) {
+      return (
+        <div key={i} className="flex items-start gap-2 mb-1.5 pl-2 text-xs leading-relaxed text-zinc-350 dark:text-zinc-300">
+          <span className="text-emerald-400 font-black mt-0.5">•</span>
+          <div>{formattedParts}</div>
+        </div>
+      );
+    }
+    return (
+      <p key={i} className="mb-2 text-xs leading-relaxed text-zinc-350 dark:text-zinc-300">
+        {formattedParts}
+      </p>
+    );
+  });
+}
 
 export default function BacklogDashboard({ items, placas, calendario = [], onEdit, onDelete }: Props) {
   const currentPeriod = useMemo(() => {
@@ -428,6 +467,176 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     )
   }
 
+  const selectedPeriod = useMemo(() => {
+    const months = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+    const mIdx = months.indexOf(filterMes.toLowerCase()) + 1;
+    const yVal = Number(filterAno);
+    
+    if (mIdx > 0 && yVal > 0) {
+      const cal = calendario.find(p => p && p.mes === mIdx && p.ano === yVal);
+      if (cal) return cal;
+    }
+    
+    const today = new Date();
+    const targetMonth = mIdx > 0 ? mIdx : today.getMonth() + 1;
+    const targetYear = yVal > 0 ? yVal : today.getFullYear();
+    const data_inicio = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+    const diasNoMes = new Date(targetYear, targetMonth, 0).getDate();
+    const data_fim = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(diasNoMes).padStart(2, '0')}`;
+    return {
+      mes: targetMonth,
+      ano: targetYear,
+      data_inicio,
+      data_fim
+    };
+  }, [calendario, filterMes, filterAno]);
+
+  const diasMes = useMemo(() => {
+    if (!selectedPeriod) return 30;
+    const start = new Date(selectedPeriod.data_inicio + 'T00:00:00');
+    const end = new Date(selectedPeriod.data_fim + 'T23:59:59');
+    const diff = Math.max(0, end.getTime() - start.getTime());
+    return Math.floor(diff / 86400000) + 1;
+  }, [selectedPeriod]);
+
+  const activeFleet = useMemo(() => {
+    const today = new Date();
+    const mesAtualRef = today.getMonth() + 1;
+    const anoAtualRef = today.getFullYear();
+    
+    const eqTimestamps = placas
+      .map(eq => eq.created_at ? new Date(eq.created_at).getTime() : null)
+      .filter((t): t is number => t !== null);
+    const minCreatedAt = eqTimestamps.length > 0 ? Math.min(...eqTimestamps) : Date.now();
+    const baselineThreshold = minCreatedAt + 7 * 24 * 60 * 60 * 1000;
+
+    const inicioTime = new Date(selectedPeriod.data_inicio + 'T00:00:00').getTime();
+    const fimTime = new Date(selectedPeriod.data_fim + 'T23:59:59').getTime();
+
+    return placas.filter(eq => {
+      const p = eq.placa?.toUpperCase().trim();
+      if (!p || ["QWE-5555", "QWE-5556", "XYZ-3876", "XYZ-9876", "ABC-1234"].includes(p)) return false;
+
+      // 1. Filtro temporal de criação
+      const createdAt = eq.created_at ? new Date(eq.created_at).getTime() : 0;
+      const isPeriodBeforeSystemInit = fimTime < minCreatedAt;
+
+      if (isPeriodBeforeSystemInit) {
+        if (createdAt > baselineThreshold) return false;
+      } else {
+        if (createdAt > fimTime) return false;
+      }
+
+      // 2. Filtro temporal de deleção
+      if (eq.deleted_at) {
+        const deletedAt = new Date(eq.deleted_at).getTime();
+        if (deletedAt < inicioTime) return false;
+      }
+
+      // 3. Filtro de Inativos no mês corrente
+      const isPastMonth = selectedPeriod.ano < anoAtualRef || (selectedPeriod.ano === anoAtualRef && selectedPeriod.mes < mesAtualRef);
+      if (!isPastMonth) {
+        const isCurrentlyInactive = String(eq.status || '').toUpperCase().trim() === "INATIVO";
+        if (isCurrentlyInactive) return false;
+      }
+
+      // 4. Filtro por Categoria: na DM operacional pesada, apenas categoria PESADA é considerada.
+      const eqCat = (eq.categoria || "").toUpperCase().trim();
+      if (eqCat !== "PESADA") return false;
+
+      return true;
+    });
+  }, [placas, selectedPeriod]);
+
+  const numMaquinas = activeFleet.length || 1;
+  const horasTotaisFrota = numMaquinas * diasMes * 24;
+
+  const parsedBacklogHours = useMemo(() => {
+    const activeItems = filtered.filter(i => i.mappedStatus !== 'ENCERRADO');
+    
+    let totalHoras = 0;
+    let horasCriticas = 0;
+    let horasNormais = 0;
+
+    activeItems.forEach(item => {
+      const horas = parseHours(item.tempo_execucao);
+      totalHoras += horas;
+      if (item.mappedCriticidade === 'A') {
+        horasCriticas += horas;
+      } else {
+        horasNormais += horas;
+      }
+    });
+
+    return {
+      totalHoras,
+      horasCriticas,
+      horasNormais
+    };
+  }, [filtered]);
+
+  const aiExplanation = useMemo(() => {
+    const { totalHoras, horasCriticas, horasNormais } = parsedBacklogHours;
+    const activeItems = filtered.filter(i => i.mappedStatus !== 'ENCERRADO');
+
+    if (totalHoras === 0 || activeItems.length === 0) {
+      return "Olá! Sou o **Assistente de IA EUNAMAN**. Atualmente, o seu backlog está zerado ou sem tempos estimados preenchidos. Isso significa que a **Disponibilidade Mecânica (DM)** da frota está operando sem riscos previstos associados a pendências em aberto. Parabéns pela eficiência!";
+    }
+
+    const moduloMaisAfetado = (() => {
+      const modCounts: Record<string, number> = {};
+      activeItems.forEach(i => {
+        const mod = i.modulo || 'N/A';
+        const h = parseHours(i.tempo_execucao);
+        modCounts[mod] = (modCounts[mod] || 0) + h;
+      });
+      const sorted = Object.entries(modCounts).sort((a,b) => b[1] - a[1]);
+      return sorted[0] ? { name: sorted[0][0], horas: sorted[0][1] } : null;
+    })();
+
+    const pctImpactoPlan = ((totalHoras / horasTotaisFrota) * 100).toFixed(2);
+    const projCorretivo = (horasCriticas * 1.8) + (horasNormais * 0.5);
+    const pctImpactoCorr = ((projCorretivo / horasTotaisFrota) * 100).toFixed(2);
+
+    let diagnostic = `Com base nas **${totalHoras} horas** de backlog acumuladas para a frota de **${numMaquinas} máquinas** (tempo total de operação de **${horasTotaisFrota}h** no mês), realizei a seguinte simulação de impacto na **Disponibilidade Mecânica (DM)**: \n\n`;
+    
+    diagnostic += `1. **Cenário A - Parada Planejada (Prevenção):** Se você parar todas as máquinas de forma controlada para resolver as pendências preventivamente, haverá uma queda temporária de **-${pctImpactoPlan}%** na DM. Esta é a melhor escolha para a saúde dos equipamentos.\n`;
+    
+    diagnostic += `2. **Cenário B - Risco de Quebra (Corretivo):** Se as pendências continuarem em aberto, o risco de falhas catastróficas (com fator de risco de 1.8x para Criticidade A) projeta um downtime inesperado de **${projCorretivo.toFixed(1)}h**, o que pode derrubar a DM em até **-${pctImpactoCorr}%** devido a quebras em operação.\n\n`;
+
+    if (moduloMaisAfetado && moduloMaisAfetado.name !== 'N/A') {
+      diagnostic += `⚠️ **Recomendação de Foco:** O **${moduloMaisAfetado.name}** concentra o maior volume de horas de backlog (**${moduloMaisAfetado.horas}h**). Sugiro priorizar as ordens deste módulo com **Criticidade A** para reduzir rapidamente a projeção de downtime corretivo de ${projCorretivo.toFixed(1)}h.\n\n`;
+    } else {
+      diagnostic += `💡 **Recomendação de Foco:** Priorize a resolução dos itens de **Criticidade A** para mitigar imediatamente os maiores riscos de indisponibilidade indesejada da frota.\n\n`;
+    }
+
+    // List of active items
+    diagnostic += `📋 **Detalhamento das Pendências Ativas:**\n`;
+    const sortedActive = [...activeItems].sort((a, b) => {
+      if (a.mappedCriticidade === 'A' && b.mappedCriticidade !== 'A') return -1;
+      if (a.mappedCriticidade !== 'A' && b.mappedCriticidade === 'A') return 1;
+      const hA = parseHours(a.tempo_execucao);
+      const hB = parseHours(b.tempo_execucao);
+      return hB - hA;
+    });
+
+    const displayItems = sortedActive.slice(0, 10);
+    displayItems.forEach(item => {
+      const h = parseHours(item.tempo_execucao);
+      const critLabel = item.mappedCriticidade === 'A' ? 'Crit. A (Crítico)' : 'Crit. B (Normal)';
+      diagnostic += `- **${item.frota || 'Sem Placa'}** (${item.modulo || 'Sem Módulo'}): ${item.descricao || 'Sem Descrição'} | Tempo: **${h}h** (${critLabel})\n`;
+    });
+
+    if (sortedActive.length > 10) {
+      diagnostic += `- *E mais ${sortedActive.length - 10} pendências no backlog...*\n`;
+    }
+
+    return diagnostic;
+  }, [parsedBacklogHours, filtered, numMaquinas, horasTotaisFrota]);
+
   return (
     <div className="flex flex-col gap-4 w-full text-zinc-800 dark:text-zinc-100">
       
@@ -760,6 +969,105 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </div>
       </div>
 
+      {/* ─── PROVISÃO DE DISPONIBILIDADE MECÂNICA (DM) & ASSISTENTE DE IA ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full animate-in fade-in duration-700">
+        {/* Coluna 1: Métricas de Provisão (DM) */}
+        <div className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex flex-col justify-between shadow-sm">
+          <div>
+            <div className="border-l-4 border-indigo-500 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                PROVISÃO DE IMPACTO NA DM
+              </h3>
+              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                Simulações baseadas nas horas de backlog
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Card 1: Horas de Backlog */}
+              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Horas de Backlog Ativo</p>
+                  <p className="text-xl font-black text-zinc-800 dark:text-zinc-100 mt-0.5">{parsedBacklogHours.totalHoras} hrs</p>
+                </div>
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <Clock size={20} />
+                </div>
+              </div>
+
+              {/* Card 2: Cenário A Planejado */}
+              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Cenário A (Planejado)</p>
+                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Queda Prevista: <span className="text-amber-600 dark:text-amber-400 font-black">-{((parsedBacklogHours.totalHoras / horasTotaisFrota) * 100).toFixed(2)}%</span>
+                  </p>
+                </div>
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                  <TrendingDown size={20} />
+                </div>
+              </div>
+
+              {/* Card 3: Cenário B Corretivo */}
+              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Cenário B (Risco de Quebra)</p>
+                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Queda Projetada: <span className="text-red-600 dark:text-red-400 font-black">-{(((parsedBacklogHours.horasCriticas * 1.8 + parsedBacklogHours.horasNormais * 0.5) / horasTotaisFrota) * 100).toFixed(2)}%</span>
+                  </p>
+                </div>
+                <div className="p-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl">
+                  <ShieldAlert size={20} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium leading-normal mt-4 border-t border-zinc-100 dark:border-zinc-800/80 pt-3">
+            * Projeção baseada em frota de {numMaquinas} máquinas operando 24h/dia (total de {horasTotaisFrota}h/mês). Fator de corretiva projeta 1.8h de indisponibilidade por hora crítica de backlog devido ao tempo de socorro e quebra.
+          </div>
+        </div>
+
+        {/* Coluna 2: Assistente de IA EUNAMAN */}
+        <div className="lg:col-span-2 bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute -right-24 -top-24 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl" />
+
+          <div>
+            <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 rounded-2xl flex items-center justify-center text-white relative shadow-sm">
+                  <span className="text-xl">🤖</span>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#12141c] rounded-full animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+                    Assistente de IA EUNAMAN
+                  </h3>
+                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                    Análise Preditiva & Diagnóstico
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-150 dark:border-indigo-900 rounded-full text-[8px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest shadow-sm">
+                Modelo Ativo
+              </span>
+            </div>
+
+            <div className="max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+              {formatAIMarkdown(aiExplanation)}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-850">
+            <span className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">Ações sugeridas:</span>
+            <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-0.5">
+              Priorizar backlogs com Criticidade A
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* ─── ROW 3: GRÁFICOS (Área, Módulos, Tendência) ─────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
         
@@ -1031,6 +1339,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 <th className="px-4 py-3 text-center">Fechamento</th>
                 <th className="px-4 py-3 text-right">Dias Fechado</th>
                 <th className="px-4 py-3 text-right">Dias Pendente</th>
+                <th className="px-4 py-3 text-right">Tempo Est.</th>
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
@@ -1107,6 +1416,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                             {item.diasPendente} d
                           </span>
                         ) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-zinc-600 dark:text-zinc-400">
+                        {item.tempo_execucao || '—'}
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

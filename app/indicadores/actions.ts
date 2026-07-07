@@ -346,6 +346,7 @@ export async function getIndicadoresData(filtros?: {
           const currentUnavail = 100 - currentAvg;
           const targetUnavail = 100 - targetDM;
 
+          // Trava apenas a DM. A DO fica livre (cálculo real de 24h + corte de reserva).
           if (currentUnavail > 0) {
             const factor = targetUnavail / currentUnavail;
             veiculos.forEach(v => {
@@ -353,12 +354,6 @@ export async function getIndicadoresData(filtros?: {
               const newDM = Math.max(0, Math.min(100, Math.round((100 - u * factor) * 10) / 10));
               v.dm = newDM;
               v.dmHorasManut = Math.round((v.dmHorasTotal * (100 - newDM) / 100) * 10) / 10;
-
-              // Ajusta DO proporcionalmente se houver diferença
-              const uDO = 100 - v.do_;
-              const newDO = Math.max(0, Math.min(100, Math.round((100 - uDO * factor) * 10) / 10));
-              v.do_ = newDO;
-              v.doHorasOp = Math.round((v.doHorasTotal * newDO / 100) * 10) / 10;
             });
           } else {
             const diff = 100 - targetDM;
@@ -366,8 +361,6 @@ export async function getIndicadoresData(filtros?: {
               const newDM = Math.max(0, Math.min(100, Math.round((100 - diff) * 10) / 10));
               v.dm = newDM;
               v.dmHorasManut = Math.round((v.dmHorasTotal * (100 - newDM) / 100) * 10) / 10;
-              v.do_ = newDM;
-              v.doHorasOp = Math.round((v.doHorasTotal * newDM / 100) * 10) / 10;
             });
           }
         }

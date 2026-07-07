@@ -41,12 +41,30 @@ export const MODULOS = ["MA02", "MA04", "MA05", "MA06", "MA07"];
 export function renderCamposDetalhes(
   tipo_formulario: string,
   detalhes: any,
-  onChange: (field: string, value: string) => void
+  onChange: (field: string, value: string) => void,
+  auxiliares: any[] = []
 ) {
   if (!tipo_formulario) return null;
 
   const sel = (cls = "") =>
     `mt-1 block w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none ${cls}`;
+
+  const estadosDb = auxiliares.filter(item => item.category === "estado_recebimento").map(item => item.value);
+  const listaEstados = estadosDb.length > 0 ? estadosDb : [
+    "QUEIMADA (O)","TORCIDA (O)","CONTAMINADA (O) COM AREIA","SEM LUBRIFICAÇÃO","NORMAL",
+    "FALTANDO PEDAÇO","ELOS DE TRAÇÃO DANIFICADOS","QUEBRADA","FACAS AMASSADAS",
+    "PEÇA NÃO ENTREGUE","PEÇA NÃO UTILIZADA","MATERIAL DO KIT INCORRETO",
+    "EMPENADO","PONTEIRA FECHADA","CANALETA DANIFICADA","CANALETA FECHADA","ROLLTOP DANIFICADO"
+  ];
+
+  const descartesDb = auxiliares.filter(item => item.category === "tipo_descarte").map(item => item.value);
+  const listaDescartes = descartesDb.length > 0 ? descartesDb : [
+    "MAL USO","PERDA","QUEBRA","LUBRIFICAÇÃO","VIDA ÚTIL","ACIDENTE","TORÇÃO","PONTEIRA QUEIMADA",
+    "PONTEIRA FECHADA","PONTEIRA QUEBRADA","MÁQ. EM INÍCIO DE OPERAÇÃO"
+  ];
+
+  const materiaisDb = auxiliares.filter(item => item.category === "material").map(item => item.value);
+  const listaMateriais = materiaisDb.length > 0 ? materiaisDb : ["EMENDA MACHO","EMENDA FEMEA","BOLSAS","REBITE"];
 
   if (tipo_formulario === "ESTADO DE RECEBIMENTO CORRENTE") {
     return (
@@ -70,7 +88,7 @@ export function renderCamposDetalhes(
           <label className="block text-sm font-semibold text-gray-600">ESTADO DA CORRENTE*</label>
           <select required className={sel()} value={detalhes.estado_corrente || ""} onChange={(e) => onChange("estado_corrente", e.target.value)}>
             <option value="">Selecione o estado...</option>
-            {["QUEIMADA (O)","TORCIDA (O)","CONTAMINADA (O) COM AREIA","SEM LUBRIFICAÇÃO","NORMAL","FALTANDO PEDAÇO","ELOS DE TRAÇÃO DANIFICADOS","QUEBRADA","FACAS AMASSADAS","PEÇA NÃO ENTREGUE","PEÇA NÃO UTILIZADA","MATERIAL DO KIT INCORRETO"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {listaEstados.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
@@ -99,7 +117,7 @@ export function renderCamposDetalhes(
           <label className="block text-sm font-semibold text-gray-600">ESTADO DO SABRE*</label>
           <select required className={sel()} value={detalhes.recebimento_sabre || ""} onChange={(e) => onChange("recebimento_sabre", e.target.value)}>
             <option value="">Selecione o estado...</option>
-            {["QUEIMADA (O)","TORCIDA (O)","CONTAMINADA (O) COM AREIA","SEM LUBRIFICAÇÃO","NORMAL","ELOS DE TRAÇÃO DANIFICADOS","QUEBRADA","PEÇA NÃO ENTREGUE","PEÇA NÃO UTILIZADA","MATERIAL DO KIT INCORRETO","EMPENADO","PONTEIRA FECHADA","CANALETA DANIFICADA","CANALETA FECHADA","ROLLTOP DANIFICADO"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {listaEstados.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
@@ -128,7 +146,7 @@ export function renderCamposDetalhes(
           <label className="block text-sm font-semibold text-gray-600">MOTIVO DE SUBSTITUIÇÃO*</label>
           <select required className={sel()} value={detalhes.motivo || ""} onChange={(e) => onChange("motivo", e.target.value)}>
             <option value="">Selecione...</option>
-            {["MAL USO","PERDA","QUEBRA","LUBRIFICAÇÃO","VIDA ÚTIL","ACIDENTE","TORÇÃO","MÁQ. EM INÍCIO DE OPERAÇÃO"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {listaDescartes.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
@@ -157,7 +175,7 @@ export function renderCamposDetalhes(
           <label className="block text-sm font-semibold text-gray-600">MOTIVO DE SUBSTITUIÇÃO*</label>
           <select required className={sel()} value={detalhes.motivo || ""} onChange={(e) => onChange("motivo", e.target.value)}>
             <option value="">Selecione...</option>
-            {["MAL USO","PERDA","QUEBRA","LUBRIFICAÇÃO","VIDA ÚTIL","ACIDENTE","TORÇÃO","PONTEIRA QUEIMADA","PONTEIRA FECHADA","PONTEIRA QUEBRADA","MÁQ. EM INÍCIO DE OPERAÇÃO"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {listaDescartes.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
@@ -183,7 +201,7 @@ export function renderCamposDetalhes(
           <label className="block text-sm font-semibold text-gray-600">MOTIVO DE SUBSTITUIÇÃO*</label>
           <select required className={sel()} value={detalhes.motivo || ""} onChange={(e) => onChange("motivo", e.target.value)}>
             <option value="">Selecione...</option>
-            {["MAL USO","PERDA","QUEBRA","LUBRIFICAÇÃO","VIDA ÚTIL","ACIDENTE","TORÇÃO"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {listaDescartes.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
@@ -206,7 +224,7 @@ export function renderCamposDetalhes(
           <label className="block text-sm font-semibold text-gray-600">TIPO DE MATERIAL*</label>
           <select required className={sel()} value={detalhes.tipo_material || ""} onChange={(e) => onChange("tipo_material", e.target.value)}>
             <option value="">Selecione...</option>
-            {["EMENDA MACHO","EMENDA FEMEA","BOLSAS","REBITE"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {listaMateriais.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
@@ -435,7 +453,7 @@ export default function AfiacaoForm({
       </div>
 
       {/* Campos dinâmicos por tipo */}
-      {renderCamposDetalhes(formData.tipo_formulario, formData.detalhes, handleDetalhesChange)}
+      {renderCamposDetalhes(formData.tipo_formulario, formData.detalhes, handleDetalhesChange, auxiliares)}
 
       {/* Botão */}
       <div className="pt-2">

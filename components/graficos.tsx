@@ -1341,23 +1341,23 @@ export function PainelFormulas() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <div>
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Disponibilidade Operacional (DO)</strong>
-          <p className="mb-2">Mede a proporção do tempo em que o veículo esteve operando ou apto, considerando apenas as horas da escala Suzano.</p>
+          <p className="mb-2">Mede a proporção do tempo em que o veículo esteve operando ou apto, calculada sobre 24h/dia. A indisponibilidade deixa de contar quando o veículo reserva assume a operação.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-blue-600 dark:text-blue-400 font-mono block w-fit">
-            DO = (Ht - Indisp. Shift) / Ht × 100
+            DO = (Ht - Indisp. até reserva) / Ht × 100
           </code>
         </div>
         <div>
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Disponibilidade Mecânica (DM)</strong>
-          <p className="mb-2">Mede o tempo real livre de manutenção dentro do período planejado de trabalho (Escala).</p>
+          <p className="mb-2">Mede o tempo real livre de manutenção, calculada sobre 24h/dia por veículo.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-emerald-600 dark:text-emerald-400 font-mono block w-fit">
-            DM = (Ht - H.Manut Shift) / Ht × 100
+            DM = (Ht - H.Manut) / Ht × 100
           </code>
         </div>
         <div>
           <strong className="text-zinc-700 dark:text-zinc-300 block mb-1 uppercase tracking-wider">Ht = Horas Planejadas</strong>
-          <p className="mb-2">Baseado no cadastro de Escala da Frota (Ex: 16h/dia de 08:00 às 00:00). Se não cadastrado, assume 24h.</p>
+          <p className="mb-2">Cada veículo é considerado disponível 24h/dia, tanto para a DM quanto para a DO, independente da escala cadastrada.</p>
           <code className="bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-xs text-purple-600 dark:text-purple-400 font-mono block w-fit">
-            Ht = Dias × Carga Horária
+            Ht = Dias × 24h
           </code>
         </div>
         <div>
