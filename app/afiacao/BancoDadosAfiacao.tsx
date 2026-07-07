@@ -131,8 +131,21 @@ function ModalEdicao({
   const set = (field: string, value: string) =>
     setForm(p => ({ ...p, [field]: value }));
 
-  const setDetalhes = (field: string, value: string) =>
-    setForm(p => ({ ...p, detalhes: { ...p.detalhes, [field]: value } }));
+  const setDetalhes = (field: string, value: string) => {
+    setForm(p => {
+      const isRecebimento = p.tipo_formulario.includes("RECEBIMENTO");
+      let updatedDetalhes = { ...p.detalhes, [field]: value };
+      
+      // Auto-atualizar Qtd. Expedida e Qtd Baixas ao alterar a quantidade
+      if (field === "corrente" || field === "sabre" || field === "quantidade") {
+        const valNum = parseFloat(value) || 0;
+        updatedDetalhes.qtd_expedida = String(valNum);
+        updatedDetalhes.qtd_baixas = isRecebimento ? "0" : String(valNum);
+      }
+      
+      return { ...p, detalhes: updatedDetalhes };
+    });
+  };
 
   const handleSalvar = async () => {
     if (!form.data || !form.afiador || !form.modulo || !form.letra || !form.kit || !form.tipo_formulario) {
@@ -241,7 +254,7 @@ function ModalEdicao({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Kit*</label>
+              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Nª Kit*</label>
               <select required
                 className="block w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none"
                 value={form.kit}
@@ -259,7 +272,7 @@ function ModalEdicao({
           {form.modulo && (
             <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
               <label className="block text-xs font-bold text-gray-700 uppercase mb-3">
-                🚜 Máquinas do {form.modulo}*
+                🚜 Equipamentos do {form.modulo}*
               </label>
               {maquinas.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -313,6 +326,129 @@ function ModalEdicao({
 
           {/* Campos específicos do tipo — reutiliza a mesma função do AfiacaoForm */}
           {renderCamposDetalhes(form.tipo_formulario, form.detalhes, setDetalhes, auxiliares)}
+
+          {/* Campos de Controle da Ficha */}
+          {form.tipo_formulario && (
+            <div className="space-y-4 border-t pt-4 mt-4 bg-slate-50/50 p-4 rounded-xl border border-gray-100">
+              <h3 className="font-bold text-xs text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                📋 Informações de Controle da Ficha
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Nª FICHA*</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Ex: 761560269"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-mono"
+                    value={form.detalhes.num_ficha || ""}
+                    onChange={(e) => setDetalhes("num_ficha", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">FICHA FÍSICA*</label>
+                  <select
+                    required
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                    value={form.detalhes.ficha_fisica || "OK"}
+                    onChange={(e) => setDetalhes("ficha_fisica", e.target.value)}
+                  >
+                    <option value="OK">OK</option>
+                    <option value="PENDENTE">PENDENTE</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">NOVO/VELHO*</label>
+                  <select
+                    required
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-bold text-slate-700"
+                    value={form.detalhes.novo_velho || "NOVO"}
+                    onChange={(e) => setDetalhes("novo_velho", e.target.value)}
+                  >
+                    <option value="NOVO">NOVO</option>
+                    <option value="VELHO">VELHO</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">CARGA*</label>
+                  <input
+                    required
+                    type="text"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-mono"
+                    value={form.detalhes.carga || "1"}
+                    onChange={(e) => setDetalhes("carga", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">UNI*</label>
+                  <input
+                    required
+                    type="text"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-mono"
+                    value={form.detalhes.uni || "20"}
+                    onChange={(e) => setDetalhes("uni", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Qtd. Expedida*</label>
+                  <input
+                    required
+                    type="number"
+                    step="any"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-mono"
+                    value={form.detalhes.qtd_expedida !== undefined ? form.detalhes.qtd_expedida : "1"}
+                    onChange={(e) => setDetalhes("qtd_expedida", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Qtd Baixas*</label>
+                  <input
+                    required
+                    type="number"
+                    step="any"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-mono"
+                    value={form.detalhes.qtd_baixas !== undefined ? form.detalhes.qtd_baixas : "1"}
+                    onChange={(e) => setDetalhes("qtd_baixas", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Centro de Custo (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="Auto-calculado por padrão"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white font-mono"
+                    value={form.detalhes.cc || ""}
+                    onChange={(e) => setDetalhes("cc", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Status Baixa (Opcional)</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                    value={form.detalhes.status_baixa || ""}
+                    onChange={(e) => setDetalhes("status_baixa", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Un. (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: PC"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                    value={form.detalhes.un || ""}
+                    onChange={(e) => setDetalhes("un", e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer fixo */}
