@@ -57,9 +57,28 @@ export class EquipamentoService {
       status: String(data.status || 'Ativo').trim(),
     };
 
+    // Verificar se já existe um veículo ativo com essa placa
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+    const { data: existing } = await supabase
+      .from('equipamentos')
+      .select('id')
+      .eq('placa', cleanData.placa)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (existing) {
+      throw new Error('Já existe um veículo ativo cadastrado com esta placa!');
+    }
+
     const { error } = await EquipamentoRepository.create(cleanData);
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.message?.includes('unique_placa_active') || error.details?.includes('unique_placa_active')) {
+        throw new Error('Já existe um veículo ativo cadastrado com esta placa!');
+      }
+      throw new Error(error.message);
+    }
     return { success: true };
   }
 
