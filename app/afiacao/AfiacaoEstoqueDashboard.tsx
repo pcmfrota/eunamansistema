@@ -32,6 +32,22 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
       } catch (e) {
         console.error("Erro ao carregar auditados:", e);
       }
+    } else {
+      // Salvar os padrões do Power BI no localStorage na primeira execução
+      const padroes = {
+        "25301352": "6",
+        "25301353": "379",
+        "25301351": "379",
+        "25045282": "153",
+        "27095494": "20",
+        "27104167": "1",
+        "27190176": "899",
+        "27076237": "24",
+        "27276133": "33",
+        "27274881": "108"
+      };
+      setAuditados(padroes);
+      localStorage.setItem("afiacao_estoque_auditados", JSON.stringify(padroes));
     }
   }, []);
 
@@ -137,6 +153,8 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
           isRecebimento,
           qtdExpedida: r.qtdExpedida || 0,
           qtdBaixa: r.qtdBaixa || 0,
+          status: String(a.detalhes?.status || "").toUpperCase(),
+          ficha: String(a.detalhes?.ficha || "").toUpperCase()
         };
       });
     });
@@ -147,13 +165,33 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
       return true;
     });
 
+    // Saldos Iniciais Estáticos conforme Power BI
+    const saldosIniciais: Record<string, { entrada: number; saida: number }> = {
+      "25301352-": { entrada: 0, saida: 0 },
+      "25301352":  { entrada: 1311.72, saida: 1309.34 },
+      "25301353":  { entrada: 34002.00, saida: 33623.00 },
+      "25301351":  { entrada: 28131.00, saida: 27752.00 },
+      "25045282":  { entrada: 18118.00, saida: 17965.00 },
+      "27095494":  { entrada: 1439.00, saida: 1419.00 },
+      "27104167":  { entrada: 13140.00, saida: 13139.00 },
+      "27190176":  { entrada: 31041.00, saida: 30142.00 },
+      "27076237":  { entrada: 3165.00, saida: 3141.00 },
+      "27276133":  { entrada: 1812.00, saida: 1779.00 },
+      "27274881":  { entrada: 2915.00, saida: 2807.00 }
+    };
+
     // Calcular Entrada e Saída para cada item da grade
     return itensDefinidos.map((it) => {
-      let entrada = 0;
-      let saida = 0;
+      const saldoIni = saldosIniciais[it.ni] || { entrada: 0, saida: 0 };
+      let entrada = saldoIni.entrada;
+      let saida = saldoIni.saida;
 
       for (const line of filteredLines) {
         if (it.codigosMaterial.includes(line.codigo)) {
+          // Ignorar linhas de Saldo Inicial importadas para evitar contagem dupla
+          const isSaldoInicial = line.status.includes("SALDO INICIAL") || line.status.includes("AUDITORIA") || line.ficha.includes("AUDITORIA");
+          if (isSaldoInicial) continue;
+
           if (line.isRecebimento) {
             // Conversão de entrada para correntes se for manual (valor inteiro menor ou igual a 100)
             if (it.entradaFactor && line.qtdExpedida <= 100 && Number.isInteger(line.qtdExpedida)) {
@@ -162,7 +200,6 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
               entrada += line.qtdExpedida;
             }
           } else {
-            // As baixas já são salvas convertidas no banco de dados
             saida += line.qtdBaixa;
           }
         }
