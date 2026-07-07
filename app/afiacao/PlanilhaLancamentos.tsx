@@ -46,7 +46,7 @@ export function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
   }
 
   const tipoFormulario = afiacao.tipo_formulario || "";
-  const isRecebimento = tipoFormulario.includes("RECEBIMENTO");
+  const isRecebimento = tipoFormulario.includes("RECEBIMENTO") || tipoFormulario === "TRANSFERÊNCIA";
 
   // ── Código do Material ──────────────────────────────────────────────────────
   // Prioriza o cod salvo diretamente no import (detalhes.cod)
@@ -77,7 +77,21 @@ export function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
       else if (detalhes.tipo_material === "REBITE") codigoUsado = "22";
       else codigoUsado = "2";
     } else {
-      codigoUsado = "12";
+      // Tenta derivar por NI/Código
+      const cleanNi = String(detalhes.ni || detalhes.codigo || "").replace(/[^\d]/g, "").trim();
+      if (cleanNi) {
+        if (cleanNi === "25301352") {
+          const desc = String(detalhes.desc || detalhes.referencia || "").toUpperCase();
+          if (desc.includes("370E")) codigoUsado = "13";
+          else codigoUsado = "12";
+        } else {
+          const found = MATERIAIS_DB.find(m => m.ni.replace(/[^\d]/g, "").trim() === cleanNi);
+          if (found) codigoUsado = found.cod;
+        }
+      }
+      if (!codigoUsado) {
+        codigoUsado = "12";
+      }
     }
   }
 
@@ -282,19 +296,28 @@ export default function PlanilhaLancamentos({
       try {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+        
+        const sheetsPayload: { sheetName: string; rows: any[] }[] = [];
+        let totalRows = 0;
 
-        if (json.length === 0) {
+        for (const name of workbook.SheetNames) {
+          const worksheet = workbook.Sheets[name];
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+          if (json.length > 0) {
+            sheetsPayload.push({ sheetName: name, rows: json });
+            totalRows += json.length;
+          }
+        }
+
+        if (totalRows === 0) {
           alert("A planilha importada está vazia!");
           return;
         }
 
-        const confirmar = confirm(`Deseja importar ${json.length} lançamento(s) de afiação desta planilha?`);
+        const confirmar = confirm(`Deseja importar ${totalRows} lançamento(s) de afiação de ${sheetsPayload.length} aba(s) desta planilha?`);
         if (!confirmar) return;
 
-        const res = await importarAfiacoes(json as any[], afiadorPadrao || undefined);
+        const res = await importarAfiacoes({ sheets: sheetsPayload } as any, afiadorPadrao || undefined);
         if (res.success) {
           alert(`✅ ${res.count} lançamento(s) importado(s) com sucesso!`);
           window.location.reload();

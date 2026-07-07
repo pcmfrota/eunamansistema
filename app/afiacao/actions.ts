@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
+import { MATERIAIS_DB } from "./materiaisDB";
 
 export async function salvarAfiacao(data: any) {
   try {
@@ -220,9 +221,60 @@ function sanitizeVal(v: any): string {
 //   cod | material | equipamento | modulo | nakit | naficha | fichafisica | novovelho |
 //   qtdexpedida | codmotivo | motivo | qtdbaixas | un | semana | data | carga |
 //   ni | cc | statusbaixa | uni | centro | movi | dep | custo
-export async function importarAfiacoes(rows: any[], defaultAfiador?: string) {
+// Helper para obter Centro de Custo (CC) a partir da máquina
+function obterCCPorEquipamento(maquina: string): string {
+  const clean = String(maquina || "").toUpperCase().trim();
+  const numPart = clean.replace(/[^\d]/g, "");
+  const mapping: Record<string, string> = {
+    "396": "06FLIMP170", "426": "06FLIMP173", "427": "06FLIMP174",
+    "431": "06FLIMP177", "432": "06FLIMP178", "434": "06FLIMP180",
+    "435": "06FL1MP181", "480": "06FLIMP186", "481": "06FLIMP187",
+    "482": "06FLIMP188", "483": "06FLIMP189", "654": "06FLIMP192",
+    "655": "06FLIMP193", "656": "06FLIMP194", "657": "06FLIMP195",
+    "658": "06FLIMP196", "659": "06FLIMP197", "546": "06FLIMP228",
+    "547": "06FLIMP229", "548": "06FLIMP230", "690": "06FLIMP235"
+  };
+  return mapping[numPart] || "";
+}
+
+// Helper para determinar o código do material com base no NI e Descrição
+function determinarCodigoPorNiEDesc(niValue: any, descValue: any): string {
+  const cleanNi = String(niValue || "").replace(/[^\d]/g, "").trim();
+  const desc = String(descValue || "").toUpperCase();
+
+  if (cleanNi === "25301352") {
+    if (desc.includes("V132")) return "12";
+    if (desc.includes("370E")) return "13";
+    return "12";
+  }
+
+  // Buscar correspondência direta no MATERIAIS_DB
+  const found = MATERIAIS_DB.find(m => m.ni.replace(/[^\d]/g, "").trim() === cleanNi);
+  if (found) return found.cod;
+
+  // Fallback por descrição
+  if (descValue) {
+    const descUpper = String(descValue).toUpperCase().trim();
+    const foundDesc = MATERIAIS_DB.find(m => descUpper.includes(m.material.toUpperCase()) || m.material.toUpperCase().includes(descUpper));
+    if (foundDesc) return foundDesc.cod;
+  }
+
+  return "";
+}
+
+export async function importarAfiacoes(dataInput: any, defaultAfiador?: string) {
   try {
-    // Pré-construir mapa de chaves normalizadas → chave original para cada linha
+    let sheets: { sheetName: string; rows: any[] }[] = [];
+    
+    if (Array.isArray(dataInput)) {
+      sheets = [{ sheetName: "Suzano Afiação", rows: dataInput }];
+    } else if (dataInput && Array.isArray(dataInput.sheets)) {
+      sheets = dataInput.sheets;
+    } else {
+      throw new Error("Formato de dados inválido para importação.");
+    }
+
+    // Pré-construir mapas e funções auxiliares
     const buildKeyMap = (row: any): Record<string, string> => {
       const map: Record<string, string> = {};
       for (const k of Object.keys(row)) {
@@ -231,7 +283,6 @@ export async function importarAfiacoes(rows: any[], defaultAfiador?: string) {
       return map;
     };
 
-    // Buscar valor pelo nome normalizado da coluna (somente exact match)
     const getExact = (keyMap: Record<string, string>, row: any, normalizedNames: string[]): any => {
       for (const name of normalizedNames) {
         const originalKey = keyMap[name];
@@ -242,86 +293,177 @@ export async function importarAfiacoes(rows: any[], defaultAfiador?: string) {
       return undefined;
     };
 
-    const mapped = rows.map((row: any) => {
-      const km = buildKeyMap(row);
+    const mapped: any[] = [];
 
-      const g = (...names: string[]) => {
-        const raw = getExact(km, row, names);
-        return sanitizeVal(raw);
-      };
+    for (const sheet of sheets) {
+      const sheetNameNorm = normalizeKey(sheet.sheetName);
+      const rows = sheet.rows;
 
-      // ── Campos principais da planilha Suzano ─────────────────────────────
-      const codMaterial   = g("cod", "cdg");
-      const equipamento   = g("equipamento", "maquina", "veiculo", "placa");
-      const modulo        = g("modulo", "mod") || "MA05";
-      const kit           = g("nakit", "nkit", "kit") || "1";
-      const numFicha      = g("naficha", "nficha", "numficha");
-      const fichaFisica   = g("fichafisica", "fisica") || "OK";
-      const novoVelho     = g("novovelho", "novo") || "NOVO";
-      const qtdExpedidaRaw = g("qtdexpedida", "qtdexp");
-      const codMotivo     = g("codmotivo", "codmot");
-      const motivo        = g("motivo");
-      const qtdBaixasRaw  = g("qtdbaixas", "baixas", "baixa");
-      const un            = g("un", "unidade");
-      const dataRaw       = g("data", "date");
-      const carga         = g("carga") || "1";
-      const ni            = g("ni");
-      const cc            = g("cc");
-      const statusBaixa   = g("statusbaixa");
-      const uni           = g("uni") || "20";
-      const centro        = g("centro");
-      const movi          = g("movi", "movimento");
-      const dep           = g("dep", "departamento");
-      const afiador       = g("afiador", "nomeafiador") || defaultAfiador || "IMPORTADO";
-      const letra         = g("letra") || "A";
+      for (const row of rows) {
+        const km = buildKeyMap(row);
+        const g = (...names: string[]) => {
+          const raw = getExact(km, row, names);
+          return sanitizeVal(raw);
+        };
 
-      // ── Parsear números ──────────────────────────────────────────────────
-      const qtdExpedida = parseExcelNumber(qtdExpedidaRaw || 0);
-      const qtdBaixas   = parseExcelNumber(qtdBaixasRaw || 0);
+        // Identificar tipo de planilha com base nas colunas ou nome da aba
+        const hasOrigemDestino = km["origem"] !== undefined && km["destino"] !== undefined;
+        const hasReferenciaQtd = km["referencia"] !== undefined && km["quantidade"] !== undefined;
+        const hasFichaEunaman = km["fichaeunaman"] !== undefined || km["afiacao"] !== undefined;
 
-      // ── Parsear data ─────────────────────────────────────────────────────
-      const data = parseExcelDate(dataRaw || "");
+        if (sheetNameNorm.includes("transferencias") || sheetNameNorm.includes("transferencia") || (hasOrigemDestino && hasFichaEunaman)) {
+          // ── PLANILHA DE TRANSFERÊNCIAS (ENTRADAS) ──────────────────────────
+          const dataRaw       = g("data", "date");
+          const origem        = g("origem");
+          const destino       = g("destino", "dep");
+          const quantidadeRaw = g("quantidade", "qtd");
+          const ficha         = g("fichaeunaman", "ficha");
+          const afiacao       = g("afiacao", "nomeafiador");
+          const itemNi        = g("item", "ni");
+          const desc          = g("descricao", "ref");
+          const status        = g("status");
 
-      // ── Determinar tipo_formulario ────────────────────────────────────────
-      let tipo_formulario = "BAIXA DE MATERIAL CORRENTE";
-      if (codMaterial === "15")                                      tipo_formulario = "BAIXA DE MATERIAL ROLLTOP";
-      else if (codMaterial === "20")                                 tipo_formulario = "BAIXA DE CHAPA MAQNOVA";
-      else if (codMaterial === "40")                                 tipo_formulario = "BAIXA DE CHAPA ROTARY-AX";
-      else if (["16","17","18","21","23"].includes(codMaterial))     tipo_formulario = "BAIXA DE MATERIAL SABRE";
-      else if (["2","3","10","22"].includes(codMaterial))            tipo_formulario = "BAIXAS DE EMENDAS E BOLSAS";
-      else if (qtdExpedida > 0 && qtdBaixas === 0)                  tipo_formulario = "ESTADO DE RECEBIMENTO CORRENTE";
+          const data = parseExcelDate(dataRaw || "");
+          const quantidade = parseExcelNumber(quantidadeRaw || 0);
+          const cod = determinarCodigoPorNiEDesc(itemNi, desc);
 
-      return {
-        data,
-        afiador: afiador.toUpperCase().trim(),
-        modulo: modulo.toUpperCase().trim(),
-        maquina: equipamento.toUpperCase().trim(),
-        letra: letra.toUpperCase().trim(),
-        kit: kit.trim(),
-        tipo_formulario,
-        detalhes: {
-          cod:          codMaterial,
-          num_ficha:    numFicha,
-          ficha_fisica: fichaFisica.toUpperCase(),
-          novo_velho:   novoVelho.toUpperCase(),
-          carga:        carga,
-          uni:          uni,
-          qtd_expedida: String(qtdExpedida),
-          qtd_baixas:   String(qtdBaixas),
-          cc:           cc,
-          status_baixa: statusBaixa,
-          un:           un,
-          ni:           ni,
-          centro:       centro,
-          movi:         movi,
-          dep:          dep,
-          cod_motivo:   codMotivo.toUpperCase(),
-          motivo:       motivo.toUpperCase(),
-          corrente:     "1",
-          sabre:        "1"
+          mapped.push({
+            data,
+            afiador: afiacao.toUpperCase().trim() || defaultAfiador || "IMPORTADO",
+            modulo: "MA05",
+            maquina: "ESTOQUE",
+            letra: "A",
+            kit: "1",
+            tipo_formulario: "TRANSFERÊNCIA",
+            detalhes: {
+              cod,
+              ni: itemNi,
+              desc,
+              qtd_expedida: String(quantidade),
+              qtd_baixas: "0",
+              dep: destino.toUpperCase().trim() || origem.toUpperCase().trim() || "AF01",
+              origem: origem.toUpperCase().trim(),
+              destino: destino.toUpperCase().trim(),
+              ficha,
+              status
+            }
+          });
+
+        } else if (sheetNameNorm.includes("baixaestoque") || sheetNameNorm.includes("baixa") || (hasReferenciaQtd && km["controle"] !== undefined)) {
+          // ── PLANILHA DE BAIXA-ESTOQUE (SAÍDAS) ─────────────────────────────
+          const dataRaw       = g("data", "date");
+          const maquina       = g("maquina", "equipamento", "veiculo", "placa");
+          const codigoNi      = g("codigo", "cod", "ni");
+          const referencia    = g("referencia", "desc", "ref");
+          const quantidadeRaw = g("quantidade", "qtd");
+          const controle      = g("controle", "ficha");
+          const dep           = g("dep", "destino");
+          const modulo        = g("modulo", "mod") || "MA05";
+
+          const data = parseExcelDate(dataRaw || "");
+          const rawQtd = parseExcelNumber(quantidadeRaw || 0);
+          const cod = determinarCodigoPorNiEDesc(codigoNi, referencia);
+
+          // Conversão de Saída para Corrente
+          let qtdBaixas = rawQtd;
+          if (cod === "12") qtdBaixas = Math.round(rawQtd * 0.05882 * 1000) / 1000;
+          else if (cod === "13" || cod === "14") qtdBaixas = Math.round(rawQtd * 0.06061 * 1000) / 1000;
+
+          mapped.push({
+            data,
+            afiador: defaultAfiador || "IMPORTADO",
+            modulo: modulo.toUpperCase().trim(),
+            maquina: maquina.toUpperCase().trim(),
+            letra: "A",
+            kit: "1",
+            tipo_formulario: "BAIXA-ESTOQUE",
+            detalhes: {
+              cod,
+              ni: codigoNi,
+              desc: referencia,
+              qtd_expedida: String(rawQtd),
+              qtd_baixas: String(qtdBaixas),
+              dep: dep.toUpperCase().trim() || "AF01",
+              ficha: controle,
+              cc: obterCCPorEquipamento(maquina)
+            }
+          });
+
+        } else {
+          // ── PLANILHA TRADICIONAL SUZANO AFIAÇÃO ───────────────────────────
+          const codMaterial   = g("cod", "cdg");
+          const equipamento   = g("equipamento", "maquina", "veiculo", "placa");
+          const modulo        = g("modulo", "mod") || "MA05";
+          const kit           = g("nakit", "nkit", "kit") || "1";
+          const numFicha      = g("naficha", "nficha", "numficha");
+          const fichaFisica   = g("fichafisica", "fisica") || "OK";
+          const novoVelho     = g("novovelho", "novo") || "NOVO";
+          const qtdExpedidaRaw = g("qtdexpedida", "qtdexp");
+          const codMotivo     = g("codmotivo", "codmot");
+          const motivo        = g("motivo");
+          const qtdBaixasRaw  = g("qtdbaixas", "baixas", "baixa");
+          const un            = g("un", "unidade");
+          const dataRaw       = g("data", "date");
+          const carga         = g("carga") || "1";
+          const ni            = g("ni");
+          const cc            = g("cc");
+          const statusBaixa   = g("statusbaixa");
+          const uni           = g("uni") || "20";
+          const centro        = g("centro");
+          const movi          = g("movi", "movimento");
+          const dep           = g("dep", "departamento");
+          const afiador       = g("afiador", "nomeafiador") || defaultAfiador || "IMPORTADO";
+          const letra         = g("letra") || "A";
+
+          const qtdExpedida = parseExcelNumber(qtdExpedidaRaw || 0);
+          const qtdBaixas   = parseExcelNumber(qtdBaixasRaw || 0);
+          const data = parseExcelDate(dataRaw || "");
+
+          let tipo_formulario = "BAIXA DE MATERIAL CORRENTE";
+          if (codMaterial === "15")                                      tipo_formulario = "BAIXA DE MATERIAL ROLLTOP";
+          else if (codMaterial === "20")                                 tipo_formulario = "BAIXA DE CHAPA MAQNOVA";
+          else if (codMaterial === "40")                                 tipo_formulario = "BAIXA DE CHAPA ROTARY-AX";
+          else if (["16","17","18","21","23"].includes(codMaterial))     tipo_formulario = "BAIXA DE MATERIAL SABRE";
+          else if (["2","3","10","22"].includes(codMaterial))            tipo_formulario = "BAIXAS DE EMENDAS E BOLSAS";
+          else if (qtdExpedida > 0 && qtdBaixas === 0)                  tipo_formulario = "ESTADO DE RECEBIMENTO CORRENTE";
+
+          mapped.push({
+            data,
+            afiador: afiador.toUpperCase().trim(),
+            modulo: modulo.toUpperCase().trim(),
+            maquina: equipamento.toUpperCase().trim(),
+            letra: letra.toUpperCase().trim(),
+            kit: kit.trim(),
+            tipo_formulario,
+            detalhes: {
+              cod:          codMaterial,
+              num_ficha:    numFicha,
+              ficha_fisica: fichaFisica.toUpperCase(),
+              novo_velho:   novoVelho.toUpperCase(),
+              carga:        carga,
+              uni:          uni,
+              qtd_expedida: String(qtdExpedida),
+              qtd_baixas:   String(qtdBaixas),
+              cc:           cc,
+              status_baixa: statusBaixa,
+              un:           un,
+              ni:           ni,
+              centro:       centro,
+              movi:         movi,
+              dep:          dep || "AF01",
+              cod_motivo:   codMotivo.toUpperCase(),
+              motivo:       motivo.toUpperCase(),
+              corrente:     "1",
+              sabre:        "1"
+            }
+          });
         }
-      };
-    });
+      }
+    }
+
+    if (mapped.length === 0) {
+      return { success: false, error: "Nenhuma linha válida encontrada para importar." };
+    }
 
     const { data: inserted, error } = await supabase
       .from("afiacao")
