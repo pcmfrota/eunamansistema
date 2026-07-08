@@ -72,14 +72,12 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
       descricao: "CORRENTE OREGON/18HX 370E",
       ni: "25301352-",
       codigosMaterial: ["13", "14"],
-      entradaFactor: 0.06061,
     },
     {
       item: "25301352",
       descricao: "CORRENTE OREGON/18HX V132",
       ni: "25301352",
       codigosMaterial: ["12"],
-      entradaFactor: 0.05882,
     },
     {
       item: "25301353",
@@ -193,12 +191,7 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
           if (isSaldoInicial) continue;
 
           if (line.isRecebimento) {
-            // Conversão de entrada para correntes se for manual (valor inteiro menor ou igual a 100)
-            if (it.entradaFactor && line.qtdExpedida <= 100 && Number.isInteger(line.qtdExpedida)) {
-              entrada += line.qtdExpedida * it.entradaFactor;
-            } else {
-              entrada += line.qtdExpedida;
-            }
+            entrada += line.qtdExpedida;
           } else {
             saida += line.qtdBaixa;
           }
