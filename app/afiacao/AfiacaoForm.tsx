@@ -194,7 +194,7 @@ export default function AfiacaoForm({
         ficha_fisica: "OK",
         novo_velho: "NOVO",
         carga: "1",
-        uni: "20",
+        uni: "",
         qtd_expedida: "1",
         qtd_baixas: isRecebimento ? "0" : "1",
         cc: prev.detalhes.cc || "",
