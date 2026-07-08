@@ -26,7 +26,7 @@ export default function PlanilhaLancamentos({
   const [filtroDataFim, setFiltroDataFim] = useState("");
 
   const todasLinhas = useMemo(() => {
-    return afiacoes.flatMap(a => extrairLinhas(a, auxiliares));
+    return (afiacoes || []).flatMap(a => extrairLinhas(a, auxiliares || []));
   }, [afiacoes, auxiliares]);
 
   // Extrair anos disponíveis para o filtro

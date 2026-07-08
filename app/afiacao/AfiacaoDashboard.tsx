@@ -32,7 +32,7 @@ export default function AfiacaoDashboard({ afiacoes, auxiliares }: DashboardProp
 
   // ── Extrair Valores Únicos para os Dropdowns a partir do Banco ──
   const parsedData = useMemo(() => {
-    return afiacoes.flatMap((a) => {
+    return (afiacoes || []).flatMap((a) => {
       const rows = extrairLinhas(a, auxiliares);
       return rows.map((r) => {
         // Encontrar unidade a partir do prefixo do modulo (ex: MA05 -> MA)

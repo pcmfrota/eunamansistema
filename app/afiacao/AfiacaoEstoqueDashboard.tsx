@@ -138,7 +138,7 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
   // ── Extrair e Agrupar Dados do Banco ──
   const parsedRows = useMemo(() => {
     // Processar lançamentos
-    const lines = afiacoes.flatMap((a) => {
+    const lines = (afiacoes || []).flatMap((a) => {
       const rows = extrairLinhas(a, auxiliares);
       return rows.map((r) => {
         const tipoForm = String(a.tipo_formulario || "").trim();
@@ -232,7 +232,7 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
   const depositosDisponiveis = useMemo(() => {
     const deps = new Set<string>();
     deps.add("AF01"); // Garantir que AF01 apareça sempre
-    for (const a of afiacoes) {
+    for (const a of (afiacoes || [])) {
       const rows = extrairLinhas(a, auxiliares);
       for (const r of rows) {
         if (r.dep) {

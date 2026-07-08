@@ -27,6 +27,7 @@ export function obterCCPorEquipamento(maquina: string): string {
 
 // Extrair e mapear os dados da afiação para linhas da planilha
 export function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
+  if (!afiacao) return [];
   const detalhes = afiacao.detalhes || {};
   let semana: number | string = "";
   let dataFormatada = "";

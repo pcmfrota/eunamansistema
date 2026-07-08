@@ -23,8 +23,8 @@ export default function AfiacaoClient({
   const [activeTab, setActiveTab] = useState<
     "menu" | "dashboard" | "corrente" | "sabre" | "rolltop" | "estoque" | "transferencias" | "banco" | "formulario" | "planilha" | "auxiliares"
   >("menu");
-  const [afiacoes, setAfiacoes] = useState(initialAfiacoes);
-  const [auxiliares, setAuxiliares] = useState(initialAuxiliares);
+  const [afiacoes, setAfiacoes] = useState(initialAfiacoes || []);
+  const [auxiliares, setAuxiliares] = useState(initialAuxiliares || []);
 
   const handleUpdate = (updated: any) => {
     setAfiacoes((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));

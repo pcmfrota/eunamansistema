@@ -56,7 +56,7 @@ export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Pro
     }
 
     // Validar duplicatas locais
-    const existe = auxiliares.some(
+    const existe = (auxiliares || []).some(
       (item) =>
         item.category === category &&
         item.value === val &&
@@ -117,11 +117,11 @@ export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Pro
     }
   };
 
-  const afiadores = auxiliares.filter((a) => a.category === "afiador");
-  const maquinas = auxiliares.filter((a) => a.category === "maquina");
-  const materiais = auxiliares.filter((a) => a.category === "material");
-  const estados = auxiliares.filter((a) => a.category === "estado_recebimento");
-  const descartes = auxiliares.filter((a) => a.category === "tipo_descarte");
+  const afiadores = (auxiliares || []).filter((a) => a.category === "afiador");
+  const maquinas = (auxiliares || []).filter((a) => a.category === "maquina");
+  const materiais = (auxiliares || []).filter((a) => a.category === "material");
+  const estados = (auxiliares || []).filter((a) => a.category === "estado_recebimento");
+  const descartes = (auxiliares || []).filter((a) => a.category === "tipo_descarte");
 
   const formatCurrency = (val: any) => {
     const num = parseFloat(val);

@@ -7,6 +7,7 @@ import {
   AFIADORES,
   MODULOS,
   renderCamposDetalhes,
+  TIPO_FORMULARIO_OPCOES,
 } from "./AfiacaoForm";
 
 // ─────────────────────────────────────────────
@@ -538,7 +539,7 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
   // Filtragem
   const filtrados = useMemo(() => {
     const q = busca.toLowerCase();
-    return afiacoes.filter((a) => {
+    return (afiacoes || []).filter((a) => {
       const texto =
         (a.afiador || "").toLowerCase().includes(q) ||
         (a.modulo || "").toLowerCase().includes(q) ||
@@ -584,13 +585,13 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
 
       {/* Estatísticas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total de Registros" value={afiacoes.length}  color="blue"   icon="📋" />
+        <StatCard label="Total de Registros" value={(afiacoes || []).length}  color="blue"   icon="📋" />
         <StatCard label="Filtrados"           value={filtrados.length} color="green"  icon="🔍" />
         <StatCard label="Módulos Ativos"
-          value={[...new Set(afiacoes.map(a => a.modulo))].filter(Boolean).length}
+          value={[...new Set((afiacoes || []).map(a => a.modulo))].filter(Boolean).length}
           color="purple" icon="🏭" />
         <StatCard label="Afiadores"
-          value={[...new Set(afiacoes.map(a => a.afiador))].filter(Boolean).length}
+          value={[...new Set((afiacoes || []).map(a => a.afiador))].filter(Boolean).length}
           color="orange" icon="👷" />
       </div>
 
@@ -619,7 +620,7 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
           <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={filtroModulo} onChange={(e) => { setFiltroModulo(e.target.value); setPaginaAtual(1); }}>
             <option value="">Todos os módulos</option>
-            {[...new Set(afiacoes.map(a => a.modulo))].filter(Boolean).sort().map(m => (
+            {[...new Set((afiacoes || []).map(a => a.modulo))].filter(Boolean).sort().map(m => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
@@ -627,7 +628,7 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
           <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={filtroAfiador} onChange={(e) => { setFiltroAfiador(e.target.value); setPaginaAtual(1); }}>
             <option value="">Todos os afiadores</option>
-            {[...new Set(afiacoes.map(a => a.afiador))].filter(Boolean).sort().map(a => (
+            {[...new Set((afiacoes || []).map(a => a.afiador))].filter(Boolean).sort().map(a => (
               <option key={a} value={a}>{a.split(" ")[0]} {a.split(" ").slice(-1)[0]}</option>
             ))}
           </select>

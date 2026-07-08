@@ -26,7 +26,7 @@ export default function AfiacaoCorrenteDashboard({ afiacoes, auxiliares }: Corre
 
   // ── Extrair Valores Únicos a partir do Banco ──
   const parsedData = useMemo(() => {
-    return afiacoes.flatMap((a) => {
+    return (afiacoes || []).flatMap((a) => {
       const rows = extrairLinhas(a, auxiliares);
       return rows.map((r) => {
         const moduloStr = String(r.modulo || "").toUpperCase().trim();

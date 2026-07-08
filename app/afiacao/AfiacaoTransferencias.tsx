@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from "react";
-import { Plus, Trash2, X, Calendar } from "lucide-react";
+import { Plus, Trash2, X, Search } from "lucide-react";
 import { salvarAfiacao, deletarAfiacao } from "./actions";
 import { MATERIAIS_DB, buscarMaterialPorCodigo } from "./materiaisDB";
 
@@ -42,7 +42,7 @@ export default function AfiacaoTransferencias({
 
   // ── Extrair e Mapear Linhas de Transferência ──
   const transferencias = useMemo(() => {
-    return afiacoes
+    return (afiacoes || [])
       .filter((a) => a.tipo_formulario === "TRANSFERÊNCIA")
       .map((a) => {
         const det = a.detalhes || {};
