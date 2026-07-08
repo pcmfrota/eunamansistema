@@ -130,7 +130,7 @@ export function extrairLinhas(afiacao: any, auxiliares: any[] = []) {
   const statusBaixa = detalhes.status_baixa || "";
   const centro = detalhes.centro || "";
   const movi = detalhes.movi || "";
-  const dep = detalhes.dep || "";
+  const dep = (detalhes.dep || "").toUpperCase().trim() || "AF01";
   const cc = detalhes.cc || obterCCPorEquipamento(afiacao.maquina);
   const custoCalculado = custoPorUnidade * (qtdBaixa || qtdExpedida || 0);
 

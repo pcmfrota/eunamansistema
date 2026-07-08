@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from "react";
-import { Plus, Trash2, Search, X, Calendar } from "lucide-react";
+import { Plus, Trash2, X, Calendar } from "lucide-react";
 import { salvarAfiacao, deletarAfiacao } from "./actions";
 import { MATERIAIS_DB, buscarMaterialPorCodigo } from "./materiaisDB";
 
@@ -392,64 +392,26 @@ export default function AfiacaoTransferencias({
                 </select>
               </div>
 
-              {/* Material Search & AutoComplete */}
-              <div className="relative">
-                <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Pesquisar Material *</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
-                    <Search className="h-3.5 w-3.5 text-gray-400" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Busque por código, descrição ou NI..."
-                    value={formMaterialSearch}
-                    onChange={(e) => {
-                      setFormMaterialSearch(e.target.value);
-                      if (formMaterial) setFormMaterial(null);
-                    }}
-                    className="w-full pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-300 rounded text-slate-800 outline-none focus:ring-1 focus:ring-blue-500 font-sans"
-                  />
-                </div>
-
-                {/* Selecionado */}
-                {formMaterial && (
-                  <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center justify-between text-emerald-800">
-                    <div>
-                      <span className="font-bold uppercase text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded mr-1.5">SELECIONADO</span>
-                      <strong>{formMaterial.ni}</strong> - {formMaterial.material}
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        setFormMaterial(null);
-                        setFormMaterialSearch("");
-                      }}
-                      className="text-emerald-700 hover:text-emerald-900"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Dropdown de Resultados */}
-                {filteredMaterials.length > 0 && !formMaterial && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-50 divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                    {filteredMaterials.map((m) => (
-                      <button
-                        key={m.cod}
-                        type="button"
-                        onClick={() => {
-                          setFormMaterial(m);
-                          setFormMaterialSearch(m.material);
-                        }}
-                        className="w-full px-3 py-2 text-left hover:bg-slate-50 flex justify-between items-center transition"
-                      >
-                        <span className="truncate">{m.material}</span>
-                        <span className="text-[10px] text-gray-400 font-mono truncate max-w-[80px]">{m.ni}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+              {/* Material Dropdown Selection (Lista Suspensa) */}
+              <div>
+                <label className="block text-[10px] text-gray-500 uppercase tracking-wider mb-1">Material *</label>
+                <select
+                  required
+                  value={formMaterial?.cod || ""}
+                  onChange={(e) => {
+                    const selectedCod = e.target.value;
+                    const found = MATERIAIS_DB.find((m) => m.cod === selectedCod);
+                    setFormMaterial(found || null);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-slate-800 outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                >
+                  <option value="">Selecione o material...</option>
+                  {MATERIAIS_DB.map((m) => (
+                    <option key={m.cod} value={m.cod}>
+                      {m.material} ({m.ni})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Quantidade e Origem/Destino */}

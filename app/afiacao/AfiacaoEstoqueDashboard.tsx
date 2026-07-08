@@ -147,7 +147,7 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
         return {
           codigo: r.codigo,
           ni: r.ni,
-          dep: String(r.dep || "").toUpperCase().trim(),
+          dep: String(r.dep || "").toUpperCase().trim() || "AF01",
           isRecebimento,
           qtdExpedida: r.qtdExpedida || 0,
           qtdBaixa: r.qtdBaixa || 0,
