@@ -3,7 +3,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { atualizarAfiacao, deletarAfiacao } from "./actions";
 import {
-  TIPO_FORMULARIO_OPCOES,
   MAQUINAS_POR_MODULO,
   AFIADORES,
   MODULOS,
