@@ -292,7 +292,7 @@ export default function UsuariosClient({
         </div>
         
         <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
-          {['admin', 'pcm', 'gestao', 'mecanico', 'motorista', 'visitante'].map(role => {
+          {['admin', 'pcm', 'gestao', 'mecanico', 'motorista', 'afiador', 'visitante'].map(role => {
             const rolePerm = permissions.find(p => p.role === role);
             const isEditing = editingPermissions === role;
             
@@ -310,6 +310,7 @@ export default function UsuariosClient({
                       role === 'gestao' ? "bg-green-100 text-green-600 dark:bg-green-900/30" :
                       role === 'mecanico' ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30" :
                       role === 'motorista' ? "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30" :
+                      role === 'afiador' ? "bg-sky-100 text-sky-600 dark:bg-sky-900/30" :
                       "bg-zinc-100 text-zinc-600 dark:bg-zinc-900/30"
                     )}>
                       <Layout size={18} />
@@ -420,6 +421,7 @@ export default function UsuariosClient({
                         <option value="gestao">Gestão</option>
                         <option value="mecanico">Mecânico</option>
                         <option value="motorista">Motorista</option>
+                        <option value="afiador">Afiador</option>
                         <option value="visitante">Visitante</option>
                       </select>
                     </div>
@@ -510,7 +512,7 @@ export default function UsuariosClient({
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase text-zinc-500 tracking-wider">Atribuir Cargo 🔒</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {['admin', 'pcm', 'gestao', 'mecanico', 'motorista', 'visitante'].map(r => (
+                    {['admin', 'pcm', 'gestao', 'mecanico', 'motorista', 'afiador', 'visitante'].map(r => (
                       <label key={r} className="relative flex items-center p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
                         <input type="radio" name="role" value={r} defaultChecked={r === 'visitante'} className="sr-only peer" />
                         <div className="w-full flex items-center justify-between">

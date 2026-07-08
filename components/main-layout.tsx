@@ -276,7 +276,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   profile?.role === 'pcm' ? 'PCM' :
                   profile?.role === 'gestao' ? 'Gestão' : 
                   profile?.role === 'mecanico' ? 'Mecânico' :
-                  profile?.role === 'motorista' ? 'Motorista' : 'Visitante'
+                  profile?.role === 'motorista' ? 'Motorista' :
+                  profile?.role === 'afiador' ? 'Afiador' : 'Visitante'
                 )}
               </p>
             </div>
