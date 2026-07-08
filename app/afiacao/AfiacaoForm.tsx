@@ -167,7 +167,9 @@ export default function AfiacaoForm({
           // No recebimento, qtd_baixas = 0
           updatedDetalhes.qtd_baixas = "0";
         } else if (field === "corrente" && isCorrente) {
-          updatedDetalhes.qtd_baixas = String(qtd);
+          // Correntes: 1 corrente = 0,057 (fator Suzano)
+          const baixa = Math.round(qtd * 0.057 * 1000) / 1000;
+          updatedDetalhes.qtd_baixas = String(baixa);
         } else {
           // Sabre, Rolltop, Chapa, Emendas: qtd_baixas = qtd selecionada
           updatedDetalhes.qtd_baixas = String(qtd);

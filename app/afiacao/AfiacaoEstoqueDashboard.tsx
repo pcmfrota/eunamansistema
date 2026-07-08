@@ -193,7 +193,12 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
           if (line.isRecebimento) {
             entrada += line.qtdExpedida;
           } else {
-            saida += line.qtdBaixa;
+            const isCorrente = it.codigosMaterial.some(c => ["12", "13", "14"].includes(c));
+            if (isCorrente) {
+              saida += line.qtdExpedida;
+            } else {
+              saida += line.qtdBaixa;
+            }
           }
         }
       }

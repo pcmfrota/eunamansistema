@@ -364,7 +364,10 @@ export async function importarAfiacoes(dataInput: any, defaultAfiador?: string) 
           const rawQtd = parseExcelNumber(quantidadeRaw || 0);
           const cod = determinarCodigoPorNiEDesc(codigoNi, referencia);
 
-          const qtdBaixas = rawQtd;
+          let qtdBaixas = rawQtd;
+          if (cod === "12" || cod === "13" || cod === "14") {
+            qtdBaixas = Math.round(rawQtd * 0.057 * 1000) / 1000;
+          }
 
           mapped.push({
             data,
