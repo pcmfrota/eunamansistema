@@ -230,7 +230,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   return (
     <div className="p-3 md:p-8 flex flex-col gap-6 min-h-screen relative">
       {/* Loading overlay */}
-      {(isPending || isExporting) && (
+      {((isPending && !data) || isExporting) && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center backdrop-blur-sm">
           <div
             className="rounded-2xl px-6 py-4 flex items-center gap-3 shadow-2xl"
@@ -240,8 +240,8 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
               border: '1px solid rgba(255,255,255,0.6)',
             }}
           >
-            <Loader2 className="w-5 h-5 text-green-700 animate-spin" />
-            <span className="text-sm font-medium text-zinc-700">Atualizando dados...</span>
+            <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
+            <span className="text-sm font-semibold text-zinc-700">{isExporting ? "Gerando relatório..." : "Atualizando dados..."}</span>
           </div>
         </div>
       )}

@@ -3,24 +3,18 @@
 import { getDashboardData } from "./dashboard";
 
 const historicoCache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL = 30 * 1000; // 30 segundos (mesmo TTL do dashboard)
+const CACHE_TTL_CURRENT = 30 * 1000; // 30 segundos para o mês atual
+const CACHE_TTL_PAST = 60 * 60 * 1000; // 1 hora para meses passados já finalizados
 
 export async function getHistoricoMensal(
   categoria: string = "PESADA",
   filtrosAdicionais?: { modulo?: string; area?: string; placa?: string; filial?: string }
 ) {
-  const cacheKey = JSON.stringify({ categoria, ...filtrosAdicionais });
-  const cached = historicoCache.get(cacheKey);
+  const hoje = new Date();
+  const mesAtualRef = hoje.getMonth() + 1;
+  const anoAtualRef = hoje.getFullYear();
   const now = Date.now();
   
-  if (cached && now - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-
-  const result = [];
-  const hoje = new Date();
-  
-  // Pegar todos os meses do ano atual (conforme vão passando)
   const currentMonthIdx = hoje.getMonth();
   const monthsToFetch = [];
   for (let i = currentMonthIdx; i >= 0; i--) {
@@ -28,32 +22,42 @@ export async function getHistoricoMensal(
     monthsToFetch.push({ mes: d.getMonth() + 1, ano: d.getFullYear() });
   }
 
-  // Busca os dados de forma paralela usando o motor já existente
-  const results = await Promise.all(
-    monthsToFetch.map(m => getDashboardData({
-      mes: m.mes,
-      ano: m.ano,
-      categoria,
-      modulo: filtrosAdicionais?.modulo,
-      area: filtrosAdicionais?.area,
-      placa: filtrosAdicionais?.placa,
-      filial: filtrosAdicionais?.filial
-    }))
-  );
-
   const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
+  // Busca os dados com cache inteligente individual por mês
+  const results = await Promise.all(
+    monthsToFetch.map(async m => {
+      const isPastMonth = m.ano < anoAtualRef || (m.ano === anoAtualRef && m.mes < mesAtualRef);
+      const cacheKey = JSON.stringify({ mes: m.mes, ano: m.ano, categoria, ...filtrosAdicionais });
+      const cached = historicoCache.get(cacheKey);
+      const ttl = isPastMonth ? CACHE_TTL_PAST : CACHE_TTL_CURRENT;
+
+      if (cached && (now - cached.timestamp) < ttl) {
+        return cached.data;
+      }
+
+      const r = await getDashboardData({
+        mes: m.mes,
+        ano: m.ano,
+        categoria,
+        modulo: filtrosAdicionais?.modulo,
+        area: filtrosAdicionais?.area,
+        placa: filtrosAdicionais?.placa,
+        filial: filtrosAdicionais?.filial
+      });
+
+      historicoCache.set(cacheKey, { data: r, timestamp: now });
+      return r;
+    })
+  );
+
+  return results.map((r, i) => {
     const m = monthsToFetch[i];
-    result.push({
+    return {
       mes: `${MESES_ABREV[m.mes]}/${String(m.ano).slice(2)}`,
       dm: r.dm,
       doOp: r.doOperacional,
-    });
-  }
-
-  historicoCache.set(cacheKey, { data: result, timestamp: now });
-  return result;
+    };
+  });
 }
 

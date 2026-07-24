@@ -292,7 +292,8 @@ export async function getDashboardData(filtros?: {
 
   // 3. Busca de Ordens de Serviço (agora com as datas precisas e filtro de filial)
   let queryOS = osBaseQuery
-  .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`);
+    .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`)
+    .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`);
 
   if (filtros?.placa) {
     queryOS = queryOS.eq('placa', filtros.placa.toUpperCase());
