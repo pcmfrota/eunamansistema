@@ -11,6 +11,7 @@ export type VeiculoDisp = {
   horasOperacional: number;
   hTotalDM: number;
   hTotalDO: number;
+  horasDisponiveisOperacional?: number;
   historicoDiario?: { 
     data: string; 
     hTotalDM: number; 
@@ -809,7 +810,10 @@ export async function getOfflineIndicadoresData(filtros?: {
   };
 }
 
-export async function getOfflineHistoricoMensal(categoria: string = "PESADA"): Promise<{ mes: string; dm: number; doOp: number }[]> {
+export async function getOfflineHistoricoMensal(
+  categoria: string = "PESADA",
+  filtrosAdicionais?: { modulo?: string; area?: string; placa?: string }
+): Promise<{ mes: string; dm: number; doOp: number }[]> {
   const result = [];
   const hoje = new Date();
   
@@ -824,7 +828,14 @@ export async function getOfflineHistoricoMensal(categoria: string = "PESADA"): P
   const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
   for (let m of monthsToFetch) {
-    const dash = await getOfflineDashboardData({ mes: m.mes, ano: m.ano, categoria });
+    const dash = await getOfflineDashboardData({
+      mes: m.mes,
+      ano: m.ano,
+      categoria,
+      modulo: filtrosAdicionais?.modulo,
+      area: filtrosAdicionais?.area,
+      placa: filtrosAdicionais?.placa,
+    });
     result.push({
       mes: `${MESES_ABREV[m.mes]}/${String(m.ano).slice(2)}`,
       dm: dash.dm,

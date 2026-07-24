@@ -3,10 +3,13 @@
 import { getDashboardData } from "./dashboard";
 
 const historicoCache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL = 1000 * 60 * 30; // 30 minutos
+const CACHE_TTL = 30 * 1000; // 30 segundos (mesmo TTL do dashboard)
 
-export async function getHistoricoMensal(categoria: string = "PESADA") {
-  const cacheKey = `historico_${categoria}`;
+export async function getHistoricoMensal(
+  categoria: string = "PESADA",
+  filtrosAdicionais?: { modulo?: string; area?: string; placa?: string; filial?: string }
+) {
+  const cacheKey = JSON.stringify({ categoria, ...filtrosAdicionais });
   const cached = historicoCache.get(cacheKey);
   const now = Date.now();
   
@@ -27,7 +30,15 @@ export async function getHistoricoMensal(categoria: string = "PESADA") {
 
   // Busca os dados de forma paralela usando o motor já existente
   const results = await Promise.all(
-    monthsToFetch.map(m => getDashboardData({ mes: m.mes, ano: m.ano, categoria }))
+    monthsToFetch.map(m => getDashboardData({
+      mes: m.mes,
+      ano: m.ano,
+      categoria,
+      modulo: filtrosAdicionais?.modulo,
+      area: filtrosAdicionais?.area,
+      placa: filtrosAdicionais?.placa,
+      filial: filtrosAdicionais?.filial
+    }))
   );
 
   const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -45,3 +56,4 @@ export async function getHistoricoMensal(categoria: string = "PESADA") {
   historicoCache.set(cacheKey, { data: result, timestamp: now });
   return result;
 }
+

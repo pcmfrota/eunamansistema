@@ -86,19 +86,42 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     const fetchHistorico = async () => {
       if (isOnline) {
         try {
-          const res = await getHistoricoMensal(categoria);
+          const res = await getHistoricoMensal(categoria, {
+            modulo: filtros.modulo || undefined,
+            area: filtros.area || undefined,
+            placa: filtros.placa || undefined,
+            filial: (filtros as any).filial || undefined,
+          });
           setHistoricoMensal(res);
           return;
         } catch (err) {
           console.warn("Falha ao buscar histórico online, usando local:", err);
         }
       }
-      const localRes = await getOfflineHistoricoMensal(categoria);
+      const localRes = await getOfflineHistoricoMensal(categoria, {
+        modulo: filtros.modulo || undefined,
+        area: filtros.area || undefined,
+        placa: filtros.placa || undefined,
+      });
       setHistoricoMensal(localRes);
     };
 
     fetchHistorico().finally(() => setLoadingHistorico(false));
-  }, [filtros.categoria, isOnline]);
+  }, [filtros.categoria, filtros.modulo, filtros.area, filtros.placa, (filtros as any).filial, isOnline]);
+
+  // Garante sincronização perfeita do mês atual/selecionado no gráfico DM POR MÊS com o card principal DM
+  const displayHistoricoMensal = React.useMemo(() => {
+    if (!historicoMensal.length || !data) return historicoMensal;
+    const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const targetLabel = `${MESES_ABREV[data.mesSelecionado]}/${String(data.anoSelecionado).slice(2)}`;
+    
+    return historicoMensal.map(item => {
+      if (item.mes === targetLabel) {
+        return { ...item, dm: data.dm, doOp: data.doOperacional };
+      }
+      return item;
+    });
+  }, [historicoMensal, data]);
 
   // Carrega e atualiza os dados do Dashboard (Offline-First)
   useEffect(() => {
@@ -348,7 +371,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         <GraficoDMModulo dados={data.dispPorModulo} />
 
         {/* Gráfico de tendência mensal de DM */}
-        <GraficoDMMensal dados={historicoMensal} loading={loadingHistorico} />
+        <GraficoDMMensal dados={displayHistoricoMensal} loading={loadingHistorico} />
 
         <GraficoDispCategoria
           dados={data.dispPorCategoria}

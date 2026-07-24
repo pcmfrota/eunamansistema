@@ -15,6 +15,7 @@ export type VeiculoDisp = {
   horasOperacional: number;
   hTotalDM: number;
   hTotalDO: number;
+  horasDisponiveisOperacional?: number;
   historicoDiario?: { 
     data: string; 
     hTotalDM: number; 

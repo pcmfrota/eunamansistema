@@ -265,6 +265,7 @@ export async function getIndicadoresData(filtros?: {
       doHorasTotal: horasTotaisPeriodo,
       totalOS: osDoVeiculo.length,
       osFechadas: osFechadasV,
+      osAbertas,
     });
   }
 
