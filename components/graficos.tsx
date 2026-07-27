@@ -1142,7 +1142,7 @@ function formatarTempoManut(horasDec: number): string {
 }
 
 // ─── 14. Ranking de Falhas (Tabela) ──────────────────────────────────────────
-export function RankingFalhas({ dados }: { dados: { placa: string; falhas: number; mtbf: number; diasManut?: number }[] }) {
+export function RankingFalhas({ dados }: { dados: { placa: string; falhas: number; mttr?: number; mtbf: number; diasManut?: number }[] }) {
   return (
     <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-zinc-100 dark:border-zinc-800 p-6 flex flex-col shadow-sm h-full">
       <h3 className="font-semibold text-[15px] mb-4 text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
@@ -1155,6 +1155,7 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
               <th className="pb-3 px-2 font-medium">Equipamento</th>
               <th className="pb-3 px-2 font-medium">Nº Falhas</th>
               <th className="pb-3 px-2 font-medium text-right">Tempo Manut.</th>
+              <th className="pb-3 px-2 font-medium text-right">MTTR</th>
               <th className="pb-3 px-2 font-medium text-right">MTBF</th>
             </tr>
           </thead>
@@ -1175,16 +1176,19 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
                   </span>
                 </td>
                 <td className="py-3 px-2 text-right text-zinc-500 font-medium whitespace-nowrap">
-                  {item.diasManut != null ? formatarTempoManut(item.diasManut) : "—"}
+                  {item.diasManut != null && item.diasManut > 0 ? formatarTempoManut(item.diasManut) : "—"}
                 </td>
-                <td className="py-3 px-2 text-right text-zinc-500">
+                <td className="py-3 px-2 text-right text-purple-600 dark:text-purple-400 font-semibold whitespace-nowrap">
+                  {item.mttr != null && item.mttr > 0 ? `${item.mttr} h` : "—"}
+                </td>
+                <td className="py-3 px-2 text-right text-indigo-600 dark:text-indigo-400 font-semibold whitespace-nowrap">
                   {item.mtbf > 0 ? `${item.mtbf} h` : "—"}
                 </td>
               </tr>
             ))}
             {dados.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-8 text-center text-zinc-500">Nenhum dado no período</td>
+                <td colSpan={5} className="py-8 text-center text-zinc-500">Nenhum dado no período</td>
               </tr>
             )}
           </tbody>

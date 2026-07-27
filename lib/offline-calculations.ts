@@ -510,7 +510,8 @@ export async function getOfflineDashboardData(filtros?: {
             horasDisponiveisOperacional: Math.round((hTotalDO * targetDO / 100) * 10) / 10,
             falhas: original ? (original as any).falhas : 0,
             historicoDiario: original ? original.historicoDiario : [],
-            osImpactantes: original ? original.osImpactantes : []
+            osImpactantes: original ? original.osImpactantes : [],
+            horasManutOS: original ? (original as any).horasManutOS : 0
           } as any;
         });
 
@@ -755,7 +756,19 @@ export async function getOfflineDashboardData(filtros?: {
     data_fim: dataFimExibicao,
     dispSemanal,
     paradasPorCategoria: Array.from(categoriasMap.entries()).map(([name, value]) => ({ name, value })),
-    rankingFalhas: Array.from(manutPorTipoMap.entries()).map(([name, value]) => ({ name, value })),
+    rankingFalhas: veiculos.filter(v => (v as any).falhas > 0).sort((a: any, b: any) => b.falhas - a.falhas).slice(0, 10).map(v => {
+      const falhasCount = (v as any).falhas || 0;
+      const tempoManut = v.horasManut > 0 ? v.horasManut : ((v as any).horasManutOS || 0);
+      const mttrVal = falhasCount > 0 ? Math.round((tempoManut / falhasCount) * 10) / 10 : 0;
+      const mtbfVal = falhasCount > 0 ? Math.round((Math.max(0, v.hTotalDO - v.horasOperacional) / falhasCount) * 10) / 10 : 0;
+      return {
+        placa: v.placa,
+        falhas: falhasCount,
+        diasManut: tempoManut,
+        mttr: mttrVal,
+        mtbf: mtbfVal
+      };
+    }),
     dispPorTipo: Array.from(modelosMap.entries()).map(([name, val]) => ({ name, dm: Math.round((val.soma / val.count) * 10) / 10 })),
     statusFrota,
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([name, value]) => ({ name, value })),

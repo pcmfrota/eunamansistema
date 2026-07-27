@@ -21,7 +21,7 @@ interface DashboardDataLocal {
     horasManut: number;
     horasOperacional: number;
   }>;
-  rankingFalhas?: Array<{ placa: string; falhas: number; mtbf: number; diasManut?: number }>;
+  rankingFalhas?: Array<{ placa: string; falhas: number; mttr?: number; mtbf: number; diasManut?: number }>;
   paradasPorCategoria?: Array<{ categoria: string; quantidade: number }>;
   manutPorTipo?: Array<{ tipo: string; quantidade: number }>;
   preventivas?: Array<{ placa: string; horas_restantes: number; status: string }>;
@@ -292,11 +292,12 @@ export function gerarSlideHTML(data: DashboardDataLocal, periodo: string, catego
           <td style="font-weight:700;color:#f59e0b">#${i + 1}</td>
           <td style="font-weight:700;color:#f1f5f9">${f.placa ?? '—'}</td>
           <td style="text-align:center;font-weight:800;color:#ef4444">${f.falhas ?? '—'}</td>
-          <td style="text-align:center;color:#e2e8f0;font-weight:600;white-space:nowrap">${f.diasManut != null ? formatarTempoManut(f.diasManut) : '—'}</td>
+          <td style="text-align:center;color:#e2e8f0;font-weight:600;white-space:nowrap">${f.diasManut != null && f.diasManut > 0 ? formatarTempoManut(f.diasManut) : '—'}</td>
+          <td style="text-align:center;color:#c084fc;font-weight:600">${f.mttr != null && f.mttr > 0 ? h(f.mttr) : '—'}</td>
           <td style="text-align:center;color:#60a5fa;font-weight:600">${f.mtbf != null ? h(f.mtbf) : '—'}</td>
         </tr>`)
     .join('')
-    : `<tr><td colspan="5" style="text-align:center;color:#4f6282;padding:24px">Sem dados de falhas no período</td></tr>`;
+    : `<tr><td colspan="6" style="text-align:center;color:#4f6282;padding:24px">Sem dados de falhas no período</td></tr>`;
 
   // ── Rows paradas por categoria
   const rowsParadas = paradas.length > 0
@@ -713,7 +714,7 @@ export function gerarSlideHTML(data: DashboardDataLocal, periodo: string, catego
   <div class="two-col">
     <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;overflow:hidden">
       <table>
-        <thead><tr><th>#</th><th>Placa</th><th style="text-align:center">Falhas</th><th style="text-align:center">Tempo Manut.</th><th style="text-align:center">MTBF</th></tr></thead>
+        <thead><tr><th>#</th><th>Placa</th><th style="text-align:center">Falhas</th><th style="text-align:center">Tempo Manut.</th><th style="text-align:center">MTTR</th><th style="text-align:center">MTBF</th></tr></thead>
         <tbody>${rowsFalhas}</tbody>
       </table>
     </div>
