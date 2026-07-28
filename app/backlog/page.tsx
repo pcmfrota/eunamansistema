@@ -23,7 +23,16 @@ export default function BacklogPage() {
         const localCol = await localDb.getAll("colaboradores");
         const localCal = await localDb.getAll("calendario_suzano");
 
-        const pl = localEq.map(e => ({
+        const isHeavyActive = (e: any) => {
+          if (e.deleted_at) return false;
+          const cat = (e.categoria || 'PESADA').toString().toUpperCase();
+          const isPesada = cat === 'PESADA' || cat === 'FROTA PESADA' || cat.includes('PESADA');
+          const st = (e.status || 'ATIVO').toString().toUpperCase();
+          const isAtivo = st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO';
+          return isPesada && isAtivo;
+        };
+
+        const pl = localEq.filter(isHeavyActive).map(e => ({
           id: e.id,
           placa: e.placa,
           modulo: e.modulo,
@@ -63,7 +72,7 @@ export default function BacklogPage() {
             const freshCol = await localDb.getAll("colaboradores");
             const freshCal = await localDb.getAll("calendario_suzano");
 
-            const freshPl = freshEq.map(e => ({
+            const freshPl = freshEq.filter(isHeavyActive).map(e => ({
               id: e.id,
               placa: e.placa,
               modulo: e.modulo,

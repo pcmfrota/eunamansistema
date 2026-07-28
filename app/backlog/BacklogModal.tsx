@@ -104,6 +104,98 @@ export default function BacklogModal({
     }
   }, [form.status, form.data_conclusao, setForm])
 
+  // Helper para interpretar o valor salvo em tempo_execucao para Horas e Minutos
+  const parseTempoToHM = (val: string) => {
+    if (!val) return { horas: '', minutos: '' };
+    const str = val.toLowerCase().trim();
+
+    // Match "4h 30m" ou "4h30m"
+    const matchHM = str.match(/^(\d+)\s*h(?:oras?)?\s*(?:(\d+)\s*m(?:in)?)?$/i);
+    if (matchHM) {
+      return { horas: matchHM[1] || '', minutos: matchHM[2] || '' };
+    }
+
+    // Match "30m" ou "30min"
+    const matchM = str.match(/^(\d+)\s*m(?:in)?$/i);
+    if (matchM) {
+      return { horas: '', minutos: matchM[1] || '' };
+    }
+
+    // Match "4h" ou "4" ou "4.5h"
+    const matchH = str.match(/^(\d+(?:[.,]\d+)?)\s*h?$/i);
+    if (matchH) {
+      const num = parseFloat(matchH[1].replace(',', '.'));
+      if (!isNaN(num)) {
+        const h = Math.floor(num);
+        const m = Math.round((num - h) * 60);
+        return { horas: h > 0 ? String(h) : '', minutos: m > 0 ? String(m) : '' };
+      }
+    }
+    return { horas: '', minutos: '' };
+  };
+
+  const currentTempoHM = parseTempoToHM(form.tempo_execucao || '');
+
+  const handleTempoHMChange = (hVal: string, mVal: string) => {
+    const h = hVal !== '' ? parseInt(hVal, 10) : NaN;
+    const m = mVal !== '' ? parseInt(mVal, 10) : NaN;
+
+    let str = '';
+    if (!isNaN(h) && h > 0 && !isNaN(m) && m > 0) {
+      str = `${h}h ${m}m`;
+    } else if (!isNaN(h) && h > 0) {
+      str = `${h}h`;
+    } else if (!isNaN(m) && m > 0) {
+      str = `${m}m`;
+    } else if (!isNaN(h) && h === 0 && !isNaN(m) && m > 0) {
+      str = `${m}m`;
+    } else if (!isNaN(h) && h >= 0) {
+      str = `${h}h`;
+    }
+
+    setForm(prev => ({ ...prev, tempo_execucao: str }));
+  };
+
+  // Helper para formatar a data para o input datetime-local permitindo edição total de data e hora
+  const formatToDatetimeLocal = (val?: string | null): string => {
+    if (!val) return getCurrentLocalDatetime();
+    const str = String(val).trim();
+    // Se estiver em formato DD/MM/YYYY HH:mm ou DD/MM/YYYYTHH:mm
+    const matchBr = str.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[\sT](\d{2}):(\d{2}))?/);
+    if (matchBr) {
+      const [, d, m, y, hh, mm] = matchBr;
+      return `${y}-${m}-${d}T${hh || '00'}:${mm || '00'}`;
+    }
+    // Se estiver em formato YYYY-MM-DD HH:mm
+    const matchIsoSpace = str.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+    if (matchIsoSpace) {
+      return `${matchIsoSpace[1]}T${matchIsoSpace[2]}`;
+    }
+    // Se já for YYYY-MM-DDTHH:mm...
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+      return str.slice(0, 16);
+    }
+    // Fallback com Date
+    const dt = new Date(str);
+    if (!isNaN(dt.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    }
+    return getCurrentLocalDatetime();
+  };
+
+  // Filtrar apenas veículos pesados e ativos
+  const heavyActivePlacas = React.useMemo(() => {
+    return (placas || []).filter(p => {
+      if ((p as any).deleted_at) return false;
+      const cat = ((p as any).categoria || 'PESADA').toString().toUpperCase();
+      const isPesada = cat === 'PESADA' || cat === 'FROTA PESADA' || cat.includes('PESADA');
+      const st = ((p as any).status || 'ATIVO').toString().toUpperCase();
+      const isAtivo = st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO';
+      return isPesada && isAtivo;
+    });
+  }, [placas]);
+
   if (!isOpen) return null
 
   const handleNext = () => step < 5 && setStep(step + 1)
@@ -234,7 +326,22 @@ export default function BacklogModal({
                {step === 1 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <Field label="Data de Evidência" span={2}>
-                        <input className={inputCls} type="datetime-local" value={form.data_evidencia} onChange={e => setForm({...form, data_evidencia: e.target.value})} />
+                        <div className="flex items-center gap-2">
+                           <input
+                              className={cn(inputCls, "flex-1 font-mono")}
+                              type="datetime-local"
+                              value={formatToDatetimeLocal(form.data_evidencia)}
+                              onChange={e => setForm({...form, data_evidencia: e.target.value})}
+                           />
+                           <button
+                              type="button"
+                              onClick={() => setForm({...form, data_evidencia: getCurrentLocalDatetime()})}
+                              className="px-3 py-3 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-zinc-600 dark:text-zinc-300 hover:text-indigo-600 rounded-xl text-xs font-black uppercase tracking-wider border border-zinc-200 dark:border-zinc-700 transition-colors shrink-0"
+                              title="Inserir data e hora atual"
+                           >
+                              Agora
+                           </button>
+                        </div>
                      </Field>
                      <Field label="Criticidade">
                         <select className={inputCls} value={form.criticidade} onChange={e => setForm({...form, criticidade: e.target.value})}>
@@ -262,10 +369,10 @@ export default function BacklogModal({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <Field label="Frota (Placa)" span={2}>
                         <SearchableSelect 
-                          options={placas.map(p => ({ value: p.placa, label: p.placa }))}
+                          options={heavyActivePlacas.map(p => ({ value: p.placa, label: `${p.placa}${p.modulo ? ` (${p.modulo})` : ''}` }))}
                           value={form.frota} 
                           onChange={val => {
-                            const eq = placas.find(p => p.placa === val);
+                            const eq = heavyActivePlacas.find(p => p.placa === val);
                             setForm({...form, frota: val, modulo: eq?.modulo || ''});
                           }}
                         />
@@ -290,9 +397,61 @@ export default function BacklogModal({
                     <Field label="Nº O.S (Opcional)">
                        <input className={inputCls} placeholder="Ex: 5042" value={form.os} onChange={e => setForm({...form, os: e.target.value})} />
                     </Field>
-                    <Field label="Tempo Estimado">
-                       <input className={inputCls} placeholder="Ex: 4h" value={form.tempo_execucao} onChange={e => setForm({...form, tempo_execucao: e.target.value})} />
-                    </Field>
+                     <Field label="Tempo Estimado">
+                        <div className="flex flex-col gap-2">
+                           <div className="flex items-center gap-2">
+                              {/* Horas */}
+                              <div className="flex-1 relative">
+                                 <input
+                                    type="number"
+                                    min="0"
+                                    max="999"
+                                    placeholder="0"
+                                    className={cn(inputCls, "pr-8 font-mono")}
+                                    value={currentTempoHM.horas}
+                                    onChange={(e) => handleTempoHMChange(e.target.value, currentTempoHM.minutos)}
+                                 />
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-zinc-400 pointer-events-none">h</span>
+                              </div>
+
+                              <span className="font-black text-zinc-400 text-sm">:</span>
+
+                              {/* Minutos */}
+                              <div className="flex-1 relative">
+                                 <input
+                                    type="number"
+                                    min="0"
+                                    max="59"
+                                    placeholder="0"
+                                    className={cn(inputCls, "pr-12 font-mono")}
+                                    value={currentTempoHM.minutos}
+                                    onChange={(e) => handleTempoHMChange(currentTempoHM.horas, e.target.value)}
+                                 />
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-zinc-400 pointer-events-none">min</span>
+                              </div>
+                           </div>
+
+                           {/* Presets Rápidos */}
+                           <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider mr-0.5">Rápido:</span>
+                              {['30m', '1h', '2h', '4h', '8h', '12h'].map((preset) => (
+                                 <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => setForm(prev => ({ ...prev, tempo_execucao: preset }))}
+                                    className={cn(
+                                       "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border",
+                                       form.tempo_execucao === preset
+                                          ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
+                                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                    )}
+                                 >
+                                    {preset}
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+                     </Field>
                     <Field label="Status Atual" span={2}>
                        <select className={inputCls} value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
                           <option value="PENDENTE">🟡 PENDENTE</option>

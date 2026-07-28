@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react";
-import dynamic from "next/dynamic";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { Filtros, type FiltrosValues } from "@/components/filtros";
 import { gerarSlideHTML } from "@/lib/gerar-slide";
@@ -10,21 +9,20 @@ import { getHistoricoMensal } from "@/app/actions/historico";
 import { useOffline } from "@/components/offline-provider";
 import { getOfflineDashboardData, getOfflineHistoricoMensal } from "@/lib/offline-calculations";
 
-// Componentes estáticos que não usam bibliotecas pesadas de gráficos
-import { PainelFormulas } from "@/components/graficos";
+import { 
+  GraficoVeiculos, 
+  GraficoPreventivas, 
+  GraficoSemanal, 
+  GraficoParadasCategoria, 
+  RankingFalhas, 
+  GraficoManuTipo, 
+  TabelaStatusFrota, 
+  GraficoDMModulo, 
+  GraficoDMMensal, 
+  GraficoDispCategoria,
+  PainelFormulas 
+} from "@/components/graficos";
 import { PremiumLoader } from "@/components/premium-loader";
-
-// Importação dinâmica dos gráficos pesados (Recharts) para deixar o carregamento inicial mais leve
-const GraficoVeiculos = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoVeiculos), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoPreventivas = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoPreventivas), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoSemanal = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoSemanal), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoParadasCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoParadasCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
-const RankingFalhas = dynamic(() => import("@/components/graficos").then((mod) => mod.RankingFalhas), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoManuTipo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoManuTipo), { ssr: false, loading: () => <CarregandoGrafico /> });
-const TabelaStatusFrota = dynamic(() => import("@/components/graficos").then((mod) => mod.TabelaStatusFrota), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoDMModulo = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMModulo), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoDMMensal = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDMMensal), { ssr: false, loading: () => <CarregandoGrafico /> });
-const GraficoDispCategoria = dynamic(() => import("@/components/graficos").then((mod) => mod.GraficoDispCategoria), { ssr: false, loading: () => <CarregandoGrafico /> });
 
 function CarregandoGrafico() {
   return (
@@ -78,37 +76,6 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     }
   }, [data]);
 
-  // Busca histórico mensal de DM (últimos 6 meses)
-  useEffect(() => {
-    setLoadingHistorico(true);
-    const categoria = filtros.categoria || "PESADA";
-    
-    const fetchHistorico = async () => {
-      if (isOnline) {
-        try {
-          const res = await getHistoricoMensal(categoria, {
-            modulo: filtros.modulo || undefined,
-            area: filtros.area || undefined,
-            placa: filtros.placa || undefined,
-            filial: (filtros as any).filial || undefined,
-          });
-          setHistoricoMensal(res);
-          return;
-        } catch (err) {
-          console.warn("Falha ao buscar histórico online, usando local:", err);
-        }
-      }
-      const localRes = await getOfflineHistoricoMensal(categoria, {
-        modulo: filtros.modulo || undefined,
-        area: filtros.area || undefined,
-        placa: filtros.placa || undefined,
-      });
-      setHistoricoMensal(localRes);
-    };
-
-    fetchHistorico().finally(() => setLoadingHistorico(false));
-  }, [filtros.categoria, filtros.modulo, filtros.area, filtros.placa, (filtros as any).filial, isOnline]);
-
   // Garante sincronização perfeita do mês atual/selecionado no gráfico DM POR MÊS com o card principal DM
   const displayHistoricoMensal = React.useMemo(() => {
     if (!historicoMensal.length || !data) return historicoMensal;
@@ -123,14 +90,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     });
   }, [historicoMensal, data]);
 
-  // Carrega e atualiza os dados do Dashboard (Offline-First)
+  // Carrega e atualiza os dados do Dashboard e Histórico de forma sincronizada (Offline-First)
   useEffect(() => {
     let active = true;
 
     startTransition(async () => {
       try {
-        // 1. Carrega do IndexedDB local imediatamente (Offline First)
-        const localData = await getOfflineDashboardData({
+        const categoria = filtros.categoria || "PESADA";
+        const filterParams = {
           mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
           ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
           categoria: filtros.categoria || undefined,
@@ -140,33 +107,47 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           status: filtros.status || undefined,
           dataInicio: filtros.dataInicio || undefined,
           dataFim: filtros.dataFim || undefined,
-        });
+          filial: (filtros as any).filial || undefined,
+        };
+
+        // 1. Carrega do IndexedDB local imediatamente em paralelo
+        const [localData, localHist] = await Promise.all([
+          getOfflineDashboardData(filterParams),
+          getOfflineHistoricoMensal(categoria, {
+            modulo: filtros.modulo || undefined,
+            area: filtros.area || undefined,
+            placa: filtros.placa || undefined,
+          }),
+        ]);
 
         if (active) {
-          setData(localData);
+          if (localData) setData(localData);
+          if (localHist) setHistoricoMensal(localHist);
           setIsLoadingInitial(false);
         }
 
-        // 2. Se estiver online, busca dados frescos do servidor
+        // 2. Se estiver online, busca dados frescos do servidor em paralelo
         if (isOnline) {
           try {
-            const freshData = await getDashboardData({
-              mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
-              ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
-              categoria: filtros.categoria || undefined,
-              placa: filtros.placa || undefined,
-              modulo: filtros.modulo || undefined,
-              area: filtros.area || undefined,
-              status: filtros.status || undefined,
-              dataInicio: filtros.dataInicio || undefined,
-              dataFim: filtros.dataFim || undefined,
-              filial: (filtros as any).filial || undefined,
-            });
-            if (active && freshData) {
-              setData(freshData);
+            setLoadingHistorico(true);
+            const [freshData, freshHist] = await Promise.all([
+              getDashboardData(filterParams),
+              getHistoricoMensal(categoria, {
+                modulo: filtros.modulo || undefined,
+                area: filtros.area || undefined,
+                placa: filtros.placa || undefined,
+                filial: (filtros as any).filial || undefined,
+              }).catch(() => null),
+            ]);
+
+            if (active) {
+              if (freshData) setData(freshData);
+              if (freshHist) setHistoricoMensal(freshHist);
             }
           } catch (onlineErr) {
             console.warn("Erro ao buscar dados online, mantendo locais:", onlineErr);
+          } finally {
+            if (active) setLoadingHistorico(false);
           }
         }
       } catch (error) {

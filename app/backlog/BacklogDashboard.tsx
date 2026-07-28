@@ -38,6 +38,24 @@ const MONTHS_PT = [
 function parseHours(val: any): number {
   if (!val) return 0;
   const str = String(val).toLowerCase().trim();
+  if (!str) return 0;
+
+  // Formato com horas e minutos (ex: "4h 30m" ou "4h30m" ou "4h 30min")
+  const matchHM = str.match(/^(\d+(?:[.,]\d+)?)\s*h(?:oras?)?\s*(\d+(?:[.,]\d+)?)\s*m(?:in(?:utos?)?)?$/i);
+  if (matchHM) {
+    const h = parseFloat(matchHM[1].replace(',', '.'));
+    const m = parseFloat(matchHM[2].replace(',', '.'));
+    return (isNaN(h) ? 0 : h) + (isNaN(m) ? 0 : m / 60);
+  }
+
+  // Formato apenas minutos (ex: "30m" ou "30min" ou "45m")
+  const matchM = str.match(/^(\d+(?:[.,]\d+)?)\s*m(?:in(?:utos?)?)?$/i);
+  if (matchM) {
+    const m = parseFloat(matchM[1].replace(',', '.'));
+    return isNaN(m) ? 0 : m / 60;
+  }
+
+  // Valor numérico ou apenas horas (ex: "4h", "4.5h", "4,5")
   const cleaned = str.replace(/[^\d.,]/g, '').replace(',', '.');
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
@@ -969,104 +987,6 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </div>
       </div>
 
-      {/* ─── PROVISÃO DE DISPONIBILIDADE MECÂNICA (DM) & ASSISTENTE DE IA ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full animate-in fade-in duration-700">
-        {/* Coluna 1: Métricas de Provisão (DM) */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex flex-col justify-between shadow-sm">
-          <div>
-            <div className="border-l-4 border-indigo-500 pl-3 mb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                PROVISÃO DE IMPACTO NA DM
-              </h3>
-              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
-                Simulações baseadas nas horas de backlog
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {/* Card 1: Horas de Backlog */}
-              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Horas de Backlog Ativo</p>
-                  <p className="text-xl font-black text-zinc-800 dark:text-zinc-100 mt-0.5">{parsedBacklogHours.totalHoras} hrs</p>
-                </div>
-                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                  <Clock size={20} />
-                </div>
-              </div>
-
-              {/* Card 2: Cenário A Planejado */}
-              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Cenário A (Planejado)</p>
-                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Queda Prevista: <span className="text-amber-600 dark:text-amber-400 font-black">-{((parsedBacklogHours.totalHoras / horasTotaisFrota) * 100).toFixed(2)}%</span>
-                  </p>
-                </div>
-                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
-                  <TrendingDown size={20} />
-                </div>
-              </div>
-
-              {/* Card 3: Cenário B Corretivo */}
-              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Cenário B (Risco de Quebra)</p>
-                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Queda Projetada: <span className="text-red-600 dark:text-red-400 font-black">-{(((parsedBacklogHours.horasCriticas * 1.8 + parsedBacklogHours.horasNormais * 0.5) / horasTotaisFrota) * 100).toFixed(2)}%</span>
-                  </p>
-                </div>
-                <div className="p-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl">
-                  <ShieldAlert size={20} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium leading-normal mt-4 border-t border-zinc-100 dark:border-zinc-800/80 pt-3">
-            * Projeção baseada em frota de {numMaquinas} máquinas operando 24h/dia (total de {horasTotaisFrota}h/mês). Fator de corretiva projeta 1.8h de indisponibilidade por hora crítica de backlog devido ao tempo de socorro e quebra.
-          </div>
-        </div>
-
-        {/* Coluna 2: Assistente de IA EUNAMAN */}
-        <div className="lg:col-span-2 bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute -right-24 -top-24 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl" />
-
-          <div>
-            <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 rounded-2xl flex items-center justify-center text-white relative shadow-sm">
-                  <span className="text-xl">🤖</span>
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#12141c] rounded-full animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
-                    Assistente de IA EUNAMAN
-                  </h3>
-                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
-                    Análise Preditiva & Diagnóstico
-                  </p>
-                </div>
-              </div>
-
-              <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-150 dark:border-indigo-900 rounded-full text-[8px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest shadow-sm">
-                Modelo Ativo
-              </span>
-            </div>
-
-            <div className="max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
-              {formatAIMarkdown(aiExplanation)}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-850">
-            <span className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">Ações sugeridas:</span>
-            <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-0.5">
-              Priorizar backlogs com Criticidade A
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* ─── ROW 3: GRÁFICOS (Área, Módulos, Tendência) ─────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
@@ -1470,6 +1390,105 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </div>
           </div>
         )}
+      </div>
+
+      {/* ─── PROVISÃO DE DISPONIBILIDADE MECÂNICA (DM) & ASSISTENTE DE IA ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full animate-in fade-in duration-700">
+        {/* Coluna 1: Métricas de Provisão (DM) */}
+        <div className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex flex-col justify-between shadow-sm">
+          <div>
+            <div className="border-l-4 border-indigo-500 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                PROVISÃO DE IMPACTO NA DM
+              </h3>
+              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                Simulações baseadas nas horas de backlog
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Card 1: Horas de Backlog */}
+              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Horas de Backlog Ativo</p>
+                  <p className="text-xl font-black text-zinc-800 dark:text-zinc-100 mt-0.5">{parsedBacklogHours.totalHoras} hrs</p>
+                </div>
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <Clock size={20} />
+                </div>
+              </div>
+
+              {/* Card 2: Cenário A Planejado */}
+              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Cenário A (Planejado)</p>
+                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Queda Prevista: <span className="text-amber-600 dark:text-amber-400 font-black">-{((parsedBacklogHours.totalHoras / horasTotaisFrota) * 100).toFixed(2)}%</span>
+                  </p>
+                </div>
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                  <TrendingDown size={20} />
+                </div>
+              </div>
+
+              {/* Card 3: Cenário B Corretivo */}
+              <div className="p-3 bg-zinc-50 dark:bg-[#1c1e26] border border-zinc-200 dark:border-zinc-800/80 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Cenário B (Risco de Quebra)</p>
+                  <p className="text-sm font-bold text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Queda Projetada: <span className="text-red-600 dark:text-red-400 font-black">-{(((parsedBacklogHours.horasCriticas * 1.8 + parsedBacklogHours.horasNormais * 0.5) / horasTotaisFrota) * 100).toFixed(2)}%</span>
+                  </p>
+                </div>
+                <div className="p-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl">
+                  <ShieldAlert size={20} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium leading-normal mt-4 border-t border-zinc-100 dark:border-zinc-800/80 pt-3">
+            * Projeção baseada em frota de {numMaquinas} máquinas operando 24h/dia (total de {horasTotaisFrota}h/mês). Fator de corretiva projeta 1.8h de indisponibilidade por hora crítica de backlog devido ao tempo de socorro e quebra.
+          </div>
+        </div>
+
+        {/* Coluna 2: Assistente de IA EUNAMAN */}
+        <div className="lg:col-span-2 bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute -right-24 -top-24 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl" />
+
+          <div>
+            <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 rounded-2xl flex items-center justify-center text-white relative shadow-sm">
+                  <span className="text-xl">🤖</span>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#12141c] rounded-full animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+                    Assistente de IA EUNAMAN
+                  </h3>
+                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                    Análise Preditiva & Diagnóstico
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-150 dark:border-indigo-900 rounded-full text-[8px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest shadow-sm">
+                Modelo Ativo
+              </span>
+            </div>
+
+            <div className="max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+              {formatAIMarkdown(aiExplanation)}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-850">
+            <span className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">Ações sugeridas:</span>
+            <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-0.5">
+              Priorizar backlogs com Criticidade A
+            </span>
+          </div>
+        </div>
       </div>
 
     </div>
