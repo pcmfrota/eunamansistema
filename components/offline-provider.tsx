@@ -133,9 +133,17 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSyncing(true);
-      console.log(`[Sync Manager] Iniciando sincronização de ${queue.length} registros...`);
+      console.log(`[Sync Manager] Sincronizando mídias e ${queue.length} registros...`);
 
-      // Carrega dinamicamente os replicadores de ação para evitar dependências circulares de Server Actions
+      // 1. Sincroniza fotos e assinaturas salvas localmente
+      try {
+        const { offlineMedia } = await import("@/lib/offline-media");
+        await offlineMedia.syncPendingMedia();
+      } catch (mediaErr) {
+        console.warn("[Sync Manager] Erro na sincronização prévia de mídias:", mediaErr);
+      }
+
+      // 2. Carrega dinamicamente os replicadores de ação para evitar dependências circulares de Server Actions
       const { replaySyncItem } = await import("@/lib/offline-actions");
 
       for (const item of queue) {

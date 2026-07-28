@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 9;
+  private dbVersion = 10;
   private db: IDBDatabase | null = null;
 
   async open(): Promise<IDBDatabase> {
@@ -34,6 +34,28 @@ export class OfflineDB {
 
       request.onupgradeneeded = (event) => {
         const db = request.result;
+
+        // Autenticação Persistente e Sessão Local
+        if (!db.objectStoreNames.contains('auth_session')) {
+          db.createObjectStore('auth_session', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('user_profile')) {
+          db.createObjectStore('user_profile', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('filiais')) {
+          db.createObjectStore('filiais', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('modulos')) {
+          db.createObjectStore('modulos', { keyPath: 'id' });
+        }
+
+        // Mídia & Fotos Offline
+        if (!db.objectStoreNames.contains('fotos_queue')) {
+          db.createObjectStore('fotos_queue', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('signatures_queue')) {
+          db.createObjectStore('signatures_queue', { keyPath: 'id' });
+        }
 
         // Tabelas de Entidades (Cache Local)
         if (!db.objectStoreNames.contains('ordens_servico')) {
