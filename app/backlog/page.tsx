@@ -18,10 +18,16 @@ export default function BacklogPage() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const localEq = await localDb.getAll("equipamentos");
-        const localCol = await localDb.getAll("colaboradores");
-        const localCal = await localDb.getAll("calendario_suzano");
+        // 1. Carrega local (Offline-First em lote)
+        const stores = await localDb.getManyStores<{
+          equipamentos: any[];
+          colaboradores: any[];
+          calendario_suzano: any[];
+        }>(["equipamentos", "colaboradores", "calendario_suzano"]);
+
+        const localEq = stores.equipamentos || [];
+        const localCol = stores.colaboradores || [];
+        const localCal = stores.calendario_suzano || [];
 
         const isHeavyActive = (e: any) => {
           if (e.deleted_at) return false;
@@ -59,18 +65,18 @@ export default function BacklogPage() {
 
         // 2. Se online, roda sync e atualiza do IndexedDB
         if (isOnline) {
-          try {
-            const { syncRolePermissions } = await import("./actions");
-            await syncRolePermissions();
-          } catch (e) {
-            console.error("Erro ao rodar syncRolePermissions:", e);
-          }
           const { syncTables } = await import("@/lib/offline-sync");
           const syncSuccess = await syncTables(["equipamentos", "colaboradores", "calendario_suzano", "backlog"]);
           if (syncSuccess) {
-            const freshEq = await localDb.getAll("equipamentos");
-            const freshCol = await localDb.getAll("colaboradores");
-            const freshCal = await localDb.getAll("calendario_suzano");
+            const freshStores = await localDb.getManyStores<{
+              equipamentos: any[];
+              colaboradores: any[];
+              calendario_suzano: any[];
+            }>(["equipamentos", "colaboradores", "calendario_suzano"]);
+
+            const freshEq = freshStores.equipamentos || [];
+            const freshCol = freshStores.colaboradores || [];
+            const freshCal = freshStores.calendario_suzano || [];
 
             const freshPl = freshEq.filter(isHeavyActive).map(e => ({
               id: e.id,

@@ -206,39 +206,50 @@ export default function BacklogModal({
     isSubmitting.current = true
     setLoading(true)
 
+    const handleSaveOffline = async () => {
+      const localItem = {
+        ...form,
+        id: form.id || `temp_backlog_${Date.now()}`,
+        _isPendingSync: true
+      }
+      await localDb.put('backlog', localItem)
+      await localDb.addToQueue('backlog', editData ? 'update' : 'create', localItem)
+
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'))
+      window.dispatchEvent(new CustomEvent('offline-db-updated-backlog'))
+      clearDraft()
+      onClose()
+      alert("Backlog salvo com sucesso (Offline)!");
+    };
+
     try {
       if (isOnline) {
-        const res = await upsertBacklogItem(form)
-
-        if (res.error) {
-          alert('Erro ao salvar: ' + res.error)
-          return
-        }
-
-        // Salva cópia atualizada no banco local (não-crítico)
         try {
-          await localDb.put('backlog', res.data || form)
-        } catch (cacheErr) {
-          console.warn('[Cache] Falha ao atualizar IndexedDB:', cacheErr)
-        }
+          const res = await upsertBacklogItem(form)
 
-        window.dispatchEvent(new CustomEvent('offline-db-updated-backlog'))
-        clearDraft()
-        onClose()
+          if (res.error) {
+            console.warn("[Backlog] Falha ao salvar online, tentando offline...", res.error);
+            await handleSaveOffline();
+            return;
+          }
+
+          // Salva cópia atualizada no banco local (não-crítico)
+          try {
+            await localDb.put('backlog', res.data || form)
+          } catch (cacheErr) {
+            console.warn('[Cache] Falha ao atualizar IndexedDB:', cacheErr)
+          }
+
+          window.dispatchEvent(new CustomEvent('offline-db-updated-backlog'))
+          clearDraft()
+          onClose()
+          alert("Backlog salvo com sucesso!");
+        } catch (err: any) {
+          console.error("[Backlog] Erro critico no salvamento online, caindo para offline:", err);
+          await handleSaveOffline();
+        }
       } else {
-        // Cenário offline
-        const localItem = {
-          ...form,
-          id: form.id || `temp_backlog_${Date.now()}`,
-          _isPendingSync: true
-        }
-        await localDb.put('backlog', localItem)
-        await localDb.addToQueue('backlog', editData ? 'update' : 'create', localItem)
-
-        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'))
-        window.dispatchEvent(new CustomEvent('offline-db-updated-backlog'))
-        clearDraft()
-        onClose()
+        await handleSaveOffline();
       }
     } catch (error: any) {
       console.error('Erro inesperado ao concluir backlog:', error)

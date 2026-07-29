@@ -88,8 +88,9 @@ export default function BaseFrotasPage() {
         const scales = data.map((d: any) => d.escala).filter(Boolean);
         await localDb.saveMany("escala_frota", scales);
       } else {
-        const eqs = await localDb.getAll("equipamentos");
-        const escalas = await localDb.getAll("escala_frota");
+        const stores = await localDb.getManyStores<{ equipamentos: any[]; escala_frota: any[] }>(["equipamentos", "escala_frota"]);
+        const eqs = stores.equipamentos || [];
+        const escalas = stores.escala_frota || [];
         const escalaMap = new Map(escalas.map((e: any) => [
           String(e.placa ?? '').toUpperCase().replace(/\s+/g, ''),
           e,
@@ -104,8 +105,9 @@ export default function BaseFrotasPage() {
       console.error(err);
       try {
         // Fallback to local DB on any error
-        const eqs = await localDb.getAll("equipamentos");
-        const escalas = await localDb.getAll("escala_frota");
+        const stores = await localDb.getManyStores<{ equipamentos: any[]; escala_frota: any[] }>(["equipamentos", "escala_frota"]);
+        const eqs = stores.equipamentos || [];
+        const escalas = stores.escala_frota || [];
         const escalaMap = new Map(escalas.map((e: any) => [
           String(e.placa ?? '').toUpperCase().replace(/\s+/g, ''),
           e,

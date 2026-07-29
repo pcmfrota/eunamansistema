@@ -122,14 +122,26 @@ public class EunamanActivity extends AppCompatActivity {
         settings.setAllowFileAccessFromFileURLs(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
         
+        // ── PERSISTÊNCIA DE DADOS ──
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        
         // Caminho para armazenamento de banco de dados e LocalStorage
         String databasePath = this.getApplicationContext().getDir("databases", android.content.Context.MODE_PRIVATE).getPath();
         settings.setDatabasePath(databasePath);
         
+        // ── ADAPTAÇÃO PARA TABLETS E TELAS GRANDES ──
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(false); // Mantém limpo, usa zoom do site
+        
         // Estratégia de Cache Mestra: Prefere cache, busca rede em segundo plano
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         
-        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
+        // Detecta o User Agent padrão e adiciona identificador do app
+        String defaultUA = settings.getUserAgentString();
+        settings.setUserAgentString(defaultUA + " EunamanApp/1.1 (Android; Tablet/Mobile)");
 
         CookieManager.getInstance().setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -168,9 +180,22 @@ public class EunamanActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
-                    // Se falhar a rede, força a carga do que está salvo localmente (Elimina tela de erro)
-                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
-                    view.loadUrl(request.getUrl().toString());
+                    // Tenta forçar o carregamento do cache antes de mostrar tela de erro
+                    if (view.getSettings().getCacheMode() != WebSettings.LOAD_CACHE_ONLY) {
+                        view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+                        view.loadUrl(request.getUrl().toString());
+                        return;
+                    }
+
+                    String errorHtml = "<html><body style='display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;'>"
+                            + "<h2 style='color:#333;'>Sem Conexão com a Internet</h2>"
+                            + "<p style='color:#666;'>Verifique o Wi-Fi do seu tablet e tente novamente.</p>"
+                            + "<button onclick='window.location.reload()' style='padding:15px 30px;background:#007bff;color:white;border:none;border-radius:5px;font-size:18px;'>Tentar Novamente</button>"
+                            + "</body></html>";
+                    view.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null);
+                    
+                    if (splashScreen != null) splashScreen.setVisibility(View.GONE);
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
                 }
             }
         });
@@ -182,6 +207,20 @@ public class EunamanActivity extends AppCompatActivity {
                     progressBar.setVisibility(newProgress < 100 ? View.VISIBLE : View.GONE);
                     progressBar.setProgress(newProgress);
                 }
+                
+                // Se chegar a 90% e ainda estiver splash, libera a visão para evitar travas
+                if (newProgress > 90 && splashScreen != null && splashScreen.getVisibility() == View.VISIBLE) {
+                    splashScreen.setVisibility(View.GONE);
+                    webView.setVisibility(View.VISIBLE);
+                }
+            }
+
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                Log.d(TAG, "JS_CONSOLE: " + consoleMessage.message() + " -- From line "
+                        + consoleMessage.lineNumber() + " of "
+                        + consoleMessage.sourceId());
+                return true;
             }
 
             @Override

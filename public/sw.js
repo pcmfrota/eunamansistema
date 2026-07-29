@@ -1,10 +1,12 @@
-const CACHE_NAME = "eunaman-cache-v8";
+const CACHE_NAME = "eunaman-cache-v12";
 const STATIC_ASSETS = [
   "/",
+  "/login",
   "/os",
   "/preventivas",
   "/pneus",
   "/backlog",
+  "/afiacao",
   "/calendario",
   "/dashboard",
   "/indicadores",
@@ -12,9 +14,16 @@ const STATIC_ASSETS = [
   "/captacao",
   "/programacao-preventiva",
   "/base-frotas",
+  "/base-dados",
+  "/documentos",
+  "/checklist-mecanicos",
+  "/admin/usuarios",
   "/manifest.json",
   "/logo-eunaman-full.png",
-  "/bg-eunaman.png"
+  "/bg-eunaman.png",
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap",
+  "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
 ];
 
 // --- INSTALL EVENT: Cache core assets ---

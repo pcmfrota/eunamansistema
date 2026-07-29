@@ -117,47 +117,7 @@ export default function PneusModal({
       const formData = new FormData()
       Object.entries(form).forEach(([key, value]) => formData.append(key, value))
 
-      if (isOnline) {
-        let result
-        if (editData?.id) {
-          result = await atualizarInspecao(editData.id, formData)
-        } else {
-          result = await registrarInspecaoCompleta(formData)
-        }
-
-        if (result && 'error' in result) {
-          setError(result.error)
-        } else {
-          // Quando online, salvamos o novo registro no cache local.
-          // Para simplificar, recarregamos a página ou re-buscamos, mas vamos atualizar o cache local também.
-          const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
-          const newLocal = {
-            id: editData?.id || `ins_${Date.now()}`,
-            ...form,
-            km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
-            horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
-            de: form.de ? parseFloat(form.de) : null,
-            dd: form.dd ? parseFloat(form.dd) : null,
-            tei: form.tei ? parseFloat(form.tei) : null,
-            tee: form.tee ? parseFloat(form.tee) : null,
-            tdi: form.tdi ? parseFloat(form.tdi) : null,
-            tde: form.tde ? parseFloat(form.tde) : null,
-            tei1: form.tei1 ? parseFloat(form.tei1) : null,
-            tee1: form.tee1 ? parseFloat(form.tee1) : null,
-            tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
-            tde1: form.tde1 ? parseFloat(form.tde1) : null,
-            estepe: form.estepe ? parseFloat(form.estepe) : null,
-            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined
-          }
-          await localDb.put("pneus_inspecao", newLocal)
-          window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"))
-          
-          clearDraft()
-          onSuccess()
-          onClose()
-        }
-      } else {
-        // Cenário offline
+      const handleSaveOffline = async () => {
         const serialized = serializeFormData(formData)
         const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
         
@@ -216,7 +176,57 @@ export default function PneusModal({
         clearDraft()
         onSuccess()
         onClose()
-        alert('✅ Boletim de pneu salvo localmente! Sincronizará automaticamente quando restabelecer conexão.')
+        alert("Boletim de pneus salvo com sucesso (Offline)!");
+      };
+
+      if (isOnline) {
+        try {
+          let result
+          if (editData?.id) {
+            result = await atualizarInspecao(editData.id, formData)
+          } else {
+            result = await registrarInspecaoCompleta(formData)
+          }
+
+          if (result && 'error' in result) {
+            console.warn("[Pneus] Falha ao salvar online, tentando offline...", result.error);
+            await handleSaveOffline();
+          } else {
+            // Quando online, salvamos o novo registro no cache local.
+            // Para simplificar, recarregamos a página ou re-buscamos, mas vamos atualizar o cache local também.
+            const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
+            const newLocal = {
+              id: editData?.id || `ins_${Date.now()}`,
+              ...form,
+              km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
+              horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+              de: form.de ? parseFloat(form.de) : null,
+              dd: form.dd ? parseFloat(form.dd) : null,
+              tei: form.tei ? parseFloat(form.tei) : null,
+              tee: form.tee ? parseFloat(form.tee) : null,
+              tdi: form.tdi ? parseFloat(form.tdi) : null,
+              tde: form.tde ? parseFloat(form.tde) : null,
+              tei1: form.tei1 ? parseFloat(form.tei1) : null,
+              tee1: form.tee1 ? parseFloat(form.tei1) : null,
+              tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
+              tde1: form.tde1 ? parseFloat(form.tde1) : null,
+              estepe: form.estepe ? parseFloat(form.estepe) : null,
+              equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined
+            }
+            await localDb.put("pneus_inspecao", newLocal)
+            window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"))
+
+            clearDraft()
+            onSuccess()
+            onClose()
+            alert("Boletim de pneus salvo com sucesso!");
+          }
+        } catch (err: any) {
+          console.error("[Pneus] Erro critico no salvamento online, caindo para offline:", err);
+          await handleSaveOffline();
+        }
+      } else {
+        await handleSaveOffline();
       }
     } catch (err) {
       setError('Erro ao processar requisição.')

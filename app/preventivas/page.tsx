@@ -23,9 +23,14 @@ export default function ControleHorimetrosPage() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const localEq = await localDb.getAll("equipamentos");
-        const localPrev = await localDb.getAll("preventivas");
+        // 1. Carrega local (Offline-First em lote)
+        const stores = await localDb.getManyStores<{
+          equipamentos: any[];
+          preventivas: any[];
+        }>(["equipamentos", "preventivas"]);
+
+        const localEq = stores.equipamentos || [];
+        const localPrev = stores.preventivas || [];
 
         const eqTransformados = localEq.map(eq => ({
           id: eq.id,
@@ -48,8 +53,13 @@ export default function ControleHorimetrosPage() {
           const { syncTables } = await import("@/lib/offline-sync");
           const syncSuccess = await syncTables(["equipamentos", "preventivas"]);
           if (syncSuccess) {
-            const freshEq = await localDb.getAll("equipamentos");
-            const freshPrev = await localDb.getAll("preventivas");
+            const freshStores = await localDb.getManyStores<{
+              equipamentos: any[];
+              preventivas: any[];
+            }>(["equipamentos", "preventivas"]);
+
+            const freshEq = freshStores.equipamentos || [];
+            const freshPrev = freshStores.preventivas || [];
 
             const freshEqTransformados = freshEq.map(eq => ({
               id: eq.id,

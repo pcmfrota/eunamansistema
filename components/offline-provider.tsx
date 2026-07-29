@@ -49,13 +49,15 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   // --- 1. Verificador de Conectividade Ativa (Ping Real) ---
   const checkConnectivity = async (): Promise<boolean> => {
     if (typeof window === "undefined") return false;
+
+    // Fast check: if browser says we're offline, we're offline.
     if (!navigator.onLine) return false;
 
     try {
       // Faz uma requisição GET simples e rápida no endpoint de ping
-      // Adicionamos timeout curto para não travar a UI
+      // Reduzimos o timeout para 5 segundos para ser mais ágil
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const response = await fetch("/api/ping", {
         method: "GET",
@@ -80,12 +82,21 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     // Inicial
     updateNetworkStatus();
 
-    // Eventos do navegador
-    window.addEventListener("online", updateNetworkStatus);
-    window.addEventListener("offline", updateNetworkStatus);
+    // Eventos do navegador para reação imediata
+    const handleOnline = () => {
+      console.log("[OfflineProvider] Navegador reportou ONLINE");
+      updateNetworkStatus();
+    };
+    const handleOffline = () => {
+      console.log("[OfflineProvider] Navegador reportou OFFLINE");
+      setIsOnline(false);
+    };
 
-    // Intervalo de segurança (15 segundos)
-    const interval = setInterval(updateNetworkStatus, 15000);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Intervalo de segurança estendido para 30 segundos
+    const interval = setInterval(updateNetworkStatus, 30000);
 
     return () => {
       window.removeEventListener("online", updateNetworkStatus);
@@ -218,20 +229,21 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOnline, pendingCount]);
 
-  // Boot Sync proativo ao iniciar online ou reatar conexão
+  // Boot Sync proativo diferido ao iniciar online ou reatar conexão (1.5s de delay para não concorrer com a página atual)
   useEffect(() => {
     if (isOnline && !syncing) {
-      const runBootSync = async () => {
+      const timerId = setTimeout(async () => {
         try {
-          console.log("[OfflineProvider] Executando boot sync em background...");
+          console.log("[OfflineProvider] Executando boot sync diferido em background...");
           const { syncAllTables } = await import("@/lib/offline-sync");
           await syncAllTables();
           window.dispatchEvent(new CustomEvent("offline-sync-completed"));
         } catch (err) {
           console.error("[OfflineProvider] Erro ao rodar boot sync:", err);
         }
-      };
-      runBootSync();
+      }, 1500);
+
+      return () => clearTimeout(timerId);
     }
   }, [isOnline]);
 

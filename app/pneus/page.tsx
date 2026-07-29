@@ -17,9 +17,14 @@ export default function PneusPage() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const localEq = await localDb.getAll("equipamentos");
-        const localInsp = await localDb.getAll("pneus_inspecao");
+        // 1. Carrega local (Offline-First em lote)
+        const stores = await localDb.getManyStores<{
+          equipamentos: any[];
+          pneus_inspecao: any[];
+        }>(["equipamentos", "pneus_inspecao"]);
+
+        const localEq = stores.equipamentos || [];
+        const localInsp = stores.pneus_inspecao || [];
 
         if (active) {
           setEquipamentos(localEq);
@@ -32,8 +37,14 @@ export default function PneusPage() {
           const { syncTables } = await import("@/lib/offline-sync");
           const syncSuccess = await syncTables(["equipamentos", "inspecoes_pneus"]);
           if (syncSuccess) {
-            const freshEq = await localDb.getAll("equipamentos");
-            const freshInsp = await localDb.getAll("pneus_inspecao");
+            const freshStores = await localDb.getManyStores<{
+              equipamentos: any[];
+              pneus_inspecao: any[];
+            }>(["equipamentos", "pneus_inspecao"]);
+
+            const freshEq = freshStores.equipamentos || [];
+            const freshInsp = freshStores.pneus_inspecao || [];
+
             if (active) {
               setEquipamentos(freshEq);
               setInspecoes(freshInsp);

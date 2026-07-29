@@ -30,10 +30,16 @@ export default function LavagensPage({
     let active = true;
     const loadData = async () => {
       try {
-        // 1. Carrega do IndexedDB local imediatamente (Offline First)
-        const localL = await localDb.getAll("lavagens");
-        const localEq = await localDb.getAll("equipamentos");
-        const localCol = await localDb.getAll("colaboradores");
+        // 1. Carrega do IndexedDB local imediatamente (Offline First em lote)
+        const stores = await localDb.getManyStores<{
+          lavagens: any[];
+          equipamentos: any[];
+          colaboradores: any[];
+        }>(["lavagens", "equipamentos", "colaboradores"]);
+
+        const localL = stores.lavagens || [];
+        const localEq = stores.equipamentos || [];
+        const localCol = stores.colaboradores || [];
         
         // Filtra lavagens locais por mês e ano
         const startDate = `${ano}-${String(mes).padStart(2, '0')}-01`;
@@ -49,8 +55,10 @@ export default function LavagensPage({
 
         // 2. Se estiver online, busca do Supabase e atualiza o localDB e o state em background
         if (isOnline) {
-          const freshL = await getLavagens(mes, ano);
-          const freshEq = await getEquipamentos();
+          const [freshL, freshEq] = await Promise.all([
+            getLavagens(mes, ano),
+            getEquipamentos()
+          ]);
           
           if (freshL && freshL.length > 0) {
             await localDb.saveMany("lavagens", freshL);
@@ -62,7 +70,7 @@ export default function LavagensPage({
           if (active) {
             setLavagens(freshL);
             setEquipamentos(freshEq);
-            const freshCol = await localDb.getAll("colaboradores"); // Assume offline-sync brings it or we just use localDB
+            const freshCol = await localDb.getAll("colaboradores");
             setColaboradores(freshCol);
           }
         }

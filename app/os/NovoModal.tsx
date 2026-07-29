@@ -640,58 +640,7 @@ export default function OSFormModal({
         fd.append("fotos", foto);
       });
 
-      if (isOnline) {
-        const res = initialData
-          ? await atualizarOrdemServico(initialData.id, fd)
-          : await criarOrdemServico(fd);
-
-        if (res && typeof res === "object" && "error" in res) {
-          // Erro real vindo do servidor
-          alert("Erro ao salvar: " + res.error);
-          return;
-        }
-
-        // Se houver backlogs selecionados para encerramento
-        if (resolvedBacklogs.size > 0 && res && typeof res === "object" && "numero_os" in res) {
-          const osNum = (res as any).numero_os;
-          const dataConclusao = (fd.get("data_fechamento") as string) || getLocalDT();
-          
-          // Chamar action de fechamento dos backlogs no Supabase
-          const encRes = await encerrarBacklogs(Array.from(resolvedBacklogs), osNum, dataConclusao);
-          if (encRes && "error" in encRes) {
-            console.error("Erro ao encerrar backlogs no servidor:", encRes.error);
-          }
-
-          // Atualizar localmente no IndexedDB
-          for (const backlogId of resolvedBacklogs) {
-            const backlog = backlogs.find(b => b.id === backlogId);
-            if (backlog) {
-              await localDb.put("backlog", {
-                ...backlog,
-                status: "ENCERRADO",
-                os: osNum,
-                data_conclusao: dataConclusao
-              });
-            }
-          }
-          window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
-        }
-
-        // Salvo com sucesso no Supabase — atualiza cache local sem bloquear
-        try {
-          if (res && typeof res === "object" && "id" in res) {
-            await localDb.put("ordens_servico", res);
-          }
-        } catch (cacheErr) {
-          // Erro no cache local é não-crítico: o dado já foi salvo no servidor
-          console.warn("[Cache] Falha ao atualizar IndexedDB (não-crítico):", cacheErr);
-        }
-
-        window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
-        await clearDraft();
-        onClose();
-      } else {
-        // Cenário offline
+      const handleSaveOffline = async () => {
         const dataFechamentoVal = (fd.get("data_fechamento") as string) || null;
         if (initialData) {
           // Editar OS Offline
@@ -796,6 +745,67 @@ export default function OSFormModal({
         window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
         await clearDraft();
         onClose();
+        alert("Ordem de serviço salva com sucesso (Offline)!");
+      };
+
+      if (isOnline) {
+        try {
+          const res = initialData
+            ? await atualizarOrdemServico(initialData.id, fd)
+            : await criarOrdemServico(fd);
+
+          if (res && typeof res === "object" && "error" in res) {
+            console.warn("[OS] Falha ao salvar online, tentando offline...", res.error);
+            await handleSaveOffline();
+            return;
+          }
+
+          // Se houver backlogs selecionados para encerramento
+          if (resolvedBacklogs.size > 0 && res && typeof res === "object" && "numero_os" in res) {
+            const osNum = (res as any).numero_os;
+            const dataConclusao = (fd.get("data_fechamento") as string) || getLocalDT();
+
+            // Chamar action de fechamento dos backlogs no Supabase
+            const encRes = await encerrarBacklogs(Array.from(resolvedBacklogs), osNum, dataConclusao);
+            if (encRes && "error" in encRes) {
+              console.error("Erro ao encerrar backlogs no servidor:", encRes.error);
+            }
+
+            // Atualizar localmente no IndexedDB
+            for (const backlogId of resolvedBacklogs) {
+              const backlog = backlogs.find(b => b.id === backlogId);
+              if (backlog) {
+                await localDb.put("backlog", {
+                  ...backlog,
+                  status: "ENCERRADO",
+                  os: osNum,
+                  data_conclusao: dataConclusao
+                });
+              }
+            }
+            window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+          }
+
+          // Salvo com sucesso no Supabase — atualiza cache local sem bloquear
+          try {
+            if (res && typeof res === "object" && "id" in res) {
+              await localDb.put("ordens_servico", res);
+            }
+          } catch (cacheErr) {
+            // Erro no cache local é não-crítico: o dado já foi salvo no servidor
+            console.warn("[Cache] Falha ao atualizar IndexedDB (não-crítico):", cacheErr);
+          }
+
+          window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
+          await clearDraft();
+          onClose();
+          alert("Ordem de serviço salva com sucesso!");
+        } catch (err: any) {
+          console.error("[OS] Erro critico no salvamento online, caindo para offline:", err);
+          await handleSaveOffline();
+        }
+      } else {
+        await handleSaveOffline();
       }
     } catch (error: any) {
       console.error("Erro inesperado no handleSubmit:", error);

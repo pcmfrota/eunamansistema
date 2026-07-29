@@ -16,14 +16,32 @@ export default function ControleOSPage() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const ordens = await localDb.getAll("ordens_servico");
-        const equipamentosRaw = await localDb.getAll("equipamentos");
-        const catalogo = await localDb.getAll("catalogo_manutencao");
-        const auxConfigs = await localDb.getAll("aux_config");
-        const calendario = await localDb.getAll("calendario_suzano");
-        const backlogs = await localDb.getAll("backlog");
-        const colaboradores = await localDb.getAll("colaboradores");
+        // 1. Carrega local (Offline-First em lote)
+        const stores = await localDb.getManyStores<{
+          ordens_servico: any[];
+          equipamentos: any[];
+          catalogo_manutencao: any[];
+          aux_config: any[];
+          calendario_suzano: any[];
+          backlog: any[];
+          colaboradores: any[];
+        }>([
+          "ordens_servico",
+          "equipamentos",
+          "catalogo_manutencao",
+          "aux_config",
+          "calendario_suzano",
+          "backlog",
+          "colaboradores"
+        ]);
+
+        const ordens = stores.ordens_servico || [];
+        const equipamentosRaw = stores.equipamentos || [];
+        const catalogo = stores.catalogo_manutencao || [];
+        const auxConfigs = stores.aux_config || [];
+        const calendario = stores.calendario_suzano || [];
+        const backlogs = stores.backlog || [];
+        const colaboradores = stores.colaboradores || [];
 
         // Processamentos
         const eqTransformados = equipamentosRaw.map(eq => {
@@ -80,14 +98,32 @@ export default function ControleOSPage() {
             "colaboradores"
           ]);
           if (syncSuccess) {
-            // Se mudou o banco remoto, relemos
-            const freshOrdens = await localDb.getAll("ordens_servico");
-            const freshEqs = await localDb.getAll("equipamentos");
-            const freshCatalogo = await localDb.getAll("catalogo_manutencao");
-            const freshAux = await localDb.getAll("aux_config");
-            const freshCal = await localDb.getAll("calendario_suzano");
-            const freshBacklogs = await localDb.getAll("backlog");
-            const freshColabs = await localDb.getAll("colaboradores");
+            // Se mudou o banco remoto, relemos em lote
+            const freshStores = await localDb.getManyStores<{
+              ordens_servico: any[];
+              equipamentos: any[];
+              catalogo_manutencao: any[];
+              aux_config: any[];
+              calendario_suzano: any[];
+              backlog: any[];
+              colaboradores: any[];
+            }>([
+              "ordens_servico",
+              "equipamentos",
+              "catalogo_manutencao",
+              "aux_config",
+              "calendario_suzano",
+              "backlog",
+              "colaboradores"
+            ]);
+
+            const freshOrdens = freshStores.ordens_servico || [];
+            const freshEqs = freshStores.equipamentos || [];
+            const freshCatalogo = freshStores.catalogo_manutencao || [];
+            const freshAux = freshStores.aux_config || [];
+            const freshCal = freshStores.calendario_suzano || [];
+            const freshBacklogs = freshStores.backlog || [];
+            const freshColabs = freshStores.colaboradores || [];
 
             const freshEqTransformados = freshEqs.map(eq => ({
               id: eq.id,

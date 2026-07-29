@@ -20,10 +20,17 @@ export default function ProgramacaoPreventiva() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const localProg = await localDb.getAll("prev_prog_semanal");
-        const localCal = await localDb.getAll("calendario_suzano");
-        const localEq = await localDb.getAll("equipamentos");
+        // 1. Carrega local (Offline-First em lote)
+        const progStores = ["prev_prog_semanal", "calendario_suzano", "equipamentos"];
+        const stores = await localDb.getManyStores<{
+          prev_prog_semanal: any[];
+          calendario_suzano: any[];
+          equipamentos: any[];
+        }>(progStores);
+
+        const localProg = stores.prev_prog_semanal || [];
+        const localCal = stores.calendario_suzano || [];
+        const localEq = stores.equipamentos || [];
 
         const filteredProg = localProg.filter(p => p.ano === anoAtivo);
         const filteredCal = localCal.filter(c => c.ano === anoAtivo);
@@ -43,11 +50,17 @@ export default function ProgramacaoPreventiva() {
         // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["prev_prog_semanal", "calendario_suzano", "equipamentos"]);
+          const syncSuccess = await syncTables(progStores);
           if (syncSuccess) {
-            const freshProg = await localDb.getAll("prev_prog_semanal");
-            const freshCal = await localDb.getAll("calendario_suzano");
-            const freshEq = await localDb.getAll("equipamentos");
+            const freshStores = await localDb.getManyStores<{
+              prev_prog_semanal: any[];
+              calendario_suzano: any[];
+              equipamentos: any[];
+            }>(progStores);
+
+            const freshProg = freshStores.prev_prog_semanal || [];
+            const freshCal = freshStores.calendario_suzano || [];
+            const freshEq = freshStores.equipamentos || [];
 
             const freshFilteredProg = freshProg.filter(p => p.ano === anoAtivo);
             const freshFilteredCal = freshCal.filter(c => c.ano === anoAtivo);

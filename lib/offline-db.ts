@@ -150,6 +150,37 @@ export class OfflineDB {
     });
   }
 
+  async getManyStores<T = Record<string, any[]>>(storeNames: string[]): Promise<T> {
+    if (!storeNames || storeNames.length === 0) return {} as T;
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const validStores = storeNames.filter(name => db.objectStoreNames.contains(name));
+      if (validStores.length === 0) return resolve({} as T);
+
+      try {
+        const transaction = db.transaction(validStores, 'readonly');
+        const results: Record<string, any[]> = {};
+        let count = validStores.length;
+
+        transaction.onerror = () => reject(transaction.error);
+
+        for (const name of validStores) {
+          const store = transaction.objectStore(name);
+          const request = store.getAll();
+          request.onsuccess = () => {
+            results[name] = request.result || [];
+            count--;
+            if (count === 0) resolve(results as T);
+          };
+          request.onerror = () => reject(request.error);
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+
   async get<T = any>(storeName: string, key: string | number): Promise<T | null> {
     const db = await this.open();
     return new Promise((resolve, reject) => {

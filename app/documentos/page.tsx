@@ -23,13 +23,23 @@ export default function DocumentosPage() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const localTac = await localDb.open().then(() => localDb.getAll("docs_tacografo"));
-        const localCiv = await localDb.getAll("docs_civ_cipp");
-        const localEletro = await localDb.getAll("docs_laudo_eletromecanico");
-        const localImpl = await localDb.getAll("docs_laudo_implemento");
-        const localCrlveP = await localDb.getAll("docs_crlve_pesados");
-        const localCrlveL = await localDb.getAll("docs_crlve_leve");
+        // 1. Carrega local (Offline-First em lote)
+        const docStores = [
+          "docs_tacografo",
+          "docs_civ_cipp",
+          "docs_laudo_eletromecanico",
+          "docs_laudo_implemento",
+          "docs_crlve_pesados",
+          "docs_crlve_leve"
+        ];
+        const stores = await localDb.getManyStores<Record<string, any[]>>(docStores);
+
+        const localTac = stores.docs_tacografo || [];
+        const localCiv = stores.docs_civ_cipp || [];
+        const localEletro = stores.docs_laudo_eletromecanico || [];
+        const localImpl = stores.docs_laudo_implemento || [];
+        const localCrlveP = stores.docs_crlve_pesados || [];
+        const localCrlveL = stores.docs_crlve_leve || [];
 
         if (active) {
           setTacografos(localTac);
@@ -44,14 +54,15 @@ export default function DocumentosPage() {
         // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["docs_tacografo", "docs_civ_cipp", "docs_laudo_eletromecanico", "docs_laudo_implemento", "docs_crlve_pesados", "docs_crlve_leve"]);
+          const syncSuccess = await syncTables(docStores);
           if (syncSuccess) {
-            const freshTac = await localDb.getAll("docs_tacografo");
-            const freshCiv = await localDb.getAll("docs_civ_cipp");
-            const freshEletro = await localDb.getAll("docs_laudo_eletromecanico");
-            const freshImpl = await localDb.getAll("docs_laudo_implemento");
-            const freshCrlveP = await localDb.getAll("docs_crlve_pesados");
-            const freshCrlveL = await localDb.getAll("docs_crlve_leve");
+            const freshStores = await localDb.getManyStores<Record<string, any[]>>(docStores);
+            const freshTac = freshStores.docs_tacografo || [];
+            const freshCiv = freshStores.docs_civ_cipp || [];
+            const freshEletro = freshStores.docs_laudo_eletromecanico || [];
+            const freshImpl = freshStores.docs_laudo_implemento || [];
+            const freshCrlveP = freshStores.docs_crlve_pesados || [];
+            const freshCrlveL = freshStores.docs_crlve_leve || [];
             if (active) {
               setTacografos(freshTac);
               setCivCipps(freshCiv);

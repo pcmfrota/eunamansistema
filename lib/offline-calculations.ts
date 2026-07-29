@@ -147,13 +147,29 @@ export async function getOfflineDashboardData(filtros?: {
   const mesAtualRef = agoraRef.getMonth() + 1;
   const anoAtualRef = agoraRef.getFullYear();
 
-  // Carrega dados das tabelas IndexedDB locais
-  const todasAsOS = await localDb.getAll("ordens_servico");
-  const todosEquipamentos = await localDb.getAll("equipamentos");
-  const escalas = await localDb.getAll("escala_frota");
-  const calendarioSuzano = await localDb.getAll("calendario_suzano");
-  const preventivasLocais = await localDb.getAll("preventivas");
-  const backlogLocais = await localDb.getAll("backlog");
+  // Carrega dados das tabelas IndexedDB locais em lote
+  const stores = await localDb.getManyStores<{
+    ordens_servico: any[];
+    equipamentos: any[];
+    escala_frota: any[];
+    calendario_suzano: any[];
+    preventivas: any[];
+    backlog: any[];
+  }>([
+    "ordens_servico",
+    "equipamentos",
+    "escala_frota",
+    "calendario_suzano",
+    "preventivas",
+    "backlog",
+  ]);
+
+  const todasAsOS = stores.ordens_servico || [];
+  const todosEquipamentos = stores.equipamentos || [];
+  const escalas = stores.escala_frota || [];
+  const calendarioSuzano = stores.calendario_suzano || [];
+  const preventivasLocais = stores.preventivas || [];
+  const backlogLocais = stores.backlog || [];
 
   let mesFiltro = filtros?.mes || 0;
   let anoFiltro = filtros?.ano || 0;

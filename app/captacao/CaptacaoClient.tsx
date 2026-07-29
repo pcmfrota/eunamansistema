@@ -44,6 +44,16 @@ import {
   atualizarLancamento
 } from './actions';
 
+// Utility for robust UUID generation (Safe for Android WebView)
+const generateId = () => {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch (e) {}
+  return 'local-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+};
+
 // Camera Modal Component
 function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -1308,6 +1318,45 @@ export default function CaptacaoClient({
       revisao: newFichaData.revisao
     };
 
+    const saveOffline = async () => {
+      const tempId = generateId();
+      const offlineFicha = {
+        id: tempId,
+        status: 'Aberta' as const,
+        criado_por: null,
+        created_at: new Date().toISOString().split('.')[0],
+        ...payload
+      };
+
+      await localDb.put('fichas_captacao', offlineFicha);
+      await localDb.addToQueue('captacao', 'create', payload);
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => [offlineFicha, ...prev]);
+      setSelectedFicha({ ...offlineFicha, lancamentos: [] });
+      setShowFichaPaper(false);
+      setViewMode('suzano');
+      if (typeof window !== 'undefined') {
+        window.history.pushState({ screen: 'details' }, '', '#details');
+      }
+      setActiveScreen('details');
+      setIsFichaModalOpen(false);
+      // Reset form
+      setNewFichaData({
+        placa: '',
+        placaCustom: '',
+        motorista: '',
+        motoristaCustom: '',
+        processo: 'Colheita',
+        nucleo: 'Suzano',
+        supervisor_suzano: '',
+        codigo: 'CO-PR-005',
+        revisao: '03',
+        mes: 0,
+        ano: 0
+      });
+    };
+
     try {
       if (isOnline) {
         const res = await criarFicha(payload);
@@ -1337,50 +1386,19 @@ export default function CaptacaoClient({
             ano: 0
           });
         } else {
-          alert('Erro ao criar ficha: ' + res.error);
+          console.warn("[Captacao] Falha ao criar online, tentando offline...", res?.error);
+          await saveOffline();
         }
       } else {
-        // Offline implementation
-        const tempId = crypto.randomUUID();
-        const offlineFicha = {
-          id: tempId,
-          status: 'Aberta' as const,
-          criado_por: null,
-          created_at: new Date().toISOString().split('.')[0],
-          ...payload
-        };
-
-        await localDb.put('fichas_captacao', offlineFicha);
-        await localDb.addToQueue('captacao', 'create', payload);
-        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
-
-        setFichas(prev => [offlineFicha, ...prev]);
-        setSelectedFicha({ ...offlineFicha, lancamentos: [] });
-        setShowFichaPaper(false);
-        setViewMode('suzano');
-        if (typeof window !== 'undefined') {
-          window.history.pushState({ screen: 'details' }, '', '#details');
-        }
-        setActiveScreen('details');
-        setIsFichaModalOpen(false);
-        // Reset form
-        setNewFichaData({
-          placa: '',
-          placaCustom: '',
-          motorista: '',
-          motoristaCustom: '',
-          processo: 'Colheita',
-          nucleo: 'Suzano',
-          supervisor_suzano: '',
-          codigo: 'CO-PR-005',
-          revisao: '03',
-          mes: 0,
-          ano: 0
-        });
+        await saveOffline();
       }
     } catch (err: any) {
-      console.error(err);
-      alert('Erro inesperado: ' + err.message);
+      console.error("[Captacao] Erro critico, forçando salvamento offline:", err);
+      try {
+        await saveOffline();
+      } catch (dbErr) {
+        alert('Erro ao salvar localmente: ' + err.message);
+      }
     } finally {
       setIsSavingFicha(false);
     }
@@ -1492,98 +1510,128 @@ export default function CaptacaoClient({
       foto_ponto: newLancamentoData.foto_ponto // base64 representation
     };
 
-    if (editingLancamentoId) {
-      if (isOnline) {
-        const res = await atualizarLancamento(editingLancamentoId, payload);
-        if (res.success && res.data) {
-          const updated = res.data;
-          await localDb.put('lancamentos_captacao', updated);
-          setFichas(prev => prev.map(f => {
-            if (f.id === selectedFicha.id) {
-              return {
-                ...f,
-                lancamentos: f.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
-              };
-            }
-            return f;
-          }));
-          setSelectedFicha(prev => ({
-            ...prev,
-            lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
-          }));
-          alert("Lançamento atualizado com sucesso!");
-        } else {
-          alert('Erro ao atualizar lançamento: ' + res.error);
+    const addOffline = async () => {
+      const tempId = generateId();
+      const offlineRow = {
+        id: tempId,
+        created_at: new Date().toISOString().split('.')[0],
+        ...payload
+      };
+
+      await localDb.put('lancamentos_captacao', offlineRow);
+      await localDb.addToQueue('captacao', 'add_lancamento', payload);
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => prev.map(f => {
+        if (f.id === selectedFicha.id) {
+          return { ...f, lancamentos: [...(f.lancamentos || []), offlineRow] };
         }
-      } else {
-        // Offline update
-        const updatedRow = {
-          id: editingLancamentoId,
-          ...payload
-        };
-        await localDb.put('lancamentos_captacao', updatedRow);
-        await localDb.addToQueue('captacao', 'update', { id: editingLancamentoId, ...payload });
-        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
-
-        setFichas(prev => prev.map(f => {
-          if (f.id === selectedFicha.id) {
-            return {
-              ...f,
-              lancamentos: f.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
-            };
-          }
-          return f;
-        }));
-        setSelectedFicha(prev => ({
-          ...prev,
-          lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
-        }));
-        alert("Lançamento atualizado com sucesso (Offline)!");
-      }
-    } else {
-      if (isOnline) {
-        const res = await adicionarLancamento(payload);
-        if (res.success && res.data) {
-          const added = res.data;
-          await localDb.put('lancamentos_captacao', added);
-          setFichas(prev => prev.map(f => {
-            if (f.id === selectedFicha.id) {
-              return { ...f, lancamentos: [...(f.lancamentos || []), added] };
-            }
-            return f;
-          }));
-          setSelectedFicha(prev => ({
-            ...prev,
-            lancamentos: [...(prev.lancamentos || []), added]
-          }));
-          alert("Lançamento adicionado com sucesso!");
-        } else {
-          alert('Erro ao adicionar lançamento: ' + res.error);
-        }
-      } else {
-        // Offline launch
-        const tempId = crypto.randomUUID();
-        const offlineRow = {
-          id: tempId,
-          created_at: new Date().toISOString().split('.')[0],
-          ...payload
-        };
-
-        await localDb.put('lancamentos_captacao', offlineRow);
-        await localDb.addToQueue('captacao', 'add_lancamento', payload);
-        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
-
-        setFichas(prev => prev.map(f => {
-          if (f.id === selectedFicha.id) {
-            return { ...f, lancamentos: [...(f.lancamentos || []), offlineRow] };
-          }
-          return f;
-        }));
-        setSelectedFicha(prev => ({
+        return f;
+      }));
+      setSelectedFicha(prev => {
+        if (!prev) return prev;
+        return {
           ...prev,
           lancamentos: [...(prev.lancamentos || []), offlineRow]
-        }));
-        alert("Lançamento adicionado com sucesso (Offline)!");
+        };
+      });
+      alert("Lançamento adicionado com sucesso (Offline)!");
+    };
+
+    const updateOffline = async () => {
+      const updatedRow = {
+        id: editingLancamentoId!,
+        ...payload
+      };
+      await localDb.put('lancamentos_captacao', updatedRow);
+      await localDb.addToQueue('captacao', 'update', { id: editingLancamentoId, ...payload });
+      window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+
+      setFichas(prev => prev.map(f => {
+        if (f.id === selectedFicha.id) {
+          return {
+            ...f,
+            lancamentos: f.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
+          };
+        }
+        return f;
+      }));
+      setSelectedFicha(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
+        };
+      });
+      alert("Lançamento atualizado com sucesso (Offline)!");
+    };
+
+    try {
+      if (editingLancamentoId) {
+        if (isOnline) {
+          const res = await atualizarLancamento(editingLancamentoId, payload);
+          if (res.success && res.data) {
+            const updated = res.data;
+            await localDb.put('lancamentos_captacao', updated);
+            setFichas(prev => prev.map(f => {
+              if (f.id === selectedFicha.id) {
+                return {
+                  ...f,
+                  lancamentos: f.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
+                };
+              }
+              return f;
+            }));
+            setSelectedFicha(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
+            };
+          });
+          alert("Lançamento atualizado com sucesso!");
+          } else {
+            console.warn("[Captacao] Falha ao atualizar online, tentando offline...", res?.error);
+            await updateOffline();
+          }
+        } else {
+          await updateOffline();
+        }
+      } else {
+        if (isOnline) {
+          const res = await adicionarLancamento(payload);
+          if (res.success && res.data) {
+            const added = res.data;
+            await localDb.put('lancamentos_captacao', added);
+            setFichas(prev => prev.map(f => {
+              if (f.id === selectedFicha.id) {
+                return { ...f, lancamentos: [...(f.lancamentos || []), added] };
+              }
+              return f;
+            }));
+            setSelectedFicha(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              lancamentos: [...(prev.lancamentos || []), added]
+            };
+          });
+          alert("Lançamento adicionado com sucesso!");
+          } else {
+            console.warn("[Captacao] Falha ao adicionar online, tentando offline...", res?.error);
+            await addOffline();
+          }
+        } else {
+          await addOffline();
+        }
+      }
+    } catch (err: any) {
+      console.error("[Captacao] Erro ao salvar lançamento, caindo para offline:", err);
+      try {
+        if (editingLancamentoId) await updateOffline();
+        else await addOffline();
+      } catch (e) {
+        alert("Erro crítico ao salvar lançamento.");
       }
     }
 

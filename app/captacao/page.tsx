@@ -19,12 +19,21 @@ export default function CaptacaoPage() {
 
     const loadData = async () => {
       try {
-        // 1. Carrega local (Offline-First)
-        const localFichas = await localDb.getAll("fichas_captacao");
-        const localLancamentos = await localDb.getAll("lancamentos_captacao");
-        const localEq = await localDb.getAll("equipamentos");
-        const localCol = await localDb.getAll("colaboradores");
-        const localCal = await localDb.getAll("calendario_suzano");
+        // 1. Carrega local (Offline-First em lote)
+        const capStores = [
+          "fichas_captacao",
+          "lancamentos_captacao",
+          "equipamentos",
+          "colaboradores",
+          "calendario_suzano"
+        ];
+        const stores = await localDb.getManyStores<Record<string, any[]>>(capStores);
+
+        const localFichas = stores.fichas_captacao || [];
+        const localLancamentos = stores.lancamentos_captacao || [];
+        const localEq = stores.equipamentos || [];
+        const localCol = stores.colaboradores || [];
+        const localCal = stores.calendario_suzano || [];
 
         // Associa os lançamentos correspondentes a cada ficha (ficha_id)
         const fichasComLancamentos = Array.isArray(localFichas) ? localFichas.map((ficha: any) => ({
@@ -47,13 +56,14 @@ export default function CaptacaoPage() {
         // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["fichas_captacao", "lancamentos_captacao", "equipamentos", "colaboradores", "calendario_suzano"]);
+          const syncSuccess = await syncTables(capStores);
           if (syncSuccess) {
-            const freshFichas = await localDb.getAll("fichas_captacao");
-            const freshLancamentos = await localDb.getAll("lancamentos_captacao");
-            const freshEq = await localDb.getAll("equipamentos");
-            const freshCol = await localDb.getAll("colaboradores");
-            const freshCal = await localDb.getAll("calendario_suzano");
+            const freshStores = await localDb.getManyStores<Record<string, any[]>>(capStores);
+            const freshFichas = freshStores.fichas_captacao || [];
+            const freshLancamentos = freshStores.lancamentos_captacao || [];
+            const freshEq = freshStores.equipamentos || [];
+            const freshCol = freshStores.colaboradores || [];
+            const freshCal = freshStores.calendario_suzano || [];
 
             const freshFichasComLancamentos = Array.isArray(freshFichas) ? freshFichas.map((ficha: any) => ({
               ...ficha,

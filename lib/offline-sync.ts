@@ -148,9 +148,9 @@ const syncTasks: Record<
 };
 
 /**
- * Sincroniza apenas as tabelas selecionadas de forma paralela e sem concorrência duplicada.
+ * Sincroniza apenas as tabelas selecionadas de forma paralela com limite de concorrência.
  */
-export async function syncTables(tableNames: string[]): Promise<boolean> {
+export async function syncTables(tableNames: string[], maxConcurrency = 4): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
   if (!navigator.onLine) {
@@ -159,11 +159,11 @@ export async function syncTables(tableNames: string[]): Promise<boolean> {
   }
 
   const supabase = createClient();
-  console.log(`[Sync Engine] Iniciando sincronização paralela das tabelas: ${tableNames.join(", ")}...`);
+  console.log(`[Sync Engine] Sincronizando tabelas: ${tableNames.join(", ")}...`);
 
   let success = false;
 
-  const promises = tableNames.map(async (name) => {
+  const executeSyncForTable = async (name: string) => {
     const fetchFn = syncTasks[name];
     if (!fetchFn) {
       console.warn(`[Sync Engine] Tabela desconhecida para sincronização: ${name}`);
@@ -196,9 +196,14 @@ export async function syncTables(tableNames: string[]): Promise<boolean> {
     })();
 
     return activeSyncs[name];
-  });
+  };
 
-  await Promise.all(promises);
+  // Executa em lotes controlados para evitar estourar o limite de conexões paralelas HTTP do navegador
+  for (let i = 0; i < tableNames.length; i += maxConcurrency) {
+    const batch = tableNames.slice(i, i + maxConcurrency);
+    await Promise.all(batch.map(name => executeSyncForTable(name)));
+  }
+
   return success;
 }
 
