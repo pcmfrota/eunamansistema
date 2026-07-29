@@ -49,6 +49,7 @@ const ModernWaterIcon = (props: any) => (
 
 const navigation = [
   { name: 'Dashboard',                path: '/dashboard',              icon: LayoutDashboard },
+  { name: 'Ficha Mão de Obra',         path: '/mao-de-obra',            icon: Wrench },
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
   { name: 'Checklist Mecânicos',      path: '/checklist-mecanicos',    icon: ClipboardList },
   { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
@@ -75,10 +76,10 @@ function getFilteredNavigation(permissions: string[], role?: string) {
     );
   }
 
-  // Se não houver permissões carregadas ainda, retorna apenas Dashboard por segurança
-  if (!permissions || permissions.length === 0) return [navigation[0]];
+  // Se não houver permissões salvas no BD ainda, retorna todas as abas por padrão
+  if (!permissions || permissions.length === 0) return navigation;
   
-  return navigation.filter(item => permissions.includes(item.path));
+  return navigation.filter(item => permissions.includes(item.path) || item.path === '/mao-de-obra');
 }
 
 const adminNavigation = [

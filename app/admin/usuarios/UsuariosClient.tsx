@@ -173,6 +173,7 @@ export default function UsuariosClient({
 
   const availableTabs = [
     { name: 'Dashboard', path: '/dashboard' },
+    { name: 'Ficha Mão de Obra', path: '/mao-de-obra' },
     { name: 'Controle de OS', path: '/os' },
     { name: 'Controle de Horímetros', path: '/preventivas' },
     { name: 'Checklist Mecânicos', path: '/checklist-mecanicos' },
