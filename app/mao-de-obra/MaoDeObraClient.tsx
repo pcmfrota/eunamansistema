@@ -162,6 +162,20 @@ export default function MaoDeObraClient({
   const canvasSupervisorRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
 
+  // Filtro estrito para exibir apenas placas de Veículos Pesados Ativos ordenados alfabeticamente
+  const equipamentosPesadosAtivos = React.useMemo(() => {
+    return (equipamentos || [])
+      .filter((e: any) => {
+        if (!e || e.deleted_at) return false;
+        const cat = (e.categoria || 'PESADA').toString().toUpperCase();
+        const isPesada = cat === 'PESADA' || cat === 'FROTA PESADA' || cat.includes('PESADA');
+        const st = (e.status || 'ATIVO').toString().toUpperCase();
+        const isAtivo = st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO';
+        return isPesada && isAtivo;
+      })
+      .sort((a: any, b: any) => (a.placa || "").localeCompare(b.placa || ""));
+  }, [equipamentos]);
+
   // Seleção automática do perfil ao carregar
   useEffect(() => {
     if (profile?.nome && !mecanicoNome) {
@@ -741,7 +755,7 @@ export default function MaoDeObraClient({
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-extrabold text-emerald-600 focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
                   <option value="">-- Selecione a Placa --</option>
-                  {equipamentos.map((eq, i) => (
+                  {equipamentosPesadosAtivos.map((eq, i) => (
                     <option key={i} value={eq.placa}>
                       {eq.placa} ({eq.tipo || eq.categoria || "Frota"})
                     </option>

@@ -27,8 +27,19 @@ export default function MaoDeObraPage() {
           colaboradores: any[];
         }>(["fichas_mao_obra", "equipamentos", "colaboradores"]);
 
+        const isHeavyActive = (e: any) => {
+          if (!e || e.deleted_at) return false;
+          const cat = (e.categoria || 'PESADA').toString().toUpperCase();
+          const isPesada = cat === 'PESADA' || cat === 'FROTA PESADA' || cat.includes('PESADA');
+          const st = (e.status || 'ATIVO').toString().toUpperCase();
+          const isAtivo = st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO';
+          return isPesada && isAtivo;
+        };
+
         const localFichas = stores.fichas_mao_obra || [];
-        const localEq = stores.equipamentos || [];
+        const localEq = (stores.equipamentos || [])
+          .filter(isHeavyActive)
+          .sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
         const localCol = stores.colaboradores || [];
 
         if (active) {
@@ -49,9 +60,13 @@ export default function MaoDeObraPage() {
               colaboradores: any[];
             }>(["fichas_mao_obra", "equipamentos", "colaboradores"]);
 
+            const freshEq = (freshStores.equipamentos || [])
+              .filter(isHeavyActive)
+              .sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+
             if (active) {
               setFichas(freshStores.fichas_mao_obra || []);
-              setEquipamentos(freshStores.equipamentos || []);
+              setEquipamentos(freshEq);
               setColaboradores(freshStores.colaboradores || []);
             }
           }
