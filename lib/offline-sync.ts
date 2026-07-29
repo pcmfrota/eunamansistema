@@ -145,6 +145,9 @@ const syncTasks: Record<
 
   checklists_mecanicos: (supabase) =>
     supabase.from("checklists_mecanicos").select("*"),
+
+  fichas_mao_obra: (supabase) =>
+    supabase.from("fichas_mao_obra").select("*").order("created_at", { ascending: false }),
 };
 
 /**

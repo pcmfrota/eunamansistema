@@ -74,6 +74,11 @@ import {
   deleteLaudoImplemento
 } from "@/app/documentos/actions";
 
+import {
+  salvarFichaMaoObra,
+  excluirFichaMaoObra
+} from "@/app/mao-de-obra/actions";
+
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
 
@@ -309,6 +314,15 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await deleteLaudoImplemento(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "ficha_mao_obra") {
+      if (action === "create" || action === "update" || action === "close") {
+        const res = await salvarFichaMaoObra(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirFichaMaoObra(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

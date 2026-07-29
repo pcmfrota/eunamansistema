@@ -23,7 +23,8 @@ import {
   Moon,
   X,
   BarChart2,
-  Plus
+  Plus,
+  Wrench
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -44,6 +45,13 @@ const ModernWaterIcon = (props: any) => (
 );
 
 const portalItems = [
+  { 
+    name: "Mão de Obra", 
+    path: "/mao-de-obra", 
+    desc: "Ficha diária de serviços, peças, fotos e apontamento de horas.", 
+    icon: Wrench, 
+    color: "from-emerald-500 to-teal-600 bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+  },
   { 
     name: "Dashboard", 
     path: "/dashboard", 
