@@ -64,28 +64,49 @@ export default function FichaPDFModal({ ficha, onClose }: FichaPDFModalProps) {
     window.print();
   };
 
-  const shareText = `FICHA DIÁRIA DE MÃO DE OBRA - EUNAMAN\n\nFicha: ${ficha.numero_ficha}\nMecânico: ${ficha.mecanico_nome}\nPlaca: ${ficha.placa}\nTipo: ${ficha.tipo_manutencao}\nTempo Total: ${ficha.tempo_total_horas || 0}h\nStatus: ${ficha.status}`;
+  const shareText = `📋 *FICHA DIÁRIA DE MÃO DE OBRA - EUNAMAN*
+
+*Ficha:* ${ficha.numero_ficha}
+*Data:* ${dataFicha} ${horaFicha}
+*Mecânico:* ${ficha.mecanico_nome} ${ficha.mecanico_matricula ? `(${ficha.mecanico_matricula})` : ""}
+*Placa / Veículo:* ${ficha.placa} ${ficha.modelo ? `(${ficha.modelo})` : ""}
+*Módulo / Frente:* ${ficha.modulo || "-"} / ${ficha.frente_trabalho || "-"}
+*Tipo de Manutenção:* ${ficha.tipo_manutencao}
+*Descrição do Serviço:* ${ficha.descricao_servico}
+*Tempo Total:* ${ficha.tempo_total_horas || 0}h
+*Status:* ${ficha.status}`;
 
   const handleWhatsApp = () => {
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-    window.open(url, "_blank");
+    const encodedText = encodeURIComponent(shareText);
+    const waUrl = `https://wa.me/?text=${encodedText}`;
+    
+    try {
+      const win = window.open(waUrl, "_blank", "noopener,noreferrer");
+      if (!win || win.closed || typeof win.closed === "undefined") {
+        window.location.href = waUrl;
+      }
+    } catch (_) {
+      window.location.href = waUrl;
+    }
   };
 
   const handleEmail = () => {
     const subject = `Ficha de Mão de Obra - ${ficha.numero_ficha} (${ficha.placa})`;
     const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shareText)}`;
-    window.open(url, "_blank");
+    window.location.href = url;
   };
 
   const handleNativeShare = async () => {
-    if (navigator.share) {
+    if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
           title: `Ficha ${ficha.numero_ficha}`,
           text: shareText,
         });
-      } catch (err) {
-        console.log("Compartilhamento cancelado:", err);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          handleWhatsApp();
+        }
       }
     } else {
       handleWhatsApp();
