@@ -384,17 +384,28 @@ export default function MaoDeObraClient({
     };
 
     try {
-      // 1. Salva localmente no IndexedDB
+      // 1. Salva localmente no IndexedDB (Offline-First garantido)
       await localDb.put("fichas_mao_obra", newFichaItem);
       setFichas(prev => [newFichaItem, ...prev.filter(f => f.id !== newFichaItem.id)]);
 
-      // 2. Adiciona à fila de sincronização
+      // 2. Adiciona à fila de sincronização para replay em background
       await localDb.addToQueue("ficha_mao_obra", "create", newFichaItem);
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
 
-      // 3. Tenta salvar online no Supabase se estiver conectado
+      // 3. Tenta sincronizar online com o Supabase sem bloquear a resposta do formulário
       if (isOnline) {
-        await salvarFichaMaoObra(newFichaItem);
+        try {
+          const res = await salvarFichaMaoObra(newFichaItem);
+          if (res && res.error) {
+            console.warn("[Mão de Obra] Aviso de sincronização no Supabase (salvo localmente):", res.error);
+          } else if (res && res.data) {
+            const serverItem = res.data;
+            await localDb.put("fichas_mao_obra", serverItem);
+            setFichas(prev => [serverItem, ...prev.filter(f => f.id !== newFichaItem.id && f.id !== serverItem.id)]);
+          }
+        } catch (onlineErr) {
+          console.warn("[Mão de Obra] Falha ao enviar para o Supabase (mantido em fila offline):", onlineErr);
+        }
       }
 
       alert(finalizar ? "✅ Ficha Diária Finalizada com sucesso!" : "💾 Rascunho salvo localmente!");
@@ -404,8 +415,8 @@ export default function MaoDeObraClient({
         resetForm();
       }
     } catch (err) {
-      console.error("Erro ao salvar ficha de mão de obra:", err);
-      alert("Erro ao salvar ficha. Dados preservados localmente.");
+      console.error("Erro no armazenamento local da ficha:", err);
+      alert("Erro ao gravar dados no dispositivo.");
     }
   };
 

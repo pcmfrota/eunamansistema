@@ -35,6 +35,37 @@ export async function salvarFichaMaoObra(ficha: any) {
       delete payload.id;
     }
 
+    // Sanitizar campos numéricos para evitar erros de sintaxe no PostgreSQL
+    if (payload.horimetro === "" || payload.horimetro === undefined || isNaN(Number(payload.horimetro))) {
+      delete payload.horimetro;
+    } else {
+      payload.horimetro = Number(payload.horimetro);
+    }
+
+    if (payload.km === "" || payload.km === undefined || isNaN(Number(payload.km))) {
+      delete payload.km;
+    } else {
+      payload.km = Number(payload.km);
+    }
+
+    if (payload.latitude === "" || payload.latitude === undefined || isNaN(Number(payload.latitude))) {
+      delete payload.latitude;
+    } else {
+      payload.latitude = Number(payload.latitude);
+    }
+
+    if (payload.longitude === "" || payload.longitude === undefined || isNaN(Number(payload.longitude))) {
+      delete payload.longitude;
+    } else {
+      payload.longitude = Number(payload.longitude);
+    }
+
+    if (payload.tempo_total_horas === "" || payload.tempo_total_horas === undefined || isNaN(Number(payload.tempo_total_horas))) {
+      payload.tempo_total_horas = 0;
+    } else {
+      payload.tempo_total_horas = Number(payload.tempo_total_horas);
+    }
+
     const { data, error } = await supabase
       .from('fichas_mao_obra')
       .upsert(payload)
