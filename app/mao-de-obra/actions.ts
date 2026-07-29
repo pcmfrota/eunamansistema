@@ -35,6 +35,13 @@ export async function salvarFichaMaoObra(ficha: any) {
       delete payload.id;
     }
 
+    if (payload.equipamento_id === "" || payload.equipamento_id === undefined) {
+      delete payload.equipamento_id;
+    }
+    if (payload.created_by === "" || payload.created_by === undefined) {
+      delete payload.created_by;
+    }
+
     // Sanitizar campos numéricos para evitar erros de sintaxe no PostgreSQL
     if (payload.horimetro === "" || payload.horimetro === undefined || isNaN(Number(payload.horimetro))) {
       delete payload.horimetro;

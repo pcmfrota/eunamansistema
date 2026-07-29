@@ -108,7 +108,7 @@ export default function MaoDeObraClient({
   const [statusFicha, setStatusFicha] = useState<"Em andamento" | "Finalizado">("Em andamento");
 
   // Dados do Mecânico
-  const [mecanicoNome, setMecanicoNome] = useState(profile?.nome || "");
+  const [mecanicoNome, setMecanicoNome] = useState((profile as any)?.nome || (profile as any)?.full_name || "");
   const [mecanicoMatricula, setMecanicoMatricula] = useState("");
   const [equipe, setEquipe] = useState("");
   const [supervisor, setSupervisor] = useState("");
@@ -178,8 +178,9 @@ export default function MaoDeObraClient({
 
   // Seleção automática do perfil ao carregar
   useEffect(() => {
-    if (profile?.nome && !mecanicoNome) {
-      setMecanicoNome(profile.nome);
+    const profNome = (profile as any)?.nome || (profile as any)?.full_name;
+    if (profNome && !mecanicoNome) {
+      setMecanicoNome(profNome);
     }
   }, [profile]);
 
@@ -255,26 +256,43 @@ export default function MaoDeObraClient({
     return Number((totalMinutos / 60).toFixed(2));
   }, [atividades]);
 
-  // Estampar Marca D'água na Foto usando Canvas HTML5
+  // Estampar Marca D'água na Foto usando Canvas HTML5 com compressão otimizada
   const stampPhotoWatermark = (dataUrl: string, placaRef: string, mecanicoRef: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.src = dataUrl;
       img.onload = () => {
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
         const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = Math.round(width);
+        canvas.height = Math.round(height);
         const ctx = canvas.getContext("2d");
         if (!ctx) return resolve(dataUrl);
 
-        // Desenha imagem original
-        ctx.drawImage(img, 0, 0);
+        // Desenha imagem redimensionada
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         // Configura estilos da faixa da marca d'água no rodapé
-        const barHeight = Math.max(30, img.height * 0.12);
+        const barHeight = Math.max(30, canvas.height * 0.12);
         ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-        ctx.fillRect(0, img.height - barHeight, img.width, barHeight);
+        ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
 
         const fontSize = Math.max(12, Math.floor(barHeight * 0.28));
         ctx.fillStyle = "#ffffff";
@@ -284,10 +302,10 @@ export default function MaoDeObraClient({
         const line1 = `EUNAMAN · ${placaRef || "PLACA"} · ${mecanicoRef || "MECÂNICO"}`;
         const line2 = `DATA: ${dtStr} ${latitude ? `· LAT: ${latitude.toFixed(4)} LONG: ${longitude?.toFixed(4)}` : ""}`;
 
-        ctx.fillText(line1, 15, img.height - barHeight + fontSize + 6);
-        ctx.fillText(line2, 15, img.height - (barHeight * 0.25));
+        ctx.fillText(line1, 15, canvas.height - barHeight + fontSize + 6);
+        ctx.fillText(line2, 15, canvas.height - (barHeight * 0.25));
 
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
+        resolve(canvas.toDataURL("image/jpeg", 0.65));
       };
       img.onerror = () => resolve(dataUrl);
     });
@@ -428,9 +446,9 @@ export default function MaoDeObraClient({
         setSelectedFichaForPDF(newFichaItem);
         resetForm();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro no armazenamento local da ficha:", err);
-      alert("Erro ao gravar dados no dispositivo.");
+      alert(`Erro ao gravar dados no dispositivo: ${err?.message || String(err)}`);
     }
   };
 

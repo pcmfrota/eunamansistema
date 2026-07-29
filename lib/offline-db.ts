@@ -13,128 +13,131 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 10;
+  private dbVersion = 13;
   private db: IDBDatabase | null = null;
 
-  async open(): Promise<IDBDatabase> {
-    if (this.db) return this.db;
+  private setupObjectStores(db: IDBDatabase) {
+    // Autenticação Persistente e Sessão Local
+    if (!db.objectStoreNames.contains('auth_session')) db.createObjectStore('auth_session', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('user_profile')) db.createObjectStore('user_profile', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('filiais')) db.createObjectStore('filiais', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('modulos')) db.createObjectStore('modulos', { keyPath: 'id' });
+
+    // Mídia & Fotos Offline
+    if (!db.objectStoreNames.contains('fotos_queue')) db.createObjectStore('fotos_queue', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('signatures_queue')) db.createObjectStore('signatures_queue', { keyPath: 'id' });
+
+    // Tabelas de Entidades (Cache Local)
+    if (!db.objectStoreNames.contains('ordens_servico')) db.createObjectStore('ordens_servico', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('preventivas')) db.createObjectStore('preventivas', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('horimetros')) db.createObjectStore('horimetros', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('pneus_inspecao')) db.createObjectStore('pneus_inspecao', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('backlog')) db.createObjectStore('backlog', { keyPath: 'id' });
+
+    // Tabelas de Cache de Seleção / Auxiliares
+    if (!db.objectStoreNames.contains('equipamentos')) db.createObjectStore('equipamentos', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('catalogo_manutencao')) db.createObjectStore('catalogo_manutencao', { keyPath: 'id' });
+    if (db.objectStoreNames.contains('id')) db.deleteObjectStore('id');
+    if (!db.objectStoreNames.contains('calendario_suzano')) db.createObjectStore('calendario_suzano', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('aux_config')) db.createObjectStore('aux_config', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('colaboradores')) db.createObjectStore('colaboradores', { keyPath: 'id' });
+
+    // Fila de Sincronização
+    if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
+
+    // Captação de Água
+    if (!db.objectStoreNames.contains('fichas_captacao')) db.createObjectStore('fichas_captacao', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('lancamentos_captacao')) db.createObjectStore('lancamentos_captacao', { keyPath: 'id' });
+
+    // Escala de Frotas
+    if (!db.objectStoreNames.contains('escala_frota')) db.createObjectStore('escala_frota', { keyPath: 'id' });
+
+    // Lavagens
+    if (!db.objectStoreNames.contains('lavagens')) db.createObjectStore('lavagens', { keyPath: 'id' });
+
+    // Programação Preventiva
+    if (!db.objectStoreNames.contains('prev_prog_semanal')) db.createObjectStore('prev_prog_semanal', { keyPath: 'id' });
+
+    // Documentos
+    if (!db.objectStoreNames.contains('docs_tacografo')) db.createObjectStore('docs_tacografo', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('docs_civ_cipp')) db.createObjectStore('docs_civ_cipp', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('docs_laudo_eletromecanico')) db.createObjectStore('docs_laudo_eletromecanico', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('docs_laudo_implemento')) db.createObjectStore('docs_laudo_implemento', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('docs_crlve_pesados')) db.createObjectStore('docs_crlve_pesados', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('docs_crlve_leve')) db.createObjectStore('docs_crlve_leve', { keyPath: 'id' });
+
+    // Checklists Mecânicos
+    if (!db.objectStoreNames.contains('checklists_mecanicos')) db.createObjectStore('checklists_mecanicos', { keyPath: 'id' });
+
+    // Fichas Diárias de Mão de Obra
+    if (!db.objectStoreNames.contains('fichas_mao_obra')) db.createObjectStore('fichas_mao_obra', { keyPath: 'id' });
+  }
+
+  async open(requiredStore?: string): Promise<IDBDatabase> {
+    if (typeof window === "undefined" || !("indexedDB" in window)) {
+      throw new Error("IndexedDB não disponível no ambiente atual.");
+    }
+
+    if (this.db) {
+      if (!requiredStore || this.db.objectStoreNames.contains(requiredStore)) {
+        return this.db;
+      }
+      try { this.db.close(); } catch (_) {}
+      this.db = null;
+    }
 
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
+      // Abre sem passar versão estática para evitar 'VersionError' se a versão no disco for maior
+      const openReq = indexedDB.open(this.dbName);
 
-      request.onerror = () => {
-        console.error('Erro ao abrir IndexedDB:', request.error);
-        reject(request.error);
+      openReq.onerror = () => {
+        console.error('Erro ao verificar IndexedDB:', openReq.error);
+        reject(openReq.error);
       };
 
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve(request.result);
+      openReq.onsuccess = async () => {
+        const currentDb = openReq.result;
+        const currentVersion = currentDb.version;
+        const storeMissing = requiredStore && !currentDb.objectStoreNames.contains(requiredStore);
+
+        if (currentVersion < this.dbVersion || storeMissing) {
+          try { currentDb.close(); } catch (_) {}
+          const newVersion = Math.max(this.dbVersion, storeMissing ? currentVersion + 1 : currentVersion);
+          this.dbVersion = newVersion;
+
+          const upgradeReq = indexedDB.open(this.dbName, newVersion);
+
+          upgradeReq.onerror = () => {
+            console.error('Erro ao fazer upgrade do IndexedDB:', upgradeReq.error);
+            reject(upgradeReq.error);
+          };
+
+          upgradeReq.onupgradeneeded = () => {
+            this.setupObjectStores(upgradeReq.result);
+          };
+
+          upgradeReq.onsuccess = () => {
+            const upgradedDb = upgradeReq.result;
+            this.db = upgradedDb;
+            upgradedDb.onversionchange = () => {
+              try { upgradedDb.close(); } catch (_) {}
+              this.db = null;
+            };
+            resolve(upgradedDb);
+          };
+          return;
+        }
+
+        this.db = currentDb;
+        currentDb.onversionchange = () => {
+          try { currentDb.close(); } catch (_) {}
+          this.db = null;
+        };
+        resolve(currentDb);
       };
 
-      request.onupgradeneeded = (event) => {
-        const db = request.result;
-
-        // Autenticação Persistente e Sessão Local
-        if (!db.objectStoreNames.contains('auth_session')) {
-          db.createObjectStore('auth_session', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('user_profile')) {
-          db.createObjectStore('user_profile', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('filiais')) {
-          db.createObjectStore('filiais', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('modulos')) {
-          db.createObjectStore('modulos', { keyPath: 'id' });
-        }
-
-        // Mídia & Fotos Offline
-        if (!db.objectStoreNames.contains('fotos_queue')) {
-          db.createObjectStore('fotos_queue', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('signatures_queue')) {
-          db.createObjectStore('signatures_queue', { keyPath: 'id' });
-        }
-
-        // Tabelas de Entidades (Cache Local)
-        if (!db.objectStoreNames.contains('ordens_servico')) {
-          db.createObjectStore('ordens_servico', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('preventivas')) {
-          db.createObjectStore('preventivas', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('horimetros')) {
-          db.createObjectStore('horimetros', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('pneus_inspecao')) {
-          db.createObjectStore('pneus_inspecao', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('backlog')) {
-          db.createObjectStore('backlog', { keyPath: 'id' });
-        }
-
-        // Tabelas de Cache de Seleção / Auxiliares
-        if (!db.objectStoreNames.contains('equipamentos')) {
-          db.createObjectStore('equipamentos', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('catalogo_manutencao')) {
-          db.createObjectStore('catalogo_manutencao', { keyPath: 'id' });
-        }
-        if (db.objectStoreNames.contains('id')) {
-          db.deleteObjectStore('id');
-        }
-        if (!db.objectStoreNames.contains('calendario_suzano')) {
-          db.createObjectStore('calendario_suzano', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('aux_config')) {
-          db.createObjectStore('aux_config', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('colaboradores')) {
-          db.createObjectStore('colaboradores', { keyPath: 'id' });
-        }
-
-        // Fila de Sincronização
-        if (!db.objectStoreNames.contains('sync_queue')) {
-          db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
-        }
-
-        // Captação de Água
-        if (!db.objectStoreNames.contains('fichas_captacao')) {
-          db.createObjectStore('fichas_captacao', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('lancamentos_captacao')) {
-          db.createObjectStore('lancamentos_captacao', { keyPath: 'id' });
-        }
-
-        // Escala de Frotas
-        if (!db.objectStoreNames.contains('escala_frota')) {
-          db.createObjectStore('escala_frota', { keyPath: 'id' });
-        }
-
-        // Lavagens
-        if (!db.objectStoreNames.contains('lavagens')) {
-          db.createObjectStore('lavagens', { keyPath: 'id' });
-        }
-
-        // Programação Preventiva
-        if (!db.objectStoreNames.contains('prev_prog_semanal')) {
-          db.createObjectStore('prev_prog_semanal', { keyPath: 'id' });
-        }
-
-        // Documentos
-        if (!db.objectStoreNames.contains('docs_tacografo')) db.createObjectStore('docs_tacografo', { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('docs_civ_cipp')) db.createObjectStore('docs_civ_cipp', { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('docs_laudo_eletromecanico')) db.createObjectStore('docs_laudo_eletromecanico', { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('docs_laudo_implemento')) db.createObjectStore('docs_laudo_implemento', { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('docs_crlve_pesados')) db.createObjectStore('docs_crlve_pesados', { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('docs_crlve_leve')) db.createObjectStore('docs_crlve_leve', { keyPath: 'id' });
-
-        // Checklists Mecânicos
-        if (!db.objectStoreNames.contains('checklists_mecanicos')) db.createObjectStore('checklists_mecanicos', { keyPath: 'id' });
-
-        // Fichas Diárias de Mão de Obra
-        if (!db.objectStoreNames.contains('fichas_mao_obra')) db.createObjectStore('fichas_mao_obra', { keyPath: 'id' });
+      openReq.onupgradeneeded = () => {
+        this.setupObjectStores(openReq.result);
       };
     });
   }
@@ -142,7 +145,7 @@ export class OfflineDB {
   // --- Operações Genéricas de Leitura e Escrita ---
 
   async getAll<T = any>(storeName: string): Promise<T[]> {
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readonly');
       const store = transaction.objectStore(storeName);
@@ -155,7 +158,13 @@ export class OfflineDB {
 
   async getManyStores<T = Record<string, any[]>>(storeNames: string[]): Promise<T> {
     if (!storeNames || storeNames.length === 0) return {} as T;
-    const db = await this.open();
+    // Tenta garantir que todas as stores existam
+    let db = await this.open();
+    for (const storeName of storeNames) {
+      if (!db.objectStoreNames.contains(storeName)) {
+        db = await this.open(storeName);
+      }
+    }
     return new Promise((resolve, reject) => {
       const validStores = storeNames.filter(name => db.objectStoreNames.contains(name));
       if (validStores.length === 0) return resolve({} as T);
@@ -185,7 +194,7 @@ export class OfflineDB {
 
 
   async get<T = any>(storeName: string, key: string | number): Promise<T | null> {
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readonly');
       const store = transaction.objectStore(storeName);
@@ -197,7 +206,7 @@ export class OfflineDB {
   }
 
   async put(storeName: string, value: any): Promise<void> {
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
@@ -218,7 +227,7 @@ export class OfflineDB {
 
   async saveMany(storeName: string, values: any[]): Promise<void> {
     if (!values || values.length === 0) return;
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
@@ -238,7 +247,7 @@ export class OfflineDB {
   }
 
   async delete(storeName: string, key: string | number): Promise<void> {
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
@@ -250,7 +259,7 @@ export class OfflineDB {
   }
 
   async deleteMany(storeName: string, keys: (string | number)[]): Promise<void> {
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
@@ -265,7 +274,7 @@ export class OfflineDB {
   }
 
   async clearStore(storeName: string): Promise<void> {
-    const db = await this.open();
+    const db = await this.open(storeName);
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
@@ -283,7 +292,7 @@ export class OfflineDB {
     action: SyncItem['action'],
     payload: any
   ): Promise<number> {
-    const db = await this.open();
+    const db = await this.open('sync_queue');
     return new Promise((resolve, reject) => {
       const transaction = db.transaction('sync_queue', 'readwrite');
       const store = transaction.objectStore('sync_queue');
