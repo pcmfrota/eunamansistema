@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 13;
+  private dbVersion = 20;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -87,57 +87,28 @@ export class OfflineDB {
     }
 
     return new Promise((resolve, reject) => {
-      // Abre sem passar versão estática para evitar 'VersionError' se a versão no disco for maior
-      const openReq = indexedDB.open(this.dbName);
+      const request = indexedDB.open(this.dbName, this.dbVersion);
 
-      openReq.onerror = () => {
-        console.error('Erro ao verificar IndexedDB:', openReq.error);
-        reject(openReq.error);
+      request.onerror = () => {
+        console.error('Erro ao abrir IndexedDB:', request.error);
+        reject(request.error);
       };
 
-      openReq.onsuccess = async () => {
-        const currentDb = openReq.result;
-        const currentVersion = currentDb.version;
-        const storeMissing = requiredStore && !currentDb.objectStoreNames.contains(requiredStore);
+      request.onsuccess = () => {
+        const db = request.result;
+        this.db = db;
 
-        if (currentVersion < this.dbVersion || storeMissing) {
-          try { currentDb.close(); } catch (_) {}
-          const newVersion = Math.max(this.dbVersion, storeMissing ? currentVersion + 1 : currentVersion);
-          this.dbVersion = newVersion;
-
-          const upgradeReq = indexedDB.open(this.dbName, newVersion);
-
-          upgradeReq.onerror = () => {
-            console.error('Erro ao fazer upgrade do IndexedDB:', upgradeReq.error);
-            reject(upgradeReq.error);
-          };
-
-          upgradeReq.onupgradeneeded = () => {
-            this.setupObjectStores(upgradeReq.result);
-          };
-
-          upgradeReq.onsuccess = () => {
-            const upgradedDb = upgradeReq.result;
-            this.db = upgradedDb;
-            upgradedDb.onversionchange = () => {
-              try { upgradedDb.close(); } catch (_) {}
-              this.db = null;
-            };
-            resolve(upgradedDb);
-          };
-          return;
-        }
-
-        this.db = currentDb;
-        currentDb.onversionchange = () => {
-          try { currentDb.close(); } catch (_) {}
+        db.onversionchange = () => {
+          try { db.close(); } catch (_) {}
           this.db = null;
         };
-        resolve(currentDb);
+
+        resolve(db);
       };
 
-      openReq.onupgradeneeded = () => {
-        this.setupObjectStores(openReq.result);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        this.setupObjectStores(db);
       };
     });
   }
