@@ -105,11 +105,20 @@ export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Pro
   };
 
   const handleExcluir = async (id: string, label: string) => {
+    if (!confirm(`Deseja realmente excluir "${label}" permanentemente?`)) return;
+
     if (id.startsWith("default-")) {
-      alert("Para excluir ou personalizar um item padrão, utilize o botão Editar (✏️) ou clique em 'Importar Materiais Padrão' no topo.");
+      startTransition(async () => {
+        const impRes = await importarPadroesAuxiliares();
+        if (impRes.success) {
+          onAdd();
+        } else {
+          alert("Erro ao preparar exclusão do item: " + impRes.error);
+        }
+      });
       return;
     }
-    if (!confirm(`Deseja realmente excluir "${label}" permanentemente?`)) return;
+
     const res = await excluirAuxiliarAfiacao(id);
     if (res.success) {
       onDelete();

@@ -128,12 +128,25 @@ export async function salvarAuxiliarAfiacao(category: string, value: string, mod
       payload.metadata = metadata;
     }
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from("aux_afiacao")
       .upsert(
         payload,
         payload.id ? undefined : { onConflict: "category, modulo, value" }
       );
+
+    // Se o PostgREST reclamar da coluna metadata, tenta novamente sem a propriedade metadata
+    if (error && (error.message?.includes("metadata") || error.code === "PGRST204")) {
+      console.warn("Coluna metadata ausente no Supabase aux_afiacao, salvando sem metadados...");
+      delete payload.metadata;
+      const fallback = await supabase
+        .from("aux_afiacao")
+        .upsert(
+          payload,
+          payload.id ? undefined : { onConflict: "category, modulo, value" }
+        );
+      error = fallback.error;
+    }
 
     if (error) throw error;
     
@@ -158,9 +171,18 @@ export async function importarPadroesAuxiliares() {
       }
     }));
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from("aux_afiacao")
       .upsert(payload, { onConflict: "category, modulo, value" });
+
+    if (error && (error.message?.includes("metadata") || error.code === "PGRST204")) {
+      console.warn("Coluna metadata ausente no Supabase, importando sem metadados...");
+      const payloadWithoutMeta = payload.map(({ metadata, ...rest }) => rest);
+      const fallback = await supabase
+        .from("aux_afiacao")
+        .upsert(payloadWithoutMeta, { onConflict: "category, modulo, value" });
+      error = fallback.error;
+    }
 
     if (error) throw error;
     revalidatePath("/afiacao");
