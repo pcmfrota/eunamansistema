@@ -790,7 +790,7 @@ export async function getOfflineDashboardData(filtros?: {
     manutPorTipo: Array.from(manutPorTipoMap.entries()).map(([name, value]) => ({ name, value })),
     dispPorCategoria,
     dispPorModulo,
-    dataAtualizacao: dataFimExibicao ? dataFimExibicao.split('-').reverse().join('/') : ""
+    dataAtualizacao: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
   };
 }
 

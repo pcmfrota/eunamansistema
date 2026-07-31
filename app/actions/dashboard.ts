@@ -970,7 +970,7 @@ export async function getDashboardData(filtros?: {
      data_fim: dataFimExibicao,
      mesSelecionado: mesFiltro,
      anoSelecionado: anoFiltro,
-     dataAtualizacao: ontem.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+     dataAtualizacao: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
   };
 
   // ─── FINAL OVERRIDES FOR METRICS ───

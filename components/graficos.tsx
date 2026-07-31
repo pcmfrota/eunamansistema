@@ -642,7 +642,7 @@ export function GraficoVeiculos({
             )}
             {dataAtualizacao && (
               <span className="text-[10px] px-2 py-0.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 font-bold uppercase tracking-wider">
-                ATU: {dataAtualizacao}
+                ATUALIZADO: {dataAtualizacao}
               </span>
             )}
             </div>

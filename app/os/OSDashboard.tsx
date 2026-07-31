@@ -193,7 +193,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
   const ontem = new Date(agoraRef);
   ontem.setDate(ontem.getDate() - 1);
   ontem.setHours(23, 59, 59, 999);
-  const dataAtualizacao = ontem.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dataAtualizacao = agoraRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   const LIMITE_INI = periodoSelecionado ? new Date(periodoSelecionado.data_inicio + "T00:00:00") : null;
   // O fim do período nunca deve passar de ontem (D-1)
@@ -683,7 +683,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
         {ordens.length} OS no banco · Período exibido: {periodoLabel}
         {periodoSelecionado && ` (${periodoSelecionado.data_inicio} → ${periodoSelecionado.data_fim})`}
         <span className="ml-2 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded text-[9px] font-bold border border-emerald-200 dark:border-emerald-500/20">
-          Dados até: {dataAtualizacao} (D+1)
+          ATUALIZADO: {dataAtualizacao}
         </span>
       </div>
     </div>
