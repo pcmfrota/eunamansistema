@@ -25,29 +25,31 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
   const [auditados, setAuditados] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const saved = localStorage.getItem("afiacao_estoque_auditados");
+    const padroes: Record<string, string> = {
+      "25301352-": "",
+      "25301352": "",
+      "25301353": "949",
+      "25301351": "949",
+      "25045282": "100",
+      "27095494": "",
+      "27104167": "1",
+      "27190176": "899",
+      "27076237": "24",
+      "27276133": "",
+      "27274881": "5"
+    };
+
+    const saved = localStorage.getItem("afiacao_estoque_auditados_v2");
     if (saved) {
       try {
         setAuditados(JSON.parse(saved));
       } catch (e) {
         console.error("Erro ao carregar auditados:", e);
+        setAuditados(padroes);
       }
     } else {
-      // Salvar os padrões do Power BI no localStorage na primeira execução
-      const padroes = {
-        "25301352": "6",
-        "25301353": "379",
-        "25301351": "379",
-        "25045282": "153",
-        "27095494": "20",
-        "27104167": "1",
-        "27190176": "899",
-        "27076237": "24",
-        "27276133": "33",
-        "27274881": "108"
-      };
       setAuditados(padroes);
-      localStorage.setItem("afiacao_estoque_auditados", JSON.stringify(padroes));
+      localStorage.setItem("afiacao_estoque_auditados_v2", JSON.stringify(padroes));
     }
   }, []);
 
@@ -55,13 +57,26 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
     // Sanitizar entrada para aceitar números e decimais no formato pt-BR
     const next = { ...auditados, [ni]: val };
     setAuditados(next);
-    localStorage.setItem("afiacao_estoque_auditados", JSON.stringify(next));
+    localStorage.setItem("afiacao_estoque_auditados_v2", JSON.stringify(next));
   };
 
   const handleLimparAuditados = () => {
-    if (confirm("Deseja limpar todos os valores auditados preenchidos?")) {
-      setAuditados({});
-      localStorage.removeItem("afiacao_estoque_auditados");
+    if (confirm("Deseja restaurar os valores auditados padrão da imagem de referência?")) {
+      const padroes: Record<string, string> = {
+        "25301352-": "",
+        "25301352": "",
+        "25301353": "949",
+        "25301351": "949",
+        "25045282": "100",
+        "27095494": "",
+        "27104167": "1",
+        "27190176": "899",
+        "27076237": "24",
+        "27276133": "",
+        "27274881": "5"
+      };
+      setAuditados(padroes);
+      localStorage.setItem("afiacao_estoque_auditados_v2", JSON.stringify(padroes));
     }
   };
 
@@ -163,19 +178,19 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
       return true;
     });
 
-    // Saldos Iniciais Estáticos conforme Power BI
+    // Saldos Iniciais Estáticos conforme Power BI / Imagem de Referência
     const saldosIniciais: Record<string, { entrada: number; saida: number }> = {
       "25301352-": { entrada: 0, saida: 0 },
-      "25301352":  { entrada: 1311.72, saida: 1309.34 },
-      "25301353":  { entrada: 34002.00, saida: 33623.00 },
-      "25301351":  { entrada: 28131.00, saida: 27752.00 },
-      "25045282":  { entrada: 18118.00, saida: 17965.00 },
-      "27095494":  { entrada: 1439.00, saida: 1419.00 },
+      "25301352":  { entrada: 1586.72, saida: 1581.34 },
+      "25301353":  { entrada: 35002.00, saida: 34053.00 },
+      "25301351":  { entrada: 29131.00, saida: 28182.00 },
+      "25045282":  { entrada: 18318.00, saida: 18218.00 },
+      "27095494":  { entrada: 1453.00, saida: 1453.00 },
       "27104167":  { entrada: 13140.00, saida: 13139.00 },
       "27190176":  { entrada: 31041.00, saida: 30142.00 },
       "27076237":  { entrada: 3165.00, saida: 3141.00 },
-      "27276133":  { entrada: 1812.00, saida: 1779.00 },
-      "27274881":  { entrada: 2915.00, saida: 2807.00 }
+      "27276133":  { entrada: 1812.00, saida: 1812.00 },
+      "27274881":  { entrada: 2940.00, saida: 2935.00 }
     };
 
     // Calcular Entrada e Saída para cada item da grade
@@ -210,11 +225,12 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
       const totalEstoque = Math.round((entrada - saida) * 100) / 100;
 
       // Obter valor auditado do estado
-      const auditadoStr = auditados[it.ni] || "";
+      const auditadoStr = auditados[it.ni] !== undefined ? auditados[it.ni] : "";
       // Substituir vírgula por ponto para parsear corretamente
-      const auditadoVal = auditadoStr ? parseFloat(auditadoStr.replace(",", ".")) : null;
+      const auditadoVal = auditadoStr !== "" ? parseFloat(auditadoStr.replace(",", ".")) : null;
 
-      const diferenca = auditadoVal !== null ? Math.round((auditadoVal - totalEstoque) * 100) / 100 : null;
+      const auditadoCalc = auditadoVal !== null ? auditadoVal : 0;
+      const diferenca = Math.round((auditadoCalc - totalEstoque) * 100) / 100;
 
       return {
         ...it,
@@ -249,7 +265,6 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
     let saida = 0;
     let totalEstoque = 0;
     let auditado = 0;
-    let diferenca = 0;
     let temAuditado = false;
 
     for (const r of parsedRows) {
@@ -258,17 +273,22 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
       totalEstoque += r.totalEstoque;
       if (r.auditadoVal !== null) {
         auditado += r.auditadoVal;
-        diferenca += r.diferenca || 0;
         temAuditado = true;
       }
     }
 
+    const entradaRounded = Math.round(entrada * 100) / 100;
+    const saidaRounded = Math.round(saida * 100) / 100;
+    const totalEstoqueRounded = Math.round(totalEstoque * 100) / 100;
+    const auditadoRounded = temAuditado ? Math.round(auditado * 100) / 100 : 0;
+    const diferenca = Math.round((auditadoRounded - totalEstoqueRounded) * 100) / 100;
+
     return {
-      entrada: Math.round(entrada * 100) / 100,
-      saida: Math.round(saida * 100) / 100,
-      totalEstoque: Math.round(totalEstoque * 100) / 100,
-      auditado: temAuditado ? Math.round(auditado * 100) / 100 : null,
-      diferenca: temAuditado ? Math.round(diferenca * 100) / 100 : null,
+      entrada: entradaRounded,
+      saida: saidaRounded,
+      totalEstoque: totalEstoqueRounded,
+      auditado: temAuditado ? auditadoRounded : null,
+      diferenca: diferenca,
     };
   }, [parsedRows]);
 

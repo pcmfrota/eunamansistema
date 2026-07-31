@@ -845,13 +845,22 @@ export async function getOfflineHistoricoMensal(
 ): Promise<{ mes: string; dm: number; doOp: number }[]> {
   const result = [];
   const hoje = new Date();
+  const todayStr = hoje.toISOString().split('T')[0];
+
+  const calendarioSuzano = (await localDb.getStore<any[]>("calendario_suzano")) || [];
   
-  // Pegar todos os meses do ano atual (conforme vão passando)
-  const currentMonthIdx = hoje.getMonth();
+  let targetMaxMes = hoje.getMonth() + 1;
+  let anoRef = hoje.getFullYear();
+
+  const calSuzano = calendarioSuzano.find((c: any) => todayStr >= c.data_inicio && todayStr <= c.data_fim);
+  if (calSuzano?.mes) {
+    targetMaxMes = Math.max(targetMaxMes, calSuzano.mes);
+    if (calSuzano.ano) anoRef = calSuzano.ano;
+  }
+
   const monthsToFetch = [];
-  for (let i = currentMonthIdx; i >= 0; i--) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    monthsToFetch.push({ mes: d.getMonth() + 1, ano: d.getFullYear() });
+  for (let m = 1; m <= targetMaxMes; m++) {
+    monthsToFetch.push({ mes: m, ano: anoRef });
   }
 
   const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];

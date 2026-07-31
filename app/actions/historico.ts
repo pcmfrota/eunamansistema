@@ -1,5 +1,6 @@
 "use server";
 
+import { createClient } from "@/utils/supabase/server";
 import { getDashboardData } from "./dashboard";
 
 const historicoCache = new Map<string, { data: any, timestamp: number }>();
@@ -11,15 +12,34 @@ export async function getHistoricoMensal(
   filtrosAdicionais?: { modulo?: string; area?: string; placa?: string; filial?: string }
 ) {
   const hoje = new Date();
-  const mesAtualRef = hoje.getMonth() + 1;
-  const anoAtualRef = hoje.getFullYear();
+  const todayStr = hoje.toISOString().split('T')[0];
+  const supabase = createClient();
+
+  let targetMaxMes = hoje.getMonth() + 1;
+  let anoAtualRef = hoje.getFullYear();
+
+  try {
+    const { data: calSuzano } = await supabase
+      .from("calendario_suzano")
+      .select("mes, ano")
+      .lte("data_inicio", todayStr)
+      .gte("data_fim", todayStr)
+      .maybeSingle();
+
+    if (calSuzano?.mes) {
+      targetMaxMes = Math.max(targetMaxMes, calSuzano.mes);
+      if (calSuzano.ano) anoAtualRef = calSuzano.ano;
+    }
+  } catch (err) {
+    console.error("Erro ao buscar calendario_suzano no historico:", err);
+  }
+
+  const mesAtualRef = targetMaxMes;
   const now = Date.now();
-  
-  const currentMonthIdx = hoje.getMonth();
+
   const monthsToFetch = [];
-  for (let i = currentMonthIdx; i >= 0; i--) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    monthsToFetch.push({ mes: d.getMonth() + 1, ano: d.getFullYear() });
+  for (let m = 1; m <= targetMaxMes; m++) {
+    monthsToFetch.push({ mes: m, ano: anoAtualRef });
   }
 
   const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -60,4 +80,5 @@ export async function getHistoricoMensal(
     };
   });
 }
+
 
