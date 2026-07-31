@@ -240,7 +240,7 @@ export default function ControleOSClient({
       try {
         const data = await localDb.getAll("colaboradores");
         if (active) {
-          data.sort((a, b) => a.nome.localeCompare(b.nome));
+          data.sort((a, b) => (a?.nome || "").localeCompare(b?.nome || ""));
           setColaboradores(data);
         }
       } catch (err) {
@@ -607,7 +607,7 @@ export default function ControleOSClient({
     return ordens
       .filter(o => {
         const q = busca.toLowerCase();
-        const matchBusca = !q || o.numero_os.toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
+        const matchBusca = !q || (o.numero_os || "").toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
         const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
         const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
         
