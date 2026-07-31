@@ -109,7 +109,7 @@ export async function buscarAuxiliaresAfiacao() {
   }
 }
 
-export async function salvarAuxiliarAfiacao(category: string, value: string, modulo?: string, metadata?: any) {
+export async function salvarAuxiliarAfiacao(category: string, value: string, modulo?: string, metadata?: any, id?: string) {
   try {
     const val = value.trim().toUpperCase();
     if (!val) return { error: "Valor não pode ser vazio" };
@@ -120,6 +120,10 @@ export async function salvarAuxiliarAfiacao(category: string, value: string, mod
       modulo: modulo || null 
     };
 
+    if (id && !id.startsWith("default-")) {
+      payload.id = id;
+    }
+
     if (metadata && Object.keys(metadata).length > 0) {
       payload.metadata = metadata;
     }
@@ -128,11 +132,37 @@ export async function salvarAuxiliarAfiacao(category: string, value: string, mod
       .from("aux_afiacao")
       .upsert(
         payload,
-        { onConflict: "category, modulo, value" }
+        payload.id ? undefined : { onConflict: "category, modulo, value" }
       );
 
     if (error) throw error;
     
+    revalidatePath("/afiacao");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function importarPadroesAuxiliares() {
+  try {
+    const payload = MATERIAIS_DB.map(m => ({
+      category: "material",
+      modulo: null,
+      value: m.material.toUpperCase(),
+      metadata: {
+        codigo: m.cod,
+        ni: m.ni,
+        custo: m.custo,
+        tipo: m.tipo
+      }
+    }));
+
+    const { error } = await supabase
+      .from("aux_afiacao")
+      .upsert(payload, { onConflict: "category, modulo, value" });
+
+    if (error) throw error;
     revalidatePath("/afiacao");
     return { success: true };
   } catch (err: any) {

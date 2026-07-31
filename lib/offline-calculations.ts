@@ -847,7 +847,8 @@ export async function getOfflineHistoricoMensal(
   const hoje = new Date();
   const todayStr = hoje.toISOString().split('T')[0];
 
-  const calendarioSuzano = (await localDb.getStore<any[]>("calendario_suzano")) || [];
+  const stores = await localDb.getManyStores<{ calendario_suzano: any[] }>(["calendario_suzano"]);
+  const calendarioSuzano = stores?.calendario_suzano || [];
   
   let targetMaxMes = hoje.getMonth() + 1;
   let anoRef = hoje.getFullYear();
