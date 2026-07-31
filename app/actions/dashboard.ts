@@ -221,8 +221,7 @@ export async function getDashboardData(filtros?: {
   let osBaseQuery = supabase.from("ordens_servico").select(`
     id, status, horas_manutencao, data_abertura, data_fechamento, 
     equipamento_id, placa, classe, foi_enviado_reserva,
-    horario_parada, horas_reserva_chegou, descricao, numero_os,
-    equipamento:equipamento_id(area)
+    horario_parada, horas_reserva_chegou, descricao, numero_os
   `);
   if (filialFiltro) osBaseQuery = osBaseQuery.eq('filial_id', filialFiltro);
 

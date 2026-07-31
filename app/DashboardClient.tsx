@@ -126,23 +126,28 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
           setIsLoadingInitial(false);
         }
 
-        // 2. Se estiver online, busca dados frescos do servidor em paralelo
+        // 2. Se estiver online, busca dados frescos do servidor
         if (isOnline) {
           try {
             setLoadingHistorico(true);
-            const [freshData, freshHist] = await Promise.all([
-              getDashboardData(filterParams),
-              getHistoricoMensal(categoria, {
-                modulo: filtros.modulo || undefined,
-                area: filtros.area || undefined,
-                placa: filtros.placa || undefined,
-                filial: (filtros as any).filial || undefined,
-              }).catch(() => null),
-            ]);
 
-            if (active) {
-              if (freshData) setData(freshData);
-              if (freshHist) setHistoricoMensal(freshHist);
+            // 2a. Busca os dados principais do Dashboard primeiro para exibição ultra-rápida dos Cards e Tabelas
+            const freshData = await getDashboardData(filterParams);
+            if (active && freshData) {
+              setData(freshData);
+              setIsLoadingInitial(false);
+            }
+
+            // 2b. Busca o histórico mensal em segundo plano sem bloquear os cards
+            const freshHist = await getHistoricoMensal(categoria, {
+              modulo: filtros.modulo || undefined,
+              area: filtros.area || undefined,
+              placa: filtros.placa || undefined,
+              filial: (filtros as any).filial || undefined,
+            }).catch(() => null);
+
+            if (active && freshHist) {
+              setHistoricoMensal(freshHist);
             }
           } catch (onlineErr) {
             console.warn("Erro ao buscar dados online, mantendo locais:", onlineErr);
