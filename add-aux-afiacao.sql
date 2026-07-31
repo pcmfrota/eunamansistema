@@ -5,9 +5,12 @@ CREATE TABLE IF NOT EXISTS public.aux_afiacao (
   category text NOT NULL, -- 'afiador' ou 'maquina'
   modulo text, -- 'MA02', 'MA04', 'MA05', 'MA06', 'MA07' (somente para 'maquina')
   value text NOT NULL,
+  metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   CONSTRAINT unique_category_modulo_value UNIQUE (category, modulo, value)
 );
+
+ALTER TABLE public.aux_afiacao ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;
 
 -- Habilitar RLS
 ALTER TABLE public.aux_afiacao ENABLE ROW LEVEL SECURITY;
