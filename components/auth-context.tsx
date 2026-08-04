@@ -226,6 +226,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
       }
 
+      // Garantir que /lubrificacao seja sempre incluída para perfis autorizados
+      if (['admin', 'pcm', 'gestao', 'mecanico', 'tecnico', 'gestor'].includes(finalRole) && !finalPerms.includes('/lubrificacao')) {
+        finalPerms.push('/lubrificacao');
+      }
+
       // 5. Atualiza State e Cache
       setProfile(finalProfile);
       setPermissions(finalPerms);
