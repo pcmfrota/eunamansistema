@@ -71,9 +71,9 @@ export function Sidebar() {
   const { permissions, profile, filialId, filialNome, isAdmin } = useAuth();
 
   const filteredRoutes = routes.filter(route => 
-    profile?.role === 'admin' || 
+    isAdmin || 
     permissions.includes(route.path) ||
-    (route.path === '/lubrificacao' && ['admin', 'pcm', 'gestao', 'mecanico', 'tecnico', 'gestor'].includes(profile?.role || ''))
+    route.path === '/lubrificacao'
   );
 
   return (

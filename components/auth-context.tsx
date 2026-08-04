@@ -64,10 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (cachedProfile) {
         const profile = JSON.parse(cachedProfile);
+        let permissions = cachedPerms ? JSON.parse(cachedPerms) : [];
+        if (Array.isArray(permissions) && !permissions.includes('/lubrificacao')) {
+          permissions.push('/lubrificacao');
+        }
         return {
           user,
           profile,
-          permissions: cachedPerms ? JSON.parse(cachedPerms) : [],
+          permissions,
           loading: false // SUCESSO: Carregamento instantâneo
         };
       }
@@ -128,10 +132,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cachedProfile) {
         try {
           const parsedProfile = JSON.parse(cachedProfile);
-          const parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : null;
+          let parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : [];
+          if (Array.isArray(parsedPerms) && !parsedPerms.includes('/lubrificacao')) {
+            parsedPerms.push('/lubrificacao');
+          }
           
           setProfile(parsedProfile);
-          if (parsedPerms) setPermissions(parsedPerms);
+          setPermissions(parsedPerms);
           
           // Se temos cache, já liberamos o loader
           setLoading(false);
