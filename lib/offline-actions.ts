@@ -79,6 +79,12 @@ import {
   excluirFichaMaoObra
 } from "@/app/mao-de-obra/actions";
 
+import {
+  registrarFichaLubrificacao,
+  atualizarFichaLubrificacao,
+  excluirFichaLubrificacao
+} from "@/app/lubrificacao/actions";
+
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
 
@@ -323,6 +329,20 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirFichaMaoObra(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "ficha_lubrificacao" || entity === "lubrificacao") {
+      if (action === "create") {
+        const res = await registrarFichaLubrificacao(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...updates } = payload;
+        const res = await atualizarFichaLubrificacao(id || payload.id, updates);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirFichaLubrificacao(payload.id || payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

@@ -15,7 +15,7 @@ import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
+type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };
 type Inspecao = {
   id: string;
   equipamento_id: string;
@@ -27,6 +27,7 @@ type Inspecao = {
   estepe: number | null;
   condicao: string;
   equipamentos?: { placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
+  _isPendingSync?: boolean;
 };
 
 const POSICOES = ["de","dd","tei","tee","tdi","tde","tei1","tee1","tdi1","tde1","estepe"] as const;
@@ -204,7 +205,29 @@ export default function PneusClient({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
 
+  // ── Helpers para verificação de status e categoria ──
+  const isEquipamentoAtivo = (eq: any) => {
+    if (!eq) return false;
+    if (eq.deleted_at) return false;
+    const st = String(eq.status || 'Ativo').toUpperCase().trim();
+    return st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO';
+  };
+
+  const isEquipamentoPesado = (eq: any) => {
+    if (!eq) return false;
+    const cat = String(eq.categoria || 'PESADA').toUpperCase().trim();
+    return cat === 'PESADA' || cat === 'FROTA PESADA' || cat.includes('PESADA');
+  };
+
+  const isEquipamentoLeve = (eq: any) => {
+    if (!eq) return false;
+    const cat = String(eq.categoria || '').toUpperCase().trim();
+    return cat === 'LEVE' || cat === 'FROTA LEVE' || cat.includes('LEVE');
+  };
+
   const filteredInspecoesRows = inspecoes.filter(i => {
+    const eq = i.equipamento_id ? equipamentos.find(e => e.id === i.equipamento_id) : null;
+    if (eq && !isEquipamentoAtivo(eq)) return false;
     const matchesSearch = !search || i.equipamentos?.placa?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !searchStatus || i.condicao === searchStatus;
     const iDate = i.data_inspecao.split('T')[0];
@@ -239,13 +262,21 @@ export default function PneusClient({
 
   // ── Build dashboard data for a given category filter ──
   const buildDashData = (catFilter: 'PESADA' | 'LEVE') => {
-    // Equipamentos da categoria
-    const eqs = equipamentos.filter(e => (e.categoria || 'PESADA').toUpperCase() === catFilter);
+    // Equipamentos ativos da categoria solicitada (Somente Pesados na aba pesados, e somente ATIVO)
+    const eqs = equipamentos.filter(e => {
+      if (!isEquipamentoAtivo(e)) return false;
+      return catFilter === 'PESADA' ? isEquipamentoPesado(e) : isEquipamentoLeve(e);
+    });
 
-    // Latest inspection per equipamento, scoped to filtered inspections
+    // Latest inspection per equipamento, scoped to filtered inspections of active vehicles
     const latest = Object.values(filteredInspecoesRows.reduce((acc, ins) => {
-      const cat = (ins.equipamentos as any)?.categoria || 'PESADA';
-      if (cat.toUpperCase() !== catFilter) return acc;
+      const eq = equipamentos.find(e => e.id === ins.equipamento_id);
+      if (eq && !isEquipamentoAtivo(eq)) return acc;
+
+      const cat = (ins.equipamentos as any)?.categoria || eq?.categoria || (catFilter === 'PESADA' ? 'PESADA' : 'LEVE');
+      const matchesCat = catFilter === 'PESADA' ? isEquipamentoPesado({ categoria: cat }) : isEquipamentoLeve({ categoria: cat });
+
+      if (!matchesCat) return acc;
       if (!acc[ins.equipamento_id]) acc[ins.equipamento_id] = ins;
       return acc;
     }, {} as Record<string, Inspecao>));
@@ -1135,7 +1166,7 @@ export default function PneusClient({
       <PneusModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        equipamentos={equipamentos}
+        equipamentos={equipamentos.filter(e => isEquipamentoAtivo(e) && (tab === 'leves' ? isEquipamentoLeve(e) : isEquipamentoPesado(e)))}
         editData={editingItem}
         onSuccess={() => router.refresh()}
       />

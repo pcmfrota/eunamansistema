@@ -210,17 +210,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
 
       // 4. Determinação das Permissões
-      const rolePerm = allPerms.find(p => p.role === finalRole);
+      const rolePerm = allPerms.find((p: any) => p.role === finalRole);
       let finalPerms: string[] = [];
 
-      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/admin/usuarios'];
+      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/lubrificacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/admin/usuarios'];
       if (rolePerm?.allowed_tabs && rolePerm.allowed_tabs.length > 0) {
         // Map '/' to '/dashboard' for backward compatibility
-        finalPerms = rolePerm.allowed_tabs.map(t => t === '/' ? '/dashboard' : t);
+        finalPerms = rolePerm.allowed_tabs.map((t: string) => t === '/' ? '/dashboard' : t);
       } else {
         if (finalRole === 'admin') finalPerms = allTabs;
         else if (finalRole === 'visitante') finalPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
-        else if (finalRole === 'mecanico') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
+        else if (finalRole === 'mecanico') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/lubrificacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
         else if (finalRole === 'motorista') finalPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
         else if (finalRole === 'afiador') finalPerms = ['/dashboard', '/afiacao'];
         else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
@@ -298,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
       console.log(`[Auth] Evento Supabase: ${event}`, session?.user?.email);
 
       if (!mounted) return;
