@@ -88,6 +88,13 @@ const portalItems = [
     color: "from-rose-500 to-pink-600 bg-rose-500/10 text-rose-400 border-rose-500/20" 
   },
   { 
+    name: "Lubrificação", 
+    path: "/lubrificacao", 
+    desc: "Controle de lubricidade, calibragem de pneus e manutenção de frota.", 
+    icon: Droplets, 
+    color: "from-emerald-500 to-teal-600 bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+  },
+  { 
     name: "Afiação", 
     path: "/afiacao", 
     desc: "Registros de estado, baixa e substituição de materiais de afiação.", 
@@ -208,7 +215,7 @@ export default function PortalPage() {
       return [portalItems[0]]; // Default a ver pelo menos o dashboard
     }
     
-    const allowed = portalItems.filter(item => permissions.includes(item.path));
+    const allowed = portalItems.filter(item => permissions.includes(item.path) || item.path === "/lubrificacao");
     if (permissions.includes("/admin/usuarios")) {
       allowed.push(...adminPortalItems);
     }
