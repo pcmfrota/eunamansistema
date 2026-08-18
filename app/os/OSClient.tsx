@@ -673,24 +673,47 @@ export default function ControleOSClient({
     if (selectedIds.size === 0) return;
     if (confirm(`Tem certeza que deseja apagar ${selectedIds.size} chamados?`)) {
       startTransition(async () => {
-        if (isOnline) {
-          const res = await excluirOrdensMassivo(Array.from(selectedIds));
-          if (res && 'error' in res) {
-            alert(`Erro: ${res.error}`);
-          } else {
-            await localDb.deleteMany('ordens_servico', Array.from(selectedIds));
-            window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
-            setSelectedIds(new Set());
+        const idsArray = Array.from(selectedIds);
+        // OS criadas offline ainda não sincronizadas (id temporário) não existem no servidor:
+        // enviá-las para o Supabase quebra a query (uuid inválido) e derruba o lote inteiro.
+        const pendingIds = idsArray.filter(id => id.startsWith('temp_os_'));
+        const serverIds = idsArray.filter(id => !id.startsWith('temp_os_'));
+
+        // Remove localmente as pendentes e cancela a criação enfileirada correspondente,
+        // para que não seja recriada no servidor quando a fila sincronizar.
+        if (pendingIds.length > 0) {
+          const queue = await localDb.getQueue();
+          for (const id of pendingIds) {
+            const os = ordens.find(o => o.id === id);
+            const queueItem = queue.find(
+              (q) => q.entity === 'os' && q.action === 'create' && q.payload?.temp_numero_os === os?.numero_os
+            );
+            if (queueItem?.id !== undefined) {
+              await localDb.removeFromQueue(queueItem.id);
+            }
           }
-        } else {
-          // Offline mode
-          const idsArray = Array.from(selectedIds);
-          await localDb.deleteMany('ordens_servico', idsArray);
-          await localDb.addToQueue('os', 'bulk_delete', idsArray);
-          window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
-          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
-          setSelectedIds(new Set());
+          await localDb.deleteMany('ordens_servico', pendingIds);
         }
+
+        if (serverIds.length > 0) {
+          if (isOnline) {
+            const res = await excluirOrdensMassivo(serverIds);
+            if (res && 'error' in res) {
+              alert(`Erro: ${res.error}`);
+              window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+              window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+              return;
+            }
+            await localDb.deleteMany('ordens_servico', serverIds);
+          } else {
+            await localDb.deleteMany('ordens_servico', serverIds);
+            await localDb.addToQueue('os', 'bulk_delete', serverIds);
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+        window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+        setSelectedIds(new Set());
       });
     }
   };
@@ -1192,7 +1215,21 @@ export default function ControleOSClient({
                 onClick={() => {
                   startTransition(async () => {
                     if (deletingId) {
-                      if (isOnline) {
+                      // OS criada offline ainda não sincronizada (id temporário) não existe no
+                      // servidor: nunca deve ser enviada para excluirOrdemServico (uuid inválido).
+                      if (deletingId.startsWith('temp_os_')) {
+                        const os = ordens.find(o => o.id === deletingId);
+                        const queue = await localDb.getQueue();
+                        const queueItem = queue.find(
+                          (q) => q.entity === 'os' && q.action === 'create' && q.payload?.temp_numero_os === os?.numero_os
+                        );
+                        if (queueItem?.id !== undefined) {
+                          await localDb.removeFromQueue(queueItem.id);
+                        }
+                        await localDb.delete('ordens_servico', deletingId);
+                        window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
+                        window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+                      } else if (isOnline) {
                         const res = await excluirOrdemServico(deletingId);
                         if (res && 'error' in res) {
                           alert(res.error);
