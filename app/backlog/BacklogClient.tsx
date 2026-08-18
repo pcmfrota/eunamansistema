@@ -18,11 +18,13 @@ import {
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
-import { getBacklog, deleteBacklogItems } from './actions';
+import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog } from './actions';
 import BacklogModal from './BacklogModal';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
 import BacklogDashboard from './BacklogDashboard';
+import BacklogSolicitarExclusaoModal from './BacklogSolicitarExclusaoModal';
+import BacklogSolicitacoesExclusao from './BacklogSolicitacoesExclusao';
 import { PremiumLoader } from '@/components/premium-loader';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
@@ -40,7 +42,7 @@ type Placa = {
 type Colaborador = { id: string; nome: string };
 
 export default function BacklogClient({ placas, colaboradores, calendario = [] }: { placas: Placa[], colaboradores: Colaborador[], calendario?: any[] }) {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const isVisitante = profile?.role === 'visitante';
   const { isOnline } = useOffline();
 
@@ -48,12 +50,39 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento'>('Dashboard');
-  
+  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento' | 'Solicitacoes'>('Dashboard');
+
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+
+  // Solicitação de Exclusão (usuários não-admin) + Aba de revisão (admin)
+  const [deleteRequestItems, setDeleteRequestItems] = useState<any[] | null>(null);
+  const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
+  const [solicitacoesLoading, setSolicitacoesLoading] = useState(false);
+  const pendentesCount = React.useMemo(() => solicitacoes.filter(r => r.status === 'PENDENTE').length, [solicitacoes]);
+
+  const loadSolicitacoes = React.useCallback(async () => {
+    if (!isAdmin) return;
+    setSolicitacoesLoading(true);
+    try {
+      const res: any = await getSolicitacoesExclusaoBacklog();
+      if (res.error) {
+        console.error("Erro ao carregar solicitações de exclusão:", res.error);
+      } else {
+        setSolicitacoes(res.data || []);
+      }
+    } finally {
+      setSolicitacoesLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin && isOnline) {
+      loadSolicitacoes();
+    }
+  }, [isAdmin, isOnline, loadSolicitacoes]);
   
   // Search State
   const [search, setSearch] = useState("");
@@ -194,34 +223,12 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Confirmar exclusão definitiva deste item?")) return;
-    if (isOnline) {
-      const res = await deleteBacklogItems([id]);
-      if (res.success) {
-        await localDb.delete("backlog", id);
-        window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
-      } else {
-        alert(res.error);
-      }
-    } else {
-      await localDb.delete("backlog", id);
-      await localDb.addToQueue('backlog', 'delete', [id]);
-      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
-      window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
-    }
-  };
-
-  const handleBatchDelete = async () => {
-    if (selectedIds.size === 0) return;
-    if (!confirm(`Confirmar exclusão de ${selectedIds.size} itens?`)) return;
-    const idsArray = Array.from(selectedIds);
+  const performDelete = async (idsArray: string[]) => {
     if (isOnline) {
       const res = await deleteBacklogItems(idsArray);
       if (res.success) {
         await localDb.deleteMany("backlog", idsArray);
         window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
-        setSelectedIds(new Set());
       } else {
         alert(res.error);
       }
@@ -230,8 +237,42 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       await localDb.addToQueue('backlog', 'delete', idsArray);
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
       window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
-      setSelectedIds(new Set());
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    // Administrador exclui diretamente; os demais perfis precisam solicitar a exclusão
+    // e aguardar a aprovação do administrador (aba "Solicitação de Exclusão").
+    if (!isAdmin) {
+      if (!isOnline) {
+        alert("É necessário estar online para solicitar a exclusão de um item do backlog.");
+        return;
+      }
+      const item = items.find(i => i.id === id);
+      setDeleteRequestItems(item ? [item] : [{ id }]);
+      return;
+    }
+    if (!confirm("Confirmar exclusão definitiva deste item?")) return;
+    await performDelete([id]);
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const idsArray = Array.from(selectedIds);
+
+    if (!isAdmin) {
+      if (!isOnline) {
+        alert("É necessário estar online para solicitar a exclusão de itens do backlog.");
+        return;
+      }
+      const selectedItems = items.filter(i => idsArray.includes(i.id));
+      setDeleteRequestItems(selectedItems);
+      return;
+    }
+
+    if (!confirm(`Confirmar exclusão de ${selectedIds.size} itens?`)) return;
+    await performDelete(idsArray);
+    setSelectedIds(new Set());
   };
 
   const currentPeriod = React.useMemo(() => {
@@ -433,18 +474,23 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         {/* Row 1: View tabs + refresh */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex gap-2 p-1.5 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-sm">
-            {(['Geral', 'Dashboard', 'Detalhamento'] as const).map(v => (
+            {(['Geral', 'Dashboard', 'Detalhamento', 'Solicitacoes'] as const)
+              .filter(v => v !== 'Solicitacoes' || isAdmin)
+              .map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "px-6 py-2 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all",
-                  view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600",
-                  v === 'Dashboard' && "flex items-center gap-1.5"
+                  "px-6 py-2 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all flex items-center gap-1.5",
+                  view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600"
                 )}
               >
                 {v === 'Dashboard' && <BarChart3 size={12} />}
-                {v}
+                {v === 'Solicitacoes' && <ShieldAlert size={12} />}
+                {v === 'Solicitacoes' ? 'Solicitação de Exclusão' : v}
+                {v === 'Solicitacoes' && pendentesCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[8px] leading-none">{pendentesCount}</span>
+                )}
               </button>
             ))}
           </div>
@@ -474,7 +520,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         </div>
 
         {/* Row 2: Search + Filters */}
-        {view !== 'Dashboard' && (
+        {(view === 'Geral' || view === 'Detalhamento') && (
           <div className="flex flex-col gap-4">
             {/* Search Input (Full Width) */}
             <div className="relative group w-full">
@@ -642,6 +688,9 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       ) : view === 'Dashboard' ? (
         /* Dashboard View */
         <BacklogDashboard items={items} placas={localPlacas} calendario={calendario} onEdit={handleEdit} onDelete={handleDelete} />
+      ) : view === 'Solicitacoes' ? (
+        /* Solicitações de Exclusão (somente administrador) */
+        <BacklogSolicitacoesExclusao requests={solicitacoes} loading={solicitacoesLoading} onRefresh={loadSolicitacoes} />
       ) : (
         <>
           {/* Multi-Select Floating Bar */}
@@ -659,7 +708,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                   </div>
                   <div className="flex items-center gap-6">
                      <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
-                       <Plus size={18} className="rotate-45" /> EXCLUIR SELEÇÃO
+                       <Plus size={18} className="rotate-45" /> {isAdmin ? 'EXCLUIR SELEÇÃO' : 'SOLICITAR EXCLUSÃO'}
                      </button>
                      <button onClick={() => setSelectedIds(new Set())} className="text-xs font-black text-zinc-400 hover:text-white transition-colors uppercase tracking-widest">
                        LIMPAR
@@ -709,9 +758,16 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         editData={editingItem}
       />
 
-      <BacklogImportModal 
+      <BacklogImportModal
         isOpen={isImportOpen}
         onClose={() => { setIsImportOpen(false); refreshData(); }}
+      />
+
+      <BacklogSolicitarExclusaoModal
+        isOpen={!!deleteRequestItems}
+        items={deleteRequestItems || []}
+        onClose={() => { setDeleteRequestItems(null); setSelectedIds(new Set()); }}
+        onSubmitted={() => { setSelectedIds(new Set()); loadSolicitacoes(); }}
       />
     </div>
   );
