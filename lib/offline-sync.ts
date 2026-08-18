@@ -176,18 +176,18 @@ export async function syncTables(tableNames: string[], maxConcurrency = 4): Prom
       return;
     }
 
-    // Se já houver um sync ativo para esta tabela específica, reutiliza a mesma promessa
-    if (activeSyncs[name]) {
-      console.log(`[Sync Engine] Tabela ${name} já está sendo sincronizada. Reutilizando promessa...`);
-      return activeSyncs[name];
-    }
+    // Se já houver um sync ativo para esta tabela específica, aguarda ele terminar
+    // e então dispara uma nova busca. Isso evita reaproveitar dados desatualizados:
+    // se um registro foi salvo enquanto o sync anterior ainda buscava dados antigos,
+    // reutilizar aquela promessa sobrescreveria a edição recente com o valor antigo.
+    const previousSync = activeSyncs[name] || Promise.resolve();
 
-    activeSyncs[name] = (async () => {
+    const currentSync = previousSync.then(async () => {
       try {
         console.log(`[Sync Engine] Buscando dados da tabela: ${name}...`);
         const { data, error } = await fetchFn(supabase);
         if (error) throw error;
-        
+
         if (data) {
           const storeName = storeNames[name] || name;
           await safeSyncStore(storeName, data, "id");
@@ -196,12 +196,13 @@ export async function syncTables(tableNames: string[], maxConcurrency = 4): Prom
         }
       } catch (err: any) {
         console.error(`[Sync Engine] Falha ao sincronizar tabela ${name}:`, err?.message || err);
-      } finally {
-        activeSyncs[name] = null;
       }
-    })();
+    }).finally(() => {
+      if (activeSyncs[name] === currentSync) activeSyncs[name] = null;
+    });
 
-    return activeSyncs[name];
+    activeSyncs[name] = currentSync;
+    return currentSync;
   };
 
   // Executa em lotes controlados para evitar estourar o limite de conexões paralelas HTTP do navegador
