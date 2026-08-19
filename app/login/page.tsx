@@ -22,7 +22,7 @@ export default function LoginPage({
     setError(null);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
+    const email = (formData.get('email') as string || '').trim();
     const password = formData.get('password') as string;
 
     try {
