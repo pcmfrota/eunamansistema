@@ -115,14 +115,7 @@ export default function PneusClient({
   const [editingItem, setEditingItem] = useState<Inspecao | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moduloFiltro, setModuloFiltro] = useState<string>("TODOS");
-  const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
   const [selectedSchematic, setSelectedSchematic] = useState<Inspecao | null>(null);
-
-  const toggleModulo = (mod: string) => {
-    const next = new Set(collapsedModulos);
-    if (next.has(mod)) next.delete(mod); else next.add(mod);
-    setCollapsedModulos(next);
-  };
 
   // Pré-carrega SheetJS via CDN para Export e Import
   useEffect(() => {
@@ -355,6 +348,24 @@ export default function PneusClient({
     if (moduloFiltro === 'TODOS') return gruposPorModulo;
     return { [moduloFiltro]: gruposPorModulo[moduloFiltro] || [] };
   }, [gruposPorModulo, moduloFiltro]);
+
+  // Lista única com todos os veículos (de todos os módulos exibidos pelo filtro
+  // acima), uma placa embaixo da outra, em vez de um card separado por módulo.
+  const todosItensFiltrados = React.useMemo(() => {
+    const out: { modulo: string; row: DashRow }[] = [];
+    Object.entries(gruposFiltrados).forEach(([modulo, items]) => {
+      items.forEach(row => out.push({ modulo, row }));
+    });
+    out.sort((a, b) => {
+      if (a.modulo !== b.modulo) return a.modulo.localeCompare(b.modulo);
+      const pa = a.row.kind === 'inspecao' ? a.row.ins.equipamentos?.placa || '' : a.row.eq.placa;
+      const pb = b.row.kind === 'inspecao' ? b.row.ins.equipamentos?.placa || '' : b.row.eq.placa;
+      if (a.row.kind === 'pendente' && b.row.kind === 'inspecao') return 1;
+      if (a.row.kind === 'inspecao' && b.row.kind === 'pendente') return -1;
+      return pa.localeCompare(pb);
+    });
+    return out;
+  }, [gruposFiltrados]);
 
 
   const exportExcel = () => {
@@ -815,21 +826,19 @@ export default function PneusClient({
               </div>
             </div>
 
-            {/* Per-Module Monitoring Tables */}
-            {Object.entries(gruposFiltrados).map(([modulo, items]) => {
+            {/* Unified Monitoring Table — todos os veículos (respeitando o filtro de módulo acima),
+                uma placa embaixo da outra, em vez de um card separado por módulo. */}
+            {(() => {
+              const items = todosItensFiltrados.map(x => x.row);
               const modCounts = getModuloCounts(items);
               const modTotal = items.length || 1;
-              const modCriticos = items.filter(row => row.kind === 'inspecao' && (row.ins.condicao === "CRITICO" || row.ins.condicao === "TROCAR"));
-              const modPendentes = items.filter(row => row.kind === 'pendente');
-              const isCollapsed = collapsedModulos.has(modulo);
+              const totalCriticos = items.filter(row => row.kind === 'inspecao' && (row.ins.condicao === "CRITICO" || row.ins.condicao === "TROCAR")).length;
+              const totalPendentes = items.filter(row => row.kind === 'pendente').length;
 
               return (
-                <div key={modulo} className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
-                  {/* Module Header */}
-                  <button
-                    onClick={() => toggleModulo(modulo)}
-                    className="w-full p-5 flex items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group"
-                  >
+                <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
+                  {/* Header */}
+                  <div className="w-full p-5 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-3">
                         <div className="p-2.5 bg-orange-500/10 rounded-xl">
@@ -837,187 +846,191 @@ export default function PneusClient({
                         </div>
                         <div className="text-left">
                           <h4 className="font-black text-zinc-800 dark:text-zinc-200 text-base uppercase tracking-wider">
-                            🚛 Módulo: {modulo}
+                            🚛 Veículos{moduloFiltro !== 'TODOS' ? ` — Módulo: ${moduloFiltro}` : ''}
                           </h4>
                           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                             {items.length} veículo{items.length !== 1 ? "s" : ""}
-                            {modCriticos.length > 0 && (
-                              <span className="ml-2 text-red-500 animate-pulse">⚠ {modCriticos.length} crítico{modCriticos.length !== 1 ? "s" : ""}</span>
+                            {totalCriticos > 0 && (
+                              <span className="ml-2 text-red-500 animate-pulse">⚠ {totalCriticos} crítico{totalCriticos !== 1 ? "s" : ""}</span>
                             )}
-                            {modPendentes.length > 0 && (
-                              <span className="ml-2 text-zinc-400">— {modPendentes.length} sem boletim</span>
+                            {totalPendentes > 0 && (
+                              <span className="ml-2 text-zinc-400">— {totalPendentes} sem boletim</span>
                             )}
                           </p>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {/* Mini KPI pills */}
-                      <div className="hidden md:flex gap-2">
-                        {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
-                          <span key={lbl} className={`px-2.5 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
-                            lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
-                            lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
-                            lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' :
-                            lbl === 'TROCAR' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
-                            'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
-                          }`}>
-                            {v} {lbl}
-                          </span>
-                        ))}
-                      </div>
-                      <svg
-                        className={`w-5 h-5 text-zinc-400 transition-transform duration-300 ${isCollapsed ? "rotate-0" : "rotate-180"}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                      </svg>
+                    {/* Mini KPI pills */}
+                    <div className="hidden md:flex gap-2">
+                      {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
+                        <span key={lbl} className={`px-2.5 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
+                          lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
+                          lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
+                          lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' :
+                          lbl === 'TROCAR' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                          'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                        }`}>
+                          {v} {lbl}
+                        </span>
+                      ))}
                     </div>
-                  </button>
+                  </div>
 
-                  {/* Module Table */}
-                  {!isCollapsed && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px]">
-                        <thead>
-                          <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
-                            <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
-                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Data</th>
-                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
-                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
-                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
-                            <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
-                            <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Status</th>
-                          </tr>
-                          <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
-                            <th className="px-6 py-1.5" />
-                            <th className="px-4 py-1.5" />
-                            {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
-                              <th key={l} className="px-1 py-1.5 text-center text-orange-500/70 font-black">{l}</th>
-                            ))}
-                            <th className="px-4 py-1.5" />
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                          {items.map((row, idx) => {
-                            if (row.kind === 'inspecao') {
-                              const ins = row.ins;
-                              return (
-                                <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
-                                  <td className="px-6 py-3">
-                                    <span 
-                                      onClick={() => setSelectedSchematic(ins)}
-                                      className="block text-sm text-zinc-900 dark:text-zinc-50 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                                    >
-                                      {ins.equipamentos?.placa}
-                                      {(ins as any)._isPendingSync && (
-                                        <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
-                                          <RefreshCw size={9} className="animate-spin mr-1" />
-                                          (Offline)
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || (ins as any).horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
-                                      {ins.data_inspecao.split('T')[0].split('-').slice(1, 3).reverse().join('/')}
-                                    </span>
-                                  </td>
-                                  {POSICOES.map(pos => (
-                                    <td key={pos} className="px-1 py-3 text-center">
-                                      {ins[pos] != null
-                                        ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span>
-                                        : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>
-                                      }
-                                    </td>
-                                  ))}
-                                  <td className="px-4 py-3 text-center">
-                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${
-                                      ins.condicao === 'BOM' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30' :
-                                      ins.condicao === 'ATENCAO' || ins.condicao === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-900/30' :
-                                      ins.condicao === 'CRITICO' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-900/30' :
-                                      'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30'
-                                    }`}>
-                                      {ins.condicao}
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            } else {
-                              // PENDENTE row - vehicle with no inspection in this period
-                              return (
-                                <tr key={`pendente-${row.eq.id}`} className="bg-zinc-50/30 dark:bg-zinc-900/20 border-l-2 border-dashed border-zinc-300 dark:border-zinc-700 opacity-70">
-                                  <td className="px-6 py-3">
-                                    <span 
-                                      onClick={() => setSelectedSchematic({
-                                        id: `pendente-${row.eq.id}`,
-                                        equipamento_id: row.eq.id,
-                                        data_inspecao: new Date().toISOString(),
-                                        km_atual: null,
-                                        de: null, dd: null, tei: null, tee: null, tdi: null, tde: null, tei1: null, tee1: null, tdi1: null, tde1: null, estepe: null,
-                                        condicao: "PENDENTE",
-                                        equipamentos: {
-                                          placa: row.eq.placa,
-                                          tipo: row.eq.tipo,
-                                          modulo: row.eq.modulo,
-                                          categoria: row.eq.categoria
-                                        }
-                                      })}
-                                      className="block text-sm text-zinc-500 dark:text-zinc-400 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                                    >
-                                      {row.eq.placa}
-                                    </span>
-                                    <span className="text-[9px] text-zinc-300 dark:text-zinc-600 block tracking-widest italic">sem boletim no período</span>
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    <span className="text-[10px] font-black text-zinc-300 dark:text-zinc-700">—</span>
-                                  </td>
-                                  {POSICOES.map(pos => (
-                                    <td key={pos} className="px-1 py-3 text-center">
-                                      <span className="inline-block w-8 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 text-zinc-200 dark:text-zinc-700 text-center">—</span>
-                                    </td>
-                                  ))}
-                                  <td className="px-4 py-3 text-center">
-                                    <span className="px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border border-dashed border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500">
-                                      PENDENTE
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            }
-                          })}
-                        </tbody>
-                        {/* Module Footer Summary */}
-                        <tfoot>
-                          <tr className="bg-zinc-50/80 dark:bg-zinc-900/60 border-t-2 border-zinc-100 dark:border-zinc-800">
-                            <td className="px-6 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest" colSpan={2}>
-                              Resumo ({items.length} veículos)
-                            </td>
-                            <td colSpan={10} className="px-4 py-2">
-                              <div className="flex gap-2 flex-wrap">
-                                {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
-                                  <span key={lbl} className={`px-2 py-0.5 text-[8px] font-black rounded-full uppercase ${
-                                    lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700' :
-                                    lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700' :
-                                    lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700' :
-                                    lbl === 'TROCAR' ? 'bg-red-100 text-red-700' :
-                                    'bg-zinc-100 text-zinc-500'
-                                  }`}>
-                                    {v} {lbl} ({Math.round((v/modTotal)*100)}%)
+                  {/* Unified Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px]">
+                      <thead>
+                        <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
+                          <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
+                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-left">Módulo</th>
+                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Data</th>
+                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
+                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
+                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
+                          <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
+                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Status</th>
+                        </tr>
+                        <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
+                          <th className="px-6 py-1.5" />
+                          <th className="px-4 py-1.5" />
+                          <th className="px-4 py-1.5" />
+                          {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
+                            <th key={l} className="px-1 py-1.5 text-center text-orange-500/70 font-black">{l}</th>
+                          ))}
+                          <th className="px-4 py-1.5" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+                        {todosItensFiltrados.map(({ modulo, row }) => {
+                          if (row.kind === 'inspecao') {
+                            const ins = row.ins;
+                            return (
+                              <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
+                                <td className="px-6 py-3">
+                                  <span
+                                    onClick={() => setSelectedSchematic(ins)}
+                                    className="block text-sm text-zinc-900 dark:text-zinc-50 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                                  >
+                                    {ins.equipamentos?.placa}
+                                    {(ins as any)._isPendingSync && (
+                                      <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
+                                        <RefreshCw size={9} className="animate-spin mr-1" />
+                                        (Offline)
+                                      </span>
+                                    )}
                                   </span>
+                                  <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || (ins as any).horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase">{modulo}</span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
+                                    {ins.data_inspecao.split('T')[0].split('-').slice(1, 3).reverse().join('/')}
+                                  </span>
+                                </td>
+                                {POSICOES.map(pos => (
+                                  <td key={pos} className="px-1 py-3 text-center">
+                                    {ins[pos] != null
+                                      ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span>
+                                      : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>
+                                    }
+                                  </td>
                                 ))}
-                              </div>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${
+                                    ins.condicao === 'BOM' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30' :
+                                    ins.condicao === 'ATENCAO' || ins.condicao === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-900/30' :
+                                    ins.condicao === 'CRITICO' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-900/30' :
+                                    'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30'
+                                  }`}>
+                                    {ins.condicao}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          } else {
+                            // PENDENTE row - vehicle with no inspection in this period
+                            return (
+                              <tr key={`pendente-${row.eq.id}`} className="bg-zinc-50/30 dark:bg-zinc-900/20 border-l-2 border-dashed border-zinc-300 dark:border-zinc-700 opacity-70">
+                                <td className="px-6 py-3">
+                                  <span
+                                    onClick={() => setSelectedSchematic({
+                                      id: `pendente-${row.eq.id}`,
+                                      equipamento_id: row.eq.id,
+                                      data_inspecao: new Date().toISOString(),
+                                      km_atual: null,
+                                      de: null, dd: null, tei: null, tee: null, tdi: null, tde: null, tei1: null, tee1: null, tdi1: null, tde1: null, estepe: null,
+                                      condicao: "PENDENTE",
+                                      equipamentos: {
+                                        placa: row.eq.placa,
+                                        tipo: row.eq.tipo,
+                                        modulo: row.eq.modulo,
+                                        categoria: row.eq.categoria
+                                      }
+                                    })}
+                                    className="block text-sm text-zinc-500 dark:text-zinc-400 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                                  >
+                                    {row.eq.placa}
+                                  </span>
+                                  <span className="text-[9px] text-zinc-300 dark:text-zinc-600 block tracking-widest italic">sem boletim no período</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase">{modulo}</span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="text-[10px] font-black text-zinc-300 dark:text-zinc-700">—</span>
+                                </td>
+                                {POSICOES.map(pos => (
+                                  <td key={pos} className="px-1 py-3 text-center">
+                                    <span className="inline-block w-8 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 text-zinc-200 dark:text-zinc-700 text-center">—</span>
+                                  </td>
+                                ))}
+                                <td className="px-4 py-3 text-center">
+                                  <span className="px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border border-dashed border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500">
+                                    PENDENTE
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        })}
+                        {todosItensFiltrados.length === 0 && (
+                          <tr>
+                            <td colSpan={15} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                              Nenhum veículo encontrado.
                             </td>
-                            <td className="px-4 py-2" />
                           </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
+                        )}
+                      </tbody>
+                      {/* Footer Summary */}
+                      <tfoot>
+                        <tr className="bg-zinc-50/80 dark:bg-zinc-900/60 border-t-2 border-zinc-100 dark:border-zinc-800">
+                          <td className="px-6 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest" colSpan={3}>
+                            Resumo ({items.length} veículos)
+                          </td>
+                          <td colSpan={12} className="px-4 py-2">
+                            <div className="flex gap-2 flex-wrap">
+                              {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
+                                <span key={lbl} className={`px-2 py-0.5 text-[8px] font-black rounded-full uppercase ${
+                                  lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700' :
+                                  lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700' :
+                                  lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700' :
+                                  lbl === 'TROCAR' ? 'bg-red-100 text-red-700' :
+                                  'bg-zinc-100 text-zinc-500'
+                                }`}>
+                                  {v} {lbl} ({Math.round((v/modTotal)*100)}%)
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               );
-            })}
+            })()}
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
