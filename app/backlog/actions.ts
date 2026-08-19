@@ -3,6 +3,7 @@
 import { BacklogService } from '@/src/services/BacklogService';
 import { revalidatePath } from 'next/cache';
 import { getUserFilial } from '@/utils/filial';
+import { registrarExclusao } from '@/lib/audit-log';
 
 export async function getBacklog(limit: number = 5000) {
   try {
@@ -185,6 +186,16 @@ export async function responderSolicitacaoExclusao(requestId: string, aprovado: 
     if (aprovado && request.backlog_id) {
       const { error: deleteError } = await supabase.from('backlog').delete().eq('id', request.backlog_id);
       if (deleteError) throw new Error(deleteError.message);
+
+      await registrarExclusao({
+        supabase,
+        modulo: 'Backlog',
+        tabelaOrigem: 'backlog',
+        registroId: request.backlog_id,
+        descricao: `${request.backlog_frota || 'S/ FROTA'} — ${request.backlog_descricao || ''}`,
+        dados: request,
+        origem: 'SOLICITACAO_APROVADA',
+      });
     }
 
     revalidatePath('/backlog');

@@ -1,8 +1,10 @@
 "use server";
 
 import { supabase } from "@/lib/supabase";
+import { createClient as createServerClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { MATERIAIS_DB } from "./materiaisDB";
+import { registrarExclusao } from "@/lib/audit-log";
 
 export async function salvarAfiacao(data: any) {
   try {
@@ -61,12 +63,34 @@ export async function atualizarAfiacao(id: string, data: any) {
 
 export async function deletarAfiacao(id: string) {
   try {
+    let rowSnapshot: any = null;
+    try {
+      const { data: rowData } = await supabase
+        .from("afiacao")
+        .select("data, afiador, modulo, maquina, letra")
+        .eq("id", id)
+        .maybeSingle();
+      rowSnapshot = rowData;
+    } catch (snapshotErr) {
+      console.warn("Falha ao capturar snapshot de afiação antes da exclusão:", snapshotErr);
+    }
+
     const { error } = await supabase
       .from("afiacao")
       .delete()
       .eq("id", id);
 
     if (error) throw error;
+
+    const supabaseAuth = createServerClient();
+    await registrarExclusao({
+      supabase: supabaseAuth,
+      modulo: "Afiação",
+      tabelaOrigem: "afiacao",
+      registroId: id,
+      descricao: `${rowSnapshot?.maquina || ''} (${rowSnapshot?.letra || ''}) — Afiador ${rowSnapshot?.afiador} (${rowSnapshot?.data})`,
+      dados: rowSnapshot,
+    });
 
     revalidatePath("/afiacao");
     return { success: true };
@@ -194,12 +218,34 @@ export async function importarPadroesAuxiliares() {
 
 export async function excluirAuxiliarAfiacao(id: string) {
   try {
+    let rowSnapshot: any = null;
+    try {
+      const { data: rowData } = await supabase
+        .from("aux_afiacao")
+        .select("category, value, modulo")
+        .eq("id", id)
+        .maybeSingle();
+      rowSnapshot = rowData;
+    } catch (snapshotErr) {
+      console.warn("Falha ao capturar snapshot de auxiliar de afiação antes da exclusão:", snapshotErr);
+    }
+
     const { error } = await supabase
       .from("aux_afiacao")
       .delete()
       .eq("id", id);
 
     if (error) throw error;
+
+    const supabaseAuth = createServerClient();
+    await registrarExclusao({
+      supabase: supabaseAuth,
+      modulo: "Auxiliar de Afiação",
+      tabelaOrigem: "aux_afiacao",
+      registroId: id,
+      descricao: `${rowSnapshot?.category} — ${rowSnapshot?.value}`,
+      dados: rowSnapshot,
+    });
 
     revalidatePath("/afiacao");
     return { success: true };
@@ -539,12 +585,35 @@ export async function importarAfiacoes(dataInput: any, defaultAfiador?: string) 
 // Excluir TODOS os lançamentos da base de afiação
 export async function excluirTodasAfiacoes() {
   try {
+    let count: number | null = null;
+    let primeirasLinhas: any[] = [];
+    try {
+      const { data: rows, count: rowCount } = await supabase
+        .from("afiacao")
+        .select("id, data, afiador, maquina", { count: "exact" });
+      count = rowCount ?? (rows ? rows.length : null);
+      primeirasLinhas = (rows || []).slice(0, 20);
+    } catch (snapshotErr) {
+      console.warn("Falha ao capturar snapshot antes de apagar todas as afiações:", snapshotErr);
+    }
+
     const { error } = await supabase
       .from("afiacao")
       .delete()
       .neq("id", "00000000-0000-0000-0000-000000000000");
 
     if (error) throw error;
+
+    const supabaseAuth = createServerClient();
+    await registrarExclusao({
+      supabase: supabaseAuth,
+      modulo: "Afiação (Limpeza Total)",
+      tabelaOrigem: "afiacao",
+      registroId: null,
+      descricao: `Todos os registros de afiação foram apagados (${count} registros)`,
+      dados: { count, amostra: primeirasLinhas },
+    });
+
     revalidatePath("/afiacao");
     return { success: true };
   } catch (err: any) {

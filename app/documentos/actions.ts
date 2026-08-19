@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { registrarExclusao, registrarExclusoesEmLote } from "@/lib/audit-log";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -163,8 +164,27 @@ export async function upsertTacografo(formData: FormData) {
 
 export async function deleteTacografo(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase.from('docs_tacografo').select('*').eq('id', id).maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('Falha ao buscar snapshot de docs_tacografo antes de excluir:', err);
+  }
+
   const { error } = await supabase.from('docs_tacografo').delete().eq('id', id);
   if (error) return { error: error.message };
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'Tacógrafo',
+    tabelaOrigem: 'docs_tacografo',
+    registroId: id,
+    descricao: `${row?.placa || ''} — ${row?.local || ''} (${row?.co || ''})`,
+    dados: row,
+  });
+
   revalidatePath('/documentos');
   return { success: true };
 }
@@ -199,8 +219,27 @@ export async function upsertCivCipp(formData: FormData) {
 
 export async function deleteCivCipp(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase.from('docs_civ_cipp').select('*').eq('id', id).maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('Falha ao buscar snapshot de docs_civ_cipp antes de excluir:', err);
+  }
+
   const { error } = await supabase.from('docs_civ_cipp').delete().eq('id', id);
   if (error) return { error: error.message };
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'CIV/CIPP',
+    tabelaOrigem: 'docs_civ_cipp',
+    registroId: id,
+    descricao: `${row?.placa || ''} — ${row?.local || ''} (${row?.co || ''})`,
+    dados: row,
+  });
+
   revalidatePath('/documentos');
   return { success: true };
 }
@@ -237,8 +276,27 @@ export async function upsertLaudoEletro(formData: FormData) {
 
 export async function deleteLaudoEletro(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase.from('docs_laudo_eletromecanico').select('*').eq('id', id).maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('Falha ao buscar snapshot de docs_laudo_eletromecanico antes de excluir:', err);
+  }
+
   const { error } = await supabase.from('docs_laudo_eletromecanico').delete().eq('id', id);
   if (error) return { error: error.message };
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'Laudo Eletromecânico',
+    tabelaOrigem: 'docs_laudo_eletromecanico',
+    registroId: id,
+    descricao: `${row?.placa || ''} — ${row?.local || ''} (${row?.co || ''})`,
+    dados: row,
+  });
+
   revalidatePath('/documentos');
   return { success: true };
 }
@@ -275,8 +333,27 @@ export async function upsertLaudoImplemento(formData: FormData) {
 
 export async function deleteLaudoImplemento(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase.from('docs_laudo_implemento').select('*').eq('id', id).maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('Falha ao buscar snapshot de docs_laudo_implemento antes de excluir:', err);
+  }
+
   const { error } = await supabase.from('docs_laudo_implemento').delete().eq('id', id);
   if (error) return { error: error.message };
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'Laudo Implemento',
+    tabelaOrigem: 'docs_laudo_implemento',
+    registroId: id,
+    descricao: `${row?.placa || ''} — ${row?.local || ''} (${row?.co || ''})`,
+    dados: row,
+  });
+
   revalidatePath('/documentos');
   return { success: true };
 }
@@ -313,8 +390,27 @@ export async function upsertCrlvePesados(formData: FormData) {
 
 export async function deleteCrlvePesados(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase.from('docs_crlve_pesados').select('*').eq('id', id).maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('Falha ao buscar snapshot de docs_crlve_pesados antes de excluir:', err);
+  }
+
   const { error } = await supabase.from('docs_crlve_pesados').delete().eq('id', id);
   if (error) return { error: error.message };
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'CRLVE Pesados',
+    tabelaOrigem: 'docs_crlve_pesados',
+    registroId: id,
+    descricao: `${row?.placa || ''} — ${row?.local || ''} (${row?.co || ''})`,
+    dados: row,
+  });
+
   revalidatePath('/documentos');
   return { success: true };
 }
@@ -351,8 +447,27 @@ export async function upsertCrlveLeve(formData: FormData) {
 
 export async function deleteCrlveLeve(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase.from('docs_crlve_leve').select('*').eq('id', id).maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('Falha ao buscar snapshot de docs_crlve_leve antes de excluir:', err);
+  }
+
   const { error } = await supabase.from('docs_crlve_leve').delete().eq('id', id);
   if (error) return { error: error.message };
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'CRLVE Leve',
+    tabelaOrigem: 'docs_crlve_leve',
+    registroId: id,
+    descricao: `${row?.placa || ''} — ${row?.local || ''} (${row?.co || ''})`,
+    dados: row,
+  });
+
   revalidatePath('/documentos');
   return { success: true };
 }
@@ -447,7 +562,39 @@ export async function importarDocumentos(tabela: string, rows: any[]) {
     // Para evitar duplicidade de registros ativos, deletamos placas que já constam na lista
     const placas = mapped.map(m => m.placa);
     if (placas.length > 0) {
+      let rowsToDelete: any[] = [];
+      try {
+        const { data } = await supabase.from(tabela).select('*').in('placa', placas);
+        rowsToDelete = data || [];
+      } catch (err) {
+        console.warn(`Falha ao buscar snapshot de ${tabela} antes de excluir por importação:`, err);
+      }
+
       await supabase.from(tabela).delete().in('placa', placas);
+
+      if (rowsToDelete.length > 0) {
+        const MODULO_POR_TABELA: Record<string, string> = {
+          docs_tacografo: 'Tacógrafo',
+          docs_civ_cipp: 'CIV/CIPP',
+          docs_laudo_eletromecanico: 'Laudo Eletromecânico',
+          docs_laudo_implemento: 'Laudo Implemento',
+          docs_crlve_pesados: 'CRLVE Pesados',
+          docs_crlve_leve: 'CRLVE Leve',
+        };
+        const moduloNome = MODULO_POR_TABELA[tabela] || tabela;
+
+        await registrarExclusoesEmLote(
+          supabase,
+          moduloNome,
+          tabela,
+          rowsToDelete.map(r => ({
+            registroId: r.id,
+            descricao: `${r.placa || ''} — ${r.local || ''}`,
+            dados: r,
+          })),
+          'DIRETO'
+        );
+      }
     }
 
     const { error } = await supabase.from(tabela).insert(mapped);

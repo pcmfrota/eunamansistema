@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { FichaCaptacao, LancamentoCaptacao } from "../models/captacao";
+import { registrarExclusao } from "@/lib/audit-log";
 
 export class CaptacaoService {
   static async getFichas() {
@@ -88,6 +89,19 @@ export class CaptacaoService {
 
   static async deleteFicha(id: string) {
     const supabase = createClient();
+
+    let fichaSnapshot: any = null;
+    try {
+      const { data } = await supabase
+        .from("fichas_captacao")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      fichaSnapshot = data;
+    } catch (snapshotError) {
+      console.warn(`Falha ao capturar snapshot da ficha ${id} antes da exclusão:`, snapshotError);
+    }
+
     const { error } = await supabase
       .from("fichas_captacao")
       .delete()
@@ -97,6 +111,16 @@ export class CaptacaoService {
       console.error(`Erro ao deletar ficha ${id}:`, error);
       throw error;
     }
+
+    await registrarExclusao({
+      supabase,
+      modulo: "Captação de Água - Ficha",
+      tabelaOrigem: "fichas_captacao",
+      registroId: id,
+      descricao: fichaSnapshot ? `Ficha ${fichaSnapshot.placa} — ${fichaSnapshot.mes}/${fichaSnapshot.ano}` : null,
+      dados: fichaSnapshot,
+    });
+
     return { success: true };
   }
 
@@ -122,6 +146,19 @@ export class CaptacaoService {
 
   static async deleteLancamento(id: string) {
     const supabase = createClient();
+
+    let lancamentoSnapshot: any = null;
+    try {
+      const { data } = await supabase
+        .from("lancamentos_captacao")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      lancamentoSnapshot = data;
+    } catch (snapshotError) {
+      console.warn(`Falha ao capturar snapshot do lançamento ${id} antes da exclusão:`, snapshotError);
+    }
+
     const { error } = await supabase
       .from("lancamentos_captacao")
       .delete()
@@ -131,6 +168,16 @@ export class CaptacaoService {
       console.error(`Erro ao deletar lançamento ${id}:`, error);
       throw error;
     }
+
+    await registrarExclusao({
+      supabase,
+      modulo: "Captação de Água - Lançamento",
+      tabelaOrigem: "lancamentos_captacao",
+      registroId: id,
+      descricao: lancamentoSnapshot ? `Lançamento ${lancamentoSnapshot.data} — ${lancamentoSnapshot.volume_captado || ""}` : null,
+      dados: lancamentoSnapshot,
+    });
+
     return { success: true };
   }
 

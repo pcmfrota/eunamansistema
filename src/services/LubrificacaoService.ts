@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { registrarExclusao } from '@/lib/audit-log';
 
 export interface FichaLubrificacao {
   id: string;
@@ -99,12 +100,35 @@ export class LubrificacaoService {
   static async delete(id: string) {
     try {
       const supabase = createClient();
+
+      let row: any = null;
+      try {
+        const { data } = await supabase
+          .from('fichas_lubrificacao')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        row = data;
+      } catch (err) {
+        console.warn('[LubrificacaoService] Falha ao buscar snapshot antes da exclusão:', err);
+      }
+
       const { error } = await supabase
         .from('fichas_lubrificacao')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw new Error(error.message);
+
+      await registrarExclusao({
+        supabase,
+        modulo: 'Lubrificação',
+        tabelaOrigem: 'fichas_lubrificacao',
+        registroId: id,
+        descricao: row ? `${row.placa} — ${row.cliente || ''} (${row.data_registro})` : null,
+        dados: row,
+      });
+
       return true;
     } catch (err: any) {
       console.error('[LubrificacaoService] Erro ao deletar ficha:', err);

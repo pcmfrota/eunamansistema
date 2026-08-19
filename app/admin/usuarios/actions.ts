@@ -3,6 +3,7 @@
 import { createClient as createServerClient } from "@/utils/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { registrarExclusao } from "@/lib/audit-log";
 
 // Helper para operações administrativas (requer SERVICE_ROLE_KEY)
 const getAdminClient = () => {
@@ -130,12 +131,37 @@ export async function createNewUser(formData: FormData) {
 
 export async function deleteUser(userId: string) {
   try {
+    const supabase = createServerClient();
+
+    // Captura o snapshot do perfil ANTES de excluir, pois o registro em `profiles`
+    // cascateia (e desaparece) assim que o usuário é apagado do Auth.
+    let profileSnapshot: any = null;
+    try {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, filial_id")
+        .eq("id", userId)
+        .maybeSingle();
+      profileSnapshot = profileData;
+    } catch (snapshotErr) {
+      console.warn("Falha ao capturar snapshot do perfil antes da exclusão do usuário:", snapshotErr);
+    }
+
     const adminClient = getAdminClient();
-    
+
     // Deleta do Auth (isso cascateia para o profile devido ao ON DELETE CASCADE no SQL)
     const { error } = await adminClient.auth.admin.deleteUser(userId);
 
     if (error) throw error;
+
+    await registrarExclusao({
+      supabase,
+      modulo: "Usuário do Sistema",
+      tabelaOrigem: "profiles",
+      registroId: userId,
+      descricao: `${profileSnapshot?.full_name || profileSnapshot?.email || userId} (${profileSnapshot?.role || ''})`,
+      dados: profileSnapshot,
+    });
 
     revalidatePath("/admin/usuarios");
     return { success: true };

@@ -20,6 +20,7 @@ import {
   BarChart2,
   Droplets,
   Building2,
+  History,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -60,6 +61,7 @@ const routes = [
   { name: "Captação de Água",         path: "/captacao",                icon: ModernWaterIcon },
   { name: "Documentos da Frota",      path: "/documentos",              icon: Clipboard },
   { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: User },
+  { name: "Histórico de Exclusões",   path: "/historico-exclusoes",     icon: History },
 ];
 
 

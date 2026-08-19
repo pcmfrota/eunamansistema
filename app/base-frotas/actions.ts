@@ -3,6 +3,7 @@
 import { EquipamentoService } from '@/src/services/EquipamentoService';
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { registrarExclusao } from '@/lib/audit-log';
 
 export async function buscarEquipamentos() {
   return await EquipamentoService.getAll();
@@ -327,11 +328,34 @@ export async function criarColaborador(dados: {
 export async function excluirColaborador(id: string) {
   try {
     const supabase = createClient();
+
+    let row: any = null;
+    try {
+      const { data } = await supabase
+        .from('colaboradores')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      row = data;
+    } catch (err) {
+      console.warn('[excluirColaborador] Falha ao buscar snapshot antes da exclusão:', err);
+    }
+
     const { error } = await supabase
       .from('colaboradores')
       .delete()
       .eq('id', id);
     if (error) throw error;
+
+    await registrarExclusao({
+      supabase,
+      modulo: 'Colaborador',
+      tabelaOrigem: 'colaboradores',
+      registroId: id,
+      descricao: row ? `${row.nome} — ${row.cargo || ''} (Matrícula ${row.matricula || 'N/A'})` : null,
+      dados: row,
+    });
+
     revalidatePath('/base-frotas');
     revalidatePath('/backlog');
     return { success: true };

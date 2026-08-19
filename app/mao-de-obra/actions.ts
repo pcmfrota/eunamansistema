@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { registrarExclusao } from '@/lib/audit-log';
 
 export async function getFichasMaoObra(limit: number = 2000) {
   try {
@@ -92,12 +93,34 @@ export async function salvarFichaMaoObra(ficha: any) {
 export async function excluirFichaMaoObra(id: string) {
   try {
     const supabase = createClient();
+
+    let fichaSnapshot: any = null;
+    try {
+      const { data } = await supabase
+        .from('fichas_mao_obra')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      fichaSnapshot = data;
+    } catch (snapshotError) {
+      console.warn(`Falha ao capturar snapshot da ficha de mão de obra ${id} antes da exclusão:`, snapshotError);
+    }
+
     const { error } = await supabase
       .from('fichas_mao_obra')
       .delete()
       .eq('id', id);
 
     if (error) throw new Error(error.message);
+
+    await registrarExclusao({
+      supabase,
+      modulo: 'Ficha Mão de Obra',
+      tabelaOrigem: 'fichas_mao_obra',
+      registroId: id,
+      descricao: fichaSnapshot ? `Ficha Nº ${fichaSnapshot.numero_ficha} — ${fichaSnapshot.mecanico_nome} (${fichaSnapshot.placa})` : null,
+      dados: fichaSnapshot,
+    });
 
     revalidatePath('/mao-de-obra');
     return { success: true };

@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server"
 import { revalidatePath } from "next/cache"
 import { calcISOWeek as calcISOWeekUtil, mondayOfISOWeek, sundayOfISOWeek } from "./week-utils"
+import { registrarExclusao } from "@/lib/audit-log"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type ProgSemanal = {
@@ -152,7 +153,30 @@ export async function atualizarStatusProgSemanal(
 // ─── DELETE ──────────────────────────────────────────────────────────────────
 export async function excluirProgSemanal(id: string) {
   const supabase = createClient()
+
+  let progSnapshot: any = null
+  try {
+    const { data } = await supabase
+      .from("prev_prog_semanal")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle()
+    progSnapshot = data
+  } catch (snapshotError) {
+    console.warn(`Falha ao capturar snapshot da programação ${id} antes da exclusão:`, snapshotError)
+  }
+
   const { error } = await supabase.from("prev_prog_semanal").delete().eq("id", id)
   if (error) return { error: error.message }
+
+  await registrarExclusao({
+    supabase,
+    modulo: "Programação Preventiva",
+    tabelaOrigem: "prev_prog_semanal",
+    registroId: id,
+    descricao: progSnapshot ? `${progSnapshot.placa} — Semana ${progSnapshot.semana_iso}/${progSnapshot.ano} (${progSnapshot.tipo})` : null,
+    dados: progSnapshot,
+  })
+
   revalidatePath("/programacao-preventiva")
 }

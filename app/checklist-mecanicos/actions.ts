@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { OSService } from '@/src/services/OSService'
 import { OSInsert } from '@/src/models/os'
+import { registrarExclusao } from '@/lib/audit-log'
 
 export async function salvarChecklist(formData: FormData) {
   try {
@@ -138,8 +139,31 @@ export async function salvarChecklist(formData: FormData) {
 export async function excluirChecklist(id: string) {
   try {
     const supabase = createClient()
+
+    let checklistSnapshot: any = null
+    try {
+      const { data } = await supabase
+        .from('checklists_mecanicos')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+      checklistSnapshot = data
+    } catch (snapshotError) {
+      console.warn(`Falha ao capturar snapshot do checklist ${id} antes da exclusão:`, snapshotError)
+    }
+
     const { error } = await supabase.from('checklists_mecanicos').delete().eq('id', id)
     if (error) throw new Error(error.message)
+
+    await registrarExclusao({
+      supabase,
+      modulo: 'Checklist Mecânicos',
+      tabelaOrigem: 'checklists_mecanicos',
+      registroId: id,
+      descricao: checklistSnapshot ? `${checklistSnapshot.placa} — ${checklistSnapshot.tipo_caminhao} (${checklistSnapshot.data_checklist})` : null,
+      dados: checklistSnapshot,
+    })
+
     revalidatePath('/checklist-mecanicos')
     return { success: true }
   } catch (error: any) {

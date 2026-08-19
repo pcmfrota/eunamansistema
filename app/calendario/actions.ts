@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { registrarExclusao } from "@/lib/audit-log";
 
 export async function getCalendario() {
   const supabase = createClient();
@@ -110,7 +111,30 @@ export async function limparDuplicatasCalendario() {
 
 export async function deleteCalendario(id: string) {
   const supabase = createClient();
+
+  let row: any = null;
+  try {
+    const { data } = await supabase
+      .from("calendario_suzano")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    row = data;
+  } catch (err) {
+    console.warn('[deleteCalendario] Falha ao buscar snapshot antes da exclusão:', err);
+  }
+
   const { error } = await supabase.from("calendario_suzano").delete().eq("id", id);
   if (error) throw error;
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'Calendário Suzano',
+    tabelaOrigem: 'calendario_suzano',
+    registroId: id,
+    descricao: row ? `Calendário ${row.mes}/${row.ano}` : null,
+    dados: row,
+  });
+
   revalidatePath("/calendario");
 }

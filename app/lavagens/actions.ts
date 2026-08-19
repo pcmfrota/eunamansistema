@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { registrarExclusao } from '@/lib/audit-log'
 
 export type Lavagem = {
   id: string
@@ -125,12 +126,34 @@ export async function saveLavagem(formData: FormData) {
 
 export async function deleteLavagem(id: string) {
   const supabase = createClient()
+
+  let lavagemSnapshot: any = null
+  try {
+    const { data } = await supabase
+      .from('lavagens')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    lavagemSnapshot = data
+  } catch (snapshotError) {
+    console.warn(`Falha ao capturar snapshot da lavagem ${id} antes da exclusão:`, snapshotError)
+  }
+
   const { error } = await supabase.from('lavagens').delete().eq('id', id)
 
   if (error) {
     console.error('Error deleting lavagem:', error)
     return { success: false, error: error.message }
   }
+
+  await registrarExclusao({
+    supabase,
+    modulo: 'Controle de Lavagens',
+    tabelaOrigem: 'lavagens',
+    registroId: id,
+    descricao: lavagemSnapshot ? `Lavagem — Placa ${lavagemSnapshot.placa} (${lavagemSnapshot.data})` : null,
+    dados: lavagemSnapshot,
+  })
 
   revalidatePath('/lavagens')
   return { success: true }
