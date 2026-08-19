@@ -95,10 +95,38 @@ public class EunamanActivity extends AppCompatActivity {
             if (savedInstanceState != null) {
                 webView.restoreState(savedInstanceState);
             } else {
-                // Carregamento inteligente: se houver cache, ele abre instantaneamente mesmo offline
-                webView.loadUrl(getString(R.string.launch_url));
+                // Se o app foi aberto por um link externo (ex: e-mail de redefinição de senha,
+                // que usa App Links para abrir direto no app), carrega essa URL específica.
+                // Caso contrário (abertura normal pelo ícone), carrega a tela inicial padrão.
+                String deepLinkUrl = extractDeepLinkUrl(getIntent());
+                webView.loadUrl(deepLinkUrl != null ? deepLinkUrl : getString(R.string.launch_url));
             }
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+
+        // Como a activity usa launchMode="singleTask", se o app já estiver aberto (em segundo
+        // plano) e o usuário tocar em um link (ex: e-mail de redefinição de senha), o Android
+        // entrega esse link aqui em vez de recriar a activity via onCreate(). Sem este método,
+        // o link era descartado silenciosamente e o app apenas voltava para o primeiro plano
+        // na tela em que já estava.
+        String deepLinkUrl = extractDeepLinkUrl(intent);
+        if (deepLinkUrl != null && webView != null) {
+            webView.loadUrl(deepLinkUrl);
+        }
+    }
+
+    /** Extrai a URL de um Intent de deep link (ACTION_VIEW), ou null se não for um. */
+    private String extractDeepLinkUrl(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
+            return null;
+        }
+        Uri data = intent.getData();
+        return data != null ? data.toString() : null;
     }
 
     @Override
