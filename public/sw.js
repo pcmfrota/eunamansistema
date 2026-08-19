@@ -1,7 +1,19 @@
-const CACHE_NAME = "eunaman-cache-v12";
-const STATIC_ASSETS = [
+const CACHE_NAME = "eunaman-cache-v13";
+const OFFLINE_URL = "/offline.html";
+
+// Páginas/arquivos pré-cacheados na instalação. Cada um é buscado individualmente
+// (ver função precache) em vez de usar cache.addAll(), que é tudo-ou-nada: antes,
+// se UM único recurso desta lista falhasse (ex: um CDN externo fora do ar por um
+// instante), a instalação inteira do Service Worker era rejeitada e ele nunca
+// chegava a ativar — ou seja, NENHUMA página ficava disponível offline, mesmo as
+// que teriam funcionado perfeitamente. Agora a falha de um item não afeta os demais.
+const PRECACHE_URLS = [
   "/",
   "/login",
+  OFFLINE_URL,
+  "/manifest.json",
+  "/logo-eunaman-full.png",
+  "/bg-eunaman.png",
   "/os",
   "/preventivas",
   "/pneus",
@@ -17,22 +29,39 @@ const STATIC_ASSETS = [
   "/base-dados",
   "/documentos",
   "/checklist-mecanicos",
+  "/mao-de-obra",
+  "/lubrificacao",
   "/admin/usuarios",
-  "/manifest.json",
-  "/logo-eunaman-full.png",
-  "/bg-eunaman.png",
-  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap",
-  "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+  "/historico-exclusoes",
 ];
+
+async function precache(cache) {
+  await Promise.all(
+    PRECACHE_URLS.map(async (url) => {
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        // Ignora respostas redirecionadas (ex: página exige login e caiu em /login):
+        // cachear isso na chave original guardaria o conteúdo errado para essa URL.
+        if (response && response.ok && !response.redirected) {
+          await cache.put(url, response);
+        }
+      } catch (err) {
+        // Best-effort: um recurso indisponível na instalação não pode impedir os
+        // demais de serem cacheados, nem impedir a ativação do Service Worker.
+        console.warn("[Service Worker] Falha ao pré-cachear (ignorado):", url, err);
+      }
+    })
+  );
+}
 
 // --- INSTALL EVENT: Cache core assets ---
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(async (cache) => {
       console.log("[Service Worker] Pré-cacheando recursos essenciais...");
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
+      await precache(cache);
+      return self.skipWaiting();
+    })
   );
 });
 
@@ -58,7 +87,7 @@ self.addEventListener("fetch", (event) => {
 
   // 1. Ignorar requisições não-GET, conexões de HMR/WebSocket e chamadas do Supabase / API internas
   if (
-    event.request.method !== "GET" || 
+    event.request.method !== "GET" ||
     url.pathname.startsWith("/api/") ||
     url.host.includes("supabase.co") ||
     event.request.url.includes("_next/image") ||
@@ -75,25 +104,41 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Grava a página no cache se vier com sucesso
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+          // Grava a página no cache se vier com sucesso (e sem redirecionamento,
+          // para não cachear na URL errada o conteúdo de outra página, ex: /login)
+          if (response.ok && !response.redirected) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
           return response;
         })
-        .catch(() => {
-          // Se a rede falhar (offline), busca a página cacheada ou a casca inicial "/"
-          return caches.match(event.request).then((cachedResponse) => {
-            return cachedResponse || caches.match("/");
-          });
+        .catch(async () => {
+          // Se a rede falhar (offline), busca a página cacheada, depois a casca
+          // inicial "/", e só em último caso a página estática de "Você está offline"
+          // — nunca deixando o respondWith sem nenhuma resposta (o que o Android
+          // WebView mostra como uma tela de erro genérica tipo "página não encontrada").
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) return cachedResponse;
+
+          const cachedHome = await caches.match("/");
+          if (cachedHome) return cachedHome;
+
+          const offlinePage = await caches.match(OFFLINE_URL);
+          if (offlinePage) return offlinePage;
+
+          return new Response(
+            "<h1>Você está offline</h1><p>Conecte-se à internet e tente novamente.</p>",
+            { headers: { "Content-Type": "text/html; charset=utf-8" } }
+          );
         })
     );
     return;
   }
 
   // 3. Recursos Estáticos (JS, CSS, Imagens, Fontes) -> CACHE-FIRST com fallback na rede
-  const isStaticAsset = 
+  const isStaticAsset =
     url.pathname.includes("/_next/static/") ||
     url.pathname.endsWith(".js") ||
     url.pathname.endsWith(".css") ||
@@ -110,7 +155,7 @@ self.addEventListener("fetch", (event) => {
         if (cachedResponse) {
           return cachedResponse;
         }
-        
+
         // Se não achar no cache, busca na rede e salva dinamicamente
         return fetch(event.request).then((response) => {
           if (!response || response.status !== 200) {
