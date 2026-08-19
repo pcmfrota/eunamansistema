@@ -169,14 +169,20 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
   }
 
   const handleSave = (id: string) => {
-    startTransition(async () => {
-      const dataToSave = {
-        ultimo_horimetro: parseFloat(editVals.ultimo),
-        horimetro_atual: parseFloat(editVals.atual),
-        intervalo_horas: parseFloat(editVals.intervalo),
-        data_atualizacao: editVals.data
-      }
+    const dataToSave = {
+      ultimo_horimetro: parseFloat(editVals.ultimo),
+      horimetro_atual: parseFloat(editVals.atual),
+      intervalo_horas: parseFloat(editVals.intervalo),
+      data_atualizacao: editVals.data
+    }
 
+    const original = data.find(p => p.id === id)
+    if (original && dataToSave.horimetro_atual < original.horimetro_atual) {
+      alert(`O horímetro/km não pode ser menor que o último valor registrado (${original.horimetro_atual}${unidade}).`)
+      return
+    }
+
+    startTransition(async () => {
       if (isOnline) {
         const res = await atualizarPreventiva(id, dataToSave)
         if ('error' in res) {

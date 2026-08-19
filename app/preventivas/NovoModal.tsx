@@ -29,6 +29,7 @@ interface Equipamento {
 
 interface NovoModalProps {
   equipamentos: Equipamento[]
+  preventivas?: { equipamento_id: string; horimetro_atual: number }[]
 }
 
 const INITIAL_FORM = {
@@ -43,7 +44,7 @@ const INITIAL_FORM = {
   observacoes: ''
 }
 
-export default function NovoModal({ equipamentos }: NovoModalProps) {
+export default function NovoModal({ equipamentos, preventivas = [] }: NovoModalProps) {
   const { isOnline } = useOffline()
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -71,8 +72,16 @@ export default function NovoModal({ equipamentos }: NovoModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError(null)
+
+    const registroAtual = preventivas.find(p => p.equipamento_id === form.equipamento_id)
+    const horimetroFinal = parseFloat(form.horimetro_final)
+    if (registroAtual && registroAtual.horimetro_atual != null && horimetroFinal < registroAtual.horimetro_atual) {
+      setError(`O horímetro/km não pode ser menor que o último valor registrado (${registroAtual.horimetro_atual}).`)
+      return
+    }
+
+    setLoading(true)
 
     try {
       const formData = new FormData()

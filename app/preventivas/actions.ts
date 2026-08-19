@@ -46,6 +46,19 @@ export async function atualizarPreventiva(id: string, dados: {
   try {
     const { createClient } = await import('@/utils/supabase/server');
     const supabase = createClient();
+
+    if (dados.horimetro_atual !== undefined) {
+      const { data: atual, error: fetchError } = await supabase
+        .from('preventivas')
+        .select('horimetro_atual')
+        .eq('id', id)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+      if (atual?.horimetro_atual != null && dados.horimetro_atual < atual.horimetro_atual) {
+        throw new Error(`O horímetro/km não pode ser menor que o último valor registrado (${atual.horimetro_atual}).`);
+      }
+    }
+
     const { error } = await supabase
       .from('preventivas')
       .update({ ...dados, data_atualizacao: dados.data_atualizacao || new Date().toISOString().split('T')[0] })
@@ -84,17 +97,13 @@ export async function registrarHorimetro(formData: FormData) {
       throw new Error('Horímetros inicial e final devem ser números válidos');
     }
 
-    // 1. Registrar no histórico de horímetros
-    await HorimetroService.create(data);
-    
-    // 2. Sincronizar com a tabela de preventivas
+    // Busca a preventiva existente ANTES de gravar, para validar contra o último valor registrado
     const { createClient } = await import('@/utils/supabase/server');
     const supabase = createClient();
-    
-    // Tenta atualizar primeiro
+
     const { data: existing, error: fetchError } = await supabase
       .from('preventivas')
-      .select('id')
+      .select('id, horimetro_atual')
       .eq('equipamento_id', data.equipamento_id)
       .single();
 
@@ -102,6 +111,14 @@ export async function registrarHorimetro(formData: FormData) {
       console.error('Erro ao buscar preventiva:', fetchError);
     }
 
+    if (existing?.horimetro_atual != null && data.horimetro_final < existing.horimetro_atual) {
+      throw new Error(`O horímetro/km não pode ser menor que o último valor registrado (${existing.horimetro_atual}).`);
+    }
+
+    // 1. Registrar no histórico de horímetros
+    await HorimetroService.create(data);
+
+    // 2. Sincronizar com a tabela de preventivas
     if (existing) {
       // Atualiza registro existente
       const { error: updateError } = await supabase

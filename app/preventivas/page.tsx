@@ -118,7 +118,7 @@ export default function ControleHorimetrosPage() {
         </div>
 
         {!isVisitante ? (
-          <NovaPreventivaModal equipamentos={equipamentos} />
+          <NovaPreventivaModal equipamentos={equipamentos} preventivas={preventivas} />
         ) : (
           <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 rounded-lg text-sm border border-amber-200 dark:border-amber-900/30 font-semibold shadow-sm">
             <ShieldAlert size={16} />
