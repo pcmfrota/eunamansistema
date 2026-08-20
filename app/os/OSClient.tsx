@@ -978,8 +978,8 @@ export default function ControleOSClient({
           {/* Filtros da tabela */}
           <div className="p-4 border-b border-zinc-100 dark:border-zinc-800">
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Ordens de Serviço</h2>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1 group">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[200px] group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-blue-500 transition-colors" size={15} />
                 <input
                   type="text"
