@@ -317,7 +317,13 @@ export default function DocumentosClient({
         const { data: { publicUrl } } = supabase.storage.from('documentos').getPublicUrl(fileName);
         anexo_url = publicUrl;
       }
-      
+
+      // O arquivo já foi enviado direto para o Storage acima — remove o campo bruto do
+      // formData antes de mandar para a server action. Sem isso, um PDF grande (poucos MB)
+      // viaja de novo dentro do payload da Server Action, que tem um limite bem menor que
+      // o do Storage, e a requisição falha silenciosamente por exceder esse limite mesmo
+      // com o upload já concluído.
+      formData.delete('arquivo_anexo');
       formValues.anexo_url = anexo_url;
       formData.set('anexo_url', anexo_url);
       if (isOnline) {
