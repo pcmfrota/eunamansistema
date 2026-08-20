@@ -102,33 +102,4 @@ export class AuthService {
 
     return { success: true };
   }
-
-  static async updatePassword(password: string) {
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // Opcional: Atualizar a senha em texto plano se o usuário logado tiver permissão ou se for para o próprio perfil
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Atualiza na tabela de perfis (Next.js)
-      await supabase
-        .from('profiles')
-        .update({ plain_password: password })
-        .eq('id', user.id);
-        
-      // Atualiza na tabela legado (PCM) se houver o e-mail
-      if (user.email) {
-        await supabase
-          .from('users')
-          .update({ senha: password })
-          .eq('email', user.email);
-      }
-    }
-
-    return { success: true };
-  }
 }

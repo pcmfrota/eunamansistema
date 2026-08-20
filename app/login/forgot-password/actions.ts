@@ -14,20 +14,3 @@ export async function forgotPassword(formData: FormData) {
 
   redirect('/login/forgot-password?success=true')
 }
-
-export async function resetPassword(formData: FormData) {
-  const password = formData.get('password') as string
-  const confirmPassword = formData.get('confirmPassword') as string
-
-  if (password !== confirmPassword) {
-    redirect(`/login/reset-password?error=${encodeURIComponent('As senhas não coincidem')}`)
-  }
-
-  try {
-    await AuthService.updatePassword(password);
-  } catch (error: any) {
-    redirect(`/login/reset-password?error=${encodeURIComponent(error.message || 'Erro ao atualizar senha')}`)
-  }
-
-  redirect('/login?message=Senha atualizada com sucesso')
-}

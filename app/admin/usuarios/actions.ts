@@ -50,8 +50,14 @@ export async function updateUserRole(userId: string, newRole: string) {
     return { error: "Apenas administradores podem alterar cargos." };
   }
 
+  // Usa o client de service role para a gravação: a política de RLS de "admin edita
+  // qualquer perfil" depende de estado que pode ficar dessincronizado, e nesse caso o
+  // update() roda sem erro mas afeta 0 linhas silenciosamente. A autorização acima
+  // (checar se quem está chamando é admin) já garante que só um admin chega até aqui.
+  const adminClient = getAdminClient();
+
   // 1. Atualiza na tabela de perfis (para visualização no app)
-  const { error: profileError } = await supabase
+  const { error: profileError } = await adminClient
     .from("profiles")
     .update({ role: newRole })
     .eq("id", userId);
@@ -60,7 +66,6 @@ export async function updateUserRole(userId: string, newRole: string) {
 
   // 2. Atualiza no Auth App Metadata (para permissões de fato no JWT)
   try {
-    const adminClient = getAdminClient();
     const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
       app_metadata: { role: newRole }
     });
@@ -69,7 +74,7 @@ export async function updateUserRole(userId: string, newRole: string) {
     console.error("Erro ao sincronizar Auth Metadata:", err.message);
     // Não paramos aqui pois o perfil já foi atualizado, mas avisamos o admin
   }
-  
+
   revalidatePath("/admin/usuarios");
   return { success: true };
 }
@@ -170,6 +175,51 @@ export async function deleteUser(userId: string) {
   }
 }
 
+// Define diretamente a senha de qualquer usuário (apenas admins)
+export async function adminSetUserPassword(userId: string, newPassword: string) {
+  const supabase = createServerClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado" };
+
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (adminProfile?.role !== 'admin') {
+    return { error: "Apenas administradores podem alterar a senha de outros usuários." };
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    return { error: "A senha deve ter pelo menos 6 caracteres." };
+  }
+
+  const adminClient = getAdminClient();
+
+  const { data: targetProfile } = await adminClient
+    .from("profiles")
+    .select("email")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
+    password: newPassword,
+    email_confirm: true,
+  });
+  if (authError) return { error: authError.message };
+
+  // Sincroniza campos de conveniência administrativa (mesmo padrão de createNewUser)
+  await adminClient.from("profiles").update({ plain_password: newPassword }).eq("id", userId);
+  if (targetProfile?.email) {
+    await adminClient.from("users").update({ senha: newPassword }).eq("email", targetProfile.email);
+  }
+
+  revalidatePath("/admin/usuarios");
+  return { success: true };
+}
+
 // Atualiza a filial de um usuário (apenas admins)
 export async function updateUserFilial(userId: string, newFilialId: string) {
   const supabase = createServerClient();
@@ -187,13 +237,15 @@ export async function updateUserFilial(userId: string, newFilialId: string) {
     return { error: "Apenas administradores podem alterar filiais." };
   }
 
-  const { error } = await supabase
+  // Mesma observação de updateUserRole: usa service role para garantir a gravação.
+  const adminClient = getAdminClient();
+  const { error } = await adminClient
     .from("profiles")
     .update({ filial_id: newFilialId })
     .eq("id", userId);
 
   if (error) return { error: error.message };
-  
+
   revalidatePath("/admin/usuarios");
   return { success: true };
 }

@@ -20,13 +20,14 @@ import {
   Building2,
   Plus,
 } from "lucide-react";
-import { 
-  updateUserRole, 
-  createNewUser, 
-  deleteUser, 
+import {
+  updateUserRole,
+  createNewUser,
+  deleteUser,
   updateRolePermissions,
   updateUserFilial,
-  createFilial
+  createFilial,
+  adminSetUserPassword
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,36 @@ export default function UsuariosClient({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { isVisitante } = useAuth();
+
+  const [passwordModalUser, setPasswordModalUser] = useState<Profile | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const closePasswordModal = () => {
+    setPasswordModalUser(null);
+    setNewPasswordInput("");
+    setPasswordError(null);
+    setPasswordSuccess(false);
+  };
+
+  const handleSetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!passwordModalUser) return;
+    setPasswordError(null);
+    setPasswordLoading(true);
+
+    const result = await adminSetUserPassword(passwordModalUser.id, newPasswordInput);
+
+    if ('error' in result) {
+      setPasswordError(result.error || "Erro ao alterar senha.");
+      setPasswordLoading(false);
+    } else {
+      setPasswordSuccess(true);
+      setPasswordLoading(false);
+    }
+  };
 
   const filteredProfiles = profiles.filter(p =>
     p.full_name?.toLowerCase().includes(busca.toLowerCase()) ||
@@ -445,14 +476,24 @@ export default function UsuariosClient({
                   </td>
                   <td className="px-6 py-4 text-right">
                     {!isVisitante && (
-                      <button
-                        onClick={() => handleDelete(p.id)}
-                        disabled={isPending}
-                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                        title="Excluir usuário"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setPasswordModalUser(p)}
+                          disabled={isPending}
+                          className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                          title="Alterar senha"
+                        >
+                          <Key size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          disabled={isPending}
+                          className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                          title="Excluir usuário"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -558,6 +599,85 @@ export default function UsuariosClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Alterar Senha */}
+      {passwordModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-md shadow-2xl scale-in-center">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Key className="text-blue-600" /> Alterar Senha
+              </h2>
+              <button
+                onClick={closePasswordModal}
+                className="text-zinc-400 hover:text-zinc-600 p-1 rounded-full hover:bg-zinc-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {passwordSuccess ? (
+              <div className="space-y-4">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 rounded-lg flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm">
+                  <CheckCircle2 size={16} /> Senha de {passwordModalUser.full_name || "usuário"} atualizada com sucesso.
+                </div>
+                <button
+                  onClick={closePasswordModal}
+                  className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSetPassword} className="space-y-4">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Definir uma nova senha para <span className="font-semibold text-zinc-700 dark:text-zinc-300">{passwordModalUser.full_name || "este usuário"}</span>.
+                </p>
+
+                {passwordError && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-lg flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
+                    <AlertCircle size={16} /> {passwordError}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-zinc-500 tracking-wider">Nova Senha</label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      autoFocus
+                      required
+                      type="text"
+                      minLength={6}
+                      placeholder="Mínimo 6 caracteres"
+                      value={newPasswordInput}
+                      onChange={e => setNewPasswordInput(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closePasswordModal}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={passwordLoading || newPasswordInput.length < 6}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                  >
+                    {passwordLoading ? "Salvando..." : "Salvar Senha"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
