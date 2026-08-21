@@ -33,8 +33,32 @@ export default function ImportProgPrevModal({ isOpen, onClose }: { isOpen: boole
         const bstr = evt.target?.result
         const wb = XLSX.read(bstr, { type: "binary" })
         const ws = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws)
-        setRows(data as any[])
+
+        // Lê como matriz bruta (sem assumir que a linha 1 tem os cabeçalhos), pois a
+        // planilha real costuma ter uma linha de título/banner (ex: "PROGRAMAÇÃO DA
+        // PREVENTIVA", em célula mesclada) acima da linha com os nomes das colunas.
+        const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][]
+
+        const headerRowIndex = raw.findIndex(row =>
+          row.some(cell => String(cell || "").toUpperCase().trim() === "PLACA")
+        )
+
+        if (headerRowIndex === -1) {
+          setResult({ error: 'Não foi possível encontrar a coluna "PLACA" na planilha. Verifique se o arquivo está no formato esperado.' })
+          setRows([])
+          return
+        }
+
+        const headers = raw[headerRowIndex].map(h => String(h || "").trim())
+        const data = raw.slice(headerRowIndex + 1).map(rowArr => {
+          const obj: Record<string, any> = {}
+          headers.forEach((h, i) => {
+            if (h) obj[h] = rowArr[i]
+          })
+          return obj
+        })
+
+        setRows(data)
       } catch (err) {
         setResult({ error: "Erro ao ler o arquivo Excel." })
       }
