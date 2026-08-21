@@ -340,6 +340,7 @@ function TabProgSemanal({
   progSemanais: ProgSemanal[]
   isVisitante: boolean
 }) {
+  const { isOnline } = useOffline()
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<ProgSemanal | null>(null)
   const [, startT] = useTransition()
@@ -438,9 +439,15 @@ function TabProgSemanal({
                 : { percentual: 0 }
               
               if (isOnline) {
-                const res = await atualizarStatusProgSemanal(item.id, ns, extras)
-                if (res?.error) {
-                  alert("Erro ao atualizar status:\\n" + res.error)
+                try {
+                  const res = await atualizarStatusProgSemanal(item.id, ns, extras)
+                  if (res?.error) {
+                    alert("Erro ao atualizar status:\\n" + res.error)
+                    return
+                  }
+                  window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+                } catch (err: any) {
+                  alert("Erro ao atualizar status:\\n" + (err?.message || String(err)))
                 }
               } else {
                 const updated = { ...item, status: ns, ...extras, _isPendingSync: true }
@@ -478,7 +485,16 @@ function TabProgSemanal({
               if (confirm("Excluir este item?")) {
                 startT(async () => {
                   if (isOnline) {
-                    await excluirProgSemanal(item.id)
+                    try {
+                      const res = await excluirProgSemanal(item.id)
+                      if (res?.error) {
+                        alert("Erro ao excluir:\\n" + res.error)
+                        return
+                      }
+                      window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+                    } catch (err: any) {
+                      alert("Erro ao excluir:\\n" + (err?.message || String(err)))
+                    }
                   } else {
                     await localDb.delete("prev_prog_semanal", item.id)
                     await localDb.addToQueue("prev_prog_semanal", "delete", { id: item.id })
@@ -1158,9 +1174,15 @@ function ProgSemanalForm({
     }
     startT(async () => {
       if (isOnline) {
-        const res = item ? await atualizarProgSemanal(item.id, payload) : await criarProgSemanal(payload)
-        if (res?.error) {
-          alert("Erro ao salvar no banco de dados:\\n" + res.error)
+        try {
+          const res = item ? await atualizarProgSemanal(item.id, payload) : await criarProgSemanal(payload)
+          if (res?.error) {
+            alert("Erro ao salvar no banco de dados:\\n" + res.error)
+            return
+          }
+          window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+        } catch (err: any) {
+          alert("Erro ao salvar no banco de dados:\\n" + (err?.message || String(err)))
           return
         }
       } else {
