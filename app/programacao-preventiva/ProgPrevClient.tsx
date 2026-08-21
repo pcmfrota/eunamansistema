@@ -6,7 +6,7 @@ import {
   CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart, LabelList
 } from "recharts"
 import { SearchableSelect } from '@/components/SearchableSelect'
-import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff, Download, Upload } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import type { ProgSemanal } from "./actions"
 import {
@@ -16,6 +16,8 @@ import {
 import { useOffline } from "@/components/offline-provider"
 import { localDb } from "@/lib/offline-db"
 import { mondayOfISOWeek, sundayOfISOWeek } from "./week-utils"
+import * as XLSX from "xlsx"
+import ImportProgPrevModal from "./ImportProgPrevModal"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
@@ -342,8 +344,50 @@ function TabProgSemanal({
 }) {
   const { isOnline } = useOffline()
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editItem, setEditItem] = useState<ProgSemanal | null>(null)
   const [, startT] = useTransition()
+
+  const handleExport = () => {
+    const sorted = [...progSemanais].sort((a, b) => {
+      if (a.ano !== b.ano) return a.ano - b.ano
+      return (a.semana_iso ?? 0) - (b.semana_iso ?? 0)
+    })
+
+    const linhas: any[] = []
+    let semanaAtual: number | null | undefined = undefined
+    sorted.forEach(item => {
+      if (item.semana_iso !== semanaAtual) {
+        semanaAtual = item.semana_iso
+        linhas.push({
+          "ANO": item.semana_iso != null
+            ? `Semana ${item.semana_iso}: ${fmtBR(item.data_inicio)} a ${fmtBR(item.data_fim)}`
+            : "Sem semana definida",
+        })
+      }
+      linhas.push({
+        "ANO": item.ano,
+        "MÊS": `${item.semana_numero ?? ""}° ${MESES[(item.mes_numero ?? 1) - 1] ?? ""}`.trim(),
+        "SEM.": item.semana_iso != null ? `S${item.semana_iso}` : "",
+        "PLACA": item.placa ?? "",
+        "MÓDULO": item.modulo ?? "",
+        "TIPO": item.categoria_operacional ?? "",
+        "DT. INICIAL": fmtBR(item.data_inicio_exec),
+        "DT. FINAL": fmtBR(item.data_fim_exec ?? item.termino),
+        "QTD DIA": item.dias ?? "",
+        "HORAS": item.mpbt ?? "",
+        "STATUS": item.status ?? "",
+        "%": item.percentual != null ? `${item.percentual}%` : "",
+        "HORÍMETRO DO DIA": item.horimetro_dia ?? "",
+        "TIPO DE MANUTENÇÃO": item.tipo ?? "",
+      })
+    })
+
+    const ws = XLSX.utils.json_to_sheet(linhas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Programação Preventiva")
+    XLSX.writeFile(wb, `programacao_preventiva_${anoAtivo}.xlsx`)
+  }
 
   const [filtroStatus, setFiltroStatus] = useState("")
   const [filtroPlaca, setFiltroPlaca] = useState("")
@@ -570,17 +614,31 @@ function TabProgSemanal({
             )
           })}
         </div>
-        {!isVisitante ? (
-          <button onClick={() => { setEditItem(null); setShowForm(true) }}
-            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-colors shadow">
-            <Plus size={15} /> Adicionar
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm">
+            <Download size={15} /> Exportar
           </button>
-        ) : (
-          <div className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-[11px] font-bold">
-            <ShieldOff size={14} /> Somente Leitura
-          </div>
-        )}
+          {!isVisitante && (
+            <button onClick={() => setShowImport(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm">
+              <Upload size={15} /> Importar
+            </button>
+          )}
+          {!isVisitante ? (
+            <button onClick={() => { setEditItem(null); setShowForm(true) }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-500 transition-colors shadow">
+              <Plus size={15} /> Adicionar
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-[11px] font-bold">
+              <ShieldOff size={14} /> Somente Leitura
+            </div>
+          )}
+        </div>
       </div>
+
+      <ImportProgPrevModal isOpen={showImport} onClose={() => setShowImport(false)} />
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">

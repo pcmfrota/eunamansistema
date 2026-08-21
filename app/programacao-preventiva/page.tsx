@@ -86,9 +86,11 @@ export default function ProgramacaoPreventiva() {
     loadData();
 
     window.addEventListener("offline-sync-completed", loadData);
+    window.addEventListener("offline-db-updated-prev_prog_semanal", loadData);
     return () => {
       active = false;
       window.removeEventListener("offline-sync-completed", loadData);
+      window.removeEventListener("offline-db-updated-prev_prog_semanal", loadData);
     };
   }, [isOnline]);
 

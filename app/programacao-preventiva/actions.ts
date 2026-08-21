@@ -3,7 +3,7 @@
 import { createClient } from "@/utils/supabase/server"
 import { revalidatePath } from "next/cache"
 import { calcISOWeek as calcISOWeekUtil, mondayOfISOWeek, sundayOfISOWeek } from "./week-utils"
-import { registrarExclusao } from "@/lib/audit-log"
+import { registrarExclusao, registrarExclusoesEmLote } from "@/lib/audit-log"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type ProgSemanal = {
@@ -179,4 +179,186 @@ export async function excluirProgSemanal(id: string) {
   })
 
   revalidatePath("/programacao-preventiva")
+}
+
+// ─── IMPORT (Excel) ─────────────────────────────────────────────────────────
+// Formato esperado (mesmas colunas da planilha externa já usada pela equipe):
+// ANO, MÊS ("4° ABRIL"), SEM. ("S18"), PLACA, MÓDULO, TIPO (C.O: COMBOIO/PIPA/...),
+// DT. INICIAL, DT. FINAL, QTD DIA, HORAS, STATUS, %, HORÍMETRO DO DIA, TIPO DE MANUTENÇÃO
+
+const MESES_PT = [
+  "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO",
+  "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO",
+]
+
+function getVal(row: Record<string, any>, aliases: string[]): any {
+  for (const alias of aliases) {
+    const val = row[alias]
+    if (val !== undefined && val !== null && val !== "") return val
+  }
+  const keys = Object.keys(row)
+  for (const alias of aliases) {
+    const key = keys.find(k => k.toLowerCase().trim() === alias.toLowerCase().trim())
+    if (key && row[key] !== undefined && row[key] !== null && row[key] !== "") return row[key]
+  }
+  return null
+}
+
+function mesNumeroFromLabel(label: string): number | null {
+  const upper = String(label || "").toUpperCase()
+  for (let i = 0; i < MESES_PT.length; i++) {
+    if (upper.includes(MESES_PT[i])) return i + 1
+  }
+  return null
+}
+
+function parseDateFlexible(raw: any): string | null {
+  if (raw == null || raw === "") return null
+  if (typeof raw === "number") {
+    // Data serial do Excel (epoch 30/12/1899)
+    const date = new Date(Math.round((raw - 25569) * 86400 * 1000))
+    return date.toISOString().slice(0, 10)
+  }
+  const str = String(raw).trim()
+  if (!str) return null
+  if (str.includes("/")) {
+    const parts = str.split("/")
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`
+    }
+  }
+  if (str.includes("-")) return str.slice(0, 10)
+  return null
+}
+
+function parsePercentual(raw: any): number | null {
+  if (raw == null || raw === "") return null
+  if (typeof raw === "number") return raw <= 1 ? Math.round(raw * 100) : Math.round(raw)
+  const str = String(raw).replace("%", "").replace(",", ".").trim()
+  const n = parseFloat(str)
+  return isNaN(n) ? null : Math.round(n)
+}
+
+function normalizeStatus(raw: any): string {
+  const s = String(raw || "").toUpperCase().trim()
+  if (s.startsWith("CONCLU")) return "CONCLUÍDO"
+  if (s.startsWith("REPROGRAMA")) return "REPROGRAMADO"
+  if (s.startsWith("EM ANDAMENTO")) return "EM ANDAMENTO"
+  if (s.startsWith("CANCELAD")) return "CANCELADO"
+  if (s.startsWith("PROGRAMAD")) return "PROGRAMADO"
+  return s || "PROGRAMADO"
+}
+
+export async function importarProgSemanal(rows: any[]) {
+  try {
+    const supabase = createClient()
+    const { cookies } = await import("next/headers")
+    const filialId = cookies().get("x-user-filial")?.value || "MATRIZ"
+
+    const mapped = rows.map(row => {
+      const placa = String(getVal(row, ["placa", "Placa", "PLACA"]) || "").toUpperCase().trim()
+      if (!placa) return null // ignora linhas de cabeçalho de semana ("Semana 18: ...") e linhas em branco
+
+      const anoRaw = getVal(row, ["ano", "Ano", "ANO"])
+      const ano = anoRaw ? parseInt(String(anoRaw)) : new Date().getFullYear()
+
+      const mesLabel = String(getVal(row, ["mes", "Mês", "MÊS", "mês"]) || "")
+      const mesNumero = mesNumeroFromLabel(mesLabel) || 1
+      const semanaNumeroMatch = mesLabel.match(/^(\d+)/)
+      const semanaNumero = semanaNumeroMatch ? parseInt(semanaNumeroMatch[1]) : 1
+
+      const semanaRaw = getVal(row, ["sem", "Sem.", "SEM.", "semana", "Semana", "SEMANA"])
+      const semanaIso = semanaRaw ? parseInt(String(semanaRaw).replace(/[^0-9]/g, "")) || null : null
+
+      const dataInicio = semanaIso ? mondayOfISOWeek(semanaIso, ano) : null
+      const dataFim = semanaIso ? sundayOfISOWeek(semanaIso, ano) : null
+
+      const modulo = String(getVal(row, ["modulo", "Módulo", "MÓDULO", "Modulo"]) || "").trim() || null
+      const categoriaOperacional = String(getVal(row, ["tipo", "Tipo", "TIPO", "categoria", "C.O", "co"]) || "").toUpperCase().trim() || null
+
+      const dataInicioExec = parseDateFlexible(getVal(row, ["dt. inicial", "DT. INICIAL", "data inicial", "Data Inicial", "DATA INICIAL"]))
+      const dataFimExec = parseDateFlexible(getVal(row, ["dt. final", "DT. FINAL", "data final", "Data Final", "DATA FINAL"]))
+
+      const diasRaw = getVal(row, ["qtd dia", "QTD DIA", "dias", "Dias"])
+      const dias = diasRaw != null && diasRaw !== "" ? parseInt(String(diasRaw)) || null : null
+
+      const mpbtRaw = getVal(row, ["horas", "Horas", "HORAS", "horas (mpbt)", "mpbt", "MPBT"])
+      const mpbt = mpbtRaw != null ? String(mpbtRaw).trim() : null
+
+      const status = normalizeStatus(getVal(row, ["status", "Status", "STATUS"]))
+      const percentual = parsePercentual(getVal(row, ["%", "percentual", "Percentual"]))
+
+      const horimetroRaw = getVal(row, ["horimetro do dia", "HORIMETRO DO DIA", "horímetro do dia", "HORÍMETRO DO DIA", "horimetro", "horímetro"])
+      const horimetroDia = horimetroRaw != null ? String(horimetroRaw).trim() : null
+
+      const tipo = String(getVal(row, ["tipo de manutencao", "TIPO DE MANUTENÇÃO", "tipo de manutenção", "Tipo de Manutenção"]) || "").toUpperCase().trim() || "PREVENTIVA"
+
+      return {
+        ano,
+        mes_numero: mesNumero,
+        semana_numero: semanaNumero,
+        semana_iso: semanaIso,
+        semana_global: semanaIso,
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        modulo,
+        categoria_operacional: categoriaOperacional,
+        placa,
+        mpbt,
+        tipo,
+        status,
+        data_inicio_exec: dataInicioExec,
+        data_fim_exec: dataFimExec,
+        termino: dataFimExec,
+        dias,
+        percentual,
+        observacoes: null,
+        horimetro_dia: horimetroDia,
+        filial_id: filialId,
+      }
+    }).filter(Boolean) as any[]
+
+    if (mapped.length === 0) {
+      return { error: "Nenhum registro válido encontrado na planilha (verifique se a coluna Placa está preenchida)." }
+    }
+
+    const anos = Array.from(new Set(mapped.map(m => m.ano)))
+
+    // Substitui os lançamentos existentes do(s) ano(s) importado(s) desta filial: a planilha
+    // externa é a fonte da verdade, então o que já existe é removido (com snapshot para o
+    // Histórico de Exclusões) antes de inserir os dados novos.
+    const { data: existentes } = await supabase
+      .from("prev_prog_semanal")
+      .select("*")
+      .eq("filial_id", filialId)
+      .in("ano", anos)
+
+    if (existentes && existentes.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("prev_prog_semanal")
+        .delete()
+        .eq("filial_id", filialId)
+        .in("ano", anos)
+      if (deleteError) return { error: deleteError.message }
+
+      await registrarExclusoesEmLote(
+        supabase,
+        "Programação Preventiva",
+        "prev_prog_semanal",
+        existentes.map((r: any) => ({
+          registroId: r.id,
+          descricao: `${r.placa} — Semana ${r.semana_iso}/${r.ano} (${r.tipo})`,
+          dados: r,
+        }))
+      )
+    }
+
+    const { error: insertError } = await supabase.from("prev_prog_semanal").insert(mapped)
+    if (insertError) return { error: insertError.message }
+
+    revalidatePath("/programacao-preventiva")
+    return { success: true, count: mapped.length, anos }
+  } catch (error: any) {
+    return { error: error.message || "Erro ao importar planilha." }
+  }
 }
