@@ -1155,6 +1155,7 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
               <th className="pb-3 px-2 font-medium">Equipamento</th>
               <th className="pb-3 px-2 font-medium">Nº Falhas</th>
               <th className="pb-3 px-2 font-medium text-right">Tempo Manut.</th>
+              <th className="pb-3 px-2 font-medium text-right">Horas Totais</th>
               <th className="pb-3 px-2 font-medium text-right">MTTR</th>
               <th className="pb-3 px-2 font-medium text-right">MTBF</th>
             </tr>
@@ -1178,6 +1179,9 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
                 <td className="py-3 px-2 text-right text-zinc-500 font-medium whitespace-nowrap">
                   {item.diasManut != null && item.diasManut > 0 ? formatarTempoManut(item.diasManut) : "—"}
                 </td>
+                <td className="py-3 px-2 text-right text-zinc-700 dark:text-zinc-300 font-semibold whitespace-nowrap">
+                  {item.diasManut != null && item.diasManut > 0 ? `${item.diasManut.toFixed(1)} h` : "—"}
+                </td>
                 <td className="py-3 px-2 text-right text-purple-600 dark:text-purple-400 font-semibold whitespace-nowrap">
                   {item.mttr != null && item.mttr > 0 ? `${item.mttr} h` : "—"}
                 </td>
@@ -1188,7 +1192,7 @@ export function RankingFalhas({ dados }: { dados: { placa: string; falhas: numbe
             ))}
             {dados.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-zinc-500">Nenhum dado no período</td>
+                <td colSpan={6} className="py-8 text-center text-zinc-500">Nenhum dado no período</td>
               </tr>
             )}
           </tbody>
