@@ -27,6 +27,8 @@ const CATS = ["COMBOIO","MUNCK","PIPA","MULI","MULT","CARREGAMENTO","MALHA VIARI
 const STATUS_OPT = ["PROGRAMADO","EM ANDAMENTO","CONCLUÍDO","REPROGRAMADO","CANCELADO"]
 const TIPO_OPT   = ["PREVENTIVA","DOCUMENTAÇÃO"]
 const PIE_COLORS = ["#22c55e","#3b82f6","#f59e0b","#ef4444","#8b5cf6"]
+// Colunas da tabela semanal — igual à planilha externa (inclui Tipo de Manutenção e OBS)
+const ROW_GRID_COLUMNS = "4% 6% 5% 6% 6% 7% 7% 7% 4% 6% 9% 4% 6% 8% 1fr 4%"
 
 // ─── ISO Week Utilities (client side) ────────────────────────────────────────
 function isoWeekClient(dateStr: string): number {
@@ -368,18 +370,19 @@ function TabProgSemanal({
       linhas.push({
         "ANO": item.ano,
         "MÊS": `${item.semana_numero ?? ""}° ${MESES[(item.mes_numero ?? 1) - 1] ?? ""}`.trim(),
-        "SEM.": item.semana_iso != null ? `S${item.semana_iso}` : "",
+        "SEMANA": item.semana_iso != null ? `S${item.semana_iso}` : "",
         "PLACA": item.placa ?? "",
         "MÓDULO": item.modulo ?? "",
         "TIPO": item.categoria_operacional ?? "",
-        "DT. INICIAL": fmtBR(item.data_inicio_exec),
-        "DT. FINAL": fmtBR(item.data_fim_exec ?? item.termino),
+        "DATA INICIAL": fmtBR(item.data_inicio_exec),
+        "DATA FINAL": fmtBR(item.data_fim_exec ?? item.termino),
         "QTD DIA": item.dias ?? "",
         "HORAS": item.mpbt ?? "",
         "STATUS": item.status ?? "",
         "%": item.percentual != null ? `${item.percentual}%` : "",
-        "HORÍMETRO DO DIA": item.horimetro_dia ?? "",
+        "HORIMETRO DO DIA": item.horimetro_dia ?? "",
         "TIPO DE MANUTENÇÃO": item.tipo ?? "",
+        "OBS": item.observacoes ?? "",
       })
     })
 
@@ -393,17 +396,15 @@ function TabProgSemanal({
   const [filtroPlaca, setFiltroPlaca] = useState("")
   const [filtroModulo, setFiltroModulo] = useState("")
 
-  const preventivasAll = itensDaSemana.filter(p => p.tipo !== "DOCUMENTAÇÃO")
-  const documentosAll = itensDaSemana.filter(p => p.tipo === "DOCUMENTAÇÃO")
-
-  const applyFilters = (list: ProgSemanal[]) => list.filter(p => 
+  const applyFilters = (list: ProgSemanal[]) => list.filter(p =>
     (filtroStatus ? p.status === filtroStatus : true) &&
     (filtroPlaca ? p.placa === filtroPlaca : true) &&
     (filtroModulo ? String(p.modulo) === filtroModulo : true)
   )
 
-  const preventivas = applyFilters(preventivasAll)
-  const documentos = applyFilters(documentosAll)
+  // Uma única tabela por semana, igual à planilha (sem separar Preventiva/Documentação em
+  // seções distintas) — o tipo de manutenção agora é apenas mais uma coluna da linha.
+  const itensFiltrados = applyFilters(itensDaSemana)
 
   const placasUnicas = Array.from(new Set(progSemanais.map(p => p.placa).filter(Boolean)))
   const modulosUnicos = Array.from(new Set(progSemanais.map(p => String(p.modulo)).filter(Boolean)))
@@ -429,7 +430,7 @@ function TabProgSemanal({
 
     return (
       <div className="flex flex-col md:grid text-[10px] border-b border-gray-100 hover:bg-gray-50/30 transition-colors group items-start md:items-center p-3 md:p-0 gap-2 md:gap-0 relative"
-        style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
+        style={{ gridTemplateColumns: ROW_GRID_COLUMNS }}>
         
         {/* Mobile Header: Placa, Módulo, Categoria */}
         <div className="flex md:hidden items-center justify-between w-full mb-1">
@@ -468,7 +469,7 @@ function TabProgSemanal({
         <div className="hidden md:block px-2 py-2 text-black text-center">{item.dias ?? "—"}</div>
         
         <div className="md:px-2 md:py-2 text-black truncate flex items-center w-full md:w-auto" title={item.mpbt ?? ""}>
-          <span className="md:hidden font-bold text-gray-700 mr-2 w-16">MPBT:</span>
+          <span className="md:hidden font-bold text-gray-700 mr-2 w-16">HORAS:</span>
           <span className="truncate">{item.mpbt ?? "—"}</span>
         </div>
         
@@ -520,7 +521,17 @@ function TabProgSemanal({
           <span className="md:hidden font-bold text-gray-700 mr-2 w-16">HORÍM:</span>
           {item.horimetro_dia ?? "—"}
         </div>
-        
+
+        <div className="md:px-2 md:py-2 text-black font-medium truncate flex items-center w-full md:w-auto" title={item.tipo ?? ""}>
+          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">TIPO MANUT.:</span>
+          <span className="truncate">{item.tipo ?? "—"}</span>
+        </div>
+
+        <div className="md:px-2 md:py-2 text-black truncate flex items-center w-full md:w-auto" title={item.observacoes ?? ""}>
+          <span className="md:hidden font-bold text-gray-400 mr-2 w-16">OBS:</span>
+          <span className="truncate">{item.observacoes ?? "—"}</span>
+        </div>
+
         {!isVisitante && (
           <div className="md:px-2 md:py-2 flex gap-3 md:gap-1 justify-end md:opacity-0 group-hover:opacity-100 transition-opacity absolute md:relative top-3 right-3 md:top-auto md:right-auto">
             <button onClick={() => { setEditItem(item); setShowForm(true) }}
@@ -555,13 +566,10 @@ function TabProgSemanal({
     )
   }
 
-  const TableHeader = ({ tipo }: { tipo: string }) => (
-    <div className={`hidden md:grid text-[9px] font-black uppercase tracking-widest border-b ${
-      tipo === "PREVENTIVA"
-        ? "bg-green-50 border-green-200 text-black"
-        : "bg-white border-gray-300 text-black"
-    }`} style={{ gridTemplateColumns: "5% 6% 6% 7% 7% 8% 8% 8% 5% 1fr 10% 4% 8% 4%" }}>
-      {["ANO","MÊS","SEM.","PLACA","MÓDULO","TIPO","DT. INICIAL","DT. FINAL","QTD DIA", tipo === "PREVENTIVA" ? "HORAS (MPBT)" : "DOCUMENTAÇÃO","STATUS","%","HORÍMETRO",""].map((h, i) => (
+  const TableHeader = () => (
+    <div className="hidden md:grid text-[9px] font-black uppercase tracking-widest border-b bg-green-50 border-green-200 text-black"
+      style={{ gridTemplateColumns: ROW_GRID_COLUMNS }}>
+      {["ANO","MÊS","SEMANA","PLACA","MÓDULO","TIPO","DATA INICIAL","DATA FINAL","QTD DIA","HORAS","STATUS","%","HORIMETRO DO DIA","TIPO DE MANUTENÇÃO","OBS",""].map((h, i) => (
         <div key={i} className="px-2 py-2.5">{h}</div>
       ))}
     </div>
@@ -718,22 +726,13 @@ function TabProgSemanal({
           </div>
         </div>
 
-        {/* Table PREVENTIVAS */}
+        {/* Table — uma única lista, igual à planilha */}
         <div className="p-4 flex flex-col gap-3">
-          <TableHeader tipo="PREVENTIVA" />
-          {preventivas.length > 0
-            ? preventivas.map(item => <StatusRow key={item.id} item={item} />)
-            : <div className="py-6 text-center text-zinc-700 text-xs">Nenhuma preventiva nesta semana. Clique em "+ Adicionar".</div>
+          <TableHeader />
+          {itensFiltrados.length > 0
+            ? itensFiltrados.map(item => <StatusRow key={item.id} item={item} />)
+            : <div className="py-6 text-center text-zinc-700 text-xs">Nenhum lançamento nesta semana. Clique em "+ Adicionar".</div>
           }
-
-          {/* Documentação section */}
-          {documentos.length > 0 && (
-            <>
-              <div className="h-px bg-white mt-1" />
-              <TableHeader tipo="DOCUMENTAÇÃO" />
-              {documentos.map(item => <StatusRow key={item.id} item={item} />)}
-            </>
-          )}
         </div>
       </div>
 
@@ -1280,7 +1279,7 @@ function ProgSemanalForm({
           {/* Tipo + Status */}
           <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
             <div>
-              <label className={lbl}>Tipo</label>
+              <label className={lbl}>Tipo de Manutenção</label>
               <select value={form.tipo} onChange={e => set("tipo", e.target.value)} className={inp}>
                 {TIPO_OPT.map(t => <option key={t}>{t}</option>)}
               </select>
@@ -1335,7 +1334,7 @@ function ProgSemanalForm({
                 placeholder="ex: RESERVA, MOD 5" className={inp} />
             </div>
             <div>
-              <label className={lbl}>Categoria (C.O)</label>
+              <label className={lbl}>Tipo (C.O)</label>
               <select value={form.categoria_operacional}
                 onChange={e => set("categoria_operacional", e.target.value)} className={inp}>
                 <option value="">— selecione —</option>
@@ -1354,7 +1353,7 @@ function ProgSemanalForm({
 
           {/* MPBT */}
           <div>
-            <label className={lbl}>MPBT — {form.tipo === "PREVENTIVA" ? "Preventivas Programadas" : "Documentação"}</label>
+            <label className={lbl}>Horas — {form.tipo === "PREVENTIVA" ? "Preventivas Programadas" : "Documentação"}</label>
             <input type="text" value={form.mpbt}
               onChange={e => set("mpbt", e.target.value)}
               placeholder={form.tipo === "PREVENTIVA"
@@ -1371,12 +1370,12 @@ function ProgSemanalForm({
                 onChange={e => set("percentual", e.target.value)} className={inp} placeholder="0-100" />
             </div>
             <div>
-              <label className={lbl}>Início Execução</label>
+              <label className={lbl}>Data Inicial</label>
               <input type="date" value={form.data_inicio_exec}
                 onChange={e => set("data_inicio_exec", e.target.value)} className={inp} />
             </div>
             <div>
-              <label className={lbl}>Término</label>
+              <label className={lbl}>Data Final</label>
               <input type="date" value={form.data_fim_exec}
                 onChange={e => handleTermino(e.target.value)} className={inp} />
             </div>
@@ -1395,7 +1394,7 @@ function ProgSemanalForm({
                 onChange={e => set("horimetro_dia", e.target.value)} className={inp} placeholder="ex: 13.095" />
             </div>
             <div>
-              <label className={lbl}>Observações (opcional)</label>
+              <label className={lbl}>Obs</label>
               <input type="text" value={form.observacoes}
                 onChange={e => set("observacoes", e.target.value)} className={inp} />
             </div>

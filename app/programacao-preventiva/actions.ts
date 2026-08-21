@@ -293,6 +293,9 @@ export async function importarProgSemanal(rows: any[]) {
 
       const tipo = String(getVal(row, ["tipo de manutencao", "TIPO DE MANUTENÇÃO", "tipo de manutenção", "Tipo de Manutenção"]) || "").toUpperCase().trim() || "PREVENTIVA"
 
+      const obsRaw = getVal(row, ["obs", "OBS", "obs.", "OBS.", "observacoes", "Observações", "OBSERVAÇÕES", "observações"])
+      const observacoes = obsRaw != null ? String(obsRaw).trim() || null : null
+
       return {
         ano,
         mes_numero: mesNumero,
@@ -312,7 +315,7 @@ export async function importarProgSemanal(rows: any[]) {
         termino: dataFimExec,
         dias,
         percentual,
-        observacoes: null,
+        observacoes,
         horimetro_dia: horimetroDia,
         filial_id: filialId,
       }
