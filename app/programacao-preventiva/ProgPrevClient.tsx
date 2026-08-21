@@ -6,7 +6,7 @@ import {
   CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart, LabelList
 } from "recharts"
 import { SearchableSelect } from '@/components/SearchableSelect'
-import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff, Download, Upload } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff, Download, Upload, CalendarClock } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import type { ProgSemanal } from "./actions"
 import {
@@ -424,6 +424,76 @@ function TabProgSemanal({
     return map
   }, [progSemanais, mesAtivo])
 
+  // Move um lançamento para a semana seguinte (mesmo dia da semana, +7 dias), recalculando
+  // ano/mês/semana a partir da nova data e marcando como REPROGRAMADO.
+  const handleMoverSemana = (item: ProgSemanal) => {
+    if (!item.data_inicio) {
+      alert("Não é possível mover: este lançamento não tem uma semana definida.")
+      return
+    }
+    if (!confirm(`Mover ${item.placa ?? "este lançamento"} da semana ${item.semana_iso} para a semana seguinte?`)) return
+
+    startT(async () => {
+      try {
+        const shiftDate = (d: string | null | undefined) => {
+          if (!d) return d ?? null
+          const nd = toDate(d)
+          nd.setDate(nd.getDate() + 7)
+          return nd.toISOString().slice(0, 10)
+        }
+
+        const novoInicioSemana = shiftDate(item.data_inicio) as string
+        const novoAno = toDate(novoInicioSemana).getFullYear()
+        const novoSemanaIso = isoWeekClient(novoInicioSemana)
+        const novoFimSemana = sundayClient(novoSemanaIso, novoAno)
+
+        const periodoCal = calendario.find(c => {
+          const ini = toDate(novoInicioSemana)
+          const s = toDate(c.data_inicio); const e = toDate(c.data_fim + "T23:59:59")
+          return ini >= s && ini <= e
+        })
+        const novoMesNumero = periodoCal?.mes ?? item.mes_numero
+        const novoSemanaNumero = getSemanasDoMes(periodoCal, novoAno)
+          .find(w => w.semana_iso === novoSemanaIso)?.semana_numero ?? item.semana_numero
+
+        const novoFimExec = shiftDate(item.data_fim_exec ?? item.termino)
+
+        const payload: any = {
+          ano: novoAno,
+          mes_numero: novoMesNumero,
+          semana_numero: novoSemanaNumero,
+          semana_iso: novoSemanaIso,
+          semana_global: novoSemanaIso,
+          data_inicio: novoInicioSemana,
+          data_fim: novoFimSemana,
+          data_inicio_exec: shiftDate(item.data_inicio_exec),
+          data_fim_exec: novoFimExec,
+          termino: novoFimExec,
+          status: "REPROGRAMADO",
+          percentual: 0,
+        }
+
+        if (isOnline) {
+          const res = await atualizarProgSemanal(item.id, payload)
+          if (res?.error) {
+            alert("Erro ao mover para a próxima semana:\\n" + res.error)
+            return
+          }
+          window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+        } else {
+          const updated = { ...item, ...payload, _isPendingSync: true }
+          await localDb.put("prev_prog_semanal", updated)
+          await localDb.addToQueue("prev_prog_semanal", "update", { id: item.id, data: payload })
+          window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+          window.dispatchEvent(new CustomEvent("offline-db-updated-prev_prog_semanal"))
+          alert("✅ Movido localmente! Será sincronizado quando a conexão voltar.")
+        }
+      } catch (err: any) {
+        alert("Erro ao mover para a próxima semana:\\n" + (err?.message || String(err)))
+      }
+    })
+  }
+
   const StatusRow = ({ item }: { item: ProgSemanal }) => {
     const pct = item.status === "CONCLUÍDO" ? 100 : item.status === "PROGRAMADO" || item.status === "REPROGRAMADO" ? 0 : (item.percentual ?? 0)
     const pctCl = pct >= 100 ? "text-emerald-400" : pct > 0 ? "text-amber-400" : "text-red-400"
@@ -534,6 +604,8 @@ function TabProgSemanal({
 
         {!isVisitante && (
           <div className="md:px-2 md:py-2 flex gap-3 md:gap-1 justify-end md:opacity-0 group-hover:opacity-100 transition-opacity absolute md:relative top-3 right-3 md:top-auto md:right-auto">
+            <button onClick={() => handleMoverSemana(item)} title="Mover para a semana seguinte"
+              className="p-1.5 md:p-1 bg-white md:bg-transparent shadow-sm md:shadow-none border border-gray-100 md:border-transparent rounded-md text-gray-400 hover:text-blue-600 transition-colors"><CalendarClock size={12} className="md:w-[11px] md:h-[11px]" /></button>
             <button onClick={() => { setEditItem(item); setShowForm(true) }}
               className="p-1.5 md:p-1 bg-white md:bg-transparent shadow-sm md:shadow-none border border-gray-100 md:border-transparent rounded-md text-gray-400 hover:text-gray-800 transition-colors"><Pencil size={12} className="md:w-[11px] md:h-[11px]" /></button>
             <button onClick={() => {
