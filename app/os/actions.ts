@@ -5,6 +5,7 @@ import { OSService } from '@/src/services/OSService'
 import { OSInsert, OSUpdate } from '@/src/models/os'
 import { createClient } from '@/utils/supabase/server'
 import { getUserFilial } from '@/utils/filial'
+import { getCurrentLocalDatetime } from '@/src/utils/dateUtils'
 
 const parseFormData = (formData: FormData): OSInsert => ({
   equipamento_id: formData.get('equipamento_id') as string,
@@ -81,12 +82,37 @@ export async function criarOrdemServico(formData: FormData) {
   }
 }
 
+// Quando uma OS gerada a partir do Backlog (ver `gerarOSDeBacklog`) é fechada,
+// os itens de backlog vinculados a ela (campo `backlog.os = numero_os`) devem
+// encerrar junto — espelha o encerramento que já ocorre quando o vínculo é
+// feito pelo caminho OS→Backlog (`encerrarBacklogs`, em app/backlog/actions.ts).
+async function closeLinkedBacklogs(osRow: any) {
+  if (!osRow?.numero_os) return;
+  try {
+    const supabase = createClient();
+    const { data: linked } = await supabase
+      .from('backlog')
+      .select('id')
+      .eq('os', osRow.numero_os)
+      .neq('status', 'ENCERRADO');
+    if (linked && linked.length > 0) {
+      const { encerrarBacklogs } = await import('@/app/backlog/actions');
+      await encerrarBacklogs(linked.map((l: any) => l.id), osRow.numero_os, osRow.data_fechamento || getCurrentLocalDatetime());
+    }
+  } catch (error) {
+    console.error('[closeLinkedBacklogs] Falha ao encerrar backlogs vinculados:', error);
+  }
+}
+
 export async function atualizarStatusOS(id: string, novoStatus: string) {
   try {
     const result = await OSService.updateOS(id, { status: novoStatus } as OSUpdate)
     revalidatePath('/os')
     revalidatePath('/')
     if (result.success && result.data) {
+      if (result.data.status === 'Fechada') {
+        await closeLinkedBacklogs(result.data)
+      }
       return result.data
     }
     return { success: true }
@@ -121,6 +147,9 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
     revalidatePath('/os')
     revalidatePath('/')
     if (result.success && result.data) {
+      if (result.data.status === 'Fechada') {
+        await closeLinkedBacklogs(result.data)
+      }
       return result.data
     }
     return result

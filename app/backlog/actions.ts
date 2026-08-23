@@ -1,6 +1,10 @@
 'use server'
 
 import { BacklogService } from '@/src/services/BacklogService';
+import { OSService } from '@/src/services/OSService';
+import { OSRepository } from '@/src/repositories/OSRepository';
+import { OSInsert } from '@/src/models/os';
+import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 import { revalidatePath } from 'next/cache';
 import { getUserFilial } from '@/utils/filial';
 import { registrarExclusao } from '@/lib/audit-log';
@@ -63,6 +67,102 @@ export async function encerrarBacklogs(ids: string[], osNumero: string, dataConc
     revalidatePath('/backlog');
     revalidatePath('/os');
     return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// ── Gerar O.S. a partir de itens de Backlog selecionados ────────────────────
+// Fluxo inverso ao de `encerrarBacklogs`: em vez de vincular o backlog a uma OS
+// já existente, aqui a OS nasce a partir dos itens de backlog escolhidos.
+
+export async function gerarOSDeBacklog(ids: string[]) {
+  try {
+    if (!ids || ids.length === 0) return { error: 'Nenhum item selecionado.' };
+
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    const { data: backlogItems, error: fetchError } = await supabase
+      .from('backlog')
+      .select('*')
+      .in('id', ids);
+    if (fetchError) throw new Error(fetchError.message);
+
+    const usaveis = (backlogItems || []).filter(item => {
+      const st = String(item.status || '').toUpperCase().trim();
+      return st !== 'ENCERRADO' && st !== 'CONCLUIDO' && st !== 'CONCLUÍDO' && st !== 'ENCERRADA';
+    });
+    if (usaveis.length === 0) {
+      return { error: 'Os itens selecionados já estão encerrados.' };
+    }
+
+    const placas = new Set(usaveis.map(i => String(i.frota || '').toUpperCase().trim()).filter(Boolean));
+    if (placas.size === 0) {
+      return { error: 'Os itens selecionados não têm placa/frota definida.' };
+    }
+    if (placas.size > 1) {
+      return { error: 'Selecione itens de uma única placa para gerar a O.S.' };
+    }
+    const placa = Array.from(placas)[0];
+
+    const { data: equipamentos, error: eqError } = await OSRepository.getEquipamentos();
+    if (eqError) throw new Error(eqError.message);
+    const equipamento = (equipamentos || []).find((e: any) => String(e.placa || '').toUpperCase().trim() === placa);
+    if (!equipamento) {
+      return { error: `A placa ${placa} não está cadastrada em Equipamentos.` };
+    }
+
+    const descricao = usaveis
+      .map(i => String(i.descricao || '').trim().replace(/\.+$/, ''))
+      .filter(Boolean)
+      .join('. ') + '.';
+
+    // Determina o cargo e a filial do usuário autenticado no servidor
+    const { data: { user } } = await supabase.auth.getUser();
+    let userRole = 'visitante';
+    let filialId = 'MATRIZ';
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, filial_id')
+        .eq('id', user.id)
+        .single();
+      if (profile) {
+        userRole = profile.role;
+        filialId = profile.filial_id || 'MATRIZ';
+      }
+    }
+
+    const payload: OSInsert = {
+      numero_os: OSService.generateOSNumber(),
+      equipamento_id: equipamento.id,
+      placa,
+      modulo: equipamento.modulo || usaveis[0].modulo || null,
+      status: 'Aberta',
+      data_abertura: getCurrentLocalDatetime(),
+      classe: 'CORRETIVA',
+      foi_enviado_reserva: false,
+      descricao,
+      aprovado: userRole !== 'mecanico',
+    } as OSInsert;
+    ;(payload as any).filial_id = filialId;
+
+    const result = await OSService.createOS(payload);
+    if (!result.success || !result.data) {
+      return { error: 'Falha ao criar a Ordem de Serviço.' };
+    }
+
+    const idsUsados = usaveis.map(i => i.id);
+    const { error: linkError } = await supabase
+      .from('backlog')
+      .update({ status: 'PROGRAMADO', os: result.data.numero_os })
+      .in('id', idsUsados);
+    if (linkError) throw new Error(linkError.message);
+
+    revalidatePath('/backlog');
+    revalidatePath('/os');
+    return { success: true, data: result.data };
   } catch (error: any) {
     return { error: error.message };
   }

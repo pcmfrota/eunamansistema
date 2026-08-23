@@ -18,13 +18,14 @@ import {
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
-import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog } from './actions';
+import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog } from './actions';
 import BacklogModal from './BacklogModal';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
 import BacklogDashboard from './BacklogDashboard';
 import BacklogSolicitarExclusaoModal from './BacklogSolicitarExclusaoModal';
 import BacklogSolicitacoesExclusao from './BacklogSolicitacoesExclusao';
+import OSFichaModal, { type OSFichaData } from '@/app/os/OSFicha';
 import { PremiumLoader } from '@/components/premium-loader';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
@@ -51,6 +52,10 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento' | 'Solicitacoes'>('Dashboard');
+
+  // Gerar O.S. a partir de itens de backlog selecionados
+  const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
+  const [gerandoOS, setGerandoOS] = useState(false);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -273,6 +278,43 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     if (!confirm(`Confirmar exclusão de ${selectedIds.size} itens?`)) return;
     await performDelete(idsArray);
     setSelectedIds(new Set());
+  };
+
+  const selectedItems = React.useMemo(
+    () => items.filter(i => selectedIds.has(i.id)),
+    [items, selectedIds]
+  );
+  const selectedPlacas = React.useMemo(
+    () => new Set(selectedItems.map(i => i.frota).filter(Boolean)),
+    [selectedItems]
+  );
+
+  const handleGerarOS = async () => {
+    if (selectedItems.length === 0) return;
+    if (!isOnline) {
+      alert("É necessário estar online para gerar a O.S.");
+      return;
+    }
+    if (selectedPlacas.size !== 1) {
+      alert("Selecione itens de uma única placa para gerar a O.S.");
+      return;
+    }
+    const placa = Array.from(selectedPlacas)[0];
+    if (!confirm(`Gerar uma Ordem de Serviço com os ${selectedItems.length} itens de backlog selecionados da placa ${placa}?`)) return;
+
+    setGerandoOS(true);
+    try {
+      const res: any = await gerarOSDeBacklog(Array.from(selectedIds));
+      if (res?.error) {
+        alert(res.error);
+        return;
+      }
+      setFichaOS(res.data as OSFichaData);
+      setSelectedIds(new Set());
+      refreshData();
+    } finally {
+      setGerandoOS(false);
+    }
   };
 
   const currentPeriod = React.useMemo(() => {
@@ -707,6 +749,19 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                      </div>
                   </div>
                   <div className="flex items-center gap-6">
+                     {selectedPlacas.size === 1 ? (
+                       <button
+                         onClick={handleGerarOS}
+                         disabled={gerandoOS}
+                         className="flex items-center gap-2 text-xs font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                         <FileText size={18} /> {gerandoOS ? 'GERANDO...' : 'GERAR O.S.'}
+                       </button>
+                     ) : (
+                       <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                         Selecione 1 placa p/ gerar O.S.
+                       </span>
+                     )}
                      <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
                        <Plus size={18} className="rotate-45" /> {isAdmin ? 'EXCLUIR SELEÇÃO' : 'SOLICITAR EXCLUSÃO'}
                      </button>
@@ -769,6 +824,10 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         onClose={() => { setDeleteRequestItems(null); setSelectedIds(new Set()); }}
         onSubmitted={() => { setSelectedIds(new Set()); loadSolicitacoes(); }}
       />
+
+      {fichaOS && (
+        <OSFichaModal os={fichaOS} onClose={() => setFichaOS(null)} />
+      )}
     </div>
   );
 }
