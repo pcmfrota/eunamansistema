@@ -13,7 +13,8 @@ import {
   ShieldAlert,
   ArrowRight,
   Database,
-  BarChart3
+  BarChart3,
+  Sparkles
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
@@ -22,6 +23,7 @@ import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOS
 import BacklogModal from './BacklogModal';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
+import BacklogAIImportModal from './BacklogAIImportModal';
 import BacklogDashboard from './BacklogDashboard';
 import BacklogSolicitarExclusaoModal from './BacklogSolicitarExclusaoModal';
 import BacklogSolicitacoesExclusao from './BacklogSolicitacoesExclusao';
@@ -61,6 +63,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isAIImportOpen, setIsAIImportOpen] = useState(false);
 
   // Solicitação de Exclusão (usuários não-admin) + Aba de revisão (admin)
   const [deleteRequestItems, setDeleteRequestItems] = useState<any[] | null>(null);
@@ -488,13 +491,19 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
             </button>
             {!isVisitante ? (
               <>
-                <button 
-                  onClick={() => setIsImportOpen(true)} 
+                <button
+                  onClick={() => setIsImportOpen(true)}
                   className="flex items-center gap-2.5 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm"
                 >
                    <Upload size={18} /> Importar
                 </button>
-                <button 
+                <button
+                  onClick={() => setIsAIImportOpen(true)}
+                  className="flex items-center gap-2.5 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/50 rounded-2xl hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all shadow-sm"
+                >
+                   <Sparkles size={18} /> Lançar via Print
+                </button>
+                <button
                   onClick={() => { setEditingItem(null); setIsModalOpen(true); }} 
                   className="flex items-center gap-2.5 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-500/30 transition-all active:scale-95 group"
                 >
@@ -816,6 +825,11 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       <BacklogImportModal
         isOpen={isImportOpen}
         onClose={() => { setIsImportOpen(false); refreshData(); }}
+      />
+
+      <BacklogAIImportModal
+        isOpen={isAIImportOpen}
+        onClose={() => { setIsAIImportOpen(false); refreshData(); }}
       />
 
       <BacklogSolicitarExclusaoModal

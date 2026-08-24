@@ -1,6 +1,7 @@
 'use server'
 
 import { BacklogService } from '@/src/services/BacklogService';
+import { BacklogRepository } from '@/src/repositories/BacklogRepository';
 import { OSService } from '@/src/services/OSService';
 import { OSRepository } from '@/src/repositories/OSRepository';
 import { OSInsert } from '@/src/models/os';
@@ -8,6 +9,9 @@ import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 import { revalidatePath } from 'next/cache';
 import { getUserFilial } from '@/utils/filial';
 import { registrarExclusao } from '@/lib/audit-log';
+import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { z } from 'zod/v4';
 
 export async function getBacklog(limit: number = 5000) {
   try {
@@ -163,6 +167,154 @@ export async function gerarOSDeBacklog(ids: string[]) {
     revalidatePath('/backlog');
     revalidatePath('/os');
     return { success: true, data: result.data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// ── Lançar Backlog via print/mensagem do WhatsApp (IA) ───────────────────────
+// Fluxo: usuário cola um print + o texto da mensagem -> IA extrai as pendências
+// por placa -> tela de revisão editável no client -> confirma -> insere em massa.
+
+const ItemExtraidoSchema = z.object({
+  placa: z.string().nullable(),
+  placa_detectada_bruta: z.string().nullable(),
+  descricao: z.string(),
+  criticidade: z.enum(['A', 'B']),
+});
+const ExtracaoBacklogSchema = z.object({ itens: z.array(ItemExtraidoSchema) });
+
+export type ItemBacklogExtraido = z.infer<typeof ItemExtraidoSchema>;
+
+export async function extrairPendenciasBacklogIA(imagemBase64: string | null, textoColado: string) {
+  try {
+    if (!imagemBase64 && !(textoColado || '').trim()) {
+      return { error: 'Cole a imagem e/ou o texto da mensagem antes de analisar.' };
+    }
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return { error: 'ANTHROPIC_API_KEY não configurada no servidor. Configure a chave da IA antes de usar este recurso.' };
+    }
+
+    const { data: equipamentos, error: eqError } = await OSRepository.getEquipamentos();
+    if (eqError) throw new Error(eqError.message);
+    const placasValidas = Array.from(new Set(
+      (equipamentos || []).map((e: any) => String(e.placa || '').toUpperCase().trim()).filter(Boolean)
+    ));
+
+    const content: Anthropic.ContentBlockParam[] = [];
+    if (imagemBase64) {
+      const match = /^data:(image\/\w+);base64,(.+)$/.exec(imagemBase64);
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: (match ? match[1] : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: match ? match[2] : imagemBase64,
+        },
+      });
+    }
+    content.push({
+      type: 'text',
+      text: [
+        textoColado?.trim() ? `Mensagem colada:\n${textoColado.trim()}` : null,
+        'Extraia cada pendência de manutenção mencionada (uma por linha/bullet/❌), agrupando por placa.',
+      ].filter(Boolean).join('\n\n'),
+    });
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const response = await anthropic.messages.parse({
+      model: 'claude-opus-5',
+      max_tokens: 4096,
+      system: `Você extrai pendências de manutenção de frota a partir de prints/mensagens de WhatsApp.
+
+Placas cadastradas no sistema (use um valor EXATAMENTE igual a um destes em "placa" apenas quando tiver certeza da correspondência com o que foi lido/mencionado; senão deixe "placa" como null e preencha "placa_detectada_bruta" com o texto bruto que você identificou):
+${placasValidas.join(', ') || '(nenhuma placa cadastrada)'}
+
+Regras:
+- Uma pendência por item/linha/bullet (cada "❌", "·" ou item de lista é uma pendência separada).
+- Não invente pendência que não esteja no texto/imagem enviada.
+- "criticidade": use "A" apenas se houver indicação explícita de urgência/gravidade (interdição, risco, parada total); use "B" nos demais casos.
+- "descricao": texto da pendência, resumido e em maiúsculas, sem repetir o nome da placa.`,
+      messages: [{ role: 'user', content }],
+      output_config: { format: zodOutputFormat(ExtracaoBacklogSchema) },
+    });
+
+    const parsed = response.parsed_output;
+    if (!parsed) {
+      return { error: 'Não foi possível interpretar a resposta da IA. Tente novamente.' };
+    }
+
+    const validas = new Set(placasValidas);
+    const itens = parsed.itens.map(item => {
+      const placaNormalizada = String(item.placa || '').toUpperCase().trim();
+      return { ...item, placa: validas.has(placaNormalizada) ? placaNormalizada : null };
+    });
+
+    return { success: true, itens, placasDisponiveis: placasValidas };
+  } catch (error: any) {
+    if (error instanceof Anthropic.AuthenticationError) {
+      return { error: 'Chave de IA inválida. Verifique a ANTHROPIC_API_KEY configurada.' };
+    }
+    if (error instanceof Anthropic.RateLimitError) {
+      return { error: 'Limite de uso da IA atingido. Tente novamente em alguns minutos.' };
+    }
+    if (error instanceof Anthropic.APIError) {
+      return { error: `Erro na IA: ${error.message}` };
+    }
+    return { error: error.message };
+  }
+}
+
+export async function lancarBacklogsExtraidos(itens: ItemBacklogExtraido[], imagemBase64: string | null) {
+  try {
+    if (!itens || itens.length === 0) return { error: 'Nenhum item para lançar.' };
+
+    const validos = itens.filter(i => i.placa && String(i.placa).trim() && String(i.descricao || '').trim());
+    if (validos.length === 0) return { error: 'Nenhum item válido — confira a placa e a descrição de cada item.' };
+
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    const { data: equipamentos, error: eqError } = await OSRepository.getEquipamentos();
+    if (eqError) throw new Error(eqError.message);
+    const moduloPorPlaca = new Map(
+      (equipamentos || []).map((e: any) => [String(e.placa || '').toUpperCase().trim(), e.modulo || null])
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    let colaborador: string | null = null;
+    let filialId = 'MATRIZ';
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('full_name, filial_id').eq('id', user.id).maybeSingle();
+      if (profile) {
+        colaborador = profile.full_name || null;
+        filialId = profile.filial_id || 'MATRIZ';
+      }
+    }
+
+    const agora = getCurrentLocalDatetime();
+    const rows = validos.map(item => {
+      const placa = String(item.placa).toUpperCase().trim();
+      return {
+        frota: placa,
+        modulo: moduloPorPlaca.get(placa) || null,
+        descricao: String(item.descricao).trim(),
+        criticidade: item.criticidade === 'A' ? 'A' : 'B',
+        status: 'PENDENTE',
+        data_evidencia: agora,
+        origem: 'IA_WHATSAPP',
+        colaborador,
+        evidencia_imagem: imagemBase64 || null,
+        filial_id: filialId,
+      };
+    });
+
+    const { error } = await BacklogRepository.insertMany(rows as any);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/backlog');
+    return { success: true, count: rows.length };
   } catch (error: any) {
     return { error: error.message };
   }

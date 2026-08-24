@@ -28,6 +28,7 @@ const VALID_COLUMNS = new Set([
   'data_programacao',
   'status_programacao',
   'observacao',
+  'evidencia_imagem',
   'created_at'
 ]);
 

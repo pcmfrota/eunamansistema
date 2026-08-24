@@ -21,6 +21,7 @@ export interface BacklogItem {
   nr_ordem?: string | null;
   fornecedor?: string | null;
   status?: string | null;
+  evidencia_imagem?: string | null;
   created_at?: string;
 }
 
