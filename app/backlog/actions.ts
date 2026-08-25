@@ -9,9 +9,8 @@ import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 import { revalidatePath } from 'next/cache';
 import { getUserFilial } from '@/utils/filial';
 import { registrarExclusao } from '@/lib/audit-log';
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { z } from 'zod/v4';
+import { GoogleGenAI, Type, ApiError } from '@google/genai';
+import { z } from 'zod';
 
 export async function getBacklog(limit: number = 5000) {
   try {
@@ -191,8 +190,8 @@ export async function extrairPendenciasBacklogIA(imagemBase64: string | null, te
     if (!imagemBase64 && !(textoColado || '').trim()) {
       return { error: 'Cole a imagem e/ou o texto da mensagem antes de analisar.' };
     }
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return { error: 'ANTHROPIC_API_KEY não configurada no servidor. Configure a chave da IA antes de usar este recurso.' };
+    if (!process.env.GEMINI_API_KEY) {
+      return { error: 'GEMINI_API_KEY não configurada no servidor. Configure a chave da IA (gratuita em aistudio.google.com/apikey) antes de usar este recurso.' };
     }
 
     const { data: equipamentos, error: eqError } = await OSRepository.getEquipamentos();
@@ -201,32 +200,30 @@ export async function extrairPendenciasBacklogIA(imagemBase64: string | null, te
       (equipamentos || []).map((e: any) => String(e.placa || '').toUpperCase().trim()).filter(Boolean)
     ));
 
-    const content: Anthropic.ContentBlockParam[] = [];
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
     if (imagemBase64) {
       const match = /^data:(image\/\w+);base64,(.+)$/.exec(imagemBase64);
-      content.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: (match ? match[1] : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+      parts.push({
+        inlineData: {
+          mimeType: match ? match[1] : 'image/jpeg',
           data: match ? match[2] : imagemBase64,
         },
       });
     }
-    content.push({
-      type: 'text',
+    parts.push({
       text: [
         textoColado?.trim() ? `Mensagem colada:\n${textoColado.trim()}` : null,
         'Extraia cada pendência de manutenção mencionada (uma por linha/bullet/❌), agrupando por placa.',
       ].filter(Boolean).join('\n\n'),
     });
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const response = await anthropic.messages.parse({
-      model: 'claude-opus-5',
-      max_tokens: 4096,
-      system: `Você extrai pendências de manutenção de frota a partir de prints/mensagens de WhatsApp.
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.6-flash',
+      contents: [{ role: 'user', parts }],
+      config: {
+        systemInstruction: `Você extrai pendências de manutenção de frota a partir de prints/mensagens de WhatsApp.
 
 Placas cadastradas no sistema (use um valor EXATAMENTE igual a um destes em "placa" apenas quando tiver certeza da correspondência com o que foi lido/mencionado; senão deixe "placa" como null e preencha "placa_detectada_bruta" com o texto bruto que você identificou):
 ${placasValidas.join(', ') || '(nenhuma placa cadastrada)'}
@@ -236,30 +233,56 @@ Regras:
 - Não invente pendência que não esteja no texto/imagem enviada.
 - "criticidade": use "A" apenas se houver indicação explícita de urgência/gravidade (interdição, risco, parada total); use "B" nos demais casos.
 - "descricao": texto da pendência, resumido e em maiúsculas, sem repetir o nome da placa.`,
-      messages: [{ role: 'user', content }],
-      output_config: { format: zodOutputFormat(ExtracaoBacklogSchema) },
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            itens: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  placa: { type: Type.STRING, nullable: true },
+                  placa_detectada_bruta: { type: Type.STRING, nullable: true },
+                  descricao: { type: Type.STRING },
+                  criticidade: { type: Type.STRING, enum: ['A', 'B'] },
+                },
+                required: ['descricao', 'criticidade'],
+              },
+            },
+          },
+          required: ['itens'],
+        },
+      },
     });
 
-    const parsed = response.parsed_output;
-    if (!parsed) {
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(response.text ?? '');
+    } catch {
       return { error: 'Não foi possível interpretar a resposta da IA. Tente novamente.' };
     }
 
+    const validated = ExtracaoBacklogSchema.safeParse(parsedJson);
+    if (!validated.success) {
+      return { error: 'A IA devolveu um formato inesperado. Tente novamente.' };
+    }
+
     const validas = new Set(placasValidas);
-    const itens = parsed.itens.map(item => {
+    const itens = validated.data.itens.map(item => {
       const placaNormalizada = String(item.placa || '').toUpperCase().trim();
       return { ...item, placa: validas.has(placaNormalizada) ? placaNormalizada : null };
     });
 
     return { success: true, itens, placasDisponiveis: placasValidas };
   } catch (error: any) {
-    if (error instanceof Anthropic.AuthenticationError) {
-      return { error: 'Chave de IA inválida. Verifique a ANTHROPIC_API_KEY configurada.' };
-    }
-    if (error instanceof Anthropic.RateLimitError) {
-      return { error: 'Limite de uso da IA atingido. Tente novamente em alguns minutos.' };
-    }
-    if (error instanceof Anthropic.APIError) {
+    if (error instanceof ApiError) {
+      if (error.status === 400 || error.status === 403) {
+        return { error: 'Chave de IA inválida. Verifique a GEMINI_API_KEY configurada.' };
+      }
+      if (error.status === 429) {
+        return { error: 'Limite de uso gratuito da IA atingido. Tente novamente em alguns minutos.' };
+      }
       return { error: `Erro na IA: ${error.message}` };
     }
     return { error: error.message };
