@@ -51,12 +51,6 @@ async function resetUser() {
     process.exit(1);
   }
 
-  // 2. Sincronizar campo plain_password na tabela profiles para consulta futura
-  await supabase
-    .from('profiles')
-    .update({ plain_password: newPassword })
-    .eq('id', user.id);
-
   console.log('✅ SENHA ATUALIZADA COM SUCESSO!')
   console.log(`Usuário: ${user.email}`)
   console.log(`Nova Senha: ${newPassword}\n`)

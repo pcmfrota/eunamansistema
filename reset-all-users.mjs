@@ -47,17 +47,7 @@ async function resetAll() {
       continue;
     }
 
-    // 2. Sincronizar campo plain_password na tabela profiles
-    const { error: profError } = await supabase
-      .from('profiles')
-      .update({ plain_password: newPassword })
-      .eq('id', user.id);
-
-    if (profError) {
-      console.error(`  - Falha ao atualizar perfil: ${profError.message}`);
-    } else {
-      console.log(`  - ✅ Sucesso`);
-    }
+    console.log(`  - ✅ Sucesso`);
   }
 
   console.log('\n-----------------------------------')

@@ -69,15 +69,6 @@ export default function ResetPasswordClient() {
       const { error: updateError } = await supabase.auth.updateUser({ password })
       if (updateError) throw updateError
 
-      // Sincroniza campos de conveniência administrativa (best-effort, não bloqueia o fluxo)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        supabase.from('profiles').update({ plain_password: password }).eq('id', user.id).then(() => {})
-        if (user.email) {
-          supabase.from('users').update({ senha: password }).eq('email', user.email).then(() => {})
-        }
-      }
-
       setSuccess(true)
       setTimeout(() => router.replace('/login?message=Senha atualizada com sucesso'), 1800)
     } catch (err: any) {
