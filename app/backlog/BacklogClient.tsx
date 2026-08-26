@@ -31,6 +31,7 @@ import OSFichaModal, { type OSFichaData } from '@/app/os/OSFicha';
 import { PremiumLoader } from '@/components/premium-loader';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
+import { mesAnoOperacional } from '@/lib/calendario-suzano';
 
 type Placa = { 
   id: string; 
@@ -381,14 +382,14 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     const years = new Set<string>();
     items.forEach(i => {
       if (i.data_evidencia) {
-        const d = new Date(i.data_evidencia);
-        if (!isNaN(d.getTime())) years.add(String(d.getFullYear()));
+        const { ano } = mesAnoOperacional(i.data_evidencia, calendario);
+        if (ano) years.add(ano);
       } else if (i.ano) {
         years.add(String(i.ano));
       }
     });
     return Array.from(years).sort();
-  }, [items]);
+  }, [items, calendario]);
 
   const filteredItems = React.useMemo(() => {
     const placasMap = new Map(localPlacas.map(p => [p.placa, p]));
@@ -426,15 +427,9 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       let itemMonth = '';
       let itemYear = '';
       if (i.data_evidencia) {
-        const d = new Date(i.data_evidencia);
-        if (!isNaN(d.getTime())) {
-          const months = [
-            'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-            'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
-          ];
-          itemMonth = months[d.getMonth()];
-          itemYear = String(d.getFullYear());
-        }
+        const periodo = mesAnoOperacional(i.data_evidencia, calendario);
+        itemMonth = periodo.mes;
+        itemYear = periodo.ano;
       } else if (i.mes) {
         const months = [
           'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -450,7 +445,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
       return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade && matchData && matchMonth && matchYear;
     });
-  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas]);
+  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas, calendario]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);

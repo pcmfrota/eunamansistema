@@ -10,6 +10,7 @@ import {
   ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw, Clock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { mesAnoOperacional } from '@/lib/calendario-suzano'
 
 interface Props {
   items: any[]
@@ -162,15 +163,13 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       const eq = placasMap.get(item.frota)
       const mappedArea = String(eq?.area || item.campo_base || 'REPOSIÇÃO').toUpperCase()
 
-      // 4. Mapped month and year
+      // 4. Mapped month and year (período operacional Suzano, não mês civil)
       let mappedMonth = 'janeiro'
       let mappedYear = '2026'
       if (item.data_evidencia) {
-        const d = new Date(item.data_evidencia)
-        if (!isNaN(d.getTime())) {
-          mappedMonth = MONTHS_PT[d.getMonth()]
-          mappedYear = String(d.getFullYear())
-        }
+        const periodo = mesAnoOperacional(item.data_evidencia, calendario)
+        if (periodo.mes) mappedMonth = periodo.mes
+        if (periodo.ano) mappedYear = periodo.ano
       } else if (item.mes) {
         // Fallback for string mes/ano
         const mIdx = parseInt(item.mes) - 1
@@ -208,7 +207,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         diasPendente
       }
     })
-  }, [items, placas])
+  }, [items, placas, calendario])
 
   // Extract unique filters options from the fully mapped list
   const filterOptions = useMemo(() => {
