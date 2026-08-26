@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { Search, Edit2, Check, X, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
+import { Search, Edit2, Check, X, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw, History } from 'lucide-react'
 import Script from 'next/script'
 import { excluirPreventiva, atualizarPreventiva } from './actions'
 import DashboardHorimetros from './DashboardHorimetros'
+import HistoricoHorimetrosTab from './HistoricoHorimetrosTab'
 import { useEffect } from 'react'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
@@ -378,7 +379,7 @@ interface Props {
   isVisitante: boolean
 }
 
-type TabKey = 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves'
+type TabKey = 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves' | 'historico'
 
 export default function ControleHorimetrosTabs({ data: initialData, isVisitante }: Props) {
   const { isOnline } = useOffline()
@@ -439,6 +440,7 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
     { key: 'dashboard-leves', label: 'Dashboard Leves', icon: <BarChart2 size={14} /> },
     { key: 'leves', label: `Leves (${leves.length})`, icon: <Gauge size={14} /> },
     { key: 'zocar', label: `Implemento Zocar (${zocar.length})`, icon: <Wrench size={14} /> },
+    { key: 'historico', label: 'Histórico', icon: <History size={14} /> },
   ]
 
   const fileInputAllRef = useRef<HTMLInputElement>(null)
@@ -528,6 +530,10 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
           </div>
           <PrevTable data={zocar} isVisitante={isVisitante} unidade="h" limites={[100, 500, 1000]} label="horimetros_zocar" />
         </div>
+      )}
+
+      {tab === 'historico' && (
+        <HistoricoHorimetrosTab />
       )}
     </div>
   )

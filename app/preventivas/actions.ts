@@ -2,6 +2,7 @@
 
 import { PreventivaService } from '@/src/services/PreventivaService';
 import { revalidatePath } from 'next/cache';
+import { registrarAtualizacaoHorimetro, inferUnidadeHorimetro } from '@/lib/horimetro-log';
 
 export async function criarPreventiva(formData: FormData) {
   try {
@@ -47,13 +48,14 @@ export async function atualizarPreventiva(id: string, dados: {
     const { createClient } = await import('@/utils/supabase/server');
     const supabase = createClient();
 
+    const { data: atual, error: fetchError } = await supabase
+      .from('preventivas')
+      .select('horimetro_atual, equipamento_id, equipamentos(placa, tipo, categoria)')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchError) throw fetchError;
+
     if (dados.horimetro_atual !== undefined) {
-      const { data: atual, error: fetchError } = await supabase
-        .from('preventivas')
-        .select('horimetro_atual')
-        .eq('id', id)
-        .maybeSingle();
-      if (fetchError) throw fetchError;
       if (atual?.horimetro_atual != null && dados.horimetro_atual < atual.horimetro_atual) {
         throw new Error(`O horímetro/km não pode ser menor que o último valor registrado (${atual.horimetro_atual}).`);
       }
@@ -64,6 +66,22 @@ export async function atualizarPreventiva(id: string, dados: {
       .update({ ...dados, data_atualizacao: dados.data_atualizacao || new Date().toISOString().split('T')[0] })
       .eq('id', id);
     if (error) throw error;
+
+    if (dados.horimetro_atual !== undefined && dados.horimetro_atual !== atual?.horimetro_atual) {
+      const eq: any = atual?.equipamentos;
+      await registrarAtualizacaoHorimetro({
+        supabase,
+        equipamentoId: atual?.equipamento_id,
+        placa: eq?.placa,
+        tipo: eq?.tipo,
+        categoria: eq?.categoria,
+        unidade: inferUnidadeHorimetro(eq?.categoria, eq?.tipo),
+        valorAnterior: atual?.horimetro_atual,
+        valorNovo: dados.horimetro_atual,
+        origem: 'EDICAO_MANUAL',
+      });
+    }
+
     revalidatePath('/preventivas');
     return { success: true };
   } catch (error: any) {
@@ -115,6 +133,12 @@ export async function registrarHorimetro(formData: FormData) {
       throw new Error(`O horímetro/km não pode ser menor que o último valor registrado (${existing.horimetro_atual}).`);
     }
 
+    const { data: equipamento } = await supabase
+      .from('equipamentos')
+      .select('placa, tipo, categoria')
+      .eq('id', data.equipamento_id)
+      .maybeSingle();
+
     // 1. Registrar no histórico de horímetros
     await HorimetroService.create(data);
 
@@ -145,10 +169,41 @@ export async function registrarHorimetro(formData: FormData) {
       if (insertError) throw insertError;
     }
 
+    await registrarAtualizacaoHorimetro({
+      supabase,
+      equipamentoId: data.equipamento_id,
+      placa: equipamento?.placa,
+      tipo: equipamento?.tipo,
+      categoria: equipamento?.categoria,
+      unidade: inferUnidadeHorimetro(equipamento?.categoria, equipamento?.tipo),
+      valorAnterior: existing?.horimetro_atual ?? data.horimetro_inicial,
+      valorNovo: data.horimetro_final,
+      origem: 'NOVO_APONTAMENTO',
+      observacoes: data.observacoes,
+    });
+
     revalidatePath('/preventivas');
     return { success: true };
   } catch (error: any) {
     console.error('Erro em registrarHorimetro:', error);
     return { error: error.message || 'Erro interno ao salvar apontamento' };
+  }
+}
+
+export async function getHistoricoHorimetros(limit: number = 1000) {
+  try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from('historico_horimetros')
+      .select('*')
+      .order('atualizado_em', { ascending: false })
+      .limit(limit);
+
+    if (error) throw new Error(error.message);
+    return { data: data || [] };
+  } catch (error: any) {
+    return { error: error.message };
   }
 }
