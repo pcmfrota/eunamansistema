@@ -129,6 +129,23 @@ export async function excluirFichaMaoObra(id: string) {
   }
 }
 
+export async function reabrirJornada(id: string) {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('fichas_mao_obra')
+      .update({ status: 'Em andamento', updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/mao-de-obra');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 export async function duplicarFichaMaoObra(id: string) {
   try {
     const supabase = createClient();
@@ -146,6 +163,7 @@ export async function duplicarFichaMaoObra(id: string) {
       id: undefined,
       numero_ficha: newNum,
       status: 'Em andamento',
+      data_jornada: new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

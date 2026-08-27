@@ -14,6 +14,7 @@ export default function MaoDeObraPage() {
   const [fichas, setFichas] = useState<any[]>([]);
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [colaboradores, setColaboradores] = useState<any[]>([]);
+  const [calendario, setCalendario] = useState<any[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -25,7 +26,8 @@ export default function MaoDeObraPage() {
           fichas_mao_obra: any[];
           equipamentos: any[];
           colaboradores: any[];
-        }>(["fichas_mao_obra", "equipamentos", "colaboradores"]);
+          calendario_suzano: any[];
+        }>(["fichas_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"]);
 
         const isHeavyActive = (e: any) => {
           if (!e || e.deleted_at) return false;
@@ -41,24 +43,27 @@ export default function MaoDeObraPage() {
           .filter(isHeavyActive)
           .sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
         const localCol = stores.colaboradores || [];
+        const localCal = stores.calendario_suzano || [];
 
         if (active) {
           setFichas(localFichas);
           setEquipamentos(localEq);
           setColaboradores(localCol);
+          setCalendario(localCal);
           setLoading(false);
         }
 
         // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["fichas_mao_obra", "equipamentos", "colaboradores"]);
+          const syncSuccess = await syncTables(["fichas_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"]);
           if (syncSuccess) {
             const freshStores = await localDb.getManyStores<{
               fichas_mao_obra: any[];
               equipamentos: any[];
               colaboradores: any[];
-            }>(["fichas_mao_obra", "equipamentos", "colaboradores"]);
+              calendario_suzano: any[];
+            }>(["fichas_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"]);
 
             const freshEq = (freshStores.equipamentos || [])
               .filter(isHeavyActive)
@@ -68,6 +73,7 @@ export default function MaoDeObraPage() {
               setFichas(freshStores.fichas_mao_obra || []);
               setEquipamentos(freshEq);
               setColaboradores(freshStores.colaboradores || []);
+              setCalendario(freshStores.calendario_suzano || []);
             }
           }
         }
@@ -101,6 +107,7 @@ export default function MaoDeObraPage() {
       initialFichas={fichas}
       equipamentos={equipamentos}
       colaboradores={colaboradores}
+      calendario={calendario}
       userRole={profile?.role || "mecanico"}
     />
   );
