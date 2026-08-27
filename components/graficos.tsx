@@ -519,6 +519,40 @@ export function GraficoVeiculos({
     };
   });
 
+  // ─── Ranking das placas que mais puxam a DM pra baixo (só faz sentido na visão Mecânica) ───
+  const piores = tipoAvailability === "DM"
+    ? [...chartData]
+        .filter(d => d.totalOS > 0)
+        .sort((a, b) => a.dispDM - b.dispDM)
+        .slice(0, 6)
+    : [];
+  const piorPlacasKey = piores.map(p => p.placa).join(",");
+
+  const [descricoesPorPlaca, setDescricoesPorPlaca] = useState<Record<string, OrdemServicoResumo[]>>({});
+  const [carregandoDescricoes, setCarregandoDescricoes] = useState(false);
+
+  // Busca as OS de cada uma das piores placas pra mostrar a descrição do que foi feito —
+  // não vem no gráfico principal (que só traz os números agregados) pra não pesar o
+  // carregamento de todos os veículos à toa.
+  useEffect(() => {
+    if (!piorPlacasKey) { setDescricoesPorPlaca({}); return; }
+    let cancelled = false;
+    setCarregandoDescricoes(true);
+    const placas = piorPlacasKey.split(",");
+    import("@/app/actions/os-placa").then(async ({ buscarOSporPlaca }) => {
+      const resultados = await Promise.all(
+        placas.map(placa => buscarOSporPlaca(placa, mes, ano, dataInicio, dataFim))
+      );
+      if (cancelled) return;
+      const map: Record<string, OrdemServicoResumo[]> = {};
+      placas.forEach((placa, i) => { map[placa] = resultados[i]; });
+      setDescricoesPorPlaca(map);
+      setCarregandoDescricoes(false);
+    }).catch(() => {
+      if (!cancelled) { setDescricoesPorPlaca({}); setCarregandoDescricoes(false); }
+    });
+    return () => { cancelled = true; };
+  }, [piorPlacasKey, mes, ano, dataInicio, dataFim]);
 
   if (chartData.length === 0) {
     return (
@@ -758,6 +792,64 @@ export function GraficoVeiculos({
           </div>
         </div>
       </div>
+
+      {/* Ranking das placas que mais puxam a DM pra baixo, com a descrição das OS lançadas */}
+      {tipoAvailability === "DM" && piores.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm mt-6">
+          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+            <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              Ranking — Quem Mais Puxa a DM
+            </h3>
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 italic">
+              Top {piores.length} · menor DM primeiro · toque numa placa para ver a ficha completa
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {piores.map((v, idx) => {
+              const oss = (descricoesPorPlaca[v.placa] || [])
+                .filter(os => (os.descricao || '').trim().length > 0)
+                .sort((a, b) => (b.horas_manutencao || 0) - (a.horas_manutencao || 0))
+                .slice(0, 2);
+              return (
+                <button
+                  type="button"
+                  key={v.placa}
+                  onClick={() => setSelected(v as any)}
+                  className="text-left flex items-start gap-3 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800 hover:border-red-200 dark:hover:border-red-900/40 hover:bg-red-50/40 dark:hover:bg-red-500/5 transition-all"
+                >
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-[11px] font-black flex items-center justify-center">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{v.placa}</span>
+                      <span className="text-xs font-semibold" style={{ color: getColorDisp(v.dispDM) }}>
+                        DM {v.dispDM}%
+                      </span>
+                      <span className="text-[10px] text-zinc-400">· {v.horasManut}h de impacto · {v.totalOS} OS</span>
+                    </div>
+                    {carregandoDescricoes ? (
+                      <p className="text-[11px] text-zinc-400 italic mt-1">Buscando descrição das OS...</p>
+                    ) : oss.length > 0 ? (
+                      <ul className="mt-1 space-y-0.5">
+                        {oss.map(os => (
+                          <li key={os.id} className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
+                            <span className="font-semibold text-zinc-500 dark:text-zinc-500">{os.numero_os}:</span> {os.descricao}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-zinc-400 italic mt-1">Sem descrição registrada nas OS do período.</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </>
   );
 }
