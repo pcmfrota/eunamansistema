@@ -299,6 +299,68 @@ export async function salvarApontamento(apontamento: any) {
   }
 }
 
+// ─── CATÁLOGOS (listas suspensas administráveis) ───
+// Sem fila offline de propósito: quem gerencia esses catálogos (admin) normalmente está
+// online, e são tabelas de referência pequenas — o mesmo padrão simples de "insere e
+// revalida" usado no restante do projeto pra esse tipo de cadastro auxiliar.
+
+export async function criarCatalogoItem(categoria: string, valor: string) {
+  try {
+    const supabase = createClient();
+    const valorNormalizado = (valor || '').trim().toUpperCase();
+    if (!categoria || !valorNormalizado) throw new Error('Informe um valor.');
+
+    const { data: ultimos } = await supabase
+      .from('mao_obra_catalogos')
+      .select('ordem')
+      .eq('categoria', categoria)
+      .order('ordem', { ascending: false })
+      .limit(1);
+    const proximaOrdem = (ultimos?.[0]?.ordem ?? 0) + 1;
+
+    const { data, error } = await supabase
+      .from('mao_obra_catalogos')
+      .upsert(
+        { categoria, valor: valorNormalizado, ordem: proximaOrdem, ativo: true },
+        { onConflict: 'categoria,valor' }
+      )
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/mao-de-obra');
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+export async function criarApontamentoCatalogo(codigo: string, descricao: string, produtivo: boolean) {
+  try {
+    const supabase = createClient();
+    const codigoNormalizado = (codigo || '').trim();
+    const descricaoNormalizada = (descricao || '').trim().toUpperCase();
+    if (!codigoNormalizado || !descricaoNormalizada) throw new Error('Informe código e descrição.');
+
+    const { data, error } = await supabase
+      .from('mao_obra_apontamentos_catalogo')
+      .upsert(
+        { codigo: codigoNormalizado, descricao: descricaoNormalizada, produtivo: Boolean(produtivo), ativo: true },
+        { onConflict: 'codigo' }
+      )
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/mao-de-obra');
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 export async function excluirApontamento(id: string) {
   try {
     const supabase = createClient();

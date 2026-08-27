@@ -208,6 +208,35 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       .sort((a, b) => b.total - a.total);
   }, [fichasFiltradas]);
 
+  // Proporção geral Produtivo x Improdutivo, no período selecionado
+  const dadosProdutivoImprodutivo = useMemo(
+    () => [
+      { name: "Produtivo", value: kpis.horasProdutivas },
+      { name: "Improdutivo", value: kpis.horasOciosas }
+    ],
+    [kpis]
+  );
+
+  // Horas por colaborador (produtivo x ocioso lado a lado) — mesma base do ranking, em gráfico
+  const dadosPorColaborador = useMemo(
+    () => ranking.map(r => ({ nome: r.nome, produtivo: r.produtivo, ocioso: r.ocioso })),
+    [ranking]
+  );
+
+  // Distribuição por Tipo de Manutenção (Corretiva Emergencial/Programada, Preventiva, Preditiva)
+  const dadosPorTipoManutencao = useMemo(() => {
+    const jornadaIds = new Set(fichasFiltradas.map(f => f.id));
+    const map: Record<string, number> = {};
+    (apontamentos || []).forEach(a => {
+      if (!a.jornada_id || !jornadaIds.has(a.jornada_id) || !a.tipo_manutencao) return;
+      const minutos = typeof a.tempo_gasto_minutos === "number" ? a.tempo_gasto_minutos : 0;
+      map[a.tipo_manutencao] = (map[a.tipo_manutencao] || 0) + minutos / 60;
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+  }, [fichasFiltradas, apontamentos]);
+
   const selectCls =
     "px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none";
 
@@ -316,6 +345,82 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   </Pie>
                   <Tooltip />
                 </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Produtivo x Improdutivo (proporção geral) */}
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <BarChart2 size={14} /> Produtivo x Improdutivo
+          </h3>
+          <div className="h-64 w-full">
+            {kpis.horasTotais > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={dadosProdutivoImprodutivo}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    <Cell fill={PRODUTIVO_COLOR} />
+                    <Cell fill={OCIOSO_COLOR} />
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Distribuição por Tipo de Manutenção */}
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <BarChart2 size={14} /> Por Tipo de Manutenção
+          </h3>
+          <div className="h-64 w-full">
+            {dadosPorTipoManutencao.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dadosPorTipoManutencao} layout="vertical" margin={{ left: 24 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} horizontal={false} />
+                  <XAxis type="number" stroke="#888888" fontSize={10} />
+                  <YAxis type="category" dataKey="name" stroke="#888888" fontSize={9} width={140} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Horas" fill={PRODUTIVO_COLOR} radius={[0, 4, 4, 0]} barSize={16} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Nenhuma atividade com tipo de manutenção informado.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Horas por Colaborador (Produtivo x Ocioso) */}
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <Users size={14} /> Horas por Colaborador
+          </h3>
+          <div className="h-64 w-full">
+            {dadosPorColaborador.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dadosPorColaborador}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="nome" stroke="#888888" fontSize={9} interval={0} angle={-25} textAnchor="end" height={60} />
+                  <YAxis stroke="#888888" fontSize={10} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="ocioso" name="Ocioso" stackId="a" fill={OCIOSO_COLOR} radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>

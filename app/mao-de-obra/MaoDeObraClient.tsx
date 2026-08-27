@@ -18,7 +18,8 @@ import {
   RefreshCcw,
   Lock,
   X,
-  Save
+  Save,
+  Layers
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
@@ -29,6 +30,7 @@ import FichaPDFModal, { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFMod
 import { salvarFichaMaoObra, excluirFichaMaoObra, duplicarFichaMaoObra, reabrirJornada, salvarApontamento, excluirApontamento } from "./actions";
 import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
 import MaoDeObraDashboard from "./MaoDeObraDashboard";
+import MaoDeObraCatalogos from "./MaoDeObraCatalogos";
 
 interface MaoDeObraClientProps {
   initialFichas: FichaMaoObraItem[];
@@ -108,17 +110,19 @@ export default function MaoDeObraClient({
   equipamentos = [],
   colaboradores = [],
   calendario = [],
-  catalogos = [],
-  apontamentosCatalogo = [],
+  catalogos: initialCatalogos = [],
+  apontamentosCatalogo: initialApontamentosCatalogo = [],
   userRole = "mecanico"
 }: MaoDeObraClientProps) {
   const { profile } = useAuth();
   const { isOnline } = useOffline();
   const isAdmin = profile?.role === "admin" || userRole === "admin";
 
-  const [activeTab, setActiveTab] = useState<"form" | "historico" | "dashboard">("form");
+  const [activeTab, setActiveTab] = useState<"form" | "historico" | "dashboard" | "catalogos">("form");
   const [fichas, setFichas] = useState<FichaMaoObraItem[]>(initialFichas || []);
   const [apontamentos, setApontamentos] = useState<AtividadeJornada[]>(initialApontamentos || []);
+  const [catalogos, setCatalogos] = useState<any[]>(initialCatalogos || []);
+  const [apontamentosCatalogo, setApontamentosCatalogo] = useState<any[]>(initialApontamentosCatalogo || []);
   const [selectedFichaForPDF, setSelectedFichaForPDF] = useState<FichaMaoObraItem | null>(null);
 
   // Mantém o estado sincronizado com o que a página carrega do IndexedDB/Supabase —
@@ -127,6 +131,8 @@ export default function MaoDeObraClient({
   // localmente, ou puxando dados novos do servidor), essa tela precisa refletir.
   useEffect(() => { setFichas(initialFichas || []); }, [initialFichas]);
   useEffect(() => { setApontamentos(initialApontamentos || []); }, [initialApontamentos]);
+  useEffect(() => { setCatalogos(initialCatalogos || []); }, [initialCatalogos]);
+  useEffect(() => { setApontamentosCatalogo(initialApontamentosCatalogo || []); }, [initialApontamentosCatalogo]);
 
   // Estados do Formulário (Jornada do Dia)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -750,6 +756,20 @@ export default function MaoDeObraClient({
             <BarChart2 size={15} />
             <span>Dashboard</span>
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab("catalogos")}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all whitespace-nowrap",
+                activeTab === "catalogos"
+                  ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              )}
+            >
+              <Layers size={15} />
+              <span>Catálogos</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1326,6 +1346,16 @@ export default function MaoDeObraClient({
       {/* ─── ABA 3: DASHBOARD DE PRODUTIVIDADE ─── */}
       {activeTab === "dashboard" && (
         <MaoDeObraDashboard fichas={fichas} apontamentos={apontamentos} colaboradores={colaboradores} calendario={calendario} />
+      )}
+
+      {/* ─── ABA 4: CATÁLOGOS (ADMIN) ─── */}
+      {activeTab === "catalogos" && isAdmin && (
+        <MaoDeObraCatalogos
+          catalogos={catalogos}
+          apontamentosCatalogo={apontamentosCatalogo}
+          onCatalogoAdicionado={item => setCatalogos(prev => [...prev.filter(c => c.id !== item.id), item])}
+          onApontamentoAdicionado={item => setApontamentosCatalogo(prev => [...prev.filter(c => c.id !== item.id), item])}
+        />
       )}
 
       {/* MODAL DE EXIBIÇÃO / GERAÇÃO DE RELATÓRIO */}
