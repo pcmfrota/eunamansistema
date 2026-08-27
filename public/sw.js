@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v14";
+const CACHE_NAME = "eunaman-cache-v15";
 const OFFLINE_URL = "/offline.html";
 
 // Páginas/arquivos pré-cacheados na instalação. Cada um é buscado individualmente
@@ -135,6 +135,16 @@ self.addEventListener("fetch", (event) => {
           // WebView mostra como uma tela de erro genérica tipo "página não encontrada").
           const cachedResponse = await caches.match(event.request);
           if (cachedResponse) return cachedResponse;
+
+          // Casamento exato (com querystring) pode não existir mesmo a página estando
+          // cacheada — ex: cartão do portal manda pra "/os?status=andamento" mas só
+          // "/os" (sem parâmetros) foi pré-cacheado. Sem isso, cai direto pro fallback
+          // de "/" (a Home) em vez de abrir a página certa — a tela/aba pedida pelo
+          // clique simplesmente não abre offline. Cada página lê os parâmetros da URL
+          // no próprio cliente (window.location.search) depois de montar, então servir
+          // a versão sem querystring do mesmo caminho é suficiente pra aba certa abrir.
+          const cachedByPath = await caches.match(event.request, { ignoreSearch: true });
+          if (cachedByPath) return cachedByPath;
 
           const cachedHome = await caches.match("/");
           if (cachedHome) return cachedHome;

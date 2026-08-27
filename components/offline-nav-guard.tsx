@@ -21,7 +21,20 @@ export function OfflineNavGuard() {
   useEffect(() => {
     if (isOnline) return;
 
+    // Uma navegação offline (fetch falhando + procura no cache) é bem mais lenta que a
+    // troca instantânea de tela de quando está online — o suficiente pra um clique
+    // impaciente repetido interromper a navegação em andamento e reiniciar do zero, dando
+    // a sensação de "preciso clicar várias vezes". Uma vez disparada, ignora novos cliques
+    // até a página realmente trocar (o navigator descarta este listener na troca de página).
+    let navigating = false;
+
     const handleClick = (event: MouseEvent) => {
+      if (navigating) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+
       // Só intercepta clique simples do botão esquerdo, sem modificadores (deixa
       // ctrl/cmd/shift/middle-click abrirem em nova aba normalmente)
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -52,6 +65,7 @@ export function OfflineNavGuard() {
 
       event.preventDefault();
       event.stopImmediatePropagation();
+      navigating = true;
       window.location.href = url.pathname + url.search + url.hash;
     };
 
