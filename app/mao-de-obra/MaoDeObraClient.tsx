@@ -24,9 +24,10 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+import { SearchableSelect, Option } from "@/components/SearchableSelect";
 import FichaPDFModal, { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 import { salvarFichaMaoObra, excluirFichaMaoObra, duplicarFichaMaoObra, reabrirJornada, salvarApontamento, excluirApontamento } from "./actions";
-import { TIPOS_ATIVIDADE, isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
+import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
 import MaoDeObraDashboard from "./MaoDeObraDashboard";
 
 interface MaoDeObraClientProps {
@@ -35,6 +36,8 @@ interface MaoDeObraClientProps {
   equipamentos: any[];
   colaboradores: any[];
   calendario?: any[];
+  catalogos?: any[];
+  apontamentosCatalogo?: any[];
   userRole?: string;
 }
 
@@ -105,6 +108,8 @@ export default function MaoDeObraClient({
   equipamentos = [],
   colaboradores = [],
   calendario = [],
+  catalogos = [],
+  apontamentosCatalogo = [],
   userRole = "mecanico"
 }: MaoDeObraClientProps) {
   const { profile } = useAuth();
@@ -172,6 +177,43 @@ export default function MaoDeObraClient({
       .sort((a: any, b: any) => (a.placa || "").localeCompare(b.placa || ""));
   }, [equipamentos]);
 
+  const placaOptions: Option[] = useMemo(
+    () => equipamentosPesadosAtivos.map((eq: any) => ({ value: eq.placa, label: eq.placa })),
+    [equipamentosPesadosAtivos]
+  );
+
+  const colaboradorOptions: Option[] = useMemo(() => {
+    const mecanicos = (colaboradores || []).filter((c: any) => !c.tipo || c.tipo.toUpperCase() === "MECÂNICO");
+    const base = mecanicos.length > 0 ? mecanicos : (colaboradores || []);
+    return base
+      .map((c: any) => ({ value: c.nome, label: c.nome }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [colaboradores]);
+
+  const catalogoPorCategoria = (categoriaBusca: string): Option[] =>
+    (catalogos || [])
+      .filter((c: any) => c.categoria === categoriaBusca)
+      .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0))
+      .map((c: any) => ({ value: c.valor, label: c.valor }));
+
+  const supervisorOptions = useMemo(() => catalogoPorCategoria("supervisor"), [catalogos]);
+  const equipeOptions = useMemo(() => catalogoPorCategoria("equipe_turno"), [catalogos]);
+  const moduloOptions = useMemo(() => catalogoPorCategoria("modulo"), [catalogos]);
+  const frenteTrabalhoOptions = useMemo(() => catalogoPorCategoria("frente_trabalho"), [catalogos]);
+  const tipoManutencaoOptions = useMemo(() => catalogoPorCategoria("tipo_manutencao"), [catalogos]);
+
+  // Catálogo de apontamentos (o que o colaborador está fazendo) — ordenado pelo código,
+  // o que já agrupa naturalmente Improdutivo (1xx) antes de Produtivo (2xx).
+  const apontamentoOptions: Option[] = useMemo(() => {
+    return (apontamentosCatalogo || [])
+      .slice()
+      .sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo)))
+      .map((c: any) => ({
+        value: c.codigo,
+        label: `${c.produtivo ? "🟢 Produtivo" : "🟠 Improdutivo"} · ${c.codigo} · ${c.descricao}`
+      }));
+  }, [apontamentosCatalogo]);
+
   // Seleção automática do nome do colaborador a partir do perfil logado
   useEffect(() => {
     const profNome = (profile as any)?.nome || (profile as any)?.full_name;
@@ -201,7 +243,7 @@ export default function MaoDeObraClient({
 
   const tempoTotalHorasCalculado = useMemo(() => somarMinutos(apontamentosDaJornada), [apontamentosDaJornada]);
   const tempoProdutivoCalculado = useMemo(
-    () => somarMinutos(apontamentosDaJornada.filter(a => isAtividadeProdutiva(a.tipo_atividade))),
+    () => somarMinutos(apontamentosDaJornada.filter(a => a.produtivo ?? isAtividadeProdutiva(a.tipo_atividade))),
     [apontamentosDaJornada]
   );
   const tempoOciosoCalculado = useMemo(
@@ -416,7 +458,10 @@ export default function MaoDeObraClient({
     }
     setDraftAtividade({
       id: gerarId(),
-      tipo_atividade: TIPOS_ATIVIDADE[0].label,
+      tipo_atividade: "",
+      tipo_manutencao: "",
+      apontamento_codigo: "",
+      produtivo: false,
       placa: "",
       descricao: "",
       hora_inicio: "",
@@ -432,7 +477,7 @@ export default function MaoDeObraClient({
   const handleCancelarDraft = () => setDraftAtividade(null);
 
   const updateDraftCampo = (
-    field: "tipo_atividade" | "placa" | "descricao" | "hora_inicio" | "hora_fim",
+    field: "tipo_manutencao" | "placa" | "descricao" | "hora_inicio" | "hora_fim",
     value: string
   ) => {
     setDraftAtividade(prev => {
@@ -449,11 +494,31 @@ export default function MaoDeObraClient({
     });
   };
 
+  // Selecionar o apontamento (o que está sendo feito) já define de uma vez a descrição
+  // e se é produtivo ou improdutivo, direto do catálogo — não depende mais de tentar
+  // adivinhar por texto.
+  const handleSelecionarApontamento = (codigo: string) => {
+    const item = (apontamentosCatalogo || []).find((c: any) => c.codigo === codigo);
+    setDraftAtividade(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        apontamento_codigo: codigo,
+        tipo_atividade: item?.descricao || "",
+        produtivo: item?.produtivo ?? false
+      };
+    });
+  };
+
   // Confirma e grava UMA atividade imediatamente (não espera o "Salvar" geral da jornada) —
   // é isso que torna seguro vários colaboradores apontando ao mesmo tempo em celulares
   // diferentes: cada apontamento é sua própria gravação, nunca sobrescreve a lista inteira.
   const handleRegistrarAtividade = async () => {
     if (!draftAtividade) return;
+    if (!draftAtividade.apontamento_codigo) {
+      alert("Selecione o apontamento (o que está sendo feito).");
+      return;
+    }
     if (!draftAtividade.hora_inicio) {
       alert("Informe pelo menos o horário de início da atividade.");
       return;
@@ -472,12 +537,14 @@ export default function MaoDeObraClient({
         id: draftAtividade.id,
         jornada_id: jornadaId,
         tipo_atividade: draftAtividade.tipo_atividade,
+        tipo_manutencao: draftAtividade.tipo_manutencao || undefined,
+        apontamento_codigo: draftAtividade.apontamento_codigo || undefined,
         placa: draftAtividade.placa || undefined,
         descricao: draftAtividade.descricao || "",
         hora_inicio: draftAtividade.hora_inicio || "",
         hora_fim: draftAtividade.hora_fim || "",
         tempo_gasto: draftAtividade.tempo_gasto || "",
-        produtivo: isAtividadeProdutiva(draftAtividade.tipo_atividade),
+        produtivo: draftAtividade.produtivo ?? isAtividadeProdutiva(draftAtividade.tipo_atividade),
         tempo_gasto_minutos: tempoGastoParaMinutos(draftAtividade.tempo_gasto)
       };
 
@@ -735,13 +802,12 @@ export default function MaoDeObraClient({
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Nome do Colaborador <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  disabled={!canEdit}
+                <SearchableSelect
+                  options={colaboradorOptions}
                   value={mecanicoNome}
-                  onChange={e => setMecanicoNome(e.target.value)}
-                  placeholder="Nome do colaborador"
-                  className={inputCls}
+                  onChange={setMecanicoNome}
+                  disabled={!canEdit}
+                  placeholder="Selecione o colaborador..."
                 />
               </div>
 
@@ -763,13 +829,12 @@ export default function MaoDeObraClient({
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Equipe / Turno
                 </label>
-                <input
-                  type="text"
-                  disabled={!canEdit}
+                <SearchableSelect
+                  options={equipeOptions}
                   value={equipe}
-                  onChange={e => setEquipe(e.target.value)}
-                  placeholder="Ex: Equipe A (Dia)"
-                  className={inputCls}
+                  onChange={setEquipe}
+                  disabled={!canEdit}
+                  placeholder="Selecione o turno..."
                 />
               </div>
 
@@ -777,13 +842,12 @@ export default function MaoDeObraClient({
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Supervisor Responsável
                 </label>
-                <input
-                  type="text"
-                  disabled={!canEdit}
+                <SearchableSelect
+                  options={supervisorOptions}
                   value={supervisor}
-                  onChange={e => setSupervisor(e.target.value)}
-                  placeholder="Nome do supervisor"
-                  className={inputCls}
+                  onChange={setSupervisor}
+                  disabled={!canEdit}
+                  placeholder="Selecione o supervisor..."
                 />
               </div>
 
@@ -791,13 +855,12 @@ export default function MaoDeObraClient({
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Módulo
                 </label>
-                <input
-                  type="text"
-                  disabled={!canEdit}
+                <SearchableSelect
+                  options={moduloOptions}
                   value={modulo}
-                  onChange={e => setModulo(e.target.value)}
-                  placeholder="Ex: Módulo Suzano Mucuri"
-                  className={inputCls}
+                  onChange={setModulo}
+                  disabled={!canEdit}
+                  placeholder="Selecione o módulo..."
                 />
               </div>
 
@@ -805,13 +868,12 @@ export default function MaoDeObraClient({
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Frente de Trabalho
                 </label>
-                <input
-                  type="text"
-                  disabled={!canEdit}
+                <SearchableSelect
+                  options={frenteTrabalhoOptions}
                   value={frenteTrabalho}
-                  onChange={e => setFrenteTrabalho(e.target.value)}
-                  placeholder="Ex: Oficina Central / Campo"
-                  className={inputCls}
+                  onChange={setFrenteTrabalho}
+                  disabled={!canEdit}
+                  placeholder="Selecione a frente..."
                 />
               </div>
 
@@ -890,39 +952,44 @@ export default function MaoDeObraClient({
             {/* Rascunho da atividade sendo apontada agora */}
             {draftAtividade && canEdit && (
               <div className="p-3 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Categoria</span>
-                    <select
-                      value={draftAtividade.tipo_atividade}
-                      onChange={e => updateDraftCampo("tipo_atividade", e.target.value)}
-                      className={inputCls}
-                    >
-                      {TIPOS_ATIVIDADE.map(t => (
-                        <option key={t.label} value={t.label}>{t.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Placa (opcional)</span>
-                    <select
-                      value={draftAtividade.placa || ""}
-                      onChange={e => updateDraftCampo("placa", e.target.value)}
-                      className={inputCls}
-                    >
-                      <option value="">—</option>
-                      {equipamentosPesadosAtivos.map((eq: any, i: number) => (
-                        <option key={i} value={eq.placa}>{eq.placa}</option>
-                      ))}
-                    </select>
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Categoria (Tipo de Manutenção)</span>
+                    <SearchableSelect
+                      options={tipoManutencaoOptions}
+                      value={draftAtividade.tipo_manutencao || ""}
+                      onChange={v => updateDraftCampo("tipo_manutencao", v)}
+                      placeholder="— Não aplicável —"
+                    />
                   </div>
                   <div className="sm:col-span-2">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Descrição</span>
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Apontamento (Produtivo / Improdutivo) <span className="text-red-500">*</span></span>
+                    <SearchableSelect
+                      options={apontamentoOptions}
+                      value={draftAtividade.apontamento_codigo || ""}
+                      onChange={handleSelecionarApontamento}
+                      placeholder="Selecione o que está sendo feito..."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Placa (opcional)</span>
+                    <SearchableSelect
+                      options={placaOptions}
+                      value={draftAtividade.placa || ""}
+                      onChange={v => updateDraftCampo("placa", v)}
+                      placeholder="— Nenhuma —"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Observação (opcional)</span>
                     <input
                       type="text"
                       value={draftAtividade.descricao}
                       onChange={e => updateDraftCampo("descricao", e.target.value)}
-                      placeholder="O que está sendo feito..."
+                      placeholder="Detalhe extra sobre a atividade..."
                       className={inputCls}
                     />
                   </div>
@@ -990,14 +1057,16 @@ export default function MaoDeObraClient({
                     key={atv.id}
                     className={cn(
                       "p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4",
-                      isAtividadeProdutiva(atv.tipo_atividade)
+                      (atv.produtivo ?? isAtividadeProdutiva(atv.tipo_atividade))
                         ? "bg-indigo-50/40 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-900/40"
                         : "bg-orange-50/40 dark:bg-orange-950/10 border-orange-200 dark:border-orange-900/40"
                     )}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {atv.apontamento_codigo && <span className="text-[9px] font-mono font-black text-slate-400">#{atv.apontamento_codigo}</span>}
                         <span className="text-xs font-black text-slate-800 dark:text-slate-100">{atv.tipo_atividade}</span>
+                        {atv.tipo_manutencao && <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase">{atv.tipo_manutencao}</span>}
                         {atv.placa && <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{atv.placa}</span>}
                         <span className="text-[10px] font-bold text-slate-500">{atv.hora_inicio || "—"} → {atv.hora_fim || "—"} ({formatMinutos(atv.tempo_gasto_minutos)})</span>
                       </div>
@@ -1123,10 +1192,13 @@ export default function MaoDeObraClient({
                 onChange={e => setFiltroCategoria(e.target.value)}
                 className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
               >
-                <option value="">-- Todas as Categorias --</option>
-                {TIPOS_ATIVIDADE.map(t => (
-                  <option key={t.label} value={t.label}>{t.label}</option>
-                ))}
+                <option value="">-- Todos os Apontamentos --</option>
+                {(apontamentosCatalogo || [])
+                  .slice()
+                  .sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo)))
+                  .map((t: any) => (
+                    <option key={t.codigo} value={t.descricao}>{t.codigo} · {t.descricao}</option>
+                  ))}
               </select>
               <input
                 type="text"

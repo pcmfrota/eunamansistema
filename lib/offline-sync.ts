@@ -152,6 +152,12 @@ const syncTasks: Record<
   apontamentos_mao_obra: (supabase) =>
     supabase.from("apontamentos_mao_obra").select("*").order("criado_em", { ascending: false }),
 
+  mao_obra_catalogos: (supabase) =>
+    supabase.from("mao_obra_catalogos").select("*").eq("ativo", true).order("ordem"),
+
+  mao_obra_apontamentos_catalogo: (supabase) =>
+    supabase.from("mao_obra_apontamentos_catalogo").select("*").eq("ativo", true).order("codigo"),
+
   fichas_lubrificacao: (supabase) =>
     supabase.from("fichas_lubrificacao").select("*, equipamento:equipamentos(placa, modulo, tipo)").is("deleted_at", null).order("data_registro", { ascending: false }),
 };

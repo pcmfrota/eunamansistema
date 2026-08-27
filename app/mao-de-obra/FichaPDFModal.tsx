@@ -9,6 +9,8 @@ export type AtividadeJornada = {
   id: string;
   jornada_id?: string;
   tipo_atividade: string;
+  tipo_manutencao?: string;
+  apontamento_codigo?: string;
   placa?: string;
   descricao: string;
   hora_inicio?: string;
@@ -311,9 +313,10 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
                 <table className="w-full text-left text-[10px]">
                   <thead className="bg-slate-100 text-slate-600 font-bold uppercase border-b border-slate-200">
                     <tr>
-                      <th className="p-2">Categoria</th>
+                      <th className="p-2">Manutenção</th>
+                      <th className="p-2">Apontamento</th>
                       <th className="p-2">Placa</th>
-                      <th className="p-2">Descrição</th>
+                      <th className="p-2">Observação</th>
                       <th className="p-2 text-center">Início</th>
                       <th className="p-2 text-center">Término</th>
                       <th className="p-2 text-right">Duração</th>
@@ -322,8 +325,11 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {atividadesOrdenadas.map((atv, idx) => (
-                      <tr key={idx} className={isAtividadeProdutiva(atv.tipo_atividade) ? "" : "bg-amber-50/40"}>
-                        <td className="p-2 font-semibold text-slate-800">{atv.tipo_atividade}</td>
+                      <tr key={idx} className={(atv.produtivo ?? isAtividadeProdutiva(atv.tipo_atividade)) ? "" : "bg-amber-50/40"}>
+                        <td className="p-2 text-slate-600">{atv.tipo_manutencao || "—"}</td>
+                        <td className="p-2 font-semibold text-slate-800">
+                          {atv.apontamento_codigo ? `${atv.apontamento_codigo} · ` : ""}{atv.tipo_atividade}
+                        </td>
                         <td className="p-2 font-mono font-bold text-slate-600">{atv.placa || "—"}</td>
                         <td className="p-2 text-slate-700">{atv.descricao || "—"}</td>
                         <td className="p-2 text-center font-medium text-slate-600">{atv.hora_inicio || "—"}</td>

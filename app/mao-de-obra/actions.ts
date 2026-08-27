@@ -265,6 +265,8 @@ export async function salvarApontamento(apontamento: any) {
       id: apontamento.id,
       jornada_id: apontamento.jornada_id,
       tipo_atividade: apontamento.tipo_atividade,
+      tipo_manutencao: apontamento.tipo_manutencao || null,
+      apontamento_codigo: apontamento.apontamento_codigo || null,
       produtivo: Boolean(apontamento.produtivo),
       placa: apontamento.placa || null,
       descricao: apontamento.descricao || null,

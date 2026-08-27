@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 22;
+  private dbVersion = 23;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -72,6 +72,8 @@ export class OfflineDB {
     // Fichas Diárias de Mão de Obra (jornada) e seus apontamentos individuais (histórico/auditoria)
     if (!db.objectStoreNames.contains('fichas_mao_obra')) db.createObjectStore('fichas_mao_obra', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('apontamentos_mao_obra')) db.createObjectStore('apontamentos_mao_obra', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('mao_obra_catalogos')) db.createObjectStore('mao_obra_catalogos', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('mao_obra_apontamentos_catalogo')) db.createObjectStore('mao_obra_apontamentos_catalogo', { keyPath: 'id' });
 
     // Lubrificação
     if (!db.objectStoreNames.contains('fichas_lubrificacao')) db.createObjectStore('fichas_lubrificacao', { keyPath: 'id' });

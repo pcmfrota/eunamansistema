@@ -7,7 +7,15 @@ import { useOffline } from "@/components/offline-provider";
 import { useAuth } from "@/components/auth-context";
 import { PremiumLoader } from "@/components/premium-loader";
 
-const STORES = ["fichas_mao_obra", "apontamentos_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"];
+const STORES = [
+  "fichas_mao_obra",
+  "apontamentos_mao_obra",
+  "equipamentos",
+  "colaboradores",
+  "calendario_suzano",
+  "mao_obra_catalogos",
+  "mao_obra_apontamentos_catalogo",
+];
 
 export default function MaoDeObraPage() {
   const { isOnline } = useOffline();
@@ -18,6 +26,8 @@ export default function MaoDeObraPage() {
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [calendario, setCalendario] = useState<any[]>([]);
+  const [catalogos, setCatalogos] = useState<any[]>([]);
+  const [apontamentosCatalogo, setApontamentosCatalogo] = useState<any[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -31,6 +41,8 @@ export default function MaoDeObraPage() {
           equipamentos: any[];
           colaboradores: any[];
           calendario_suzano: any[];
+          mao_obra_catalogos: any[];
+          mao_obra_apontamentos_catalogo: any[];
         }>(STORES);
 
         const isHeavyActive = (e: any) => {
@@ -49,6 +61,8 @@ export default function MaoDeObraPage() {
           .sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
         const localCol = stores.colaboradores || [];
         const localCal = stores.calendario_suzano || [];
+        const localCatalogos = stores.mao_obra_catalogos || [];
+        const localApontCatalogo = stores.mao_obra_apontamentos_catalogo || [];
 
         if (active) {
           setFichas(localFichas);
@@ -56,6 +70,8 @@ export default function MaoDeObraPage() {
           setEquipamentos(localEq);
           setColaboradores(localCol);
           setCalendario(localCal);
+          setCatalogos(localCatalogos);
+          setApontamentosCatalogo(localApontCatalogo);
           setLoading(false);
         }
 
@@ -70,6 +86,8 @@ export default function MaoDeObraPage() {
               equipamentos: any[];
               colaboradores: any[];
               calendario_suzano: any[];
+              mao_obra_catalogos: any[];
+              mao_obra_apontamentos_catalogo: any[];
             }>(STORES);
 
             const freshEq = (freshStores.equipamentos || [])
@@ -82,6 +100,8 @@ export default function MaoDeObraPage() {
               setEquipamentos(freshEq);
               setColaboradores(freshStores.colaboradores || []);
               setCalendario(freshStores.calendario_suzano || []);
+              setCatalogos(freshStores.mao_obra_catalogos || []);
+              setApontamentosCatalogo(freshStores.mao_obra_apontamentos_catalogo || []);
             }
           }
         }
@@ -119,6 +139,8 @@ export default function MaoDeObraPage() {
       equipamentos={equipamentos}
       colaboradores={colaboradores}
       calendario={calendario}
+      catalogos={catalogos}
+      apontamentosCatalogo={apontamentosCatalogo}
       userRole={profile?.role || "mecanico"}
     />
   );
