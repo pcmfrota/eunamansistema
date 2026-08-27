@@ -6,6 +6,7 @@ import { MainLayout } from "@/components/main-layout";
 import { AuthProvider } from "@/components/auth-context";
 import { OfflineProvider } from "@/components/offline-provider";
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
+import { OfflineNavGuard } from "@/components/offline-nav-guard";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -47,6 +48,7 @@ export default function RootLayout({
                 {children}
               </MainLayout>
               <ServiceWorkerRegistrar />
+              <OfflineNavGuard />
             </OfflineProvider>
           </AuthProvider>
         </ThemeProvider>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v13";
+const CACHE_NAME = "eunaman-cache-v14";
 const OFFLINE_URL = "/offline.html";
 
 // Páginas/arquivos pré-cacheados na instalação. Cada um é buscado individualmente
@@ -97,6 +97,20 @@ self.addEventListener("fetch", (event) => {
     event.request.url.includes("socket.io")
   ) {
     return; // Pass-through para rede pura
+  }
+
+  // 1b. Fetch interno do Next.js App Router (troca de tela client-side, marca com o header
+  // "RSC" ou "Next-Router-State-Tree") — não é uma navegação de página nem um asset estático,
+  // é um payload especial (RSC/Flight) que este Service Worker não sabe cachear nem responder
+  // com um HTML qualquer sem quebrar o parser do Next no cliente. Deixa passar direto: se
+  // estiver offline, o fetch falha "puro" e o Next.js detecta e faz o fallback dele mesmo
+  // pra navegação completa — que aí sim cai na estratégia de página HTML abaixo.
+  if (
+    event.request.headers.get("RSC") === "1" ||
+    event.request.headers.get("Next-Router-State-Tree") ||
+    event.request.headers.get("Next-Router-Prefetch") === "1"
+  ) {
+    return;
   }
 
   // 2. Páginas HTML (Documentos e Navegações) -> NETWORK-FIRST, falling back to Cache
