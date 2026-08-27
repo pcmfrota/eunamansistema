@@ -68,6 +68,27 @@ function tempoGastoParaMinutos(tempoGasto?: string): number {
   return h * 60 + m;
 }
 
+function paraMinutosAbsolutos(hora?: string): number {
+  if (!hora) return NaN;
+  const [h, m] = hora.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return NaN;
+  return h * 60 + m;
+}
+
+// Duas atividades não podem ocupar o mesmo intervalo de horário — o colaborador só pode
+// estar fazendo uma coisa por vez. Trata virada de dia (ex: 23:00 -> 01:00) como o cálculo
+// de duração já faz.
+function intervalosSeSobrepoem(inicio1?: string, fim1?: string, inicio2?: string, fim2?: string): boolean {
+  let s1 = paraMinutosAbsolutos(inicio1);
+  let e1 = paraMinutosAbsolutos(fim1);
+  let s2 = paraMinutosAbsolutos(inicio2);
+  let e2 = paraMinutosAbsolutos(fim2);
+  if ([s1, e1, s2, e2].some(v => isNaN(v))) return false;
+  if (e1 <= s1) e1 += 24 * 60;
+  if (e2 <= s2) e2 += 24 * 60;
+  return s1 < e2 && s2 < e1;
+}
+
 // tempo_gasto_minutos é a coluna real (fonte de verdade); tempo_gasto (string "HH:MM")
 // só existe como conveniência de exibição no rascunho em edição no cliente.
 function somarMinutos(lista: AtividadeJornada[]): number {
@@ -166,6 +187,17 @@ export default function MaoDeObraClient({
       .filter(a => a.jornada_id === editingId)
       .sort((a, b) => (a.hora_inicio || "").localeCompare(b.hora_inicio || ""));
   }, [apontamentos, editingId]);
+
+  // Atividade já registrada que ocupa o mesmo horário do rascunho em edição — bloqueia o
+  // registro enquanto existir, já que o colaborador não pode estar em duas atividades ao
+  // mesmo tempo.
+  const conflitoDraft = useMemo(() => {
+    if (!draftAtividade?.hora_inicio || !draftAtividade?.hora_fim) return null;
+    return apontamentosDaJornada.find(a =>
+      a.id !== draftAtividade.id &&
+      intervalosSeSobrepoem(draftAtividade.hora_inicio, draftAtividade.hora_fim, a.hora_inicio, a.hora_fim)
+    ) || null;
+  }, [draftAtividade, apontamentosDaJornada]);
 
   const tempoTotalHorasCalculado = useMemo(() => somarMinutos(apontamentosDaJornada), [apontamentosDaJornada]);
   const tempoProdutivoCalculado = useMemo(
@@ -424,6 +456,10 @@ export default function MaoDeObraClient({
     if (!draftAtividade) return;
     if (!draftAtividade.hora_inicio) {
       alert("Informe pelo menos o horário de início da atividade.");
+      return;
+    }
+    if (conflitoDraft) {
+      alert(`Esse horário sobrepõe "${conflitoDraft.tipo_atividade}" (${conflitoDraft.hora_inicio} → ${conflitoDraft.hora_fim}). Ajuste o horário antes de registrar.`);
       return;
     }
 
@@ -920,7 +956,7 @@ export default function MaoDeObraClient({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={savingAtividade}
+                      disabled={savingAtividade || !!conflitoDraft}
                       onClick={handleRegistrarAtividade}
                       className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow disabled:opacity-60"
                     >
@@ -935,6 +971,13 @@ export default function MaoDeObraClient({
                     </button>
                   </div>
                 </div>
+
+                {conflitoDraft && (
+                  <div className="p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-lg text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                    <AlertCircle size={13} className="shrink-0" />
+                    Esse horário sobrepõe "{conflitoDraft.tipo_atividade}" ({conflitoDraft.hora_inicio} → {conflitoDraft.hora_fim}). Ajuste o horário.
+                  </div>
+                )}
               </div>
             )}
 
