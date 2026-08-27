@@ -108,13 +108,19 @@ export default function PneusClient({
   const isVisitante = profile?.role === "visitante";
 
   const [tab, setTab] = useState<Tab>("dashboard");
-  const handleSetTab = (t: Tab) => { setTab(t); setModuloFiltro("TODOS"); };
+  const handleSetTab = (t: Tab) => { setTab(t); setModuloFiltro("TODOS"); setCondicaoFiltro("TODOS"); };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAIReportOpen, setIsAIReportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Inspecao | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moduloFiltro, setModuloFiltro] = useState<string>("TODOS");
+  // "TODOS" ou um dos rótulos dos cartões de KPI (BOM/REGULAR/ATENCAO/CRITICO/TROCAR/PENDENTE) —
+  // clicar num cartão filtra a tabela de veículos abaixo por aquele status; clicar de novo limpa.
+  const [condicaoFiltro, setCondicaoFiltro] = useState<string>("TODOS");
+  const handleClickCondicao = (label: string) => {
+    setCondicaoFiltro(prev => (prev === label ? "TODOS" : label));
+  };
   const [selectedSchematic, setSelectedSchematic] = useState<Inspecao | null>(null);
 
   // Pré-carrega SheetJS via CDN para Export e Import
@@ -354,7 +360,15 @@ export default function PneusClient({
   const todosItensFiltrados = React.useMemo(() => {
     const out: { modulo: string; row: DashRow }[] = [];
     Object.entries(gruposFiltrados).forEach(([modulo, items]) => {
-      items.forEach(row => out.push({ modulo, row }));
+      items.forEach(row => {
+        if (condicaoFiltro !== 'TODOS') {
+          const matches = condicaoFiltro === 'PENDENTE'
+            ? row.kind === 'pendente'
+            : row.kind === 'inspecao' && row.ins.condicao === condicaoFiltro;
+          if (!matches) return;
+        }
+        out.push({ modulo, row });
+      });
     });
     out.sort((a, b) => {
       if (a.modulo !== b.modulo) return a.modulo.localeCompare(b.modulo);
@@ -365,7 +379,7 @@ export default function PneusClient({
       return pa.localeCompare(pb);
     });
     return out;
-  }, [gruposFiltrados]);
+  }, [gruposFiltrados, condicaoFiltro]);
 
 
   const exportExcel = () => {
@@ -794,36 +808,56 @@ export default function PneusClient({
               </div>
             </div>
 
-            {/* Global KPI Cards */}
+            {/* Global KPI Cards — clique num cartão pra filtrar a tabela abaixo por aquele status; clique de novo pra limpar */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-              {Object.entries(counts).map(([label, val]) => (
-                <div key={label} className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow group">
-                   <div className="flex items-center justify-between mb-3">
-                      <span className={`p-2 rounded-xl ${
-                        label === 'BOM' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10' :
-                        label === 'REGULAR' || label === 'ATENCAO' ? 'bg-yellow-50 text-yellow-500 dark:bg-yellow-500/10' :
-                        label === 'CRITICO' ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10' :
-                        'bg-red-50 text-red-500 dark:bg-red-500/10'
-                      }`}>
-                         <Circle size={18} fill="currentColor" fillOpacity={0.2} />
-                      </span>
-                      <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">Global</span>
-                   </div>
-                   <div className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{val}</div>
-                   <p className="text-[10px] font-bold text-zinc-500 mt-0.5">{label} · {Math.round((val/total)*100)}%</p>
-                </div>
-              ))}
+              {Object.entries(counts).map(([label, val]) => {
+                const isActive = condicaoFiltro === label;
+                return (
+                  <button
+                    type="button"
+                    key={label}
+                    onClick={() => handleClickCondicao(label)}
+                    className={`text-left bg-white dark:bg-zinc-950 p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group ${
+                      isActive
+                        ? "border-orange-500 ring-2 ring-orange-500/30"
+                        : "border-zinc-200 dark:border-zinc-800"
+                    }`}
+                  >
+                     <div className="flex items-center justify-between mb-3">
+                        <span className={`p-2 rounded-xl ${
+                          label === 'BOM' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10' :
+                          label === 'REGULAR' || label === 'ATENCAO' ? 'bg-yellow-50 text-yellow-500 dark:bg-yellow-500/10' :
+                          label === 'CRITICO' ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10' :
+                          'bg-red-50 text-red-500 dark:bg-red-500/10'
+                        }`}>
+                           <Circle size={18} fill="currentColor" fillOpacity={0.2} />
+                        </span>
+                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">{isActive ? "Filtrando" : "Global"}</span>
+                     </div>
+                     <div className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{val}</div>
+                     <p className="text-[10px] font-bold text-zinc-500 mt-0.5">{label} · {Math.round((val/total)*100)}%</p>
+                  </button>
+                );
+              })}
               {/* Pendente Card */}
-              <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 shadow-sm hover:shadow-md transition-shadow group">
+              <button
+                type="button"
+                onClick={() => handleClickCondicao('PENDENTE')}
+                className={`text-left bg-white dark:bg-zinc-950 p-5 rounded-2xl border-2 border-dashed shadow-sm hover:shadow-md transition-all group ${
+                  condicaoFiltro === 'PENDENTE'
+                    ? "border-orange-500 ring-2 ring-orange-500/30"
+                    : "border-zinc-300 dark:border-zinc-700"
+                }`}
+              >
                  <div className="flex items-center justify-between mb-3">
                     <span className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400">
                        <Circle size={18} className="opacity-40" />
                     </span>
-                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">Global</span>
+                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">{condicaoFiltro === 'PENDENTE' ? "Filtrando" : "Global"}</span>
                  </div>
                  <div className="text-2xl font-black text-zinc-400">{pendentesTotal}</div>
                  <p className="text-[10px] font-bold text-zinc-400 mt-0.5">PENDENTE · sem boletim</p>
-              </div>
+              </button>
             </div>
 
             {/* Unified Monitoring Table — todos os veículos (respeitando o filtro de módulo acima),
@@ -845,8 +879,18 @@ export default function PneusClient({
                           <Circle size={16} className="text-orange-500" fill="currentColor" fillOpacity={0.3} />
                         </div>
                         <div className="text-left">
-                          <h4 className="font-black text-zinc-800 dark:text-zinc-200 text-base uppercase tracking-wider">
-                            🚛 Veículos{moduloFiltro !== 'TODOS' ? ` — Módulo: ${moduloFiltro}` : ''}
+                          <h4 className="font-black text-zinc-800 dark:text-zinc-200 text-base uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                            <span>🚛 Veículos{moduloFiltro !== 'TODOS' ? ` — Módulo: ${moduloFiltro}` : ''}</span>
+                            {condicaoFiltro !== 'TODOS' && (
+                              <button
+                                type="button"
+                                onClick={() => setCondicaoFiltro('TODOS')}
+                                className="flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-orange-200 dark:hover:bg-orange-500/30 transition-colors"
+                                title="Limpar filtro de status"
+                              >
+                                Status: {condicaoFiltro} ✕
+                              </button>
+                            )}
                           </h4>
                           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                             {items.length} veículo{items.length !== 1 ? "s" : ""}
