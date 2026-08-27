@@ -27,7 +27,9 @@ import {
   updateRolePermissions,
   updateUserFilial,
   createFilial,
-  adminSetUserPassword
+  adminSetUserPassword,
+  aprovarUsuario,
+  rejeitarUsuario,
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,19 @@ type Profile = {
   role: string;
   filial_id: string;
   updated_at: string;
+  email?: string | null;
+  status?: string | null;
+  cargo_solicitado?: string | null;
+};
+
+const CARGO_LABEL: Record<string, string> = {
+  admin: "Administrador",
+  pcm: "PCM",
+  gestao: "Gestão",
+  mecanico: "Mecânico",
+  motorista: "Motorista",
+  afiador: "Afiador",
+  visitante: "Visitante",
 };
 
 type RolePermission = {
@@ -102,10 +117,44 @@ export default function UsuariosClient({
     }
   };
 
-  const filteredProfiles = profiles.filter(p =>
-    p.full_name?.toLowerCase().includes(busca.toLowerCase()) ||
-    p.role.toLowerCase().includes(busca.toLowerCase())
-  );
+  // Autocadastros aguardando aprovação ficam fora da lista principal (que é sobre contas já
+  // liberadas) e aparecem no cartão de Aprovações Pendentes, em destaque no topo da página.
+  const pendentes = profiles.filter(p => p.status === "pendente");
+  const filteredProfiles = profiles
+    .filter(p => p.status !== "pendente")
+    .filter(p =>
+      p.full_name?.toLowerCase().includes(busca.toLowerCase()) ||
+      p.role.toLowerCase().includes(busca.toLowerCase())
+    );
+
+  const [cargoAprovacao, setCargoAprovacao] = useState<Record<string, string>>({});
+  const [aprovandoId, setAprovandoId] = useState<string | null>(null);
+
+  const handleAprovar = async (p: Profile) => {
+    if (isVisitante) return;
+    const role = cargoAprovacao[p.id] || p.cargo_solicitado || "visitante";
+    setAprovandoId(p.id);
+    const result = await aprovarUsuario(p.id, role);
+    setAprovandoId(null);
+    if ("error" in result && result.error) {
+      alert(result.error);
+    } else {
+      setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, role, status: "aprovado" } : x));
+    }
+  };
+
+  const handleRejeitar = async (p: Profile) => {
+    if (isVisitante) return;
+    if (!confirm(`Rejeitar o cadastro de ${p.full_name || p.email}? A pessoa não conseguirá entrar no sistema.`)) return;
+    setAprovandoId(p.id);
+    const result = await rejeitarUsuario(p.id);
+    setAprovandoId(null);
+    if ("error" in result && result.error) {
+      alert(result.error);
+    } else {
+      setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, status: "rejeitado" } : x));
+    }
+  };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     if (isVisitante) return;
@@ -248,6 +297,61 @@ export default function UsuariosClient({
           )}
         </div>
       </div>
+
+      {/* Aprovações Pendentes — autocadastros aguardando um admin aprovar */}
+      {pendentes.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900/40 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-amber-200/70 dark:border-amber-900/40">
+            <h2 className="text-lg font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <UserPlus size={20} /> Aprovações Pendentes ({pendentes.length})
+            </h2>
+            <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+              Cadastros feitos pelos próprios usuários — eles só conseguem entrar depois de aprovados aqui.
+            </p>
+          </div>
+          <div className="divide-y divide-amber-200/60 dark:divide-amber-900/30">
+            {pendentes.map(p => (
+              <div key={p.id} className="p-4 flex flex-wrap items-center gap-3 justify-between">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{p.full_name || "Sem nome"}</p>
+                  <p className="text-xs text-zinc-500">{p.email}</p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold mt-0.5">
+                    Cargo pedido: {CARGO_LABEL[p.cargo_solicitado || ""] || p.cargo_solicitado || "—"}
+                  </p>
+                </div>
+                {!isVisitante && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      value={cargoAprovacao[p.id] ?? p.cargo_solicitado ?? "visitante"}
+                      onChange={e => setCargoAprovacao(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      disabled={aprovandoId === p.id}
+                      className="border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 text-xs font-medium bg-white dark:bg-zinc-900 cursor-pointer"
+                    >
+                      {Object.entries(CARGO_LABEL).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleAprovar(p)}
+                      disabled={aprovandoId === p.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-60 transition-all"
+                    >
+                      <CheckCircle2 size={14} /> Aprovar
+                    </button>
+                    <button
+                      onClick={() => handleRejeitar(p)}
+                      disabled={aprovandoId === p.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-zinc-900 text-red-600 border border-red-200 dark:border-red-900/50 rounded-lg text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-60 transition-all"
+                    >
+                      <X size={14} /> Rejeitar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filiais Section */}
       <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
@@ -431,8 +535,15 @@ export default function UsuariosClient({
                         )}
                       </div>
                       <div>
-                        <p className="font-medium text-zinc-900 dark:text-zinc-100">{p.full_name || "Sem nome"}</p>
-                        <p className="text-xs text-zinc-500">{p.id.slice(0, 8)}...</p>
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                          {p.full_name || "Sem nome"}
+                          {p.status === "rejeitado" && (
+                            <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-[9px] font-bold uppercase tracking-wider">
+                              Rejeitado
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-zinc-500">{p.email || `${p.id.slice(0, 8)}...`}</p>
                       </div>
                     </div>
                   </td>

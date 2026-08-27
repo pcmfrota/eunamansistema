@@ -107,6 +107,8 @@ export async function createNewUser(formData: FormData) {
         role,
         full_name: fullName,
         filial_id: filialId,
+        email,
+        status: "aprovado",
       })
       .eq("id", authData.user.id);
 
@@ -313,7 +315,73 @@ export async function updateRolePermissions(role: string, allowedTabs: string[])
     });
 
   if (error) return { error: error.message };
-  
+
   revalidatePath("/"); // Revalida para atualizar a sidebar
+  return { success: true };
+}
+
+// ─── Aprovação de autocadastro ───
+// Só aqui (via service role) o cargo pedido no autocadastro vira o role de verdade —
+// o próprio usuário nunca consegue fazer essa troca sozinho (ver gatilho
+// prevent_self_role_escalation no banco).
+
+async function verificarAdmin(supabase: any) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado" } as const;
+
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (adminProfile?.role !== "admin") {
+    return { error: "Apenas administradores podem aprovar ou rejeitar cadastros." } as const;
+  }
+  return { ok: true } as const;
+}
+
+export async function aprovarUsuario(userId: string, roleAprovado: string) {
+  const supabase = createServerClient();
+  const check = await verificarAdmin(supabase);
+  if ("error" in check) return { error: check.error };
+
+  const adminClient = getAdminClient();
+
+  const { error: profileError } = await adminClient
+    .from("profiles")
+    .update({ role: roleAprovado, status: "aprovado" })
+    .eq("id", userId);
+
+  if (profileError) return { error: profileError.message };
+
+  try {
+    const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
+      app_metadata: { role: roleAprovado },
+    });
+    if (authError) throw authError;
+  } catch (err: any) {
+    console.error("Erro ao sincronizar Auth Metadata na aprovação:", err.message);
+  }
+
+  revalidatePath("/admin/usuarios");
+  return { success: true };
+}
+
+export async function rejeitarUsuario(userId: string) {
+  const supabase = createServerClient();
+  const check = await verificarAdmin(supabase);
+  if ("error" in check) return { error: check.error };
+
+  const adminClient = getAdminClient();
+
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ status: "rejeitado" })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/usuarios");
   return { success: true };
 }

@@ -100,9 +100,22 @@ export async function middleware(request: NextRequest) {
         try {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('role, filial_id')
+            .select('role, filial_id, status')
             .eq('id', user.id)
             .single()
+
+          // Reforço: cadastro autoservido (status pendente/rejeitado) não navega em nenhuma
+          // rota protegida, mesmo com uma sessão do Supabase Auth válida — a tela de login
+          // já desloga nesse caso, isso aqui é só o cinto de segurança caso já exista sessão.
+          if (profile?.status && profile.status !== 'aprovado') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            const redirectResponse = NextResponse.redirect(url)
+            redirectResponse.cookies.delete('x-user-role')
+            redirectResponse.cookies.delete('x-user-permissions')
+            return redirectResponse
+          }
+
           if (profile?.role) {
             userRole = profile.role.toLowerCase()
             userFilial = profile.filial_id || 'MATRIZ'

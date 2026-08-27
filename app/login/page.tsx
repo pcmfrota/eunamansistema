@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { KeyRound, Mail, AlertCircle, Loader2 } from 'lucide-react'
@@ -50,9 +51,20 @@ export default function LoginPage({
 
         // Busca do banco em paralelo
         const [profileRes, permRes] = await Promise.all([
-          supabase.from('profiles').select('id, full_name, role, avatar_url').eq('id', user.id).maybeSingle(),
+          supabase.from('profiles').select('id, full_name, role, avatar_url, status').eq('id', user.id).maybeSingle(),
           supabase.from('role_permissions').select('role, allowed_tabs')
         ]);
+
+        // Cadastro feito pelo próprio usuário fica travado até um admin aprovar — a senha
+        // já é válida no Auth, mas ninguém entra de fato enquanto status !== 'aprovado'.
+        if (profileRes?.data && profileRes.data.status && profileRes.data.status !== 'aprovado') {
+          await supabase.auth.signOut();
+          throw new Error(
+            profileRes.data.status === 'rejeitado'
+              ? 'Seu cadastro foi rejeitado. Fale com um administrador para mais informações.'
+              : 'Seu cadastro ainda está aguardando aprovação de um administrador.'
+          );
+        }
 
         const profileData = profileRes?.data;
         const allPerms = permRes?.data || [];
@@ -214,8 +226,15 @@ export default function LoginPage({
 
             <LoginButton isSubmitting={isSubmitting} />
           </form>
+
+          <p className="mt-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+            Não tem uma conta?{" "}
+            <Link href="/login/cadastro" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+              Criar cadastro
+            </Link>
+          </p>
         </div>
-        
+
         <p className="mt-8 text-center text-xs text-zinc-500">
           Esta é uma área restrita. O acesso não autorizado é proibido.
         </p>
