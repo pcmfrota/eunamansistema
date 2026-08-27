@@ -14,16 +14,16 @@ import {
   aprovarOrdemServico
 } from "@/app/os/actions";
 
-import { 
-  criarPreventiva, 
-  excluirPreventiva, 
-  atualizarPreventiva, 
+import {
+  criarPreventiva,
+  excluirPreventiva,
+  atualizarPreventiva,
   importarPreventivas,
   registrarHorimetro
 } from "@/app/preventivas/actions";
 
-import { 
-  registrarInspecaoCompleta, 
+import {
+  registrarInspecaoCompleta,
   atualizarInspecao, 
   excluirInspecao, 
   excluirInspecoesMassivo, 
@@ -76,7 +76,9 @@ import {
 
 import {
   salvarFichaMaoObra,
-  excluirFichaMaoObra
+  excluirFichaMaoObra,
+  salvarApontamento,
+  excluirApontamento
 } from "@/app/mao-de-obra/actions";
 
 import {
@@ -329,6 +331,15 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirFichaMaoObra(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "apontamento_mao_obra") {
+      if (action === "create" || action === "update") {
+        const res = await salvarApontamento(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirApontamento(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

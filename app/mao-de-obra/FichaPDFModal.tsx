@@ -3,16 +3,21 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { X, Printer, Share2, Send, Mail, Clock } from "lucide-react";
-import { isAtividadeProdutiva } from "./tiposAtividade";
+import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
 
 export type AtividadeJornada = {
   id: string;
+  jornada_id?: string;
   tipo_atividade: string;
   placa?: string;
   descricao: string;
   hora_inicio?: string;
   hora_fim?: string;
   tempo_gasto?: string;
+  tempo_gasto_minutos?: number;
+  produtivo?: boolean;
+  registrado_por_nome?: string;
+  criado_em?: string;
 };
 
 export type FichaMaoObraItem = {
@@ -43,6 +48,7 @@ export type FichaMaoObraItem = {
 
 interface FichaPDFModalProps {
   ficha: FichaMaoObraItem | null;
+  apontamentos?: AtividadeJornada[];
   onClose: () => void;
 }
 
@@ -50,7 +56,7 @@ function formatHoras(h?: number): string {
   return `${(h || 0).toFixed(2)}h`;
 }
 
-export default function FichaPDFModal({ ficha, onClose }: FichaPDFModalProps) {
+export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDFModalProps) {
   if (!ficha) return null;
 
   const dataJornada = ficha.data_jornada || ficha.created_at?.split("T")[0];
@@ -58,7 +64,10 @@ export default function FichaPDFModal({ ficha, onClose }: FichaPDFModalProps) {
     ? new Date(dataJornada + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
     : "—";
 
-  const atividades = ficha.atividades || [];
+  // Fonte de verdade é a lista de apontamentos individuais (histórico de quem/quando registrou);
+  // ficha.atividades só existe em fichas antigas anteriores a esse modelo.
+  const atividades = (apontamentos && apontamentos.length > 0) ? apontamentos : (ficha.atividades || []);
+  const atividadesOrdenadas = [...atividades].sort((a, b) => (a.hora_inicio || "").localeCompare(b.hora_inicio || ""));
 
   // Duração da jornada (início/fim do dia) menos a soma das atividades apontadas — tempo sem nenhum registro.
   const tempoNaoApontado = React.useMemo(() => {
@@ -292,11 +301,11 @@ export default function FichaPDFModal({ ficha, onClose }: FichaPDFModalProps) {
             </div>
           )}
 
-          {/* Atividades Executadas */}
-          {atividades.length > 0 && (
+          {/* Atividades Executadas / Histórico do Dia */}
+          {atividadesOrdenadas.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-[11px] font-extrabold text-slate-800 uppercase border-b border-slate-200 pb-1">
-                📋 Atividades do Dia
+                📋 Atividades do Dia — Histórico de Apontamentos
               </h3>
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <table className="w-full text-left text-[10px]">
@@ -308,17 +317,22 @@ export default function FichaPDFModal({ ficha, onClose }: FichaPDFModalProps) {
                       <th className="p-2 text-center">Início</th>
                       <th className="p-2 text-center">Término</th>
                       <th className="p-2 text-right">Duração</th>
+                      <th className="p-2 text-right">Registrado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {atividades.map((atv, idx) => (
+                    {atividadesOrdenadas.map((atv, idx) => (
                       <tr key={idx} className={isAtividadeProdutiva(atv.tipo_atividade) ? "" : "bg-amber-50/40"}>
                         <td className="p-2 font-semibold text-slate-800">{atv.tipo_atividade}</td>
                         <td className="p-2 font-mono font-bold text-slate-600">{atv.placa || "—"}</td>
                         <td className="p-2 text-slate-700">{atv.descricao || "—"}</td>
                         <td className="p-2 text-center font-medium text-slate-600">{atv.hora_inicio || "—"}</td>
                         <td className="p-2 text-center font-medium text-slate-600">{atv.hora_fim || "—"}</td>
-                        <td className="p-2 text-right font-bold text-slate-800">{atv.tempo_gasto || "—"}</td>
+                        <td className="p-2 text-right font-bold text-slate-800">{typeof atv.tempo_gasto_minutos === "number" ? formatMinutos(atv.tempo_gasto_minutos) : (atv.tempo_gasto || "—")}</td>
+                        <td className="p-2 text-right text-slate-500 text-[9px]">
+                          {atv.criado_em ? new Date(atv.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          {atv.registrado_por_nome ? ` · ${atv.registrado_por_nome}` : ""}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

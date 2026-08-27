@@ -17,3 +17,15 @@ export const TIPOS_ATIVIDADE: TipoAtividade[] = [
 export function isAtividadeProdutiva(tipo: string | undefined | null): boolean {
   return TIPOS_ATIVIDADE.find(t => t.label === tipo)?.produtivo ?? false;
 }
+
+/**
+ * "tempo_gasto_minutos" (coluna real, sempre presente em qualquer apontamento sincronizado)
+ * é a fonte de verdade — "tempo_gasto" (string "HH:MM") não existe no banco, é só
+ * conveniência de exibição enquanto o rascunho está sendo editado no cliente.
+ */
+export function formatMinutos(minutos?: number | null): string {
+  const total = Math.max(0, Math.round(minutos || 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}

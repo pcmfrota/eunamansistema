@@ -7,11 +7,14 @@ import { useOffline } from "@/components/offline-provider";
 import { useAuth } from "@/components/auth-context";
 import { PremiumLoader } from "@/components/premium-loader";
 
+const STORES = ["fichas_mao_obra", "apontamentos_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"];
+
 export default function MaoDeObraPage() {
   const { isOnline } = useOffline();
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [fichas, setFichas] = useState<any[]>([]);
+  const [apontamentos, setApontamentos] = useState<any[]>([]);
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [calendario, setCalendario] = useState<any[]>([]);
@@ -24,10 +27,11 @@ export default function MaoDeObraPage() {
         // 1. Carrega do IndexedDB local imediatamente (Offline-First em lote)
         const stores = await localDb.getManyStores<{
           fichas_mao_obra: any[];
+          apontamentos_mao_obra: any[];
           equipamentos: any[];
           colaboradores: any[];
           calendario_suzano: any[];
-        }>(["fichas_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"]);
+        }>(STORES);
 
         const isHeavyActive = (e: any) => {
           if (!e || e.deleted_at) return false;
@@ -39,6 +43,7 @@ export default function MaoDeObraPage() {
         };
 
         const localFichas = stores.fichas_mao_obra || [];
+        const localApontamentos = stores.apontamentos_mao_obra || [];
         const localEq = (stores.equipamentos || [])
           .filter(isHeavyActive)
           .sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
@@ -47,6 +52,7 @@ export default function MaoDeObraPage() {
 
         if (active) {
           setFichas(localFichas);
+          setApontamentos(localApontamentos);
           setEquipamentos(localEq);
           setColaboradores(localCol);
           setCalendario(localCal);
@@ -56,14 +62,15 @@ export default function MaoDeObraPage() {
         // 2. Se online, roda sync seletivo e atualiza do IndexedDB
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["fichas_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"]);
+          const syncSuccess = await syncTables(STORES);
           if (syncSuccess) {
             const freshStores = await localDb.getManyStores<{
               fichas_mao_obra: any[];
+              apontamentos_mao_obra: any[];
               equipamentos: any[];
               colaboradores: any[];
               calendario_suzano: any[];
-            }>(["fichas_mao_obra", "equipamentos", "colaboradores", "calendario_suzano"]);
+            }>(STORES);
 
             const freshEq = (freshStores.equipamentos || [])
               .filter(isHeavyActive)
@@ -71,6 +78,7 @@ export default function MaoDeObraPage() {
 
             if (active) {
               setFichas(freshStores.fichas_mao_obra || []);
+              setApontamentos(freshStores.apontamentos_mao_obra || []);
               setEquipamentos(freshEq);
               setColaboradores(freshStores.colaboradores || []);
               setCalendario(freshStores.calendario_suzano || []);
@@ -87,10 +95,12 @@ export default function MaoDeObraPage() {
 
     window.addEventListener("offline-sync-completed", loadData);
     window.addEventListener("offline-db-updated-fichas_mao_obra", loadData);
+    window.addEventListener("offline-db-updated-apontamentos_mao_obra", loadData);
     return () => {
       active = false;
       window.removeEventListener("offline-sync-completed", loadData);
       window.removeEventListener("offline-db-updated-fichas_mao_obra", loadData);
+      window.removeEventListener("offline-db-updated-apontamentos_mao_obra", loadData);
     };
   }, [isOnline]);
 
@@ -105,6 +115,7 @@ export default function MaoDeObraPage() {
   return (
     <MaoDeObraClient
       initialFichas={fichas}
+      initialApontamentos={apontamentos}
       equipamentos={equipamentos}
       colaboradores={colaboradores}
       calendario={calendario}

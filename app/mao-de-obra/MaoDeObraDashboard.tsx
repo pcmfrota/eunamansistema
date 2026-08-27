@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { BarChart2, Clock, Users, TrendingUp } from "lucide-react";
 import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
-import type { FichaMaoObraItem } from "./FichaPDFModal";
+import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 
 const PRODUTIVO_COLOR = "#4f46e5"; // indigo — paleta padrão do projeto
 const OCIOSO_COLOR = "#f97316"; // laranja
@@ -24,6 +24,7 @@ const PIE_COLORS = ["#4f46e5", "#10b981", "#f97316", "#0ea5e9", "#a855f7", "#ec4
 
 interface Props {
   fichas: FichaMaoObraItem[];
+  apontamentos?: AtividadeJornada[];
   colaboradores?: any[];
   calendario?: any[];
 }
@@ -37,7 +38,7 @@ function KpiCard({ label, value, color }: { label: string; value: string | numbe
   );
 }
 
-export default function MaoDeObraDashboard({ fichas = [], colaboradores = [], calendario = [] }: Props) {
+export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], colaboradores = [], calendario = [] }: Props) {
   const currentPeriod = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
@@ -155,10 +156,24 @@ export default function MaoDeObraDashboard({ fichas = [], colaboradores = [], ca
       }));
   }, [fichas, calendario]);
 
-  // Distribuição por tipo de atividade, no período selecionado
+  // Distribuição por tipo de atividade, no período selecionado.
+  // Fonte primária é a lista de apontamentos individuais; cai para o JSONB
+  // legado (ficha.atividades) só para fichas antigas sem nenhum apontamento próprio.
   const dadosPorTipo = useMemo(() => {
     const map: Record<string, number> = {};
+    const jornadaIds = new Set(fichasFiltradas.map(f => f.id));
+    const jornadasComApontamento = new Set<string>();
+
+    (apontamentos || []).forEach(a => {
+      if (!a.jornada_id || !jornadaIds.has(a.jornada_id)) return;
+      jornadasComApontamento.add(a.jornada_id);
+      const minutos = typeof a.tempo_gasto_minutos === "number" ? a.tempo_gasto_minutos : 0;
+      if (!minutos) return;
+      map[a.tipo_atividade] = (map[a.tipo_atividade] || 0) + minutos / 60;
+    });
+
     fichasFiltradas.forEach(f => {
+      if (jornadasComApontamento.has(f.id)) return;
       (f.atividades || []).forEach(a => {
         if (!a.tempo_gasto) return;
         const [h, m] = a.tempo_gasto.split(":").map(Number);
@@ -166,10 +181,11 @@ export default function MaoDeObraDashboard({ fichas = [], colaboradores = [], ca
         map[a.tipo_atividade] = (map[a.tipo_atividade] || 0) + h + m / 60;
       });
     });
+
     return Object.entries(map)
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
-  }, [fichasFiltradas]);
+  }, [fichasFiltradas, apontamentos]);
 
   // Ranking por colaborador
   const ranking = useMemo(() => {

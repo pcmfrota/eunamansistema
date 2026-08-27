@@ -149,6 +149,9 @@ const syncTasks: Record<
   fichas_mao_obra: (supabase) =>
     supabase.from("fichas_mao_obra").select("*").order("created_at", { ascending: false }),
 
+  apontamentos_mao_obra: (supabase) =>
+    supabase.from("apontamentos_mao_obra").select("*").order("criado_em", { ascending: false }),
+
   fichas_lubrificacao: (supabase) =>
     supabase.from("fichas_lubrificacao").select("*, equipamento:equipamentos(placa, modulo, tipo)").is("deleted_at", null).order("data_registro", { ascending: false }),
 };
