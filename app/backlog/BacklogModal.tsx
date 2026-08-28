@@ -24,7 +24,7 @@ import { localDb } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
 
 // ─── Types and Config ────────────────────────────────────────────────────────
-type Placa = { id: string; placa: string; modulo: string | null }
+type Placa = { id: string; placa: string; modulo: string | null; area?: string | null }
 
 const STEPS = [
   { id: 1, label: "Identificação",  icon: Tag,          color: "bg-indigo-500",  text: "text-indigo-600" },
@@ -66,6 +66,9 @@ function Field({ label, children, span = 1 }: { label: string, children: React.R
 }
 
 const inputCls = "w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-zinc-300 dark:placeholder:text-zinc-700"
+// Campos que vem automaticamente do cadastro da placa (Módulo/Área) — somente leitura,
+// pra não desalinhar do que está registrado na Base de Frotas.
+const readOnlyCls = "w-full px-4 py-3 bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-zinc-500 dark:text-zinc-400 outline-none cursor-not-allowed placeholder:text-zinc-300 dark:placeholder:text-zinc-700"
 
 type Colaborador = { id: string; nome: string }
 
@@ -379,23 +382,23 @@ export default function BacklogModal({
                {step === 2 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <Field label="Frota (Placa)" span={2}>
-                        <SearchableSelect 
+                        <SearchableSelect
                           options={heavyActivePlacas.map(p => ({ value: p.placa, label: `${p.placa}${p.modulo ? ` (${p.modulo})` : ''}` }))}
-                          value={form.frota} 
+                          value={form.frota}
                           onChange={val => {
                             const eq = heavyActivePlacas.find(p => p.placa === val);
-                            setForm({...form, frota: val, modulo: eq?.modulo || ''});
+                            setForm({...form, frota: val, modulo: eq?.modulo || '', campo_base: eq?.area || ''});
                           }}
                         />
                      </Field>
                      <Field label="Módulo">
-                        <input className={inputCls} placeholder="Selecione a placa..." value={form.modulo} onChange={e => setForm({...form, modulo: e.target.value})} />
+                        <input className={readOnlyCls} readOnly placeholder="Selecione a placa..." value={form.modulo} title="Vem automaticamente do cadastro da placa na Base de Frotas" />
                      </Field>
                      <Field label="TAG">
                         <input className={inputCls} placeholder="Identificador" value={form.tag} onChange={e => setForm({...form, tag: e.target.value})} />
                      </Field>
                      <Field label="Campo / Base" span={2}>
-                        <input className={inputCls} placeholder="Localização física" value={form.campo_base} onChange={e => setForm({...form, campo_base: e.target.value})} />
+                        <input className={readOnlyCls} readOnly placeholder="Selecione a placa..." value={form.campo_base} title="Vem automaticamente do cadastro da placa na Base de Frotas" />
                      </Field>
                   </div>
                )}
