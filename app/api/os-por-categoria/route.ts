@@ -3,16 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 function parseLocal(dateStr: string | null): number {
   if (!dateStr) return 0;
-  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-  if (match) {
-    return new Date(
-      parseInt(match[1]),
-      parseInt(match[2]) - 1,
-      parseInt(match[3]),
-      parseInt(match[4]),
-      parseInt(match[5])
-    ).getTime();
-  }
+  // Tenta formato PT-BR legado: DD/MM/YYYY HH:mm — o parser nativo do Date não entende isso.
   const matchBR = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
   if (matchBR) {
     return new Date(
@@ -23,6 +14,10 @@ function parseLocal(dateStr: string | null): number {
       parseInt(matchBR[5])
     ).getTime();
   }
+  // ISO (com ou sem timezone, ex: "...+00:00" vindo do Postgres timestamptz) — o parser
+  // nativo já respeita o offset gravado. A reconstrução manual que existia aqui antes
+  // descartava esse offset e tratava os números como se já fossem hora local, criando
+  // um erro sistemático de 3h (o fuso de Brasília) em cada OS.
   return new Date(dateStr).getTime();
 }
 
