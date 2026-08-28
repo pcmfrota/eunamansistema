@@ -62,12 +62,22 @@ public class EunamanActivity extends AppCompatActivity {
     private static final int REQUEST_CAMERA_PERM   = 1002;
     private static final int MAX_IMAGE_SIZE_PX     = 1280;
     private static final int JPEG_QUALITY          = 80;
+    private static final long PAGE_LOAD_TIMEOUT_MS = 12000;
 
     private WebView     webView;
     private ProgressBar progressBar;
     private ImageView   splashScreen;
     private String      currentPhotoPath;
     private Uri         photoUri;
+
+    // Trava de seguranca para navegacao pendurada: ao retomar do segundo plano no Android,
+    // a ConnectivityManager pode reportar rede disponivel antes do radio realmente terminar
+    // de reconectar, deixando a requisicao da pagina pendurada sem nunca chamar
+    // onReceivedError nem onPageFinished (nao eh um erro, so nunca responde). Sem isso a
+    // splash/"Carregando Sistema" fica presa pra sempre, porque nem a splash eh liberada
+    // nem o JS da pagina chega a carregar pra acionar o proprio timer de seguranca dele.
+    private final Handler watchdogHandler = new Handler(Looper.getMainLooper());
+    private Runnable pageLoadWatchdogRunnable;
 
     private boolean isLoggingOut = false;
     private static final int REQUEST_FILE_CHOOSER = 1004;
@@ -118,6 +128,12 @@ public class EunamanActivity extends AppCompatActivity {
         if (deepLinkUrl != null && webView != null) {
             webView.loadUrl(deepLinkUrl);
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+        super.onDestroy();
     }
 
     /** Extrai a URL de um Intent de deep link (ACTION_VIEW), ou null se não for um. */
@@ -191,10 +207,21 @@ public class EunamanActivity extends AppCompatActivity {
                 } else {
                     view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
                 }
+
+                watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+                pageLoadWatchdogRunnable = () -> {
+                    Log.w(TAG, "Watchdog: navegacao nao terminou em " + PAGE_LOAD_TIMEOUT_MS + "ms (" + url + "). Forcando carga via cache.");
+                    view.stopLoading();
+                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+                    view.loadUrl(url);
+                };
+                watchdogHandler.postDelayed(pageLoadWatchdogRunnable, PAGE_LOAD_TIMEOUT_MS);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+
                 // Sincronização agressiva de cookies (Grava a sessão no disco físico)
                 new Thread(() -> CookieManager.getInstance().flush()).start();
 
