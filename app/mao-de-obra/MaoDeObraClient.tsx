@@ -19,7 +19,9 @@ import {
   Lock,
   X,
   Save,
-  Layers
+  Layers,
+  ArrowLeft,
+  MoreVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
@@ -118,7 +120,9 @@ export default function MaoDeObraClient({
   const { isOnline } = useOffline();
   const isAdmin = profile?.role === "admin" || userRole === "admin";
 
-  const [activeTab, setActiveTab] = useState<"form" | "historico" | "dashboard" | "catalogos">("form");
+  const [activeTab, setActiveTab] = useState<"menu" | "form" | "historico" | "dashboard" | "catalogos">("menu");
+  const [openMenuFichaId, setOpenMenuFichaId] = useState<string | null>(null);
+  const [showFiltros, setShowFiltros] = useState(false);
   const [fichas, setFichas] = useState<FichaMaoObraItem[]>(initialFichas || []);
   const [apontamentos, setApontamentos] = useState<AtividadeJornada[]>(initialApontamentos || []);
   const [catalogos, setCatalogos] = useState<any[]>(initialCatalogos || []);
@@ -133,6 +137,16 @@ export default function MaoDeObraClient({
   useEffect(() => { setApontamentos(initialApontamentos || []); }, [initialApontamentos]);
   useEffect(() => { setCatalogos(initialCatalogos || []); }, [initialCatalogos]);
   useEffect(() => { setApontamentosCatalogo(initialApontamentosCatalogo || []); }, [initialApontamentosCatalogo]);
+
+  // Fecha o menu flutuante de ações do Histórico ao pressionar Esc
+  useEffect(() => {
+    if (!openMenuFichaId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuFichaId(null);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [openMenuFichaId]);
 
   // Estados do Formulário (Jornada do Dia)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -418,8 +432,9 @@ export default function MaoDeObraClient({
     }
   };
 
-  // Carregar Jornada para Edição / Visualização / Continuidade
-  const handleEditFicha = (f: FichaMaoObraItem) => {
+  // Carregar Jornada para Edição / Visualização / Continuidade. `navigate: false` só
+  // preenche os dados sem tirar o usuário da tela de menu (usado na retomada automática).
+  const handleEditFicha = (f: FichaMaoObraItem, options?: { navigate?: boolean }) => {
     setEditingId(f.id);
     setNumeroFicha(f.numero_ficha);
     setStatusFicha((f.status as any) || "Em andamento");
@@ -434,12 +449,14 @@ export default function MaoDeObraClient({
     setHoraFimJornada(f.hora_fim_jornada || "17:00");
     setDraftAtividade(null);
     setObservacoes(f.observacoes || "");
-    setActiveTab("form");
+    if (options?.navigate !== false) setActiveTab("form");
   };
 
   // Retoma automaticamente a jornada de hoje já aberta pelo colaborador (mesmo nome + mesma
   // data), caso exista — permite dar continuidade aos apontamentos do dia em outra sessão/
-  // aparelho sem duplicar a jornada.
+  // aparelho sem duplicar a jornada. Só carrega os dados em segundo plano: quem decide
+  // entrar no formulário é o usuário, clicando no card — a tela inicial continua sendo
+  // sempre o menu de cards.
   useEffect(() => {
     if (autoLoadedRef.current) return;
     if (!mecanicoNome || fichas.length === 0) return;
@@ -450,7 +467,7 @@ export default function MaoDeObraClient({
       (f.data_jornada || f.created_at?.split("T")[0]) === todayStr
     );
     if (aberta) {
-      handleEditFicha(aberta);
+      handleEditFicha(aberta, { navigate: false });
     }
     autoLoadedRef.current = true;
   }, [fichas, mecanicoNome]);
@@ -718,60 +735,76 @@ export default function MaoDeObraClient({
           </div>
         </div>
 
-        {/* Abas de Navegação */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/60 w-full sm:w-auto overflow-x-auto">
+        {/* Voltar ao menu — só aparece quando já está dentro de uma seção */}
+        {activeTab !== "menu" && (
+          <button
+            onClick={() => setActiveTab("menu")}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-extrabold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors"
+          >
+            <ArrowLeft size={15} />
+            <span>Voltar</span>
+          </button>
+        )}
+      </div>
+
+      {/* ─── MENU DE CARDS (TELA INICIAL DO MÓDULO) ─── */}
+      {activeTab === "menu" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             onClick={() => setActiveTab("form")}
-            className={cn(
-              "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all whitespace-nowrap",
-              activeTab === "form"
-                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-            )}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
           >
-            <PenTool size={15} />
-            <span>Apontamento do Dia</span>
+            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
+              <PenTool size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight">Apontamento do Dia</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Registrar atividades da jornada</p>
+            </div>
           </button>
+
           <button
             onClick={() => setActiveTab("historico")}
-            className={cn(
-              "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all whitespace-nowrap",
-              activeTab === "historico"
-                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-            )}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
           >
-            <FileText size={15} />
-            <span>Histórico ({fichas.length})</span>
+            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
+              <FileText size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight">Histórico ({fichas.length})</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ver e editar jornadas lançadas</p>
+            </div>
           </button>
+
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={cn(
-              "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all whitespace-nowrap",
-              activeTab === "dashboard"
-                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-            )}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
           >
-            <BarChart2 size={15} />
-            <span>Dashboard</span>
+            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
+              <BarChart2 size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight">Dashboard</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Gráficos e indicadores</p>
+            </div>
           </button>
+
           {isAdmin && (
             <button
               onClick={() => setActiveTab("catalogos")}
-              className={cn(
-                "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-extrabold transition-all whitespace-nowrap",
-                activeTab === "catalogos"
-                  ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              )}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
             >
-              <Layers size={15} />
-              <span>Catálogos</span>
+              <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
+                <Layers size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight">Catálogos</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Gerenciar listas do formulário</p>
+              </div>
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {/* ─── ABA 1: APONTAMENTO DO DIA (NOVO OU CONTINUAÇÃO) ─── */}
       {activeTab === "form" && (
@@ -943,6 +976,10 @@ export default function MaoDeObraClient({
             )}
           </div>
 
+          {/* Seção 2 (Atividades), Seção 3 (Observações) e Botões de Ação só aparecem depois
+              que o colaborador for identificado — revelação progressiva do formulário. */}
+          {mecanicoNome.trim() && (
+          <>
           {/* Seção 2: Atividades do Dia */}
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1181,17 +1218,24 @@ export default function MaoDeObraClient({
               </div>
             </div>
           )}
+          </>
+          )}
         </div>
       )}
 
       {/* ─── ABA 2: HISTÓRICO DE JORNADAS ─── */}
       {activeTab === "historico" && (
         <div className="space-y-4">
-          {/* Barra de Filtros Avançados */}
+          {/* Barra de Filtros Avançados — discreta, só expande ao clicar */}
           <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-            <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-slate-500">
-              <Filter size={15} /> Filtros de Pesquisa
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowFiltros(v => !v)}
+              className="flex items-center gap-2 text-xs font-extrabold uppercase text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+            >
+              <Filter size={15} /> Filtros
+            </button>
+            {showFiltros && (
             <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-2">
               <input
                 type="text"
@@ -1240,6 +1284,7 @@ export default function MaoDeObraClient({
                 className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
               />
             </div>
+            )}
           </div>
 
           {/* Tabela de Histórico */}
@@ -1264,7 +1309,11 @@ export default function MaoDeObraClient({
                     {fichasFiltradas.map((f) => {
                       const qtdAtividades = apontamentos.filter(a => a.jornada_id === f.id).length;
                       return (
-                        <tr key={f.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <tr
+                          key={f.id}
+                          onClick={() => setOpenMenuFichaId(prev => prev === f.id ? null : f.id)}
+                          className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer"
+                        >
                           <td className="p-3 font-semibold">
                             {(f.data_jornada || f.created_at?.split("T")[0] || "").split("-").reverse().join("/")}
                           </td>
@@ -1284,48 +1333,56 @@ export default function MaoDeObraClient({
                               {f.status}
                             </span>
                           </td>
-                          <td className="p-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => setSelectedFichaForPDF(f)}
-                                title="Visualizar / Gerar Relatório"
-                                className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white rounded-lg transition"
-                              >
-                                <Printer size={15} />
-                              </button>
-                              <button
-                                onClick={() => handleEditFicha(f)}
-                                title="Abrir / Continuar"
-                                className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white rounded-lg transition"
-                              >
-                                <Pencil size={15} />
-                              </button>
-                              <button
-                                onClick={() => handleDuplicateFicha(f.id)}
-                                title="Duplicar como modelo"
-                                className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-purple-600 hover:text-white rounded-lg transition"
-                              >
-                                <Copy size={15} />
-                              </button>
-                              {isAdmin && f.status === "Finalizado" && (
-                                <button
-                                  onClick={() => handleReabrirJornada(f.id)}
-                                  title="Reabrir (Admin)"
-                                  className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-amber-600 hover:text-white rounded-lg transition"
+                          <td className="p-3 text-right relative">
+                            <MoreVertical size={16} className="ml-auto text-slate-400" />
+
+                            {openMenuFichaId === f.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
+                                  onClick={(e) => { e.stopPropagation(); setOpenMenuFichaId(null); }}
+                                />
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute right-3 top-full mt-1 z-50 w-48 py-1.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl text-left"
                                 >
-                                  <RefreshCcw size={15} />
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <button
-                                  onClick={() => handleDeleteFicha(f.id)}
-                                  title="Excluir (Admin)"
-                                  className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg transition"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              )}
-                            </div>
+                                  <button
+                                    onClick={() => { setSelectedFichaForPDF(f); setOpenMenuFichaId(null); }}
+                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                  >
+                                    <Printer size={14} /> Ver / Imprimir
+                                  </button>
+                                  <button
+                                    onClick={() => { handleEditFicha(f); setOpenMenuFichaId(null); }}
+                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                  >
+                                    <Pencil size={14} /> Editar
+                                  </button>
+                                  <button
+                                    onClick={() => { handleDuplicateFicha(f.id); setOpenMenuFichaId(null); }}
+                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                  >
+                                    <Copy size={14} /> Duplicar
+                                  </button>
+                                  {isAdmin && f.status === "Finalizado" && (
+                                    <button
+                                      onClick={() => { handleReabrirJornada(f.id); setOpenMenuFichaId(null); }}
+                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
+                                    >
+                                      <RefreshCcw size={14} /> Reabrir Jornada
+                                    </button>
+                                  )}
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => { handleDeleteFicha(f.id); setOpenMenuFichaId(null); }}
+                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                                    >
+                                      <Trash2 size={14} /> Excluir
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1354,7 +1411,9 @@ export default function MaoDeObraClient({
           catalogos={catalogos}
           apontamentosCatalogo={apontamentosCatalogo}
           onCatalogoAdicionado={item => setCatalogos(prev => [...prev.filter(c => c.id !== item.id), item])}
+          onCatalogoRemovido={id => setCatalogos(prev => prev.filter(c => c.id !== id))}
           onApontamentoAdicionado={item => setApontamentosCatalogo(prev => [...prev.filter(c => c.id !== item.id), item])}
+          onApontamentoRemovido={id => setApontamentosCatalogo(prev => prev.filter(c => c.id !== id))}
         />
       )}
 

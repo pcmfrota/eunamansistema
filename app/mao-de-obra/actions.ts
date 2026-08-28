@@ -336,6 +336,51 @@ export async function criarCatalogoItem(categoria: string, valor: string) {
   }
 }
 
+export async function editarCatalogoItem(id: string, novoValor: string) {
+  try {
+    const supabase = createClient();
+    const valorNormalizado = (novoValor || '').trim().toUpperCase();
+    if (!id || !valorNormalizado) throw new Error('Informe um valor.');
+
+    const { data, error } = await supabase
+      .from('mao_obra_catalogos')
+      .update({ valor: valorNormalizado })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') throw new Error('Já existe um item com esse valor nesta lista.');
+      throw new Error(error.message);
+    }
+
+    revalidatePath('/mao-de-obra');
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// Exclusão lógica (ativo=false): mantém o histórico de jornadas antigas legível (o valor
+// é texto solto nelas, não uma referência) e permite "readicionar" o mesmo item depois —
+// criarCatalogoItem faz upsert por categoria+valor, então reativa a linha em vez de duplicar.
+export async function excluirCatalogoItem(id: string) {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('mao_obra_catalogos')
+      .update({ ativo: false })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/mao-de-obra');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 export async function criarApontamentoCatalogo(codigo: string, descricao: string, produtivo: boolean) {
   try {
     const supabase = createClient();
@@ -356,6 +401,51 @@ export async function criarApontamentoCatalogo(codigo: string, descricao: string
 
     revalidatePath('/mao-de-obra');
     return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+export async function editarApontamentoCatalogo(id: string, codigo: string, descricao: string, produtivo: boolean) {
+  try {
+    const supabase = createClient();
+    const codigoNormalizado = (codigo || '').trim();
+    const descricaoNormalizada = (descricao || '').trim().toUpperCase();
+    if (!id || !codigoNormalizado || !descricaoNormalizada) throw new Error('Informe código e descrição.');
+
+    const { data, error } = await supabase
+      .from('mao_obra_apontamentos_catalogo')
+      .update({ codigo: codigoNormalizado, descricao: descricaoNormalizada, produtivo: Boolean(produtivo) })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') throw new Error('Já existe um item com esse código.');
+      throw new Error(error.message);
+    }
+
+    revalidatePath('/mao-de-obra');
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// Exclusão lógica — mesmo raciocínio de excluirCatalogoItem: criarApontamentoCatalogo faz
+// upsert por código, então readicionar o mesmo código reativa a linha em vez de duplicar.
+export async function excluirApontamentoCatalogo(id: string) {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('mao_obra_apontamentos_catalogo')
+      .update({ ativo: false })
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/mao-de-obra');
+    return { success: true };
   } catch (error: any) {
     return { error: error.message };
   }
