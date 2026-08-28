@@ -844,6 +844,19 @@ export default function PneusClient({
                       {mod}
                     </button>
                   ))}
+                  {/* Atalho rápido pro filtro de status PENDENTE (mesmo filtro do card de KPI
+                      abaixo), direto ao lado dos módulos pra não precisar rolar a tela. */}
+                  <button
+                    type="button"
+                    onClick={() => handleClickCondicao('PENDENTE')}
+                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-dashed ${
+                      condicaoFiltro === 'PENDENTE'
+                        ? "bg-zinc-700 text-white border-zinc-700 shadow-lg shadow-zinc-700/20 dark:bg-zinc-300 dark:text-zinc-900 dark:border-zinc-300"
+                        : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400"
+                    }`}
+                  >
+                    Pendentes
+                  </button>
                 </div>
                 <div className="flex gap-3 text-[10px] font-black uppercase tracking-tighter text-zinc-400 ml-2">
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
