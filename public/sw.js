@@ -1,5 +1,20 @@
-const CACHE_NAME = "eunaman-cache-v16";
+const CACHE_NAME = "eunaman-cache-v17";
 const OFFLINE_URL = "/offline.html";
+
+// fetch() puro não tem timeout embutido: se a rede travar no meio do caminho
+// (o caso classico eh o APK/TWA retomando de segundo plano no Android com um
+// socket morto ou DNS lento), a Promise pode nunca resolver nem rejeitar. Como
+// o "fetch" do evento de navegacao fica dentro de um event.respondWith(), isso
+// trava a PROPRIA navegacao da pagina indefinidamente — a tela fica presa no
+// ultimo frame desenhado (o "Carregando Sistema") porque o HTML novo nunca
+// termina de chegar, e o React nem chega a hidratar pra rodar o timer de
+// seguranca de 10s do MainLayout. Com o timeout, cai pro cache rapido demais
+// e a pagina sempre termina de carregar.
+function fetchComTimeout(request, ms = 8000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ms);
+  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+}
 
 // Páginas/arquivos pré-cacheados na instalação. Cada um é buscado individualmente
 // (ver função precache) em vez de usar cache.addAll(), que é tudo-ou-nada: antes,
@@ -122,7 +137,7 @@ self.addEventListener("fetch", (event) => {
   // 2. Páginas HTML (Documentos e Navegações) -> NETWORK-FIRST, falling back to Cache
   if (event.request.mode === "navigate" || event.request.headers.get("accept")?.includes("text/html")) {
     event.respondWith(
-      fetch(event.request)
+      fetchComTimeout(event.request)
         .then((response) => {
           // Grava a página no cache se vier com sucesso (e sem redirecionamento,
           // para não cachear na URL errada o conteúdo de outra página, ex: /login)
@@ -187,7 +202,7 @@ self.addEventListener("fetch", (event) => {
         }
 
         // Se não achar no cache, busca na rede e salva dinamicamente
-        return fetch(event.request).then((response) => {
+        return fetchComTimeout(event.request).then((response) => {
           if (!response || response.status !== 200) {
             return response;
           }
@@ -204,7 +219,7 @@ self.addEventListener("fetch", (event) => {
 
   // 4. Estratégia Padrão -> Rede com fallback no Cache
   event.respondWith(
-    fetch(event.request)
+    fetchComTimeout(event.request)
       .catch(() => caches.match(event.request))
   );
 });
