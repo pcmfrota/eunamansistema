@@ -94,9 +94,19 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [travouCarregando, setTravouCarregando] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Trava de segurança: se por qualquer motivo (sessão presa, IndexedDB bloqueado por outra
+  // aba, etc.) a tela de carregamento nunca resolver sozinha, depois de 10s oferece um jeito
+  // de sair dela em vez de travar para sempre — nunca vimos essa causa exata acontecer antes,
+  // mas uma tela de carregamento sem nenhuma saída manual é sempre um risco.
+  useEffect(() => {
+    const timer = setTimeout(() => setTravouCarregando(true), 10000);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleLogout = async () => {
@@ -128,8 +138,21 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   if (showLoader) {
     return (
-      <div className={cn("min-h-screen flex items-center justify-center transition-colors duration-300", isDark ? "bg-[#040e04] text-zinc-100" : "bg-[#f9fafb] text-zinc-800")}>
+      <div className={cn("min-h-screen flex flex-col items-center justify-center gap-5 p-6 transition-colors duration-300", isDark ? "bg-[#040e04] text-zinc-100" : "bg-[#f9fafb] text-zinc-800")}>
         <PremiumLoader type="squares-sequential" text="Carregando Sistema" subtext="PCM • EUNAMAN SISTEMA" />
+        {travouCarregando && (
+          <div className="flex flex-col items-center gap-3 text-center max-w-xs animate-in fade-in duration-300">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Isso está demorando mais que o esperado.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow transition-colors"
+            >
+              Recarregar
+            </button>
+          </div>
+        )}
       </div>
     );
   }

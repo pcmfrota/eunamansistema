@@ -287,8 +287,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        // Timeout de segurança: sem isso, se getSession() travar (sessão corrompida,
+        // storage bloqueado etc.) a tela de carregamento nunca sai do lugar — mesmo
+        // raciocínio do timeout de 5s já usado em syncWithDatabase, aqui aplicado ao
+        // primeiro passo da inicialização, que não tinha nenhuma proteção.
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout de 5 segundos ao obter sessão')), 5000)
+        );
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+
         if (!mounted) return;
 
         if (session?.user) {
