@@ -70,6 +70,15 @@ public class EunamanActivity extends AppCompatActivity {
     private String      currentPhotoPath;
     private Uri         photoUri;
 
+    // Trava de seguranca para navegacao pendurada: ao retomar do segundo plano no Android,
+    // a ConnectivityManager pode reportar rede disponivel antes do radio realmente terminar
+    // de reconectar, deixando a requisicao da pagina pendurada sem nunca chamar
+    // onReceivedError nem onPageFinished (nao eh um erro, so nunca responde). Sem isso a
+    // splash/"Carregando Sistema" fica presa pra sempre, porque nem a splash eh liberada
+    // nem o JS da pagina chega a carregar pra acionar o proprio timer de seguranca dele.
+    private final Handler watchdogHandler = new Handler(Looper.getMainLooper());
+    private Runnable pageLoadWatchdogRunnable;
+
     private boolean isLoggingOut = false;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
@@ -94,7 +103,23 @@ public class EunamanActivity extends AppCompatActivity {
         if (webView != null) {
             configureWebView();
             if (savedInstanceState != null) {
-                webView.restoreState(savedInstanceState);
+                android.webkit.WebBackForwardList historico = webView.restoreState(savedInstanceState);
+                if (historico == null) {
+                    // Restauracao falhou (Bundle invalido/incompativel) — o WebView fica sem
+                    // nenhuma pagina carregada. Sem isso, a splash nativa ficaria presa pra
+                    // sempre porque nenhuma navegacao chega a acontecer.
+                    Log.w(TAG, "restoreState() falhou, carregando URL inicial do zero.");
+                    webView.loadUrl(getString(R.string.launch_url));
+                } else {
+                    // restoreState() eh o caminho de "reabrir o app depois do Android matar o
+                    // processo em segundo plano por falta de memoria" — o caso mais comum de
+                    // todos, e tipicamente numa tela profunda (ex: /mao-de-obra), nao na Home.
+                    // Ele NAO dispara onPageStarted/onPageFinished de forma confiavel em todas
+                    // as versoes do WebView, entao o watchdog normal (armado dentro de
+                    // onPageStarted) pode nunca ser ativado nesse caminho especifico. Arma aqui
+                    // tambem, direto, sem depender de nenhum callback do WebViewClient.
+                    armWatchdogAposRestoreState();
+                }
             } else {
                 // Se o app foi aberto por um link externo (ex: e-mail de redefinição de senha,
                 // que usa App Links para abrir direto no app), carrega essa URL específica.
@@ -103,6 +128,24 @@ public class EunamanActivity extends AppCompatActivity {
                 webView.loadUrl(deepLinkUrl != null ? deepLinkUrl : getString(R.string.launch_url));
             }
         }
+    }
+
+    private void armWatchdogAposRestoreState() {
+        watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+        final String urlRestaurada = webView.getUrl();
+        pageLoadWatchdogRunnable = () -> {
+            Log.w(TAG, "Watchdog pos-restoreState: pagina nao confirmou carregamento em " + PAGE_LOAD_TIMEOUT_MS + "ms (" + urlRestaurada + "). Forcando reload.");
+            webView.stopLoading();
+            webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+            webView.loadUrl(urlRestaurada != null ? urlRestaurada : getString(R.string.launch_url));
+        };
+        watchdogHandler.postDelayed(pageLoadWatchdogRunnable, PAGE_LOAD_TIMEOUT_MS);
+    }
+
+    @Override
+    protected void onDestroy() {
+        watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+        super.onDestroy();
     }
 
     @Override
@@ -186,14 +229,29 @@ public class EunamanActivity extends AppCompatActivity {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                
+
                 // Sempre usa o modo padrão: o Service Worker cuidará da inteligência offline.
                 // Forçar LOAD_CACHE_ONLY aqui estava impedindo o carregamento de arquivos novos.
                 view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+
+                // Watchdog: se a navegacao nao terminar em PAGE_LOAD_TIMEOUT_MS, forca reload
+                // em modo cache-only. Independente da decisao acima (nao forcar cache-only de
+                // saida), isso so age como ultimo recurso se a requisicao ficar pendurada sem
+                // nunca chamar onReceivedError nem onPageFinished.
+                watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+                pageLoadWatchdogRunnable = () -> {
+                    Log.w(TAG, "Watchdog: navegacao nao terminou em " + PAGE_LOAD_TIMEOUT_MS + "ms (" + url + "). Forcando carga via cache.");
+                    view.stopLoading();
+                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+                    view.loadUrl(url);
+                };
+                watchdogHandler.postDelayed(pageLoadWatchdogRunnable, PAGE_LOAD_TIMEOUT_MS);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+
                 // Sincronização agressiva de cookies (Grava a sessão no disco físico)
                 new Thread(() -> CookieManager.getInstance().flush()).start();
 
