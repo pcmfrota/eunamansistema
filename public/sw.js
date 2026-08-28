@@ -201,8 +201,11 @@ self.addEventListener("fetch", (event) => {
           return cachedResponse;
         }
 
-        // Se não achar no cache, busca na rede e salva dinamicamente
-        return fetchComTimeout(event.request).then((response) => {
+        // Para assets estáticos, tentamos a rede COM timeout mas se falhar,
+        // tentamos SEM timeout (pode ser arquivo grande ou rede lenta)
+        return fetchComTimeout(event.request, 10000).catch(() => {
+          return fetch(event.request);
+        }).then((response) => {
           if (!response || response.status !== 200) {
             return response;
           }
@@ -211,6 +214,11 @@ self.addEventListener("fetch", (event) => {
             cache.put(event.request, responseClone);
           });
           return response;
+        }).catch(() => {
+          // Fallback supremo para CSS/JS: retorna um script vazio ou CSS vazio
+          // para que o navegador não interrompa o parser.
+          const mime = event.request.url.endsWith(".css") ? "text/css" : "application/javascript";
+          return new Response("", { headers: { "Content-Type": mime } });
         });
       })
     );

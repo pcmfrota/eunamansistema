@@ -421,6 +421,9 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
           "fixed inset-y-0 right-0 w-full max-w-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 border-l border-zinc-200 dark:border-zinc-800 z-[10001] shadow-2xl flex flex-col backdrop-blur-md transition-transform duration-300 ease-out",
           isDrawerOpen ? "translate-x-0" : "translate-x-full"
         )}
+        style={{
+          display: isDrawerOpen ? 'flex' : 'none' // Força ocultação mesmo sem CSS
+        }}
       >
         {/* Drawer Header */}
         <div className="p-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">

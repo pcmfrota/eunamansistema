@@ -152,19 +152,76 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   if (showLoader) {
     return (
-      <div className={cn("min-h-screen flex flex-col items-center justify-center gap-5 p-6 transition-colors duration-300", isDark ? "bg-[#040e04] text-zinc-100" : "bg-[#f9fafb] text-zinc-800")}>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '20px',
+          padding: '24px',
+          backgroundColor: isDark ? "#040e04" : "#f9fafb",
+          color: isDark ? "#f1f5f9" : "#111827",
+          fontFamily: 'sans-serif',
+          textAlign: 'center'
+        }}
+      >
         <PremiumLoader type="squares-sequential" text="Carregando Sistema" subtext="PCM • EUNAMAN SISTEMA" />
         {travouCarregando && (
-          <div className="flex flex-col items-center gap-3 text-center max-w-xs animate-in fade-in duration-300">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
+              marginTop: '40px',
+              maxWidth: '280px'
+            }}
+          >
+            <p style={{ fontSize: '13px', opacity: 0.7, fontWeight: 'bold' }}>
               Isso está demorando mais que o esperado.
             </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow transition-colors"
-            >
-              Recarregar
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  backgroundColor: '#059669',
+                  color: 'white',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '900',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                TENTAR NOVAMENTE
+              </button>
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined' && (window as any).EunamanApp?.clearCache) {
+                    (window as any).EunamanApp.clearCache();
+                  } else {
+                    alert("Função disponível apenas no aplicativo nativo.");
+                  }
+                }}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  backgroundColor: 'transparent',
+                  color: isDark ? '#ef4444' : '#b91c1c',
+                  border: `1.5px solid ${isDark ? '#ef4444' : '#b91c1c'}`,
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                LIMPAR LIXO DO SISTEMA
+              </button>
+            </div>
           </div>
         )}
       </div>
