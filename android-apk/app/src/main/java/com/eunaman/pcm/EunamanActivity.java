@@ -70,15 +70,6 @@ public class EunamanActivity extends AppCompatActivity {
     private String      currentPhotoPath;
     private Uri         photoUri;
 
-    // Trava de seguranca para navegacao pendurada: ao retomar do segundo plano no Android,
-    // a ConnectivityManager pode reportar rede disponivel antes do radio realmente terminar
-    // de reconectar, deixando a requisicao da pagina pendurada sem nunca chamar
-    // onReceivedError nem onPageFinished (nao eh um erro, so nunca responde). Sem isso a
-    // splash/"Carregando Sistema" fica presa pra sempre, porque nem a splash eh liberada
-    // nem o JS da pagina chega a carregar pra acionar o proprio timer de seguranca dele.
-    private final Handler watchdogHandler = new Handler(Looper.getMainLooper());
-    private Runnable pageLoadWatchdogRunnable;
-
     private boolean isLoggingOut = false;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
@@ -130,11 +121,6 @@ public class EunamanActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    protected void onDestroy() {
-        watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
-        super.onDestroy();
-    }
 
     /** Extrai a URL de um Intent de deep link (ACTION_VIEW), ou null se não for um. */
     private String extractDeepLinkUrl(Intent intent) {
@@ -201,27 +187,13 @@ public class EunamanActivity extends AppCompatActivity {
                 super.onPageStarted(view, url, favicon);
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
                 
-                // Se a rede estiver instável, trava no modo cache para não dar erro
-                if (!isNetworkAvailable()) {
-                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
-                } else {
-                    view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
-                }
-
-                watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
-                pageLoadWatchdogRunnable = () -> {
-                    Log.w(TAG, "Watchdog: navegacao nao terminou em " + PAGE_LOAD_TIMEOUT_MS + "ms (" + url + "). Forcando carga via cache.");
-                    view.stopLoading();
-                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
-                    view.loadUrl(url);
-                };
-                watchdogHandler.postDelayed(pageLoadWatchdogRunnable, PAGE_LOAD_TIMEOUT_MS);
+                // Sempre usa o modo padrão: o Service Worker cuidará da inteligência offline.
+                // Forçar LOAD_CACHE_ONLY aqui estava impedindo o carregamento de arquivos novos.
+                view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
-
                 // Sincronização agressiva de cookies (Grava a sessão no disco físico)
                 new Thread(() -> CookieManager.getInstance().flush()).start();
 
@@ -235,17 +207,14 @@ public class EunamanActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
-                    // Tenta forçar o carregamento do cache antes de mostrar tela de erro
-                    if (view.getSettings().getCacheMode() != WebSettings.LOAD_CACHE_ONLY) {
-                        view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
-                        view.loadUrl(request.getUrl().toString());
-                        return;
-                    }
-
+                    // Se falhar a rede no frame principal, mostra tela de erro com opção de limpar cache.
                     String errorHtml = "<html><body style='display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;'>"
-                            + "<h2 style='color:#333;'>Sem Conexão com a Internet</h2>"
-                            + "<p style='color:#666;'>Verifique o Wi-Fi do seu tablet e tente novamente.</p>"
-                            + "<button onclick='window.location.reload()' style='padding:15px 30px;background:#007bff;color:white;border:none;border-radius:5px;font-size:18px;'>Tentar Novamente</button>"
+                            + "<h2 style='color:#333;'>Erro de Carregamento</h2>"
+                            + "<p style='color:#666;'>O sistema não conseguiu carregar os arquivos necessários.</p>"
+                            + "<div style='display:flex;gap:10px;flex-direction:column;width:100%;max-width:300px;'>"
+                            + "<button onclick='window.location.reload()' style='padding:15px;background:#22c55e;color:white;border:none;border-radius:12px;font-size:16px;font-weight:bold;'>Tentar Novamente</button>"
+                            + "<button onclick='EunamanApp.clearCache()' style='padding:12px;background:#f4f4f5;color:#71717a;border:1px solid #e4e4e7;border-radius:12px;font-size:14px;'>Limpar Lixo e Reiniciar</button>"
+                            + "</div>"
                             + "</body></html>";
                     view.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null);
                     
@@ -605,6 +574,17 @@ public class EunamanActivity extends AppCompatActivity {
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
+
+        @JavascriptInterface
+        public void clearCache() {
+            runOnUiThread(() -> {
+                webView.clearCache(true);
+                WebStorage.getInstance().deleteAllData();
+                CookieManager.getInstance().removeAllCookies(null);
+                Toast.makeText(EunamanActivity.this, "Lixo de sistema removido. Reiniciando...", Toast.LENGTH_LONG).show();
+                webView.loadUrl(getString(R.string.launch_url));
+            });
+        }
 
         @JavascriptInterface
         public void saveBase64File(String base64Data, String filename, String mimeType) {

@@ -95,19 +95,33 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [travouCarregando, setTravouCarregando] = useState(false);
+  const [forcedReady, setForcedReady] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Trava de segurança: se por qualquer motivo (sessão presa, IndexedDB bloqueado por outra
-  // aba, etc.) a tela de carregamento nunca resolver sozinha, depois de 10s oferece um jeito
-  // de sair dela em vez de travar para sempre — nunca vimos essa causa exata acontecer antes,
-  // mas uma tela de carregamento sem nenhuma saída manual é sempre um risco.
+  // Trava de segurança: se por qualquer motivo a tela de carregamento nunca resolver sozinha,
+  // depois de 10s oferece um jeito de sair ou tenta forçar a montagem.
   useEffect(() => {
-    const timer = setTimeout(() => setTravouCarregando(true), 10000);
-    return () => clearTimeout(timer);
-  }, []);
+    const timer = setTimeout(() => {
+      setTravouCarregando(true);
+      // Pulo do gato: se passar de 15s e tivermos ao menos o usuário, força a entrada
+      // Isso resolve casos onde o Profile demorou mas o sistema pode rodar com cache local
+    }, 10000);
+
+    const forceTimer = setTimeout(() => {
+      if (user) {
+        setForcedReady(true);
+        console.warn('[MainLayout] Forçando exibição por timeout de 15s');
+      }
+    }, 15000);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(forceTimer);
+    };
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -134,7 +148,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   // Unifica a exibição de loading para evitar discrepâncias entre o HTML do servidor (SSR)
   // e o primeiro ciclo de render do cliente (Hydration).
-  const showLoader = !mounted || (!isLoginPage && !isPortalPage && (authLoading || (user && !profile)));
+  const showLoader = !forcedReady && (!mounted || (!isLoginPage && !isPortalPage && (authLoading || (user && !profile))));
 
   if (showLoader) {
     return (
