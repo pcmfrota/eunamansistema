@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer } from "lucide-react";
+import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, ArrowLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { registrarInspecaoCompleta, atualizarInspecao, excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
@@ -13,6 +13,7 @@ import PneuEsquemaModal from "./PneuEsquemaModal";
 import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };
@@ -64,7 +65,7 @@ function fmtDate(dateStr: string | null) {
   return `${d}/${m}/${y}`;
 }
 
-type Tab = "dashboard" | "leves" | "lista" | "historico";
+type Tab = "menu" | "dashboard" | "leves" | "lista" | "historico";
 
 export default function PneusClient({
   equipamentos,
@@ -107,8 +108,11 @@ export default function PneusClient({
   const { profile } = useAuth();
   const isVisitante = profile?.role === "visitante";
 
-  const [tab, setTab] = useState<Tab>("dashboard");
+  // Tela inicial é o menu de cards — mais limpa, principalmente pra uso no app.
+  const [tab, setTab] = useState<Tab>("menu");
   const handleSetTab = (t: Tab) => { setTab(t); setModuloFiltro("TODOS"); setCondicaoFiltro("TODOS"); };
+  // Filtros (placa/data/status) ficam ocultos por padrão dentro de cada seção.
+  const [showFiltros, setShowFiltros] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAIReportOpen, setIsAIReportOpen] = useState(false);
@@ -664,10 +668,10 @@ export default function PneusClient({
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[100rem] mx-auto w-full h-full animate-in fade-in duration-500">
       
-      {/* Header Section */}
+      {/* Header Section — sempre visível; ações e filtros só aparecem fora do menu inicial */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-zinc-950 p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
          <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/5 blur-3xl rounded-full -mr-20 -mt-20 group-hover:bg-orange-500/10 transition-colors" />
-         
+
          <div className="flex items-center gap-5 relative z-10">
             <div className="p-4 bg-orange-500 text-white rounded-2xl shadow-xl shadow-orange-500/20">
               <Circle size={28} fill="currentColor" fillOpacity={0.2} />
@@ -681,68 +685,46 @@ export default function PneusClient({
             </div>
          </div>
 
+          {tab !== "menu" && (
           <div className="flex flex-wrap items-center gap-3 relative z-10">
-            {/* Filtro por Placa */}
-            <div className="relative group">
-               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
-               <input 
-                 type="text" 
-                 placeholder="PLACA..." 
-                 value={search}
-                 onChange={e => setSearch(e.target.value)}
-                 className="pl-12 pr-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all w-44"
-               />
-            </div>
-
-            {/* Filtro por Data */}
-            <div className="flex items-center bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-1.5 gap-2">
-              <input 
-                type="date" 
-                value={dateInicio}
-                onChange={e => setDateInicio(e.target.value)}
-                className="bg-transparent text-[10px] font-black uppercase outline-none text-zinc-600 dark:text-zinc-400"
-              />
-              <span className="text-zinc-300 font-bold">/</span>
-              <input 
-                type="date" 
-                value={dateFim}
-                onChange={e => setDateFim(e.target.value)}
-                className="bg-transparent text-[10px] font-black uppercase outline-none text-zinc-600 dark:text-zinc-400"
-              />
-            </div>
-
-            {/* Filtro por Status */}
-            <select 
-              value={searchStatus}
-              onChange={e => setSearchStatus(e.target.value)}
-              className="px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none transition-all cursor-pointer"
+            {/* Voltar ao menu de cards */}
+            <button
+              onClick={() => handleSetTab("menu")}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs font-black text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <option value="">TODOS STATUS</option>
-              {Object.keys(counts).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+              <ArrowLeft size={15} /> Voltar
+            </button>
 
-            {(search || searchStatus) && (
-              <button 
-                onClick={handleClearFilters}
-                className="px-4 py-3 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-2xl transition-all"
-              >
-                Limpar
-              </button>
-            )}
+            {/* Botão Filtros — retrátil, fechado por padrão pra manter a tela limpa */}
+            <button
+              onClick={() => setShowFiltros(v => !v)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-3 rounded-2xl border text-xs font-black uppercase tracking-widest transition-colors",
+                showFiltros
+                  ? "bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400"
+                  : "bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              )}
+            >
+              <Filter size={15} /> Filtros
+              {(search || searchStatus) && (
+                <span className="px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[9px] leading-none">•</span>
+              )}
+              <ChevronDown size={14} className={cn("transition-transform", showFiltros && "rotate-180")} />
+            </button>
 
             <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm">
                <Download size={16} /> Exportar
             </button>
 
             {!isVisitante && (
-              <button 
+              <button
                   onClick={() => alert("Histórico da quinzena arquivado com sucesso. Iniciando novo ciclo...")}
                   className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-orange-600 border border-orange-200 dark:border-orange-900/50 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all"
               >
                  <Archive size={16} /> Fechar Ciclo
               </button>
             )}
-            
+
             {!isVisitante ? (
               <>
                 <button onClick={() => setIsImportOpen(true)} className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm">
@@ -760,8 +742,79 @@ export default function PneusClient({
               </div>
             )}
          </div>
+          )}
       </div>
 
+      {/* ─── MENU DE CARDS (TELA INICIAL) ─── */}
+      {tab === "menu" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {!isVisitante && (
+            <button
+              onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
+            >
+              <div className="p-3 bg-orange-500 text-white rounded-xl shadow-md">
+                <Plus size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Registrar</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Lançar um novo boletim de inspeção</p>
+              </div>
+            </button>
+          )}
+
+          <button
+            onClick={() => handleSetTab("dashboard")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
+          >
+            <div className="p-3 bg-orange-500 text-white rounded-xl shadow-md text-lg leading-none">🚛</div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Boletim Pesados</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Painel e inspeções da frota pesada</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleSetTab("leves")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+          >
+            <div className="p-3 bg-blue-500 text-white rounded-xl shadow-md text-lg leading-none">🚗</div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Boletim Leves</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Painel e inspeções da frota leve</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleSetTab("lista")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
+          >
+            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+              <ClipboardList size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Lista</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Todas as inspeções em formato de lista</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleSetTab("historico")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
+          >
+            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+              <History size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Histórico</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Ciclos e alterações já encerrados</p>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {tab !== "menu" && (
+      <>
       {criticos.length > 0 && (
         <div className="flex items-center gap-4 px-6 py-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-600 dark:text-red-400 shadow-sm animate-pulse">
           <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -771,38 +824,60 @@ export default function PneusClient({
         </div>
       )}
 
+      {showFiltros && (
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-zinc-950 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            {/* Filtro por Placa */}
+            <div className="relative group">
+               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
+               <input
+                 type="text"
+                 placeholder="PLACA..."
+                 value={search}
+                 onChange={e => setSearch(e.target.value)}
+                 className="pl-12 pr-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all w-44"
+               />
+            </div>
+
+            {/* Filtro por Data */}
+            <div className="flex items-center bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-1.5 gap-2">
+              <input
+                type="date"
+                value={dateInicio}
+                onChange={e => setDateInicio(e.target.value)}
+                className="bg-transparent text-[10px] font-black uppercase outline-none text-zinc-600 dark:text-zinc-400"
+              />
+              <span className="text-zinc-300 font-bold">/</span>
+              <input
+                type="date"
+                value={dateFim}
+                onChange={e => setDateFim(e.target.value)}
+                className="bg-transparent text-[10px] font-black uppercase outline-none text-zinc-600 dark:text-zinc-400"
+              />
+            </div>
+
+            {/* Filtro por Status */}
+            <select
+              value={searchStatus}
+              onChange={e => setSearchStatus(e.target.value)}
+              className="px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none transition-all cursor-pointer"
+            >
+              <option value="">TODOS STATUS</option>
+              {Object.keys(counts).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {(search || searchStatus) && (
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-3 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-2xl transition-all"
+              >
+                Limpar
+              </button>
+            )}
+        </div>
+      )}
+
       {/* Main Tabs */}
       <div className="flex flex-col gap-6">
-        <div className="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl w-fit border border-zinc-200 dark:border-zinc-800">
-           {/* Pesados */}
-           <button 
-             onClick={() => handleSetTab("dashboard")}
-             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "dashboard" ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
-           >
-             🚛 Pesados
-           </button>
-           {/* Carros Leves */}
-           <button 
-             onClick={() => handleSetTab("leves")}
-             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "leves" ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
-           >
-             🚗 Carros Leves
-           </button>
-           {/* Lista */}
-           <button 
-             onClick={() => handleSetTab("lista")}
-             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "lista" ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
-           >
-             Lista
-           </button>
-           {/* Histórico */}
-           <button 
-             onClick={() => handleSetTab("historico")}
-             className={`px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${tab === "historico" ? "bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-md" : "text-zinc-500 hover:text-zinc-700 hover:bg-white/50"}`}
-           >
-             Histórico
-           </button>
-        </div>
 
         {(tab === "dashboard" || tab === "leves") && (
           <div className="space-y-6">
@@ -1322,6 +1397,8 @@ export default function PneusClient({
            </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Modals */}
       <PneusModal 
