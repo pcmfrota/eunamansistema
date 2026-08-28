@@ -799,7 +799,7 @@ export function GraficoVeiculos({
           <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
             <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500" />
-              Ranking — Quem Mais Puxa a DM
+              Ranking de Impedimentos
             </h3>
             <span className="text-[10px] text-zinc-400 dark:text-zinc-600 italic">
               Top {piores.length} · menor DM primeiro · toque numa placa para ver a ficha completa
