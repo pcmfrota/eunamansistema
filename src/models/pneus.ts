@@ -30,6 +30,10 @@ export interface InspecaoPneu {
   tde1?: number | null;
   estepe?: number | null;
   created_at?: string;
+
+  // Quem registrou o boletim — usado no Histórico e na restrição de visualização por usuário
+  registrado_por?: string | null;
+  registrado_por_nome?: string | null;
 }
 
 export interface InspecaoPneuInsert extends Omit<InspecaoPneu, 'id' | 'created_at'> {}

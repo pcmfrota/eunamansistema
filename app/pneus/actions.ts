@@ -3,21 +3,43 @@
 import { PneusService } from '@/src/services/PneusService';
 import { revalidatePath } from 'next/cache';
 import { getCurrentLocalDate } from '@/src/utils/dateUtils';
+import { createClient } from '@/utils/supabase/server';
 
 const POSICOES = ['de','dd','tei','tee','tdi','tde','tei1','tee1','tdi1','tde1','estepe'] as const
+
+// Quem está autenticado no momento — grava em cada boletim pra alimentar o Histórico
+// e a restrição de visualização por usuário (mecânico só vê o que ele mesmo lançou).
+async function getUsuarioAtual() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { registrado_por: null, registrado_por_nome: null };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  return {
+    registrado_por: user.id,
+    registrado_por_nome: profile?.full_name || user.email || 'Usuário',
+  };
+}
 
 export async function registrarInspecaoPneu(formData: FormData) {
   try {
     const sulco_mm = parseFloat(formData.get('sulco_mm') as string);
     const posicoes: any = { [formData.get('eixo') as string]: sulco_mm };
     const condicao = PneusService.calcCondicao(posicoes);
+    const usuario = await getUsuarioAtual();
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
       data_inspecao: getCurrentLocalDate(),
       km_atual: null,
       condicao,
-      ...posicoes
+      ...posicoes,
+      ...usuario
     };
 
     await PneusService.create(data);
@@ -51,6 +73,7 @@ export async function registrarInspecaoCompleta(formData: FormData) {
 
     const rawCondicao = formData.get('condicao') as string;
     const condicao = PneusService.sanitizeCondicao(rawCondicao, PneusService.calcCondicao(posicoes));
+    const usuario = await getUsuarioAtual();
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
@@ -59,11 +82,12 @@ export async function registrarInspecaoCompleta(formData: FormData) {
       horimetro_registro: formData.get('horimetro_registro') ? parseFloat(formData.get('horimetro_registro') as string) : null,
       observacoes: formData.get('observacoes') as string,
       condicao,
-      ...posicoes
+      ...posicoes,
+      ...usuario
     };
 
     await PneusService.create(data);
-    
+
     revalidatePath('/pneus');
     revalidatePath('/');
     return { success: true };

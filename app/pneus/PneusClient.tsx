@@ -29,6 +29,8 @@ type Inspecao = {
   condicao: string;
   equipamentos?: { placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
   _isPendingSync?: boolean;
+  registrado_por?: string | null;
+  registrado_por_nome?: string | null;
 };
 
 const POSICOES = ["de","dd","tei","tee","tdi","tde","tei1","tee1","tdi1","tde1","estepe"] as const;
@@ -105,8 +107,9 @@ export default function PneusClient({
     };
   }, []);
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const isVisitante = profile?.role === "visitante";
+  const isAdmin = profile?.role === "admin";
 
   // Tela inicial é o menu de cards — mais limpa, principalmente pra uso no app.
   const [tab, setTab] = useState<Tab>("menu");
@@ -266,6 +269,14 @@ export default function PneusClient({
     const matchesDate = (!dateInicio || iDate >= dateInicio) && (!dateFim || iDate <= dateFim);
     return matchesSearch && matchesStatus && matchesDate;
   });
+
+  // Histórico é auditoria por usuário: mecânico/motorista só vê o que ele mesmo registrou
+  // (mais os boletins antigos sem essa marca, já que não dá pra saber de quem eram); admin
+  // continua vendo tudo. Não mexe no Dashboard (Veículos) nem na Lista — essas são a visão
+  // operacional da frota inteira, não um log de quem lançou, e precisam continuar globais.
+  const historicoVisivel = isAdmin
+    ? filteredInspecoesRows
+    : filteredInspecoesRows.filter(i => !i.registrado_por || i.registrado_por === user?.id);
 
   const handleClearFilters = () => {
     setSearch("");
@@ -1307,6 +1318,7 @@ export default function PneusClient({
                       <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
                       <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">KM</th>
                       <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
+                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Registrado por</th>
                       <th colSpan={3} className="px-4 py-4 font-black uppercase text-zinc-400 text-right">Controle</th>
                     </tr>
                   </thead>
@@ -1333,6 +1345,9 @@ export default function PneusClient({
                         <td className="px-4 py-4 text-center">
                           <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
                         </td>
+                        <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
+                          {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
+                        </td>
                         <td className="px-4 py-4 text-right" colSpan={3}>
                            {!isVisitante && (
                               <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1352,8 +1367,13 @@ export default function PneusClient({
 
         {tab === "historico" && (
            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
-             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
                <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 px-2">Histórico Completo de Inspeções</h4>
+               {!isAdmin && (
+                 <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 px-2">
+                   Mostrando só os boletins que você registrou
+                 </span>
+               )}
              </div>
              <div className="overflow-x-auto min-h-[300px]">
                 <table className="w-full text-xs text-left">
@@ -1364,10 +1384,11 @@ export default function PneusClient({
                       <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">KM</th>
                       {POSICOES.map(p => <th key={p} className="px-2 py-4 font-black uppercase text-zinc-400 text-center">{p}</th>)}
                       <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
+                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Registrado por</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                    {filteredInspecoesRows.map(ins => (
+                    {historicoVisivel.map(ins => (
                       <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
                         <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
                           <span
@@ -1388,6 +1409,9 @@ export default function PneusClient({
                         ))}
                         <td className="px-4 py-4 text-center">
                           <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
+                        </td>
+                        <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
+                          {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
                         </td>
                       </tr>
                     ))}
