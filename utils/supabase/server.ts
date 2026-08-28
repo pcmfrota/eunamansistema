@@ -24,6 +24,15 @@ export const createClient = () => {
           }
         },
       },
+      // O Supabase faz suas chamadas via fetch() por baixo dos panos, e o Next.js 14
+      // cacheia automaticamente qualquer fetch() GET (é o caso de todo .select()) por
+      // tempo indeterminado, mesmo dentro de uma Server Action — sem isso, dashboards
+      // e listagens podiam continuar mostrando dados desatualizados do banco mesmo
+      // muito tempo depois de um registro mudar, sem nenhum jeito confiável de saber
+      // quando os dados exibidos deixaram de refletir o banco real.
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
     }
   );
 };
