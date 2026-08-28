@@ -101,13 +101,17 @@ export async function saveLavagem(formData: FormData) {
   if (img3) lavagemData.imagem_3_url = img3
   if (imgH) lavagemData.imagem_horimetro_url = imgH
 
+  // O cliente já manda um UUID de verdade mesmo em registros novos (pra poder salvar
+  // localmente offline antes de sincronizar) — por isso é upsert por id, não um
+  // if/else de "tem id → update, não tem → insert": um id novo que ainda não existe
+  // na tabela cairia no update e não salvaria nada (update em id inexistente não dá
+  // erro, só não afeta nenhuma linha).
   let error;
   if (id) {
-    const { error: updateError } = await supabase
+    const { error: upsertError } = await supabase
       .from('lavagens')
-      .update(lavagemData)
-      .eq('id', id)
-    error = updateError
+      .upsert({ ...lavagemData, id }, { onConflict: 'id' })
+    error = upsertError
   } else {
     const { error: insertError } = await supabase
       .from('lavagens')

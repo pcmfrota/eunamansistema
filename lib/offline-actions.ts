@@ -252,7 +252,14 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
 
     else if (entity === "lavagem") {
       if (action === "create" || action === "update") {
-        const formData = deserializeToFormData(payload);
+        // Lançamentos enfileirados antes da correção do id (o cliente gerava um "temp_..."
+        // em vez de um UUID de verdade) ficam presos aqui pra sempre — o Postgres rejeita
+        // esse id na coluna uuid. Remove o id inválido pra cair num insert normal (deixa o
+        // banco gerar um novo), mesmo tratamento já usado pra colaborador logo acima.
+        const payloadCorrigido = payload?.id && String(payload.id).startsWith("temp_")
+          ? { ...payload, id: undefined }
+          : payload;
+        const formData = deserializeToFormData(payloadCorrigido);
         const res = await saveLavagem(formData);
         if (res && !res.success) throw new Error(res.error);
       } else if (action === "delete") {

@@ -281,7 +281,12 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const id = modalData.id || `temp_${Date.now()}`
+    // Gera um UUID de verdade já no cliente (não um "temp_..." qualquer) — o Postgres
+    // rejeita esse id na hora de salvar (coluna é uuid), e mesmo que aceitasse, o servidor
+    // não teria como saber se é uma criação nova ou uma atualização.
+    const id = modalData.id || (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
     const dataToSave = {
       ...modalData,
       id,
