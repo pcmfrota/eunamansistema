@@ -224,6 +224,35 @@ export default function PneusClient({
     return cat === 'LEVE' || cat === 'FROTA LEVE' || cat.includes('LEVE');
   };
 
+  // Dias corridos desde o último boletim de cada equipamento, considerando TODO o
+  // histórico (não só o período selecionado nos filtros de data acima) — o lançamento
+  // é a cada 15 dias, então isso precisa refletir a última vez real que a placa subiu
+  // um boletim, independente de qual intervalo de datas está sendo visualizado no momento.
+  // null = equipamento nunca teve nenhum boletim registrado.
+  const diasSemBoletimPorEquipamento = React.useMemo(() => {
+    const ultimaDataPorEq: Record<string, string> = {};
+    inspecoes.forEach(ins => {
+      if (!ins.equipamento_id) return;
+      const data = ins.data_inspecao.split('T')[0];
+      if (!ultimaDataPorEq[ins.equipamento_id] || data > ultimaDataPorEq[ins.equipamento_id]) {
+        ultimaDataPorEq[ins.equipamento_id] = data;
+      }
+    });
+
+    const hojeMs = new Date().setHours(0, 0, 0, 0);
+    const map: Record<string, number | null> = {};
+    equipamentos.forEach(eq => {
+      const ultima = ultimaDataPorEq[eq.id];
+      if (!ultima) { map[eq.id] = null; return; }
+      const [y, m, d] = ultima.split('-').map(Number);
+      const dataMs = new Date(y, m - 1, d).setHours(0, 0, 0, 0);
+      map[eq.id] = Math.floor((hojeMs - dataMs) / 86400000);
+    });
+    return map;
+  }, [inspecoes, equipamentos]);
+
+  const LIMITE_DIAS_BOLETIM = 15;
+
   const filteredInspecoesRows = inspecoes.filter(i => {
     const eq = i.equipamento_id ? equipamentos.find(e => e.id === i.equipamento_id) : null;
     if (eq && !isEquipamentoAtivo(eq)) return false;
@@ -324,11 +353,22 @@ export default function PneusClient({
       return { pos: pos.toUpperCase(), media: vals.length ? Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10 : 0 };
     }).filter(d => d.media > 0);
 
-    return { eqs, latest, grupos, modulos, counts, pendentesCount, critList, pieData, latestDate, pMedia };
+    // Placas há mais de LIMITE_DIAS_BOLETIM dias sem nenhum boletim (ou que nunca tiveram
+    // um) — independe do período selecionado nos filtros de data, usa o histórico real.
+    const atrasados15d = eqs
+      .map(eq => ({ eq, dias: diasSemBoletimPorEquipamento[eq.id] ?? null }))
+      .filter(({ dias }) => dias === null || dias > LIMITE_DIAS_BOLETIM)
+      .sort((a, b) => {
+        if (a.dias == null) return -1;
+        if (b.dias == null) return 1;
+        return b.dias - a.dias;
+      });
+
+    return { eqs, latest, grupos, modulos, counts, pendentesCount, critList, pieData, latestDate, pMedia, atrasados15d };
   };
 
-  const pesadosData = React.useMemo(() => buildDashData('PESADA'), [equipamentos, filteredInspecoesRows]);
-  const levesData   = React.useMemo(() => buildDashData('LEVE'),   [equipamentos, filteredInspecoesRows]);
+  const pesadosData = React.useMemo(() => buildDashData('PESADA'), [equipamentos, filteredInspecoesRows, diasSemBoletimPorEquipamento]);
+  const levesData   = React.useMemo(() => buildDashData('LEVE'),   [equipamentos, filteredInspecoesRows, diasSemBoletimPorEquipamento]);
 
   // ── Active category data (feeds shared dashboard JSX) ──
   const isLevesTab = tab === 'leves';
@@ -344,6 +384,7 @@ export default function PneusClient({
   const globalLatestDate = activeData.latestDate;
   const posMedia       = activeData.pMedia;
   const total          = activeData.latest.length || 1;
+  const atrasados15d   = activeData.atrasados15d;
 
   const modulosDisponiveis = React.useMemo(
     () => (isLevesTab ? levesData : pesadosData).modulos,
@@ -362,10 +403,16 @@ export default function PneusClient({
     Object.entries(gruposFiltrados).forEach(([modulo, items]) => {
       items.forEach(row => {
         if (condicaoFiltro !== 'TODOS') {
-          const matches = condicaoFiltro === 'PENDENTE'
-            ? row.kind === 'pendente'
-            : row.kind === 'inspecao' && row.ins.condicao === condicaoFiltro;
-          if (!matches) return;
+          if (condicaoFiltro === 'ATRASADO_15D') {
+            const eqId = row.kind === 'inspecao' ? row.ins.equipamento_id : row.eq.id;
+            const dias = diasSemBoletimPorEquipamento[eqId] ?? null;
+            if (!(dias === null || dias > LIMITE_DIAS_BOLETIM)) return;
+          } else {
+            const matches = condicaoFiltro === 'PENDENTE'
+              ? row.kind === 'pendente'
+              : row.kind === 'inspecao' && row.ins.condicao === condicaoFiltro;
+            if (!matches) return;
+          }
         }
         out.push({ modulo, row });
       });
@@ -379,7 +426,7 @@ export default function PneusClient({
       return pa.localeCompare(pb);
     });
     return out;
-  }, [gruposFiltrados, condicaoFiltro]);
+  }, [gruposFiltrados, condicaoFiltro, diasSemBoletimPorEquipamento]);
 
 
   const exportExcel = () => {
@@ -808,6 +855,22 @@ export default function PneusClient({
               </div>
             </div>
 
+            {/* Aviso: placas há mais de LIMITE_DIAS_BOLETIM dias sem nenhum boletim (independe
+                do período selecionado nos filtros de data acima — usa o histórico real). */}
+            {atrasados15d.length > 0 && (
+              <div className="flex items-start gap-3 p-4 rounded-2xl border-2 border-red-300 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20">
+                <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-wide text-red-700 dark:text-red-400">
+                    {atrasados15d.length} placa{atrasados15d.length !== 1 ? "s" : ""} há mais de {LIMITE_DIAS_BOLETIM} dias sem boletim de pneus
+                  </p>
+                  <p className="text-[11px] font-semibold text-red-600/90 dark:text-red-400/80 mt-1 break-words">
+                    {atrasados15d.map(({ eq, dias }) => `${eq.placa} (${dias == null ? "nunca teve boletim" : `${dias}d`})`).join(" · ")}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Global KPI Cards — clique num cartão pra filtrar a tabela abaixo por aquele status; clique de novo pra limpar */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
               {Object.entries(counts).map(([label, val]) => {
@@ -857,6 +920,25 @@ export default function PneusClient({
                  </div>
                  <div className="text-2xl font-black text-zinc-400">{pendentesTotal}</div>
                  <p className="text-[10px] font-bold text-zinc-400 mt-0.5">PENDENTE · sem boletim</p>
+              </button>
+              {/* Atrasados > 15 dias Card */}
+              <button
+                type="button"
+                onClick={() => handleClickCondicao('ATRASADO_15D')}
+                className={`text-left bg-white dark:bg-zinc-950 p-5 rounded-2xl border-2 shadow-sm hover:shadow-md transition-all group ${
+                  condicaoFiltro === 'ATRASADO_15D'
+                    ? "border-red-500 ring-2 ring-red-500/30"
+                    : "border-red-200 dark:border-red-900/50"
+                }`}
+              >
+                 <div className="flex items-center justify-between mb-3">
+                    <span className="p-2 rounded-xl bg-red-50 text-red-500 dark:bg-red-500/10">
+                       <AlertTriangle size={18} />
+                    </span>
+                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">{condicaoFiltro === 'ATRASADO_15D' ? "Filtrando" : "Global"}</span>
+                 </div>
+                 <div className="text-2xl font-black text-red-600 dark:text-red-400">{atrasados15d.length}</div>
+                 <p className="text-[10px] font-bold text-red-500/80 mt-0.5">ATRASADAS · +{LIMITE_DIAS_BOLETIM} dias</p>
               </button>
             </div>
 
@@ -1017,7 +1099,16 @@ export default function PneusClient({
                                   >
                                     {row.eq.placa}
                                   </span>
-                                  <span className="text-[9px] text-zinc-300 dark:text-zinc-600 block tracking-widest italic">sem boletim no período</span>
+                                  {(() => {
+                                    const dias = diasSemBoletimPorEquipamento[row.eq.id] ?? null;
+                                    const atrasada = dias === null || dias > LIMITE_DIAS_BOLETIM;
+                                    const texto = dias == null ? "nunca teve boletim" : `${dias} dia${dias !== 1 ? "s" : ""} sem boletim`;
+                                    return (
+                                      <span className={`text-[9px] block tracking-widest italic ${atrasada ? "text-red-500 dark:text-red-400 not-italic font-black" : "text-zinc-300 dark:text-zinc-600"}`}>
+                                        {texto}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-4 py-3">
                                   <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase">{modulo}</span>
