@@ -116,7 +116,7 @@ export default function MaoDeObraClient({
   apontamentosCatalogo: initialApontamentosCatalogo = [],
   userRole = "mecanico"
 }: MaoDeObraClientProps) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { isOnline } = useOffline();
   const isAdmin = profile?.role === "admin" || userRole === "admin";
 
@@ -683,9 +683,25 @@ export default function MaoDeObraClient({
     }
   };
 
+  // Segurança de exibição: mecânicos e motoristas só veem as próprias fichas no histórico
+  // — só o admin acompanha o que todo mundo lançou. Prioriza created_by (id do usuário
+  // autenticado) por ser confiável; cai pro nome só em fichas antigas sem esse campo
+  // preenchido. Calculado à parte dos filtros de busca (placa/categoria/data) pra também
+  // poder alimentar o contador do card de menu sem herdar um filtro de busca esquecido.
+  const meuNomeNormalizado = (profile?.full_name || "").trim().toLowerCase();
+  const fichasVisiveis = useMemo(() => {
+    if (isAdmin) return fichas;
+    return fichas.filter(f => {
+      const donoId = (f as any).created_by;
+      return donoId
+        ? donoId === user?.id
+        : (f.mecanico_nome || "").trim().toLowerCase() === meuNomeNormalizado;
+    });
+  }, [fichas, isAdmin, user?.id, meuNomeNormalizado]);
+
   // Lista Filtrada do Histórico
   const fichasFiltradas = useMemo(() => {
-    return fichas.filter(f => {
+    return fichasVisiveis.filter(f => {
       if (filtroMecanico && !f.mecanico_nome?.toLowerCase().includes(filtroMecanico.toLowerCase())) return false;
       if (filtroPlaca) {
         const atividadesDaFicha = apontamentos.filter(a => a.jornada_id === f.id);
@@ -705,7 +721,7 @@ export default function MaoDeObraClient({
       if (filtroDataFim && dataRef > filtroDataFim) return false;
       return true;
     });
-  }, [fichas, apontamentos, filtroMecanico, filtroPlaca, filtroCategoria, filtroSupervisor, filtroDataInicio, filtroDataFim]);
+  }, [fichasVisiveis, apontamentos, filtroMecanico, filtroPlaca, filtroCategoria, filtroSupervisor, filtroDataInicio, filtroDataFim]);
 
   const inputCls = "w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed";
 
@@ -771,7 +787,7 @@ export default function MaoDeObraClient({
               <FileText size={22} />
             </div>
             <div>
-              <h3 className="text-sm font-black uppercase tracking-tight">Histórico ({fichas.length})</h3>
+              <h3 className="text-sm font-black uppercase tracking-tight">Histórico ({fichasVisiveis.length})</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ver e editar jornadas lançadas</p>
             </div>
           </button>
