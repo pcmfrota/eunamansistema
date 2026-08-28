@@ -48,6 +48,21 @@ export async function fecharFicha(id: string) {
   }
 }
 
+// Reabre uma ficha mesmo depois que o período operacional (calendario_suzano) já virou —
+// ver comentário da coluna reaberta_em na migration. Sem essa marca, só voltar o status
+// para "Aberta" não basta: a trava automática por período no cliente re-bloquearia a
+// ficha de novo assim que ela é lida.
+export async function reabrirFicha(id: string) {
+  try {
+    const result = await CaptacaoService.updateFicha(id, { status: 'Aberta', reaberta_em: new Date().toISOString() });
+    revalidatePath('/captacao');
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action reabrirFicha:", error);
+    return { error: error.message || "Erro ao reabrir ficha." };
+  }
+}
+
 export async function adicionarLancamento(data: Omit<LancamentoCaptacao, 'id' | 'created_at'>) {
   try {
     const result = await CaptacaoService.addLancamento(data);

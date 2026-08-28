@@ -13,6 +13,7 @@ export interface FichaCaptacao {
   status: 'Aberta' | 'Fechada';
   criado_por?: string;
   created_at?: string;
+  reaberta_em?: string | null;
   lancamentos?: LancamentoCaptacao[];
 }
 

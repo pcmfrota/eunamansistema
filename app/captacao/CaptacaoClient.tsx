@@ -34,11 +34,12 @@ import { useAuth } from '@/components/auth-context';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 import { SearchableSelect } from '@/components/SearchableSelect';
-import { 
-  criarFicha, 
-  fecharFicha, 
-  excluirFicha, 
-  adicionarLancamento, 
+import {
+  criarFicha,
+  fecharFicha,
+  reabrirFicha,
+  excluirFicha,
+  adicionarLancamento,
   excluirLancamento,
   atualizarFicha,
   atualizarLancamento
@@ -626,11 +627,15 @@ export default function CaptacaoClient({
   const isFichaLocked = useCallback((ficha: any) => {
     if (!ficha) return true;
     if (ficha.status === 'Fechada') return true;
-    
+
+    // Reaberta manualmente (ex: faltou lançar algo do mês passado): a marca de reabertura
+    // vence a trava automática por período abaixo, senão a ficha travaria de novo na hora.
+    if (ficha.reaberta_em) return false;
+
     // If the Ficha belongs to a past year or past month, it is automatically closed
     if (Number(ficha.ano) < currentPeriod.ano) return true;
     if (Number(ficha.ano) === currentPeriod.ano && Number(ficha.mes) < currentPeriod.mes) return true;
-    
+
     return false;
   }, [currentPeriod]);
 
@@ -1440,6 +1445,34 @@ export default function CaptacaoClient({
     }
   };
 
+  // Reabrir uma ficha já fechada (ou automaticamente travada por período) — ex: faltou
+  // lançar uma captação do mês passado. Exige internet: precisa gravar reaberta_em no
+  // servidor pra trava automática por período não reaplicar assim que a ficha for lida.
+  const handleReabrirFicha = async (id: string) => {
+    if (!isOnline) {
+      alert("Reabrir uma ficha requer conexão com a internet.");
+      return;
+    }
+    if (!window.confirm("Reabrir esta ficha para lançar um registro que ficou faltando?")) return;
+
+    const res = await reabrirFicha(id);
+    if (!res.success) {
+      alert('Erro ao reabrir ficha: ' + res.error);
+      return;
+    }
+
+    const reabertaEm = res.data?.reaberta_em || new Date().toISOString();
+    const dbFicha = await localDb.get('fichas_captacao', id);
+    if (dbFicha) {
+      await localDb.put('fichas_captacao', { ...dbFicha, status: 'Aberta', reaberta_em: reabertaEm });
+    }
+    setFichas(prev => prev.map(f => f.id === id ? { ...f, status: 'Aberta', reaberta_em: reabertaEm } : f));
+    if (selectedFicha?.id === id) {
+      setSelectedFicha((prev: any) => ({ ...prev, status: 'Aberta', reaberta_em: reabertaEm }));
+    }
+    alert("Ficha reaberta com sucesso!");
+  };
+
   // Handle Deleting a Ficha
   const handleDeleteFicha = async (id: string) => {
 
@@ -2090,6 +2123,17 @@ export default function CaptacaoClient({
                       className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-700 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full uppercase tracking-wider"
                     >
                       <span>FECHA MÊS</span>
+                    </button>
+                  )}
+
+                  {/* 4b. Reabrir ficha (mês já fechado ou virado) — faltou lançar algo */}
+                  {isFichaLocked(selectedFicha) && (profile?.role === 'admin' || profile?.role === 'pcm' || profile?.role === 'gestao') && (
+                    <button
+                      type="button"
+                      onClick={() => handleReabrirFicha(selectedFicha.id)}
+                      className="flex items-center justify-center gap-2 px-4 py-3.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-2xl text-amber-700 dark:text-amber-400 font-black text-xs transition-all active:scale-95 shadow w-full uppercase tracking-wider"
+                    >
+                      <span>REABRIR FICHA</span>
                     </button>
                   )}
 
