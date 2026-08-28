@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Users,
   UserPlus,
@@ -32,6 +32,7 @@ import {
   rejeitarUsuario,
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
+import { useOffline } from "@/components/offline-provider";
 import { cn } from "@/lib/utils";
 
 type Filial = { id: string; nome: string; ativo: boolean };
@@ -75,6 +76,13 @@ export default function UsuariosClient({
   const [profiles, setProfiles] = useState(initialProfiles);
   const [permissions, setPermissions] = useState<RolePermission[]>(initialPermissions);
   const [filiais, setFiliais] = useState<Filial[]>(initialFiliais);
+  const { isOnline } = useOffline();
+
+  // page.tsx agora sincroniza dado local/offline em segundo plano e repassa versões
+  // atualizadas dessas props — sem isso, essa atualização nunca chegaria aqui.
+  useEffect(() => { setProfiles(initialProfiles); }, [initialProfiles]);
+  useEffect(() => { setPermissions(initialPermissions); }, [initialPermissions]);
+  useEffect(() => { setFiliais(initialFiliais); }, [initialFiliais]);
   const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -103,6 +111,10 @@ export default function UsuariosClient({
   const handleSetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!passwordModalUser) return;
+    if (!isOnline) {
+      setPasswordError("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     setPasswordError(null);
     setPasswordLoading(true);
 
@@ -132,6 +144,10 @@ export default function UsuariosClient({
 
   const handleAprovar = async (p: Profile) => {
     if (isVisitante) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     const role = cargoAprovacao[p.id] || p.cargo_solicitado || "visitante";
     setAprovandoId(p.id);
     const result = await aprovarUsuario(p.id, role);
@@ -146,6 +162,10 @@ export default function UsuariosClient({
   const handleRejeitar = async (p: Profile) => {
     if (isVisitante) return;
     if (!confirm(`Rejeitar o cadastro de ${p.full_name || p.email}? A pessoa não conseguirá entrar no sistema.`)) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     setAprovandoId(p.id);
     const result = await rejeitarUsuario(p.id);
     setAprovandoId(null);
@@ -158,6 +178,10 @@ export default function UsuariosClient({
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     if (isVisitante) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     startTransition(async () => {
       const result = await updateUserRole(userId, newRole);
       if ('error' in result) {
@@ -170,6 +194,10 @@ export default function UsuariosClient({
 
   const handleFilialChange = async (userId: string, newFilial: string) => {
     if (isVisitante) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     startTransition(async () => {
       const result = await updateUserFilial(userId, newFilial);
       if ('error' in result) {
@@ -183,6 +211,10 @@ export default function UsuariosClient({
   const handleDelete = async (userId: string) => {
     if (isVisitante) return;
     if (!confirm("Tem certeza que deseja excluir permanentemente este usuário?")) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
 
     startTransition(async () => {
       const result = await deleteUser(userId);
@@ -196,6 +228,10 @@ export default function UsuariosClient({
 
   const handleCreateFilial = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!isOnline) {
+      setFilialError("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     setFilialLoading(true);
     setFilialError(null);
 
@@ -215,6 +251,10 @@ export default function UsuariosClient({
 
   const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!isOnline) {
+      setError("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -231,6 +271,10 @@ export default function UsuariosClient({
   };
 
   const handleUpdatePermissions = async (role: string, tabs: string[]) => {
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
     startTransition(async () => {
       const result = await updateRolePermissions(role, tabs);
       if ('error' in result) {

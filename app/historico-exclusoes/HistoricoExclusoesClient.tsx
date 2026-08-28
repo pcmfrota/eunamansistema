@@ -5,6 +5,8 @@ import { History, Search, RefreshCcw, User, Clock, Database, X, Eye, ShieldAlert
 import { cn } from '@/lib/utils'
 import { getHistoricoExclusoes } from './actions'
 import { PremiumLoader } from '@/components/premium-loader'
+import { localDb } from '@/lib/offline-db'
+import { useOffline } from '@/components/offline-provider'
 
 function OrigemTag({ origem }: { origem: string }) {
   const isAprovado = origem === 'SOLICITACAO_APROVADA'
@@ -20,7 +22,12 @@ function OrigemTag({ origem }: { origem: string }) {
   )
 }
 
+function sortRegistros(raw: any[]) {
+  return [...raw].sort((a, b) => (b.excluido_em || '').localeCompare(a.excluido_em || ''))
+}
+
 export default function HistoricoExclusoesClient() {
+  const { isOnline } = useOffline()
   const [registros, setRegistros] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -28,6 +35,7 @@ export default function HistoricoExclusoesClient() {
   const [filterModulo, setFilterModulo] = useState('')
   const [verSnapshot, setVerSnapshot] = useState<any | null>(null)
 
+  // Recarrega direto do Supabase (usado no botão de atualizar, exige internet)
   const load = async () => {
     setLoading(true)
     setErrorMsg(null)
@@ -37,15 +45,39 @@ export default function HistoricoExclusoesClient() {
         setErrorMsg(res.error)
       } else {
         setRegistros(res.data || [])
+        await localDb.saveMany('historico_exclusoes', res.data || [])
       }
     } finally {
       setLoading(false)
     }
   }
 
+  // Carrega local primeiro (offline-first) e, se online, sincroniza em segundo plano
+  const loadLocalFirst = async () => {
+    try {
+      const local = await localDb.getAll('historico_exclusoes')
+      setRegistros(sortRegistros(local))
+    } catch (err) {
+      console.error('Erro ao carregar histórico de exclusões local:', err)
+    }
+    setLoading(false)
+
+    if (isOnline) {
+      try {
+        const res: any = await getHistoricoExclusoes(1000)
+        if (!res.error) {
+          setRegistros(sortRegistros(res.data || []))
+          await localDb.saveMany('historico_exclusoes', res.data || [])
+        }
+      } catch (err) {
+        console.error('Erro ao sincronizar histórico de exclusões:', err)
+      }
+    }
+  }
+
   useEffect(() => {
-    load()
-  }, [])
+    loadLocalFirst()
+  }, [isOnline])
 
   const modulosUnicos = useMemo(
     () => Array.from(new Set(registros.map(r => r.modulo))).filter(Boolean).sort(),

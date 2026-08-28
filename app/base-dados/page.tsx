@@ -13,10 +13,12 @@ import {
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
-import { 
-  buscarConfiguracoes, 
-  salvarConfiguracao, 
-  excluirConfiguracao, 
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
+import {
+  buscarConfiguracoes,
+  salvarConfiguracao,
+  excluirConfiguracao,
   excluirVariasConfiguracoes,
   importarConfiguracoes,
   ConfigCategory
@@ -30,8 +32,20 @@ interface StoreData {
   'sub-sistemas': { id: string, value: string }[];
 }
 
+function groupConfigs(configs: any[]): StoreData {
+  const grouped: StoreData = { motivos: [], sistemas: [], 'sub-sistemas': [] };
+  configs.forEach((c: any) => {
+    const cat = c.category as TabType;
+    if (grouped[cat]) {
+      grouped[cat].push({ id: c.id, value: c.value });
+    }
+  });
+  return grouped;
+}
+
 export default function BaseDadosPage() {
   const { profile } = useAuth();
+  const { isOnline } = useOffline();
   const isVisitante = profile?.role === "visitante";
 
   const [activeTab, setActiveTab] = useState<TabType>('motivos');
@@ -42,27 +56,31 @@ export default function BaseDadosPage() {
   const [newItemText, setNewItemText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Carregar do Supabase
+  // Carrega local (offline-first) e, se online, atualiza em segundo plano
   const loadData = async () => {
-    setLoading(true);
-    const configs = await buscarConfiguracoes();
-    
-    // Group configs by category
-    const grouped: StoreData = { motivos: [], sistemas: [], 'sub-sistemas': [] };
-    configs.forEach((c: any) => {
-      const cat = c.category as TabType;
-      if (grouped[cat]) {
-        grouped[cat].push({ id: c.id, value: c.value });
-      }
-    });
-
-    setData(grouped);
+    try {
+      const local = await localDb.getAll('aux_config');
+      setData(groupConfigs(local));
+    } catch (err) {
+      console.error("Erro ao carregar aux_config local:", err);
+    }
     setLoading(false);
+
+    if (isOnline) {
+      try {
+        const { syncTables } = await import("@/lib/offline-sync");
+        await syncTables(["aux_config"]);
+        const configs = await buscarConfiguracoes();
+        setData(groupConfigs(configs));
+      } catch (err) {
+        console.error("Erro ao sincronizar aux_config:", err);
+      }
+    }
   };
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [isOnline]);
 
   const switchTab = (tab: TabType) => {
     setActiveTab(tab);
@@ -87,7 +105,11 @@ export default function BaseDadosPage() {
 
   const handleDeleteItem = async (id: string, name: string) => {
     if (!confirm(`Excluir permanentemente o item "${name}"?`)) return;
-    
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
+
     const res = await excluirConfiguracao(id);
     if ('error' in res) {
       alert("Erro ao excluir: " + res.error);
@@ -99,7 +121,11 @@ export default function BaseDadosPage() {
 
   const handleBatchDelete = async () => {
     if (!confirm(`Deseja excluir permanentemente os ${selectedItems.length} itens selecionados?`)) return;
-    
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
+
     const res = await excluirVariasConfiguracoes(selectedItems);
     if ('error' in res) {
       alert("Erro ao excluir itens: " + res.error);
@@ -116,6 +142,10 @@ export default function BaseDadosPage() {
     
     if (data[activeTab].some(i => i.value === text)) {
       alert("Este item já existe na lista.");
+      return;
+    }
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
       return;
     }
 
@@ -149,6 +179,10 @@ export default function BaseDadosPage() {
   const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
 
     const XLSX = (window as any).XLSX;
     if (!XLSX) {

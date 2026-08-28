@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AfiacaoDashboard from "./AfiacaoDashboard";
 import AfiacaoCorrenteDashboard from "./AfiacaoCorrenteDashboard";
 import AfiacaoSabreDashboard from "./AfiacaoSabreDashboard";
@@ -25,6 +25,17 @@ export default function AfiacaoClient({
   >("menu");
   const [afiacoes, setAfiacoes] = useState(initialAfiacoes || []);
   const [auxiliares, setAuxiliares] = useState(initialAuxiliares || []);
+
+  // A tela de Afiação (page.tsx) agora sincroniza dado local/offline em segundo plano e
+  // repassa versões atualizadas dessas props — sem este efeito, essa atualização nunca
+  // chegaria até aqui (useState só usa o valor inicial na primeira renderização).
+  useEffect(() => {
+    setAfiacoes(initialAfiacoes || []);
+  }, [initialAfiacoes]);
+
+  useEffect(() => {
+    setAuxiliares(initialAuxiliares || []);
+  }, [initialAuxiliares]);
 
   const handleUpdate = (updated: any) => {
     setAfiacoes((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));

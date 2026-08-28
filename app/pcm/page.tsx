@@ -1,25 +1,15 @@
-import { createClient } from "@/utils/supabase/server";
+"use client";
+
+import { useEffect, useState } from "react";
 import PCMClient from "./PCMClient";
+import { localDb } from "@/lib/offline-db";
+import { useOffline } from "@/components/offline-provider";
+import { PremiumLoader } from "@/components/premium-loader";
 
-export const dynamic = "force-dynamic";
-
-export default async function PCMPage() {
-  const supabase = createClient();
-
-  // Buscar preventivas com status calculado
-  const { data: prevRaw } = await supabase
-    .from("preventivas")
-    .select(
-      "id, equipamento_id, ultimo_horimetro, horimetro_atual, intervalo_horas, tipo_servico, equipamentos(placa, modelo)"
-    )
-    .order("created_at", { ascending: false });
-
-  // Calcular status e horas restantes de cada preventiva
-  const preventivas = (prevRaw ?? []).map((p: any) => {
+function buildPreventivas(prevRaw: any[]) {
+  const preventivas = (prevRaw || []).map((p: any) => {
     const restantes =
-      Number(p.ultimo_horimetro) +
-      Number(p.intervalo_horas) -
-      Number(p.horimetro_atual);
+      Number(p.ultimo_horimetro) + Number(p.intervalo_horas) - Number(p.horimetro_atual);
     const percentual =
       p.intervalo_horas > 0
         ? Math.min(
@@ -48,14 +38,82 @@ export default async function PCMPage() {
   });
 
   preventivas.sort((a, b) => a.horas_restantes - b.horas_restantes);
+  return preventivas;
+}
 
-  // Últimas OS abertas (pendentes)
-  const { data: osPendentes } = await supabase
-    .from("ordens_servico")
-    .select("id, placa, status, descricao_problema, data_abertura, motivo")
-    .eq("status", "Aberta")
-    .order("data_abertura", { ascending: false })
-    .limit(10);
+function buildOsPendentes(osRaw: any[]) {
+  return (osRaw || [])
+    .filter((os: any) => os.status === "Aberta")
+    .sort((a: any, b: any) => (a.data_abertura < b.data_abertura ? 1 : -1))
+    .slice(0, 10)
+    .map((os: any) => ({
+      id: os.id,
+      placa: os.placa,
+      status: os.status,
+      descricao_problema: os.descricao_problema,
+      data_abertura: os.data_abertura,
+      motivo: os.motivo,
+    }));
+}
 
-  return <PCMClient preventivas={preventivas} osPendentes={osPendentes ?? []} />;
+export default function PCMPage() {
+  const { isOnline } = useOffline();
+  const [loading, setLoading] = useState(true);
+  const [preventivas, setPreventivas] = useState<any[]>([]);
+  const [osPendentes, setOsPendentes] = useState<any[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadData = async () => {
+      try {
+        const stores = await localDb.getManyStores<{
+          preventivas: any[];
+          ordens_servico: any[];
+        }>(["preventivas", "ordens_servico"]);
+
+        if (active) {
+          setPreventivas(buildPreventivas(stores.preventivas || []));
+          setOsPendentes(buildOsPendentes(stores.ordens_servico || []));
+          setLoading(false);
+        }
+
+        if (isOnline) {
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["preventivas", "ordens_servico"]);
+          if (syncSuccess) {
+            const fresh = await localDb.getManyStores<{
+              preventivas: any[];
+              ordens_servico: any[];
+            }>(["preventivas", "ordens_servico"]);
+            if (active) {
+              setPreventivas(buildPreventivas(fresh.preventivas || []));
+              setOsPendentes(buildOsPendentes(fresh.ordens_servico || []));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar PCM:", err);
+        if (active) setLoading(false);
+      }
+    };
+
+    loadData();
+
+    window.addEventListener("offline-sync-completed", loadData);
+    return () => {
+      active = false;
+      window.removeEventListener("offline-sync-completed", loadData);
+    };
+  }, [isOnline]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+        <PremiumLoader type="squares-sequential" text="Carregando PCM" subtext="Buscando registros locais..." />
+      </div>
+    );
+  }
+
+  return <PCMClient preventivas={preventivas} osPendentes={osPendentes} />;
 }

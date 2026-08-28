@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 23;
+  private dbVersion = 24;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -77,6 +77,18 @@ export class OfflineDB {
 
     // Lubrificação
     if (!db.objectStoreNames.contains('fichas_lubrificacao')) db.createObjectStore('fichas_lubrificacao', { keyPath: 'id' });
+
+    // Afiação
+    if (!db.objectStoreNames.contains('afiacao')) db.createObjectStore('afiacao', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('aux_afiacao')) db.createObjectStore('aux_afiacao', { keyPath: 'id' });
+
+    // Histórico de Exclusões (auditoria, somente leitura)
+    if (!db.objectStoreNames.contains('historico_exclusoes')) db.createObjectStore('historico_exclusoes', { keyPath: 'id' });
+
+    // Admin de Usuários — lista completa de perfis e permissões por cargo
+    // (não confundir com 'user_profile', que guarda só o perfil do usuário logado)
+    if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('role_permissions')) db.createObjectStore('role_permissions', { keyPath: 'role' });
   }
 
   async open(requiredStore?: string): Promise<IDBDatabase> {

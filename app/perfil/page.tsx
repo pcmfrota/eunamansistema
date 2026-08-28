@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '@/components/auth-context'
+import { useOffline } from '@/components/offline-provider'
 import { createClient } from '@/utils/supabase/client'
 import { 
   User, 
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils'
 
 export default function PerfilPage() {
   const { profile, user, loading: authLoading, updatePassword, refreshProfile } = useAuth()
+  const { isOnline } = useOffline()
   const [loading, setLoading] = useState(false)
   const [pwLoading, setPwLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -40,6 +42,10 @@ export default function PerfilPage() {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
+    if (!isOnline) {
+      setMessage({ type: 'error', text: 'Esta ação exige conexão com a internet. Tente novamente ao reconectar.' })
+      return
+    }
 
     setLoading(true)
     setMessage(null)
@@ -82,6 +88,10 @@ export default function PerfilPage() {
       setPwMessage({ type: 'error', text: 'A senha deve ter pelo menos 6 caracteres' })
       return
     }
+    if (!isOnline) {
+      setPwMessage({ type: 'error', text: 'Esta ação exige conexão com a internet. Tente novamente ao reconectar.' })
+      return
+    }
 
     setPwLoading(true)
     setPwMessage(null)
@@ -100,8 +110,12 @@ export default function PerfilPage() {
 
   const handleUploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      setLoading(true)
       if (!e.target.files || e.target.files.length === 0 || !user) return
+      if (!isOnline) {
+        setMessage({ type: 'error', text: 'Esta ação exige conexão com a internet. Tente novamente ao reconectar.' })
+        return
+      }
+      setLoading(true)
       
       const file = e.target.files[0]
       const fileExt = file.name.split('.').pop()

@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v15";
+const CACHE_NAME = "eunaman-cache-v16";
 const OFFLINE_URL = "/offline.html";
 
 // Páginas/arquivos pré-cacheados na instalação. Cada um é buscado individualmente
@@ -33,6 +33,12 @@ const PRECACHE_URLS = [
   "/lubrificacao",
   "/admin/usuarios",
   "/historico-exclusoes",
+  "/horimetro",
+  "/pcm",
+  "/perfil",
+  "/login/cadastro",
+  "/custos",
+  "/semanal",
 ];
 
 async function precache(cache) {

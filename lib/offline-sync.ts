@@ -49,7 +49,7 @@ const syncTasks: Record<
   equipamentos: (supabase) =>
     supabase
       .from("equipamentos")
-      .select("id, placa, modulo, area, tipo, categoria, status, created_at, deleted_at")
+      .select("id, placa, modelo, modulo, area, tipo, categoria, status, created_at, deleted_at")
       .is("deleted_at", null),
 
   escala_frota: (supabase) =>
@@ -80,7 +80,7 @@ const syncTasks: Record<
   preventivas: (supabase) =>
     supabase
       .from("preventivas")
-      .select("*, equipamentos(placa, tipo, categoria, modulo)")
+      .select("*, equipamentos(placa, modelo, tipo, categoria, modulo)")
       .order("data_atualizacao", { ascending: false }),
 
   inspecoes_pneus: (supabase) =>
@@ -160,6 +160,27 @@ const syncTasks: Record<
 
   fichas_lubrificacao: (supabase) =>
     supabase.from("fichas_lubrificacao").select("*, equipamento:equipamentos(placa, modulo, tipo)").is("deleted_at", null).order("data_registro", { ascending: false }),
+
+  horimetros: (supabase) =>
+    supabase.from("horimetros").select("*, equipamentos(placa, modelo)").order("data_referencia", { ascending: false }).order("created_at", { ascending: false }),
+
+  afiacao: (supabase) =>
+    supabase.from("afiacao").select("*").order("created_at", { ascending: false }),
+
+  aux_afiacao: (supabase) =>
+    supabase.from("aux_afiacao").select("*").order("value", { ascending: true }),
+
+  historico_exclusoes: (supabase) =>
+    supabase.from("historico_exclusoes").select("*").order("excluido_em", { ascending: false }).limit(1000),
+
+  profiles: (supabase) =>
+    supabase.from("profiles").select("*").order("full_name"),
+
+  role_permissions: (supabase) =>
+    supabase.from("role_permissions").select("*"),
+
+  filiais: (supabase) =>
+    supabase.from("filiais").select("id, nome, ativo").order("id"),
 };
 
 /**
