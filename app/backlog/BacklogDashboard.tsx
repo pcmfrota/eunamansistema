@@ -128,6 +128,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const [filterMes, setFilterMes] = useState(defaultMonthName)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [search, setSearch] = useState('')
+  // Painel de filtros fica fechado por padrão (discreto) — só expande ao clicar.
+  const [showFiltros, setShowFiltros] = useState(false)
 
   // Pagination states for dashboard table
   const [currentPage, setCurrentPage] = useState(1)
@@ -278,6 +280,22 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       return true
     })
   }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterDataInicio, filterDataFim, search])
+
+  // Quantos filtros estão ativos além do padrão — mostrado como selo no botão
+  // quando o painel de filtros está fechado, pra não esconder que algo está filtrando.
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (filterStatuses.length > 0 && filterStatuses.length < 3) count++
+    if (filterCriticidade) count++
+    if (filterFornecedor) count++
+    if (filterArea) count++
+    if (filterModulo) count++
+    if (filterMecanico) count++
+    if (filterDataInicio) count++
+    if (filterDataFim) count++
+    if (search) count++
+    return count
+  }, [filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterMecanico, filterDataInicio, filterDataFim, search])
 
   // Apply all filters including Mechanic
   const filtered = useMemo(() => {
@@ -657,12 +675,10 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   return (
     <div className="flex flex-col gap-4 w-full text-zinc-800 dark:text-zinc-100">
       
-      {/* ─── ROW 1: FILTROS & CRITICIDADE (Lado a Lado) ────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 w-full">
-        
-        {/* CARD: FILTROS E STATUS (Painel de Etiquetas) */}
-        <div className="lg:col-span-3 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+      {/* ─── ROW 1: PAINEL DE ETIQUETAS (Filtros — retrátil, fechado por padrão) ─── */}
+      <div className="w-full">
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 PAINEL DE ETIQUETAS
@@ -671,18 +687,43 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 ENCERRADOS X PENDÊNCIA
               </p>
             </div>
-            
-            {/* Stylized Suzano Logo */}
-            <div className="flex items-center gap-2 self-end lg:self-center">
-              <span className="text-xs font-black uppercase tracking-widest text-[#00a859] dark:text-[#2ecc71] italic">
-                suzano
-              </span>
-              <span className="w-4 h-4 bg-[#00a859] dark:bg-[#2ecc71] rounded-tl-full rounded-br-full" />
+
+            <div className="flex items-center gap-3 self-end lg:self-center">
+              {/* Botão de Filtros — retrátil e discreto, selo mostra quantos estão ativos */}
+              <button
+                type="button"
+                onClick={() => setShowFiltros(v => !v)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-colors",
+                  showFiltros
+                    ? "bg-[#00a859]/10 border-[#00a859]/30 text-[#00a859] dark:text-[#2ecc71]"
+                    : "bg-zinc-50 dark:bg-[#1e2028] border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                )}
+              >
+                <Filter size={13} />
+                Filtros
+                {activeFilterCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-[#00a859] text-white text-[8px] leading-none">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown size={13} className={cn("transition-transform", showFiltros && "rotate-180")} />
+              </button>
+
+              {/* Stylized Suzano Logo */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-widest text-[#00a859] dark:text-[#2ecc71] italic">
+                  suzano
+                </span>
+                <span className="w-4 h-4 bg-[#00a859] dark:bg-[#2ecc71] rounded-tl-full rounded-br-full" />
+              </div>
             </div>
           </div>
 
+          {showFiltros && (
+          <>
           {/* Grid de Filtros */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
             
             {/* Filtro Status Multi-select */}
             <div className="relative">
@@ -873,61 +914,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
               className="w-full pl-10 pr-6 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all shadow-sm"
             />
           </div>
-        </div>
-
-        {/* Card: ETIQUETA POR CRITICIDADE */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-          <div className="border-l-4 border-cyan-500 pl-3">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              ETIQUETA POR CRITICIDADE
-            </h3>
-            <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2">
-              {Object.entries(CRITICIDADE_COLORS).map(([name, col]) => (
-                <span key={name} className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: col.chart }} />
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="h-[180px] w-full relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={donutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, value }) => value > 0 ? `${name} ${value}` : ''}
-                  labelLine={false}
-                >
-                  {donutData.map((entry, idx) => (
-                    <Cell 
-                      key={idx} 
-                      fill={CRITICIDADE_COLORS[entry.name]?.chart || '#cbd5e1'} 
-                      stroke="transparent" 
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0]
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        CRITICIDADE {data.name}: <span className="text-cyan-400">{data.value}</span>
-                      </div>
-                    )
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          </>
+          )}
         </div>
       </div>
 
@@ -987,9 +975,64 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       </div>
 
 
-      {/* ─── ROW 3: GRÁFICOS (Área, Módulos, Tendência) ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-        
+      {/* ─── ROW 3: GRÁFICOS (Criticidade, Área, Módulos, Tendência) — agrupados juntos ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 w-full">
+
+        {/* Card: ETIQUETA POR CRITICIDADE */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div className="border-l-4 border-cyan-500 pl-3 mb-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+              ETIQUETA POR CRITICIDADE
+            </h3>
+            <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2">
+              {Object.entries(CRITICIDADE_COLORS).map(([name, col]) => (
+                <span key={name} className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: col.chart }} />
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-[200px] w-full relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={donutData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={70}
+                  paddingAngle={3}
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, value }) => value > 0 ? `${name} ${value}` : ''}
+                  labelLine={false}
+                >
+                  {donutData.map((entry, idx) => (
+                    <Cell
+                      key={idx}
+                      fill={CRITICIDADE_COLORS[entry.name]?.chart || '#cbd5e1'}
+                      stroke="transparent"
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0]
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        CRITICIDADE {data.name}: <span className="text-cyan-400">{data.value}</span>
+                      </div>
+                    )
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
         {/* Card: ETIQUETA POR ÁREA */}
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="border-l-4 border-blue-600 pl-3 mb-4">
