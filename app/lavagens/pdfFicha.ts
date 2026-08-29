@@ -19,6 +19,7 @@ export type LavagemParaPDF = {
   imagem_2_url?: string | null;
   imagem_3_url?: string | null;
   imagem_horimetro_url?: string | null;
+  assinatura_url?: string | null;
 };
 
 function fmtDataPDF(dateStr?: string | null) {
@@ -123,8 +124,9 @@ export function gerarHtmlFichaLavagem(l: LavagemParaPDF) {
          </table>
          ` : ''}
 
-         <div style="border: 2px solid #1d4ed8; padding: 6px; margin-top: 10px; display: flex; flex-direction: column; justify-content: flex-end; font-size: 8px; color: #000;">
-            <div style="border-top: 1px solid #1d4ed8; margin-top: 30px; text-align: center; padding-top: 4px;">Assinatura do Responsável</div>
+         <div style="border: 2px solid #1d4ed8; padding: 6px; margin-top: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; font-size: 8px; color: #000;">
+            ${l.assinatura_url ? `<img src="${l.assinatura_url}" style="height: 60px; object-fit: contain;" />` : ''}
+            <div style="border-top: 1px solid #1d4ed8; margin-top: ${l.assinatura_url ? '4px' : '30px'}; padding-top: 4px; width: 100%; text-align: center;">Assinatura do Responsável</div>
          </div>
       </div>
     `;

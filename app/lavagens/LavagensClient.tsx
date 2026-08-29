@@ -110,7 +110,8 @@ const BLANK_MODAL_DATA = {
   imagem_1_url: '',
   imagem_2_url: '',
   imagem_3_url: '',
-  imagem_horimetro_url: ''
+  imagem_horimetro_url: '',
+  assinatura_url: ''
 }
 
 // Helper para compressão de imagem via canvas para ~50KB
@@ -166,6 +167,8 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('Todos')
   const [filterArea, setFilterArea] = useState('Todas')
+  // Alterna qual frota o Painel mostra — evita ter que rolar a tela pra ver a outra.
+  const [painelVista, setPainelVista] = useState<'pesada' | 'leve'>('pesada')
   // Preenchido só após salvar com sucesso — troca o formulário do lançamento pela tela de
   // "Lavagem registrada" com a opção de ver/baixar a ficha em PDF.
   const [savedRecord, setSavedRecord] = useState<any | null>(null)
@@ -712,10 +715,26 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
           {/* Main Content */}
           <main className="flex-1 overflow-auto p-4 custom-scrollbar">
             {tab === 'painel' && (
-              <div className="space-y-10">
-                <PainelSecao titulo="Frota Pesada" emoji="🚛" data={painelPesados} mesLabel={format(activeDate, 'MMMM yyyy', { locale: ptBR })} />
-                <div className="border-t border-zinc-200 dark:border-zinc-800" />
-                <PainelSecao titulo="Frota Leve" emoji="🚗" data={painelLeves} mesLabel={format(activeDate, 'MMMM yyyy', { locale: ptBR })} />
+              <div className="space-y-6">
+                <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-xl p-1 border border-zinc-200 dark:border-zinc-800 w-fit">
+                  <button
+                    onClick={() => setPainelVista('pesada')}
+                    className={cn("px-4 py-2 text-xs font-black rounded-lg transition-all flex items-center gap-2", painelVista === 'pesada' ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-white")}
+                  >
+                    🚛 Frota Pesada
+                  </button>
+                  <button
+                    onClick={() => setPainelVista('leve')}
+                    className={cn("px-4 py-2 text-xs font-black rounded-lg transition-all flex items-center gap-2", painelVista === 'leve' ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-white")}
+                  >
+                    🚗 Frota Leve
+                  </button>
+                </div>
+                {painelVista === 'pesada' ? (
+                  <PainelSecao titulo="Frota Pesada" emoji="🚛" data={painelPesados} mesLabel={format(activeDate, 'MMMM yyyy', { locale: ptBR })} />
+                ) : (
+                  <PainelSecao titulo="Frota Leve" emoji="🚗" data={painelLeves} mesLabel={format(activeDate, 'MMMM yyyy', { locale: ptBR })} />
+                )}
               </div>
             )}
 
@@ -1177,6 +1196,13 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                     </>
                   )}
                 </div>
+
+                <div className="col-span-2 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                  <SignaturePad
+                    value={modalData.assinatura_url}
+                    onChange={(dataUrl) => setModalData((prev: any) => ({ ...prev, assinatura_url: dataUrl }))}
+                  />
+                </div>
               </div>
 
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
@@ -1274,6 +1300,15 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                 <ImagePreview url={selectedLavagem.imagem_3_url} label="Foto 03" />
               </div>
             </section>
+
+            {(selectedLavagem as any).assinatura_url && (
+              <section className="space-y-2">
+                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">✍️ ASSINATURA</h3>
+                <div className="p-3 bg-white rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <img src={(selectedLavagem as any).assinatura_url} className="w-full h-24 object-contain" />
+                </div>
+              </section>
+            )}
           </div>
 
           <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
@@ -1422,6 +1457,107 @@ function PainelSecao({ titulo, emoji, data, mesLabel }: {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Assinatura simples por toque/mouse num canvas — captura a confirmação de quem lavou/
+// conferiu o veículo, sem precisar de biblioteca externa. Opcional: some com "Limpar".
+function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawingRef = useRef(false)
+  const hasDrawnRef = useRef(false)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!ctx) return
+    ctx.strokeStyle = '#1d4ed8'
+    ctx.lineWidth = 2.5
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+  }, [])
+
+  // Se o valor for limpo por fora (ex: reabrir o formulário em branco), limpa o desenho também.
+  useEffect(() => {
+    if (!value && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d')
+      ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      hasDrawnRef.current = false
+    }
+  }, [value])
+
+  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    const point = 'touches' in e ? e.touches[0] : (e as React.MouseEvent)
+    return {
+      x: (point.clientX - rect.left) * (canvas.width / rect.width),
+      y: (point.clientY - rect.top) * (canvas.height / rect.height)
+    }
+  }
+
+  const start = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    drawingRef.current = true
+    const ctx = canvasRef.current?.getContext('2d')
+    if (!ctx) return
+    const { x, y } = getPos(e)
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+  }
+
+  const move = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawingRef.current) return
+    e.preventDefault()
+    const ctx = canvasRef.current?.getContext('2d')
+    if (!ctx) return
+    const { x, y } = getPos(e)
+    ctx.lineTo(x, y)
+    ctx.stroke()
+    hasDrawnRef.current = true
+  }
+
+  const end = () => {
+    if (!drawingRef.current) return
+    drawingRef.current = false
+    if (hasDrawnRef.current && canvasRef.current) {
+      onChange(canvasRef.current.toDataURL('image/png'))
+    }
+  }
+
+  const limpar = () => {
+    const ctx = canvasRef.current?.getContext('2d')
+    if (ctx && canvasRef.current) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    hasDrawnRef.current = false
+    onChange('')
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Assinatura (opcional)</label>
+        {value && (
+          <button type="button" onClick={limpar} className="text-[10px] font-black text-red-500 hover:underline uppercase tracking-widest">
+            Limpar
+          </button>
+        )}
+      </div>
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={180}
+          className="w-full h-[140px] touch-none cursor-crosshair"
+          onMouseDown={start}
+          onMouseMove={move}
+          onMouseUp={end}
+          onMouseLeave={end}
+          onTouchStart={start}
+          onTouchMove={move}
+          onTouchEnd={end}
+        />
       </div>
     </div>
   )

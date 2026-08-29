@@ -20,6 +20,7 @@ export type Lavagem = {
   imagem_2_url?: string
   imagem_3_url?: string
   imagem_horimetro_url?: string
+  assinatura_url?: string
   created_at: string
   validated_at?: string
   registrado_por?: string | null
@@ -128,11 +129,13 @@ export async function saveLavagem(formData: FormData) {
   const img2 = formData.get('imagem_2_url')
   const img3 = formData.get('imagem_3_url')
   const imgH = formData.get('imagem_horimetro_url')
+  const assinatura = formData.get('assinatura_url')
 
   if (img1) lavagemData.imagem_1_url = img1
   if (img2) lavagemData.imagem_2_url = img2
   if (img3) lavagemData.imagem_3_url = img3
   if (imgH) lavagemData.imagem_horimetro_url = imgH
+  if (assinatura) lavagemData.assinatura_url = assinatura
 
   // "Colaborador" (quem lavou) não é mais escolhido manualmente — é sempre quem está
   // logado fazendo o lançamento (lançamento rápido, pensado pro app). Só preenchemos
