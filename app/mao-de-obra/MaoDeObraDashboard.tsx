@@ -223,6 +223,8 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       .sort((a, b) => b.value - a.value);
   }, [fichasFiltradas, apontamentos]);
 
+  const totalHorasPorTipo = useMemo(() => dadosPorTipo.reduce((s, d) => s + d.value, 0) || 1, [dadosPorTipo]);
+
   // Ranking por colaborador — mostra, para cada um, quanto da carga horária da jornada
   // (início/fim apontados) foi produtivo, improdutivo, e quanto ficou sem nenhum registro.
   const ranking = useMemo(() => {
@@ -417,28 +419,25 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3 lg:col-span-2">
           <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <BarChart2 size={14} /> Distribuição por Tipo de Atividade
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-80 w-full">
             {dadosPorTipo.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={dadosPorTipo}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    dataKey="value"
-                    label={({ name, value, percent }) => `${name}: ${value}h (${(percent * 100).toFixed(0)}%)`}
-                  >
+                <BarChart data={dadosPorTipo} margin={{ top: 20, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="name" stroke="#888888" fontSize={10} interval={0} angle={-25} textAnchor="end" height={70} />
+                  <YAxis stroke="#888888" fontSize={10} />
+                  <Tooltip formatter={(value: any) => `${value}h (${((Number(value) / totalHorasPorTipo) * 100).toFixed(0)}%)`} />
+                  <Bar dataKey="value" name="Horas" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="value" position="top" fontSize={10} formatter={horasLabel} />
                     {dadosPorTipo.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
@@ -503,11 +502,11 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
         </div>
 
         {/* Horas por Colaborador (Produtivo x Improdutivo x Não Apontado) */}
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3 lg:col-span-2">
           <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <Users size={14} /> Horas por Colaborador
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-80 w-full">
             {dadosPorColaborador.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorColaborador}>
