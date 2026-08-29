@@ -62,6 +62,7 @@ const routes = [
   { name: "Documentos da Frota",      path: "/documentos",              icon: Clipboard },
   { name: "Gestão de Usuários",       path: "/admin/usuarios",          icon: User },
   { name: "Histórico de Exclusões",   path: "/historico-exclusoes",     icon: History },
+  { name: "Tentativas de Acesso",     path: "/tentativas-acesso",       icon: Shield },
 ];
 
 

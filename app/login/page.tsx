@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { KeyRound, Mail, AlertCircle, Loader2 } from 'lucide-react'
+import { registrarTentativaLogin } from '@/app/tentativas-acesso/actions'
 
 // Renderizamos aqui a UI Premium para Login
 export default function LoginPage({
@@ -104,6 +105,9 @@ export default function LoginPage({
         
         // Define o cookie de role temporário imediatamente no cliente para a middleware
         document.cookie = `x-user-role=${finalRole}; path=/; max-age=3600; SameSite=Lax`;
+
+        // Histórico de tentativas de acesso, visível ao admin em /tentativas-acesso.
+        await registrarTentativaLogin(email, true, undefined, user.id);
       }
 
       // 2. Aguarda até que o cookie do Supabase apareça no navegador (evitando redirecionamento prematuro sem sessão)
@@ -130,7 +134,9 @@ export default function LoginPage({
       window.location.replace('/');
     } catch (err: any) {
       console.error('[Login] Erro ao entrar:', err);
-      setError(err.message || 'Credenciais inválidas ou erro ao conectar');
+      const motivo = err.message || 'Credenciais inválidas ou erro ao conectar';
+      setError(motivo);
+      await registrarTentativaLogin(email, false, motivo);
       setIsSubmitting(false);
     }
   };
