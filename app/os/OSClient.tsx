@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText, Printer } from "lucide-react";
+import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText, Printer, ArrowLeft, Filter, ChevronDown } from "lucide-react";
 import {
   criarOrdemServico,
   atualizarStatusOS,
@@ -258,7 +258,9 @@ export default function ControleOSClient({
     };
   }, []);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "lista">("lista");
+  // Tela inicial é o menu de cards — mais limpa, principalmente pra uso no app.
+  const [activeTab, setActiveTab] = useState<"menu" | "dashboard" | "lista">("menu");
+  const [showFiltros, setShowFiltros] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos Status");
   const [filtroModulo, setFiltroModulo] = useState("Todos Módulos");
@@ -897,34 +899,30 @@ export default function ControleOSClient({
             </span>
           </div>
         </div>
+        {activeTab !== "menu" && (
         <div className="flex gap-3 items-center flex-wrap">
-          {/* ── Tab Switcher ── */}
-          <div className="flex rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
-                activeTab === "dashboard"
-                  ? "bg-green-600 text-white"
-                  : "bg-white dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              }`}
-            >
-              <BarChart2 size={15} /> Dashboard
-            </button>
-            <button
-              onClick={() => setActiveTab("lista")}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
-                activeTab === "lista"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              }`}
-            >
-              <List size={15} /> Lista de OS
-            </button>
-          </div>
+          <button
+            onClick={() => setActiveTab("menu")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs font-black text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <ArrowLeft size={15} /> Voltar
+          </button>
 
           {/* ── Action buttons — só na aba Lista ── */}
           {activeTab === "lista" && (
             <>
+              <button
+                onClick={() => setShowFiltros(v => !v)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors",
+                  showFiltros
+                    ? "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400"
+                    : "bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                )}
+              >
+                <Filter size={15} /> Filtros
+                <ChevronDown size={14} className={cn("transition-transform", showFiltros && "rotate-180")} />
+              </button>
               {selectedIds.size > 0 && !isVisitante && (
                 <button onClick={handleExcluirSelecionados} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
                   <Trash2 size={16} /> Apagar Selecionados ({selectedIds.size})
@@ -935,11 +933,11 @@ export default function ControleOSClient({
                   "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm",
                   isPending ? "cursor-not-allowed opacity-50" : "cursor-pointer"
                 )}>
-                  <input 
-                    type="file" 
-                    accept=".xlsx,.csv" 
-                    className="hidden" 
-                    onChange={handleImportExcel} 
+                  <input
+                    type="file"
+                    accept=".xlsx,.csv"
+                    className="hidden"
+                    onChange={handleImportExcel}
                     disabled={isPending}
                   />
                   {isPending ? (
@@ -965,7 +963,64 @@ export default function ControleOSClient({
             </>
           )}
         </div>
+        )}
       </div>
+
+      {/* ══ MENU DE CARDS (TELA INICIAL) ══ */}
+      {activeTab === "menu" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {!isVisitante ? (
+            <button
+              onClick={() => { setEditingOS(null); setModalFotos([]); setShowModal(true); }}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
+                <Plus size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Nova OS</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Abrir uma nova ordem de serviço</p>
+              </div>
+            </button>
+          ) : (
+            <div className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+              <div className="p-3 bg-zinc-200 dark:bg-zinc-800 text-zinc-400 rounded-xl">
+                <Lock size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-400">Nova OS</h3>
+                <p className="text-xs text-zinc-400 mt-1">Somente leitura para o seu perfil</p>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setActiveTab("lista")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+          >
+            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+              <List size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Lista de OS</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Buscar, filtrar e gerenciar as ordens de serviço</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
+          >
+            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
+              <BarChart2 size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Dashboard</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Indicadores e gráficos das ordens de serviço</p>
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* ══ DASHBOARD TAB ══ */}
       {activeTab === "dashboard" && (
@@ -976,6 +1031,7 @@ export default function ControleOSClient({
       {activeTab === "lista" && (
         <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
           {/* Filtros da tabela */}
+          {showFiltros && (
           <div className="p-4 border-b border-zinc-100 dark:border-zinc-800">
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Ordens de Serviço</h2>
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
@@ -1048,6 +1104,7 @@ export default function ControleOSClient({
               </select>
             </div>
           </div>
+          )}
 
           {/* Tabela */}
           <div className="overflow-x-auto">

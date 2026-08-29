@@ -540,8 +540,14 @@ export default function OSFormModal({
       clientY = e.clientY;
     }
 
+    // O canvas é esticado por CSS (w-full/h-full) pra caber em containers de larguras
+    // diferentes (celular estreito vs. desktop), mas o buffer de desenho continua fixo em
+    // 340x176 — sem essa escala, o traço sai desalinhado do dedo/cursor em telas menores.
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.moveTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
     setIsDrawing(true);
   };
 
@@ -563,7 +569,10 @@ export default function OSFormModal({
       clientY = e.clientY;
     }
 
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    ctx.lineTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
     ctx.stroke();
   };
 
@@ -1287,7 +1296,7 @@ export default function OSFormModal({
             </div>
 
             {fotos.length > 0 ? (
-              <div className="grid grid-cols-5 gap-2 mt-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
                 {fotos.map((foto, idx) => (
                   <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
                     <img src={foto} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
