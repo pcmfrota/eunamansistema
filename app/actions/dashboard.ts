@@ -298,6 +298,10 @@ export async function getDashboardData(filtros?: {
   const fimTime = parseLocal(fimFiltro);
 
   const allOS = allOSUnfiltered.filter(os => {
+    // OS "Programado" é só planejamento futuro — não pode contar como tempo de
+    // indisponibilidade (DM/DO), MTTR/MTBF nem nenhuma métrica de manutenção real
+    // enquanto o serviço não foi de fato iniciado.
+    if (os.status === 'Programado') return false;
     const osStart = parseLocal(os.horario_parada || os.data_abertura);
     const osEnd = os.data_fechamento ? parseLocal(os.data_fechamento) : null;
     return osStart <= fimTime && (!osEnd || osEnd >= inicioTime);
@@ -770,7 +774,7 @@ export async function getDashboardData(filtros?: {
 
   const statusFrota = veiculos.map(v => {
     const eq = eqMapByPlaca.get(v.placa.toUpperCase().trim());
-    const osAbertaAtiva = (osPorPlaca.get(v.placa) || []).find(o => o.status === 'Aberta' || o.status === 'Em Andamento');
+    const osAbertaAtiva = (osPorPlaca.get(v.placa) || []).find(o => o.status === 'Aberta');
 
     let statusLabel = "Disponível";
     if (osAbertaAtiva) statusLabel = "Manutenção";
@@ -893,7 +897,7 @@ export async function getDashboardData(filtros?: {
 
   const result: DashboardData = {
     totalOS: allOS.length,
-    emAndamento: allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length,
+    emAndamento: allOS.filter(o => o.status === "Aberta").length,
     osFechadas: allOS.filter(o => o.status === "Fechada" || o.status === "Concluída").length,
     disponibilidadeMedia: dm,
     dm,
@@ -901,7 +905,7 @@ export async function getDashboardData(filtros?: {
     horasManutencao: Math.round(hIndispDMTotal * 10) / 10,
     mttr,
     mtbf,
-    backlog: Math.round((allOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
+    backlog: Math.round((allOS.filter(o => o.status === "Aberta").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
     totalEquipamentos: frotaFiltrada.length,
     totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
@@ -1160,9 +1164,12 @@ export async function getOSporCategoria(
 
     // Filtra localmente por data e pertença a categoria
     const osFiltradasData = osList.filter(os => {
+      // OS "Programado" é só planejamento futuro — não conta como indisponibilidade real.
+      if (os.status === 'Programado') return false;
+
       const osPlaca = os.placa?.toUpperCase().trim();
       const osEquipId = os.equipamento_id;
-      
+
       const isFromCategory = (osPlaca && platesSet.has(osPlaca)) || (osEquipId && equipIdsSet.has(osEquipId));
       if (!isFromCategory) return false;
 

@@ -184,7 +184,8 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
   // ── KPIs
   // ─── Consolidação das Métricas ───────────────────────────────────────────
   const totalOS = ordensFiltradas.length;
-  const emAndamento = ordensFiltradas.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length;
+  const emAndamento = ordensFiltradas.filter(o => o.status === "Aberta").length;
+  const programadas = ordensFiltradas.filter(o => o.status === "Programado").length;
   const encerradas = ordensFiltradas.filter(o => o.status === "Fechada" || o.status === "Concluída").length;
   
   // Limites do período para "clipar" as horas (Padrão PCM)
@@ -210,6 +211,9 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
     const intervalosPorVeiculo = new Map<string, Array<{start: number, end: number}>>();
     
     ordensFiltradas.forEach(o => {
+      // OS "Programado" é só planejamento futuro — não pode contar como veículo
+      // parado/indisponível enquanto o serviço não começou de fato.
+      if (o.status === "Programado") return;
       const inicioOS = new Date(o.horario_parada || o.data_abertura);
       const fimOS = o.data_fechamento ? new Date(o.data_fechamento) : agoraRef;
       
@@ -485,7 +489,8 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="QTD Total de O.S" value={totalOS} sub="no período Suzano" color="#22c55e" />
-        <KpiCard label="O.S Em Andamento / Abertas" value={emAndamento} sub="aguardando conclusão" color="#f59e0b" />
+        <KpiCard label="O.S Abertas" value={emAndamento} sub="aguardando conclusão" color="#f59e0b" />
+        <KpiCard label="O.S Programadas" value={programadas} sub="agendadas, sem impacto na disponibilidade" color="#a855f7" />
         <KpiCard label="O.S Encerradas" value={encerradas} sub="concluídas no período" color="#3b82f6" />
         <KpiCard label="Horas Totais de Manutenção" value={`${totalHoras.toFixed(1)}h`} sub="somadas no período" color="#a78bfa" />
       </div>
@@ -526,8 +531,8 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
                     <td className="py-2 px-3">
                       {(o.status === "Fechada" || o.status === "Concluída")
                         ? <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">✅ Fechada</span>
-                        : o.status === "Em Andamento"
-                          ? <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">⚙️ Em Andamento</span>
+                        : o.status === "Programado"
+                          ? <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400">🗓️ Programado</span>
                           : <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">📋 Aberta</span>}
                     </td>
                   </tr>

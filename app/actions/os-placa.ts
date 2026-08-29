@@ -167,6 +167,9 @@ export async function buscarOSporPlaca(
 
   // Filtra localmente por data usando parseLocal (segurança total contra timezones no banco)
   const osFiltradasData = data.filter(os => {
+    // OS "Programado" é só planejamento futuro — não conta como indisponibilidade real.
+    if (os.status === 'Programado') return false;
+
     const osStart = parseLocal(os.horario_parada || os.data_abertura);
     const osEnd = os.data_fechamento ? parseLocal(os.data_fechamento) : null;
 

@@ -4,7 +4,7 @@ export interface OS {
   equipamento_id?: string | null;
   placa: string;
   modulo: string | null;
-  status: 'Aberta' | 'Em Andamento' | 'Fechada' | 'Cancelada' | 'Concluída' | string;
+  status: 'Aberta' | 'Programado' | 'Fechada' | 'Cancelada' | 'Concluída' | string;
   data_abertura: string;
   data_fechamento?: string | null;
   horimetro?: number | null;

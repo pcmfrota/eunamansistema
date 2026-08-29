@@ -143,9 +143,12 @@ export async function getOSporCategoriaV3(
 
     // Filtra localmente por data e pertença à categoria usando parseLocal para segurança total
     const osFiltradasData = osList.filter(os => {
+      // OS "Programado" é só planejamento futuro — não conta como indisponibilidade real.
+      if (os.status === 'Programado') return false;
+
       const osPlaca = os.placa?.toUpperCase().trim();
       const osEquipId = os.equipamento_id;
-      
+
       const isFromCategory = (osPlaca && platesSet.has(osPlaca)) || (osEquipId && equipIdsSet.has(osEquipId));
       if (!isFromCategory) return false;
 

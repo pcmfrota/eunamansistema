@@ -316,8 +316,8 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
 
     const statusColor = (os.status === "Fechada" || os.status === "Concluída")
       ? { bg: "#d1fae5", text: "#065f46", border: "#6ee7b7" }
-      : os.status === "Em Andamento"
-      ? { bg: "#fef3c7", text: "#92400e", border: "#fcd34d" }
+      : os.status === "Programado"
+      ? { bg: "#ede9fe", text: "#5b21b6", border: "#c4b5fd" }
       : { bg: "#dbeafe", text: "#1e40af", border: "#93c5fd" };
 
     const rows = (label: string, value: string, bold = false, green = false) =>
@@ -728,8 +728,8 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                       className={`status-badge-print inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
                         os.status === "Fechada" || os.status === "Concluída"
                           ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                          : os.status === "Em Andamento"
-                          ? "bg-amber-100 text-amber-800 border border-amber-300"
+                          : os.status === "Programado"
+                          ? "bg-purple-100 text-purple-800 border border-purple-300"
                           : "bg-blue-100 text-blue-800 border border-blue-300"
                       }`}
                     >

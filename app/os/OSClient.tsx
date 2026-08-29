@@ -84,8 +84,8 @@ function StatusBadge({ status }: { status: string | null }) {
   const s = status || "Aberta";
   if (s === "Fechada" || s === "Concluída")
     return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">Fechada</span>;
-  if (s === "Em Andamento")
-    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">Em Andamento</span>;
+  if (s === "Programado")
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400">Programado</span>;
   return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">Aberta</span>;
 }
 
@@ -564,8 +564,8 @@ export default function ControleOSClient({
       if (statusParam.toLowerCase() === "aberta") {
         setFiltroStatus("Aberta");
         setActiveTab("lista");
-      } else if (statusParam.toLowerCase() === "andamento") {
-        setFiltroStatus("Em Andamento");
+      } else if (statusParam.toLowerCase() === "programado") {
+        setFiltroStatus("Programado");
         setActiveTab("lista");
       } else if (statusParam.toLowerCase() === "fechada") {
         setFiltroStatus("Fechada");
@@ -1089,7 +1089,7 @@ export default function ControleOSClient({
               <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
                 <option>Todos Status</option>
                 <option>Aberta</option>
-                <option>Em Andamento</option>
+                <option>Programado</option>
                 <option>Fechada</option>
               </select>
               <select value={filtroModulo} onChange={e => setFiltroModulo(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
@@ -1218,12 +1218,12 @@ export default function ControleOSClient({
                                 Aprovar
                               </button>
                             )}
-                            {os.status === "Aberta" && (
-                              <button title="Iniciar OS" onClick={() => handleStatusUpdate(os.id, "Em Andamento")} className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                            {os.status === "Programado" && (
+                              <button title="Iniciar OS" onClick={() => handleStatusUpdate(os.id, "Aberta")} className="p-1.5 rounded-md text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">
                                 <Check size={14} />
                               </button>
                             )}
-                            {os.status === "Em Andamento" && (
+                            {os.status === "Aberta" && (
                               <button title="Fechar OS" onClick={() => handleStatusUpdate(os.id, "Fechada")} className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
                                 <Check size={14} />
                               </button>

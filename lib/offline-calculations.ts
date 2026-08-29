@@ -239,6 +239,9 @@ export async function getOfflineDashboardData(filtros?: {
   const fimTime = parseLocal(fimFiltro);
 
   const filteredOS = todasAsOS.filter(os => {
+    // OS "Programado" é só planejamento futuro — não conta como indisponibilidade real.
+    if (os.status === 'Programado') return false;
+
     const osStart = parseLocal(os.horario_parada || os.data_abertura);
     const osEnd = os.data_fechamento ? parseLocal(os.data_fechamento) : null;
     const matchesTime = osStart <= fimTime && (!osEnd || osEnd >= inicioTime);
@@ -614,7 +617,7 @@ export async function getOfflineDashboardData(filtros?: {
 
   const statusFrota = veiculos.map(v => {
     const eq = eqMapByPlaca.get(v.placa.toUpperCase().trim());
-    const osAbertaAtiva = (osPorPlaca.get(v.placa) || []).find(o => o.status === 'Aberta' || o.status === 'Em Andamento');
+    const osAbertaAtiva = (osPorPlaca.get(v.placa) || []).find(o => o.status === 'Aberta');
 
     let statusLabel = "Disponível";
     if (osAbertaAtiva) statusLabel = "Manutenção";
@@ -743,7 +746,7 @@ export async function getOfflineDashboardData(filtros?: {
 
   return {
     totalOS: filteredOS.length,
-    emAndamento: filteredOS.filter(o => o.status === "Aberta" || o.status === "Em Andamento").length,
+    emAndamento: filteredOS.filter(o => o.status === "Aberta").length,
     osFechadas: filteredOS.filter(o => o.status === "Fechada" || o.status === "Concluída").length,
     disponibilidadeMedia: dm,
     dm: dm,

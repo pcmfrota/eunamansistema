@@ -500,7 +500,7 @@ export function gerarSlideHTML(data: DashboardDataLocal, periodo: string, catego
       <div class="card" style="height:100%">
         <h4>OS por Status</h4>
         <div style="margin:8px 0">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#94a3b8;font-size:13px">Abertas / Em Andamento</span><span style="color:#f59e0b;font-weight:700">${abertas}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#94a3b8;font-size:13px">Abertas</span><span style="color:#f59e0b;font-weight:700">${abertas}</span></div>
           <div class="progress-outer"><div class="progress-inner" style="width:${txAbertura}%;background:#f59e0b"></div></div>
         </div>
         <div style="margin:8px 0">

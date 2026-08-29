@@ -181,6 +181,8 @@ export async function getIndicadoresData(filtros?: {
   // 2. Agrupar OS por placa
   const osPorPlaca: Record<string, typeof allOS> = {};
   allOS.forEach(os => {
+    // OS "Programado" é só planejamento futuro — não conta como indisponibilidade real.
+    if (os.status === 'Programado') return;
     let p = os.placa?.toUpperCase().trim();
     if (!p && os.equipamento_id) p = eqMap.get(os.equipamento_id)?.placa;
     if (!p || PLACAS_BLOQUEADAS.has(p)) return;

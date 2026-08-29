@@ -515,26 +515,26 @@ export default function PortalPage() {
                   </div>
                 </Link>
 
-                {/* Em Andamento */}
-                <Link 
-                  href="/os?status=andamento"
+                {/* Programado */}
+                <Link
+                  href="/os?status=programado"
                   onClick={() => setShowOSMenuModal(false)}
                   className={cn(
-                    "group flex flex-col justify-between p-4 border rounded-2xl transition-all duration-150 hover:border-amber-500/30 active:scale-[0.98]",
-                    isDark 
-                      ? "bg-zinc-900/60 border-white/5 hover:bg-zinc-900/80" 
+                    "group flex flex-col justify-between p-4 border rounded-2xl transition-all duration-150 hover:border-purple-500/30 active:scale-[0.98]",
+                    isDark
+                      ? "bg-zinc-900/60 border-white/5 hover:bg-zinc-900/80"
                       : "bg-white/60 border-zinc-200/80 hover:bg-white/95"
                   )}
                 >
                   <div className="flex items-center justify-between w-full">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50" />
-                    <div className={cn("p-1.5 rounded-lg border text-amber-500", isDark ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-100")}>
+                    <span className="w-2 h-2 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50" />
+                    <div className={cn("p-1.5 rounded-lg border text-purple-500", isDark ? "bg-purple-500/10 border-purple-500/20" : "bg-purple-50 border-purple-100")}>
                       <CircleDot size={12} />
                     </div>
                   </div>
                   <div className="mt-4">
                     <span className={cn("text-[8px] font-black uppercase tracking-wider block", isDark ? "text-zinc-500" : "text-zinc-400")}>Filtrar</span>
-                    <span className={cn("text-[11px] font-black uppercase tracking-wide block mt-0.5", isDark ? "text-white" : "text-green-950")}>Em Andamento</span>
+                    <span className={cn("text-[11px] font-black uppercase tracking-wide block mt-0.5", isDark ? "text-white" : "text-green-950")}>Programado</span>
                   </div>
                 </Link>
 

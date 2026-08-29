@@ -864,7 +864,7 @@ export default function OSFormModal({
             <Field label="Status *">
               <select name="status" required defaultValue={initialData?.status || "Aberta"} className={I}>
                 <option>Aberta</option>
-                <option>Em Andamento</option>
+                <option>Programado</option>
                 <option>Fechada</option>
               </select>
             </Field>
@@ -900,7 +900,7 @@ export default function OSFormModal({
                 {operacoesTipo.map(o => <option key={o} value={o} />)}
               </datalist>
             </Field>
-            <Field label="Local">
+            <Field label="Local da Atividade">
               <input name="local" type="text"
                 defaultValue={initialData?.local || ""}
                 className={I} />
