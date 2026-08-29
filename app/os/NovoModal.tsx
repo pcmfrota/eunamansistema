@@ -151,6 +151,7 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
 }
 import { criarOrdemServico, atualizarOrdemServico } from "./actions";
 import { encerrarBacklogs } from "@/app/backlog/actions";
+import { criarColaborador } from "@/app/base-frotas/actions";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
 
@@ -165,6 +166,9 @@ type OS = {
   horas_manutencao: number | null;
   descricao: string | null;
   horimetro: number | null;
+  km: number | null;
+  foto_horimetro?: string | null;
+  foto_km?: string | null;
   operacao_tipo: string | null;
   local: string | null;
   classe: string | null;
@@ -205,6 +209,14 @@ interface OSFormModalProps {
   colaboradores?: any[];
   fotos: string[];
   setFotos: React.Dispatch<React.SetStateAction<string[]>>;
+  fotoHorimetro: string;
+  setFotoHorimetro: React.Dispatch<React.SetStateAction<string>>;
+  fotoKm: string;
+  setFotoKm: React.Dispatch<React.SetStateAction<string>>;
+  // Histórico já carregado, usado só pra sugerir/validar o horímetro (não faz nenhuma
+  // consulta nova ao servidor). Tipado como any[] de propósito: o componente pai
+  // (OSClient) tem seu próprio tipo local "OS", incompatível estruturalmente com o daqui.
+  ordensExistentes?: any[];
 }
 
 function getLocalDT() {
@@ -220,6 +232,11 @@ export default function OSFormModal({
   colaboradores = [],
   fotos,
   setFotos,
+  fotoHorimetro,
+  setFotoHorimetro,
+  fotoKm,
+  setFotoKm,
+  ordensExistentes = [],
 }: OSFormModalProps) {
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
@@ -262,10 +279,52 @@ export default function OSFormModal({
   const initParsed = parseInitialSigsAndCargos();
   const [assinaturas, setAssinaturas] = useState<string[]>(initParsed.mecanicos);
   const [sigCargos, setSigCargos] = useState<Record<string, string>>(initParsed.cargos);
+  // Aprovações dos cargos fixos ficam suspensas (uma por vez, na ordem de CARGOS_LABELS):
+  // assina ou pula, e só então a próxima aparece. "pularCargos" marca quem foi pulado
+  // (sem assinatura) pra não travar o fluxo esperando por alguém que não vai assinar.
+  const [pularCargos, setPularCargos] = useState<Set<string>>(new Set());
+  const cargoResolvido = (key: string) => !!sigCargos[key] || pularCargos.has(key);
+  const cargoAtivo = Object.keys(CARGOS_LABELS).find(key => !cargoResolvido(key)) || null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [resolvedBacklogs, setResolvedBacklogs] = useState<Set<string>>(new Set());
   const [showCameraModal, setShowCameraModal] = useState(false);
+
+  // Lista de colaboradores usada nos selects de mecânico — cópia local pra poder incluir
+  // na hora um nome recém-cadastrado, sem precisar recarregar a página.
+  const [colaboradoresLocal, setColaboradoresLocal] = useState(colaboradores);
+  const [showAddColaborador, setShowAddColaborador] = useState(false);
+  const [novoNomeColaborador, setNovoNomeColaborador] = useState("");
+  const [addingColaborador, setAddingColaborador] = useState(false);
+
+  // Quando o mecânico não está na lista: cadastra o nome completo na base de
+  // colaboradores (pra aparecer nas próximas buscas) e já preenche o próximo slot vazio.
+  const handleAdicionarColaborador = async () => {
+    const nome = novoNomeColaborador.trim();
+    if (!nome) return;
+    setAddingColaborador(true);
+    try {
+      const res = await criarColaborador({ nome });
+      if (res && "error" in res) {
+        alert("Erro ao cadastrar colaborador: " + res.error);
+        return;
+      }
+      setColaboradoresLocal(prev => [...prev, { nome }]);
+      setMecanicos(prev => {
+        const idxVazio = prev.findIndex(m => !m.trim());
+        if (idxVazio >= 0) {
+          const next = [...prev];
+          next[idxVazio] = nome;
+          return next;
+        }
+        return prev.length < 5 ? [...prev, nome] : prev;
+      });
+      setNovoNomeColaborador("");
+      setShowAddColaborador(false);
+    } finally {
+      setAddingColaborador(false);
+    }
+  };
 
   const formRef = useRef<HTMLFormElement | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -294,6 +353,7 @@ export default function OSFormModal({
       horario_parada: fd.get("horario_parada") as string,
       status: fd.get("status") as string,
       horimetro: fd.get("horimetro") as string,
+      km: fd.get("km") as string,
       local: fd.get("local") as string,
       classe: fd.get("classe") as string,
       qual_reserva: fd.get("qual_reserva") as string,
@@ -315,6 +375,8 @@ export default function OSFormModal({
       sigCargos,
       resolvedBacklogs: Array.from(resolvedBacklogs),
       fotos,
+      fotoHorimetro,
+      fotoKm,
     };
     localDb.put("aux_config", { id: draftKey, draftData }).catch(err => {
       console.warn("Falha ao salvar rascunho no IndexedDB:", err);
@@ -372,6 +434,8 @@ export default function OSFormModal({
               return uniquePhotos;
             });
           }
+          if (d.fotoHorimetro !== undefined && d.fotoHorimetro) setFotoHorimetro(d.fotoHorimetro);
+          if (d.fotoKm !== undefined && d.fotoKm) setFotoKm(d.fotoKm);
 
           setTimeout(() => {
             if (formRef.current) {
@@ -387,6 +451,10 @@ export default function OSFormModal({
               if (d.horimetro !== undefined) {
                 const el = form.querySelector('[name="horimetro"]') as HTMLInputElement;
                 if (el) el.value = d.horimetro;
+              }
+              if (d.km !== undefined) {
+                const el = form.querySelector('[name="km"]') as HTMLInputElement;
+                if (el) el.value = d.km;
               }
               if (d.local !== undefined) {
                 const el = form.querySelector('[name="local"]') as HTMLInputElement;
@@ -469,7 +537,7 @@ export default function OSFormModal({
     if (isInitialized) {
       saveDraft();
     }
-  }, [isInitialized, fotos, assinaturas, sigCargos]);
+  }, [isInitialized, fotos, assinaturas, sigCargos, fotoHorimetro, fotoKm]);
 
   // Filter open backlogs for the selected vehicle (equip?.placa)
   const openBacklogs = useMemo(() => {
@@ -493,14 +561,40 @@ export default function OSFormModal({
     });
   }, [equipamentos, initialData]);
 
-  // Catalogos em cascata
-  const sistemasUnicos = Array.from(new Set(catalogo.map(c => c.sistema))).sort();
-  const subsistemasFiltrados = sistema
-    ? Array.from(new Set(catalogo.filter(c => c.sistema === sistema).map(c => c.subsistema))).sort()
-    : [];
-  const componentesFiltrados = sistema && subSistema
-    ? Array.from(new Set(catalogo.filter(c => c.sistema === sistema && c.subsistema === subSistema).map(c => c.componente))).sort()
-    : [];
+  // Catálogo invertido: busca começa pelo Componente (lista geral, com busca por nome) e
+  // Sistema/Sub-Sistema são derivados automaticamente. A maioria dos componentes pertence
+  // a uma única combinação (sistema, subsistema); um punhado (ex: "BOMBAS") aparece em mais
+  // de uma — nesses casos pedimos pra escolher qual combinação se aplica.
+  const componentesUnicos = useMemo(() => Array.from(new Set(catalogo.map(c => c.componente))).sort(), [catalogo]);
+
+  const combosParaComponente = (nome: string) => {
+    const seen = new Set<string>();
+    const combos: { sistema: string; subsistema: string }[] = [];
+    catalogo.forEach(c => {
+      if (c.componente !== nome) return;
+      const key = `${c.sistema}|||${c.subsistema}`;
+      if (!seen.has(key)) { seen.add(key); combos.push({ sistema: c.sistema, subsistema: c.subsistema }); }
+    });
+    return combos;
+  };
+
+  const combinacoesComponente = useMemo(
+    () => (componente ? combosParaComponente(componente) : []),
+    [catalogo, componente]
+  );
+
+  const handleComponenteChange = (val: string) => {
+    setComponente(val);
+    const combos = combosParaComponente(val);
+    if (combos.length === 1) {
+      setSistema(combos[0].sistema);
+      setSubSistema(combos[0].subsistema);
+    } else {
+      // Ambíguo (ou vazio) — espera a escolha explícita da combinação abaixo.
+      setSistema("");
+      setSubSistema("");
+    }
+  };
 
   // Calcular tempo total de manutenção
   const diffMin = (() => {
@@ -516,6 +610,41 @@ export default function OSFormModal({
     if (eq) {
       setOperacaoTipo(eq.tipo || "");
     }
+  };
+
+  // Último horímetro já lançado pra essa placa (excluindo a própria OS em edição) — base
+  // pra bloquear um valor menor que o anterior e pra sugerir uma estimativa de horímetro
+  // atual assumindo ~24h/dia de operação desde o último lançamento.
+  const ultimoRegistroHorimetro = useMemo(() => {
+    if (!equip?.placa) return null;
+    const relevantes = ordensExistentes
+      .filter(o => o.placa === equip.placa && o.id !== initialData?.id && o.horimetro != null && !isNaN(Number(o.horimetro)))
+      .sort((a, b) => new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime());
+    return relevantes[0] || null;
+  }, [ordensExistentes, equip?.placa, initialData?.id]);
+
+  const projecaoHorimetro = useMemo(() => {
+    if (!ultimoRegistroHorimetro) return null;
+    const dataRef = ultimoRegistroHorimetro.data_fechamento || ultimoRegistroHorimetro.data_abertura;
+    const horasDecorridas = Math.max(0, (Date.now() - new Date(dataRef).getTime()) / 3600000);
+    return Math.round((Number(ultimoRegistroHorimetro.horimetro) + horasDecorridas) * 10) / 10;
+  }, [ultimoRegistroHorimetro]);
+
+  // Foto ativa no momento de abrir a câmera: "fotos" (geral), "horimetro" ou "km" — a ponte
+  // nativa do APK só devolve um resultado genérico, então precisa saber por fora (localStorage,
+  // sobrevive a reload da Activity) pra qual campo essa captura deve ir.
+  const [cameraTarget, setCameraTarget] = useState<"fotos" | "horimetro" | "km">("fotos");
+  const abrirCamera = (target: "fotos" | "horimetro" | "km") => {
+    setCameraTarget(target);
+    saveDraft();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("eunaman_os_active_photo_field", target === "fotos" ? "" : target);
+      if ((window as any).EunamanCamera) {
+        (window as any).EunamanCamera.openCamera();
+        return;
+      }
+    }
+    setShowCameraModal(true);
   };
 
   // ─── Assinatura Digital Canvas Draw Logic ──────────────────────────────────
@@ -624,6 +753,31 @@ export default function OSFormModal({
 
     // Guard contra duplo clique / duplo submit
     if (isSubmitting.current) return;
+
+    // Fotos de horímetro e km são obrigatórias — validado aqui (antes de tentar salvar,
+    // online ou offline) pra não depender do caminho de erro do servidor, que trata
+    // qualquer falha como "sem conexão" e tentaria salvar offline mesmo sem as fotos.
+    if (!fotoHorimetro) {
+      alert("Tire ou anexe uma foto do horímetro antes de salvar.");
+      return;
+    }
+    if (!fotoKm) {
+      alert("Tire ou anexe uma foto do KM antes de salvar.");
+      return;
+    }
+
+    // Horímetro não pode ser menor que o último já lançado pra essa placa.
+    const horimetroInformadoRaw = new FormData(e.currentTarget).get("horimetro") as string;
+    const horimetroInformado = horimetroInformadoRaw ? parseFloat(horimetroInformadoRaw) : NaN;
+    if (ultimoRegistroHorimetro && !isNaN(horimetroInformado) && horimetroInformado < Number(ultimoRegistroHorimetro.horimetro)) {
+      alert(
+        `O horímetro informado (${horimetroInformado}h) é menor que o último registrado para ${equip?.placa} ` +
+        `(${ultimoRegistroHorimetro.horimetro}h em ${new Date(ultimoRegistroHorimetro.data_abertura).toLocaleDateString('pt-BR')}). ` +
+        `Confira o valor antes de salvar.`
+      );
+      return;
+    }
+
     isSubmitting.current = true;
     setLoading(true);
 
@@ -636,6 +790,8 @@ export default function OSFormModal({
       fd.set("sistema", sistema);
       fd.set("sub_sistema", subSistema);
       fd.set("componente", componente);
+      fd.set("foto_horimetro", fotoHorimetro);
+      fd.set("foto_km", fotoKm);
       // Serializa assinaturas (mecânicos + cargos) num JSON estruturado
       fd.set("assinatura_mecanico", JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos }));
 
@@ -680,9 +836,12 @@ export default function OSFormModal({
             ...initialData,
             ...serialized,
             horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
+            km: fd.get("km") ? parseFloat(fd.get("km") as string) : null,
             horas_manutencao: Number((diffMin/60).toFixed(2)),
             foi_enviado_reserva: fd.get("foi_enviado_reserva") === "on",
             fotos: fotos,
+            foto_horimetro: fotoHorimetro,
+            foto_km: fotoKm,
             _isPendingSync: true
           };
           await localDb.put("ordens_servico", updatedOS);
@@ -727,6 +886,7 @@ export default function OSFormModal({
             horas_manutencao: Number((diffMin/60).toFixed(2)),
             descricao: fd.get("descricao") as string,
             horimetro: fd.get("horimetro") ? parseFloat(fd.get("horimetro") as string) : null,
+            km: fd.get("km") ? parseFloat(fd.get("km") as string) : null,
             operacao_tipo: fd.get("operacao_tipo") as string,
             local: fd.get("local") as string,
             classe: fd.get("classe") as string || "CORRETIVA",
@@ -743,6 +903,8 @@ export default function OSFormModal({
             equipamento_id: fd.get("equipamento_id") as string,
             assinatura_mecanico: JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos }),
             fotos: fotos,
+            foto_horimetro: fotoHorimetro,
+            foto_km: fotoKm,
             _isPendingSync: true
           };
           await localDb.put("ordens_servico", newOS);
@@ -885,11 +1047,22 @@ export default function OSFormModal({
               className={`${I} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed text-emerald-700 dark:text-emerald-400 font-semibold`} />
           </Field>
 
-          {/* Horímetro, Operação, Local */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Horímetro, KM, Operação, Local */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Field label="Horímetro">
               <input name="horimetro" type="number" step="0.1"
                 defaultValue={initialData?.horimetro ?? equip?.ultimoHist ?? ""}
+                className={I} />
+              {ultimoRegistroHorimetro && (
+                <p className="text-[10px] text-zinc-400 mt-1 leading-tight">
+                  Último: {ultimoRegistroHorimetro.horimetro}h ({new Date(ultimoRegistroHorimetro.data_abertura).toLocaleDateString('pt-BR')})
+                  {projecaoHorimetro != null && <> · Estimativa 24h/dia: ~{projecaoHorimetro}h</>}
+                </p>
+              )}
+            </Field>
+            <Field label="KM">
+              <input name="km" type="number" step="0.1"
+                defaultValue={initialData?.km ?? ""}
                 className={I} />
             </Field>
             <Field label="Operação (Tipo)">
@@ -905,6 +1078,26 @@ export default function OSFormModal({
                 defaultValue={initialData?.local || ""}
                 className={I} />
             </Field>
+          </div>
+
+          {/* Fotos obrigatórias do horímetro e do KM */}
+          <div className="grid grid-cols-2 gap-3">
+            <FotoObrigatoria
+              label="Foto do Horímetro *"
+              url={fotoHorimetro}
+              onCapture={() => abrirCamera("horimetro")}
+              onClear={() => setFotoHorimetro("")}
+              inputId="foto-horimetro-galeria"
+              onFileSelect={(dataUrl) => setFotoHorimetro(dataUrl)}
+            />
+            <FotoObrigatoria
+              label="Foto do KM *"
+              url={fotoKm}
+              onCapture={() => abrirCamera("km")}
+              onClear={() => setFotoKm("")}
+              inputId="foto-km-galeria"
+              onFileSelect={(dataUrl) => setFotoKm(dataUrl)}
+            />
           </div>
 
           {/* Tipo de Manutenção + Reserva */}
@@ -1088,7 +1281,7 @@ export default function OSFormModal({
                   <span className="text-xs text-zinc-400 w-4 shrink-0">{idx + 1}.</span>
                   <div className="flex-1">
                     <SearchableSelect
-                      options={colaboradores.map(colab => ({ value: colab.nome, label: colab.nome }))}
+                      options={colaboradoresLocal.map(colab => ({ value: colab.nome, label: colab.nome }))}
                       value={nome}
                       onChange={val => {
                         const copia = [...mecanicos];
@@ -1111,6 +1304,43 @@ export default function OSFormModal({
                 </div>
               ))}
             </div>
+
+            {/* Colaborador não está na lista — cadastra o nome completo na base */}
+            {showAddColaborador ? (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="text"
+                  value={novoNomeColaborador}
+                  onChange={e => setNovoNomeColaborador(e.target.value)}
+                  placeholder="Nome completo do colaborador..."
+                  className={`${I} text-sm`}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleAdicionarColaborador}
+                  disabled={addingColaborador || !novoNomeColaborador.trim()}
+                  className="shrink-0 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg text-xs transition-colors"
+                >
+                  {addingColaborador ? "Salvando..." : "Adicionar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddColaborador(false); setNovoNomeColaborador(""); }}
+                  className="shrink-0 text-zinc-400 hover:text-zinc-600 text-lg leading-none px-1"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAddColaborador(true)}
+                className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline font-medium"
+              >
+                Não achou o nome? Cadastrar novo colaborador
+              </button>
+            )}
 
             {/* Assinaturas individuais por mecânico */}
             {mecanicos.some(m => m.trim() !== "") && (
@@ -1168,48 +1398,93 @@ export default function OSFormModal({
               </div>
             )}
 
-            {/* ── Assinaturas dos Cargos Fixos ── */}
+            {/* ── Assinaturas dos Cargos Fixos — uma de cada vez, na ordem; assina ou
+                 pula e a próxima aparece. As que ainda não chegaram na vez ficam
+                 suspensas (esmaecidas, sem ação disponível). ── */}
             <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800/40 flex flex-col gap-3">
               <p className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wide">
                 📋 Aprovações / Assinaturas de Responsáveis
               </p>
               {(Object.entries(CARGOS_LABELS) as [string, string][]).map(([key, label]) => {
                 const sig = sigCargos[key] || "";
-                return (
-                  <div key={key} className="flex items-center justify-between gap-3 p-3 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-700 rounded-xl">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 truncate">
-                        {label}
-                      </p>
-                      {sig ? (
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <div className="p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm">
-                            <img src={sig} alt={`Assinatura ${label}`} className="h-9 object-contain max-w-[140px]" />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSigCargos(prev => { const n = {...prev}; delete n[key]; return n; })}
-                            className="text-red-400 hover:text-red-600 text-lg leading-none px-1 transition-colors"
-                            title="Remover assinatura"
-                          >×</button>
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-zinc-400 mt-0.5">Sem assinatura</p>
-                      )}
+                const pulado = pularCargos.has(key);
+                const resolvido = !!sig || pulado;
+                const ativo = key === cargoAtivo;
+
+                const abrirAssinatura = () => {
+                  setTimeout(() => {
+                    const canvas = canvasRef.current;
+                    if (canvas) { const ctx = canvas.getContext('2d'); ctx?.clearRect(0, 0, canvas.width, canvas.height); }
+                  }, 50);
+                  setShowSigPad(key as SigPadTarget);
+                };
+
+                // Ainda não chegou a vez — mostra só o nome, suspenso/esmaecido.
+                if (!resolvido && !ativo) {
+                  return (
+                    <div key={key} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/30 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl opacity-50">
+                      <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-500 truncate flex-1">{label}</p>
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-wide">Aguardando</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTimeout(() => {
-                          const canvas = canvasRef.current;
-                          if (canvas) { const ctx = canvas.getContext('2d'); ctx?.clearRect(0, 0, canvas.width, canvas.height); }
-                        }, 50);
-                        setShowSigPad(key as SigPadTarget);
-                      }}
-                      className="shrink-0 px-3 py-2 bg-zinc-700 hover:bg-zinc-800 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
-                    >
-                      {sig ? "Alterar" : "Assinar"}
-                    </button>
+                  );
+                }
+
+                // Resolvido (assinado ou pulado) — resumo compacto, com opção de reabrir.
+                if (resolvido) {
+                  return (
+                    <div key={key} className="flex items-center justify-between gap-3 p-3 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-700 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 truncate">{label}</p>
+                        {sig ? (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <div className="p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm">
+                              <img src={sig} alt={`Assinatura ${label}`} className="h-9 object-contain max-w-[140px]" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSigCargos(prev => { const n = {...prev}; delete n[key]; return n; })}
+                              className="text-red-400 hover:text-red-600 text-lg leading-none px-1 transition-colors"
+                              title="Remover assinatura"
+                            >×</button>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-amber-500 mt-0.5 font-semibold uppercase tracking-wide">Pulado — sem assinatura</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setPularCargos(prev => { const n = new Set(prev); n.delete(key); return n; }); abrirAssinatura(); }}
+                        className="shrink-0 px-3 py-2 bg-zinc-700 hover:bg-zinc-800 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
+                      >
+                        {sig ? "Alterar" : "Assinar"}
+                      </button>
+                    </div>
+                  );
+                }
+
+                // Ativo — a vez dele agora: assina ou pula.
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3 p-3 bg-emerald-50/50 dark:bg-emerald-950/10 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-black text-emerald-800 dark:text-emerald-400 truncate">{label}</p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">Sem assinatura</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPularCargos(prev => new Set(prev).add(key))}
+                        className="px-3 py-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-bold text-xs transition-colors"
+                      >
+                        Pular
+                      </button>
+                      <button
+                        type="button"
+                        onClick={abrirAssinatura}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
+                      >
+                        Assinar
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1218,28 +1493,51 @@ export default function OSFormModal({
             <input type="hidden" name="assinatura_mecanico" value={JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos })} />
           </div>
 
-          {/* Sistema / Subsistema / Componente em cascata */}
+          {/* Componente / Sistema / Sub-Sistema — busca começa pelo componente */}
           <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
-            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Sistema / Sub-Sistema / Componente</p>
+            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Componente / Sistema / Sub-Sistema</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="Sistema">
-                <select value={sistema} onChange={e => { setSistema(e.target.value); setSubSistema(""); setComponente(""); }} className={I}>
-                  <option value="">Selecione...</option>
-                  {sistemasUnicos.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Sub-Sistema">
-                <select value={subSistema} onChange={e => { setSubSistema(e.target.value); setComponente(""); }} disabled={!sistema} className={`${I} disabled:opacity-50`}>
-                  <option value="">Selecione...</option>
-                  {subsistemasFiltrados.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
               <Field label="Componente">
-                <select value={componente} onChange={e => setComponente(e.target.value)} disabled={!subSistema} className={`${I} disabled:opacity-50`}>
-                  <option value="">Selecione...</option>
-                  {componentesFiltrados.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <SearchableSelect
+                  options={componentesUnicos.map(c => ({ value: c, label: c }))}
+                  value={componente}
+                  onChange={handleComponenteChange}
+                  placeholder="Digite pra buscar o componente..."
+                />
               </Field>
+              {combinacoesComponente.length > 1 ? (
+                <div className="sm:col-span-2">
+                  <Field label="Onde esse componente se aplica? *">
+                    <select
+                      value={sistema && subSistema ? `${sistema}|||${subSistema}` : ""}
+                      onChange={e => {
+                        const [s, sub] = e.target.value.split("|||");
+                        setSistema(s || "");
+                        setSubSistema(sub || "");
+                      }}
+                      className={I}
+                    >
+                      <option value="">Selecione...</option>
+                      {combinacoesComponente.map(combo => (
+                        <option key={`${combo.sistema}|||${combo.subsistema}`} value={`${combo.sistema}|||${combo.subsistema}`}>
+                          {combo.sistema} → {combo.subsistema}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <Field label="Sistema (automático)">
+                    <input type="text" readOnly value={sistema} placeholder="—"
+                      className={`${I} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed text-emerald-700 dark:text-emerald-400 font-semibold`} />
+                  </Field>
+                  <Field label="Sub-Sistema (automático)">
+                    <input type="text" readOnly value={subSistema} placeholder="—"
+                      className={`${I} bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed text-emerald-700 dark:text-emerald-400 font-semibold`} />
+                  </Field>
+                </>
+              )}
             </div>
           </div>
 
@@ -1271,22 +1569,9 @@ export default function OSFormModal({
                     <span className="text-base leading-none font-bold">+</span> Galeria
                   </label>
                   <span className="text-zinc-350 dark:text-zinc-650 text-xs">|</span>
-                  {/* 
-                    No APK: chama a ponte nativa (sem sair da página).
-                    No browser: abre câmera in-page com getUserMedia (sem reload).
-                  */}
                   <button
                     type="button"
-                    onClick={() => {
-                      saveDraft();
-                      if (typeof window !== "undefined" && (window as any).EunamanCamera) {
-                        // APK: usa ponte nativa Java
-                        (window as any).EunamanCamera.openCamera();
-                      } else {
-                        // Browser: abre câmera in-page (sem sair da página)
-                        setShowCameraModal(true);
-                      }
-                    }}
+                    onClick={() => abrirCamera("fotos")}
                     className="cursor-pointer text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 flex items-center gap-1 transition-colors bg-transparent border-0 p-0"
                   >
                     📷 Tirar Foto
@@ -1341,6 +1626,8 @@ export default function OSFormModal({
       {showCameraModal && (
         <CameraModal
           onCapture={(dataUrl) => {
+            if (cameraTarget === "horimetro") { setFotoHorimetro(dataUrl); return; }
+            if (cameraTarget === "km") { setFotoKm(dataUrl); return; }
             if (fotos.length >= 5) {
               alert("Você pode lançar no máximo 5 fotos.");
               return;
@@ -1438,6 +1725,74 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="flex flex-col gap-1.5">
       <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// Slot de foto único e obrigatório (horímetro / km) — diferente do array "Fotos do
+// Serviço", que é opcional e aceita até 5. Câmera nativa/in-page via onCapture; galeria via
+// input de arquivo direto (comprime no cliente antes de guardar).
+function FotoObrigatoria({ label, url, onCapture, onClear, inputId, onFileSelect }: {
+  label: string;
+  url: string;
+  onCapture: () => void;
+  onClear: () => void;
+  inputId: string;
+  onFileSelect: (dataUrl: string) => void;
+}) {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          onFileSelect(canvas.toDataURL("image/jpeg", 0.6));
+        } else {
+          onFileSelect(src);
+        }
+      };
+      img.onerror = () => onFileSelect(src);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</label>
+      {url ? (
+        <div className="relative aspect-video rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
+          <img src={url} alt={label} className="w-full h-full object-cover" />
+          <button type="button" onClick={onClear} title="Remover foto"
+            className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors shadow">
+            <X size={10} className="stroke-[3]" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-950/10">
+          <label htmlFor={inputId} className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+            Galeria
+          </label>
+          <input id={inputId} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <span className="text-zinc-300 dark:text-zinc-700 text-xs">|</span>
+          <button type="button" onClick={onCapture}
+            className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 bg-transparent border-0 p-0">
+            📷 Tirar Foto
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -272,6 +272,10 @@ export default function ControleOSClient({
   const [showModal, setShowModal] = useState(false);
   const [editingOS, setEditingOS] = useState<OS | null>(null);
   const [modalFotos, setModalFotos] = useState<string[]>([]);
+  // Fotos obrigatórias de horímetro e KM — campos dedicados, separados das fotos gerais
+  // do serviço, pra garantir que o colaborador realmente fotografou os dois marcadores.
+  const [fotoHorimetro, setFotoHorimetro] = useState<string>("");
+  const [fotoKm, setFotoKm] = useState<string>("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
@@ -282,6 +286,19 @@ export default function ControleOSClient({
   const { profile } = useAuth();
 
   const isVisitante = profile?.role === "visitante";
+
+  // Zera/preenche as 3 frentes de foto (gerais + horímetro + km) de uma vez, pra não
+  // esquecer nenhuma nos vários pontos onde o modal abre em branco ou pra edição.
+  const resetFotosOS = () => {
+    setModalFotos([]);
+    setFotoHorimetro("");
+    setFotoKm("");
+  };
+  const preencherFotosOS = (os: any | null) => {
+    setModalFotos(os?.fotos || []);
+    setFotoHorimetro(os?.foto_horimetro || "");
+    setFotoKm(os?.foto_km || "");
+  };
 
   const hasCheckedActiveDraft = React.useRef(false);
 
@@ -310,6 +327,8 @@ export default function ControleOSClient({
             return uniquePhotos;
           });
         }
+        if (draft?.draftData?.fotoHorimetro) setFotoHorimetro(draft.draftData.fotoHorimetro);
+        if (draft?.draftData?.fotoKm) setFotoKm(draft.draftData.fotoKm);
       } catch (err) {
         console.warn("Erro ao recuperar fotos do rascunho:", err);
       }
@@ -479,8 +498,30 @@ export default function ControleOSClient({
     });
   };
 
+  // ── Grava a foto dedicada de horímetro/km (única, não é array) no rascunho ativo ──
+  const setSinglePhotoField = (target: "horimetro" | "km", dataUrl: string) => {
+    if (target === "horimetro") setFotoHorimetro(dataUrl);
+    else setFotoKm(dataUrl);
+
+    const activeDraftKey = localStorage.getItem("eunaman_active_os_draft_key");
+    if (activeDraftKey) {
+      const draftField = target === "horimetro" ? "fotoHorimetro" : "fotoKm";
+      localDb.get<{ id: string; draftData: any }>("aux_config", activeDraftKey).then(draft => {
+        if (draft && draft.draftData) {
+          draft.draftData[draftField] = dataUrl;
+          localDb.put("aux_config", draft);
+        } else {
+          localDb.put("aux_config", { id: activeDraftKey, draftData: { [draftField]: dataUrl } });
+        }
+      }).catch(() => {});
+    }
+  };
+
   // ── Registra o callback da ponte nativa do APK (EunamanCamera) ──
   // Quando a Activity Java tira uma foto, ela chama window.onEunamanCameraResult com o Base64.
+  // "eunaman_os_active_photo_field" (setado pelo NovoModal antes de abrir a câmera) diz se
+  // essa captura é pra foto geral do serviço, pro horímetro ou pro km — sem isso, a ponte
+  // nativa (que só devolve um resultado genérico) não teria como saber o destino certo.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -488,6 +529,9 @@ export default function ControleOSClient({
       try {
         const result = JSON.parse(jsonStr);
         if (result.success && result.dataUrl) {
+          const target = localStorage.getItem("eunaman_os_active_photo_field");
+          localStorage.removeItem("eunaman_os_active_photo_field");
+
           // Comprime via canvas antes de adicionar (mesmo fluxo do file input)
           const img = new Image();
           img.src = result.dataUrl;
@@ -501,14 +545,18 @@ export default function ControleOSClient({
             canvas.width = w;
             canvas.height = h;
             const ctx = canvas.getContext("2d");
+            let compressed = result.dataUrl;
             if (ctx) {
               ctx.drawImage(img, 0, 0, w, h);
-              addPhotoDataUrl(canvas.toDataURL("image/jpeg", 0.6));
-            } else {
-              addPhotoDataUrl(result.dataUrl);
+              compressed = canvas.toDataURL("image/jpeg", 0.6);
             }
+            if (target === "horimetro" || target === "km") setSinglePhotoField(target, compressed);
+            else addPhotoDataUrl(compressed);
           };
-          img.onerror = () => addPhotoDataUrl(result.dataUrl);
+          img.onerror = () => {
+            if (target === "horimetro" || target === "km") setSinglePhotoField(target, result.dataUrl);
+            else addPhotoDataUrl(result.dataUrl);
+          };
         } else if (!result.success) {
           console.warn("[EunamanCamera] Erro na ponte nativa:", result.error);
         }
@@ -547,7 +595,7 @@ export default function ControleOSClient({
       const os = initialOrdens.find(o => o.id === abrirId);
       if (os) {
         setEditingOS(os);
-        setModalFotos(os.fotos || []);
+        preencherFotosOS(os);
         setShowModal(true);
       }
     }
@@ -555,7 +603,7 @@ export default function ControleOSClient({
     const isNew = params.get("new") === "true";
     if (isNew) {
       setEditingOS(null);
-      setModalFotos([]);
+      resetFotosOS();
       setShowModal(true);
     }
 
@@ -952,7 +1000,7 @@ export default function ControleOSClient({
                 <Download size={15} /> Exportar Excel
               </button>
               {!isVisitante ? (
-                <button onClick={() => { setEditingOS(null); setModalFotos([]); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+                <button onClick={() => { setEditingOS(null); resetFotosOS(); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
                   <Plus size={15} /> Nova OS
                 </button>
               ) : (
@@ -971,7 +1019,7 @@ export default function ControleOSClient({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {!isVisitante ? (
             <button
-              onClick={() => { setEditingOS(null); setModalFotos([]); setShowModal(true); }}
+              onClick={() => { setEditingOS(null); resetFotosOS(); setShowModal(true); }}
               className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
             >
               <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
@@ -1228,7 +1276,7 @@ export default function ControleOSClient({
                                 <Check size={14} />
                               </button>
                             )}
-                            <button title="Editar" onClick={() => { setEditingOS(os); setModalFotos(os.fotos || []); setShowModal(true); }} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                            <button title="Editar" onClick={() => { setEditingOS(os); preencherFotosOS(os); setShowModal(true); }} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                               <Pencil size={14} />
                             </button>
                             <button title="Excluir" onClick={() => setDeletingId(os.id)} className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
@@ -1318,10 +1366,10 @@ export default function ControleOSClient({
         <OSFormModal
           equipamentos={equipamentos}
           initialData={editingOS}
-          onClose={() => { 
-            setShowModal(false); 
-            setEditingOS(null); 
-            setModalFotos([]);
+          onClose={() => {
+            setShowModal(false);
+            setEditingOS(null);
+            resetFotosOS();
           }}
           operacoesTipo={operacoesTipo}
           motivos={motivos}
@@ -1330,6 +1378,11 @@ export default function ControleOSClient({
           colaboradores={colaboradores}
           fotos={modalFotos}
           setFotos={setModalFotos}
+          fotoHorimetro={fotoHorimetro}
+          setFotoHorimetro={setFotoHorimetro}
+          fotoKm={fotoKm}
+          setFotoKm={setFotoKm}
+          ordensExistentes={ordens}
         />
       )}
 
@@ -1501,7 +1554,7 @@ export default function ControleOSClient({
                 onClick={() => {
                   if (isVisitante) return;
                   setEditingOS(selectedOSActions);
-                  setModalFotos(selectedOSActions?.fotos || []);
+                  preencherFotosOS(selectedOSActions);
                   setShowModal(true);
                   setSelectedOSActions(null);
                 }}

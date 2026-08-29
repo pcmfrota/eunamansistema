@@ -8,6 +8,9 @@ export interface OS {
   data_abertura: string;
   data_fechamento?: string | null;
   horimetro?: number | null;
+  km?: number | null;
+  foto_horimetro?: string | null;
+  foto_km?: string | null;
   operacao_tipo?: string | null;
   local?: string | null;
   classe: 'CORRETIVA' | 'PREVENTIVA' | 'PREDITIVA' | string;
