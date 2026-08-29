@@ -14,6 +14,7 @@ export type LavagemParaPDF = {
   status?: string | null;
   observacoes?: string | null;
   itens_lavados?: string[] | null;
+  tipo_frota?: 'pesado' | 'leve' | null;
   imagem_1_url?: string | null;
   imagem_2_url?: string | null;
   imagem_3_url?: string | null;
@@ -38,12 +39,19 @@ function fmtHoraPDF(dateStr?: string | null) {
 // Monta o HTML da ficha — usado tanto pra gerar o PDF quanto pra pré-visualizar antes de
 // baixar (FichaPreviewModal renderiza esse mesmo markup dentro de um modal).
 export function gerarHtmlFichaLavagem(l: LavagemParaPDF) {
-  const fotos = [
-    { label: 'Horímetro', url: l.imagem_horimetro_url },
-    { label: 'Foto 01', url: l.imagem_1_url },
-    { label: 'Foto 02', url: l.imagem_2_url },
-    { label: 'Foto 03', url: l.imagem_3_url },
-  ].filter(f => !!f.url);
+  const isLeve = l.tipo_frota === 'leve';
+  const fotos = (isLeve
+    ? [
+        { label: 'Foto Externa', url: l.imagem_1_url },
+        { label: 'Foto Interna', url: l.imagem_2_url },
+      ]
+    : [
+        { label: 'Horímetro', url: l.imagem_horimetro_url },
+        { label: 'Foto 01', url: l.imagem_1_url },
+        { label: 'Foto 02', url: l.imagem_2_url },
+        { label: 'Foto 03', url: l.imagem_3_url },
+      ]
+  ).filter(f => !!f.url);
 
   const itens = l.itens_lavados || [];
 
@@ -57,6 +65,7 @@ export function gerarHtmlFichaLavagem(l: LavagemParaPDF) {
                </td>
                <td style="width: 50%; border-right: 2px solid #1d4ed8; text-align: center; vertical-align: middle; color: #000;">
                   <h1 style="margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 1px;">FICHA DE LAVAGEM</h1>
+                  <div style="font-size: 9px; font-weight: bold; letter-spacing: 1px; margin-top: 2px;">${isLeve ? '🚗 FROTA LEVE' : '🚛 FROTA PESADA'}</div>
                </td>
                <td style="width: 25%; padding: 5px; font-size: 9px; line-height: 1.2; color: #000;">
                   <div>Doc. Nº.:</div>

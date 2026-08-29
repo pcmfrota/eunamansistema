@@ -15,6 +15,7 @@ export type Lavagem = {
   lavagem_realizada: boolean
   observacoes: string
   itens_lavados?: string[]
+  tipo_frota?: 'pesado' | 'leve' | null
   imagem_1_url?: string
   imagem_2_url?: string
   imagem_3_url?: string
@@ -90,6 +91,7 @@ export async function saveLavagem(formData: FormData) {
   const km = Number(formData.get('km'))
   const lavagem_realizada = formData.get('lavagem_realizada') === 'true'
   const observacoes = formData.get('observacoes') as string
+  const tipo_frota = (formData.get('tipo_frota') as string) || null
 
   let itens_lavados: string[] = []
   const itensRaw = formData.get('itens_lavados') as string | null
@@ -97,9 +99,11 @@ export async function saveLavagem(formData: FormData) {
     try { itens_lavados = JSON.parse(itensRaw) } catch { itens_lavados = [] }
   }
 
-  // Status logic: if horimetro or km are missing, status is "Pendente"
+  // Status logic: km é sempre obrigatório; horímetro só é exigido pra frota pesada —
+  // carro leve não tem esse campo no formulário, então não pode travar o status em
+  // "Pendente" por falta dele.
   let status = 'Lavado'
-  if (!horimetro || !km) {
+  if (!km || (tipo_frota !== 'leve' && !horimetro)) {
     status = 'Pendente'
   }
   if (!lavagem_realizada) {
@@ -115,6 +119,7 @@ export async function saveLavagem(formData: FormData) {
     lavagem_realizada,
     observacoes,
     itens_lavados,
+    tipo_frota,
   }
 
   // Handle image uploads if any (simplification: URLs are passed directly for now)

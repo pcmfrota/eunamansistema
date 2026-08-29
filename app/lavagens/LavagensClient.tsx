@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
-  Calendar as CalendarIcon,
   Grid,
   Search,
   Filter,
@@ -73,9 +72,10 @@ const STATUS_COLORS = {
   'default': 'bg-zinc-200 dark:bg-zinc-800'
 }
 
-// Checklist simples do que foi lavado no caminhão — mostrado no lançamento e reaproveitado
-// na ficha em PDF. Lista fixa, pensada pra marcar rápido pelo aplicativo.
-const ITENS_LAVAGEM = [
+// Checklist do que foi lavado — diferente pra caminhão (frota pesada) e carro (frota leve),
+// já que a lavagem de cada um envolve itens bem diferentes. Mostrado no lançamento e
+// reaproveitado na ficha em PDF.
+const ITENS_LAVAGEM_PESADO = [
   'Cabine (Externa)',
   'Cabine (Interna)',
   'Carroceria / Caçamba',
@@ -86,11 +86,22 @@ const ITENS_LAVAGEM = [
   'Tanque de Combustível',
 ]
 
+const ITENS_LAVAGEM_LEVE = [
+  'Lavagem Externa',
+  'Lavagem Interna',
+  'Rodas e Pneus',
+  'Vidros e Retrovisores',
+]
+
 const BLANK_MODAL_DATA = {
   id: '',
   placa: '',
   data: format(new Date(), 'yyyy-MM-dd'),
   colaborador: '',
+  // Vazio força a tela de escolha (Caminhão x Carro) a aparecer antes do formulário —
+  // só fica preenchido quando vem de uma célula do Calendário (que já sabe a categoria
+  // do equipamento) ou depois que o usuário escolhe manualmente.
+  tipo_frota: '' as '' | 'pesado' | 'leve',
   horimetro: '',
   km: '',
   lavagem_realizada: true,
@@ -138,7 +149,7 @@ const compressBase64 = (dataUrl: string, maxWidth = 800, maxHeight = 800, qualit
   });
 };
 
-type Tab = 'menu' | 'painel' | 'calendario' | 'galeria' | 'historico'
+type Tab = 'menu' | 'painel' | 'calendario-pesados' | 'calendario-leves' | 'galeria' | 'historico'
 
 export default function LavagensClient({ initialLavagens, equipamentos, colaboradores, currentMes, currentAno }: LavagensClientProps) {
   const { isOnline } = useOffline()
@@ -166,6 +177,28 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     if (!eq) return false
     const st = String(eq.status || 'Ativo').toUpperCase().trim()
     return st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO'
+  }
+
+  // Mesma lógica usada no Boletim de Pneus pra separar frota pesada (caminhões) de leve
+  // (carros) a partir da categoria cadastrada no equipamento.
+  const isEquipamentoPesado = (eq: any) => {
+    if (!eq) return false
+    const cat = String(eq.categoria || 'PESADA').toUpperCase().trim()
+    return cat === 'PESADA' || cat === 'FROTA PESADA' || cat.includes('PESADA')
+  }
+
+  const isEquipamentoLeve = (eq: any) => {
+    if (!eq) return false
+    const cat = String(eq.categoria || '').toUpperCase().trim()
+    return cat === 'LEVE' || cat === 'FROTA LEVE' || cat.includes('LEVE')
+  }
+
+  // Tipo de frota de uma lavagem já lançada: usa o que foi escolhido no lançamento
+  // (tipo_frota) e, se faltar (registro antigo), cai pra categoria atual do equipamento.
+  const tipoFrotaDaLavagem = (l: any): 'pesado' | 'leve' => {
+    if (l.tipo_frota === 'leve' || l.tipo_frota === 'pesado') return l.tipo_frota
+    const eq = equipamentos.find(e => e.placa === l.placa)
+    return isEquipamentoLeve(eq) ? 'leve' : 'pesado'
   }
 
   const areaOptions = useMemo(() => {
@@ -302,11 +335,12 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     })
   }, [filteredLavagens])
 
-  // Meta: 1 lavagem por semana por caminhão. Considera as semanas ISO que aparecem no mês
-  // selecionado — um caminhão "cumpre a meta" se teve pelo menos 1 lavagem "Lavado" em
-  // cada uma dessas semanas.
-  const painelData = useMemo(() => {
-    const ativos = equipamentos.filter(isEquipamentoAtivo)
+  // Meta: 1 lavagem por semana por veículo. Considera as semanas ISO que aparecem no mês
+  // selecionado — um veículo "cumpre a meta" se teve pelo menos 1 lavagem "Lavado" em
+  // cada uma dessas semanas. Pesados e leves são calculados separadamente (Painel mostra
+  // as duas frotas em seções distintas).
+  const computePainel = (categoriaFn: (eq: any) => boolean) => {
+    const ativos = equipamentos.filter(eq => isEquipamentoAtivo(eq) && categoriaFn(eq))
     const semanasDoMes = Array.from(new Set(days.map(d => getISOWeek(d))))
     const totalSemanas = semanasDoMes.length || 1
 
@@ -331,7 +365,10 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
 
     const totalCumprindo = porPlaca.filter(p => p.cumpriuMeta).length
     return { porPlaca, totalSemanas, totalCumprindo, totalAtivos: ativos.length }
-  }, [equipamentos, lavagens, days])
+  }
+
+  const painelPesados = useMemo(() => computePainel(isEquipamentoPesado), [equipamentos, lavagens, days])
+  const painelLeves = useMemo(() => computePainel(isEquipamentoLeve), [equipamentos, lavagens, days])
 
   const getStatus = (placa: string, date: Date) => {
     const lavagem = lavagens.find(l => {
@@ -342,7 +379,9 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     return lavagem
   }
 
-  const handleOpenModal = (placa: string, date: Date) => {
+  // tipoFrota vem de qual calendário a célula foi clicada (Pesados ou Leves) — já sabendo
+  // a categoria do equipamento, não precisa perguntar de novo.
+  const handleOpenModal = (placa: string, date: Date, tipoFrota: 'pesado' | 'leve') => {
     setSavedRecord(null)
     setShowModalPreview(false)
     const existing = getStatus(placa, date)
@@ -352,10 +391,11 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
         ...existing,
         horimetro: String(existing.horimetro || ''),
         km: String(existing.km || ''),
-        itens_lavados: existing.itens_lavados || []
+        itens_lavados: existing.itens_lavados || [],
+        tipo_frota: (existing as any).tipo_frota || tipoFrota
       })
     } else {
-      setModalData({ ...BLANK_MODAL_DATA, placa, data: format(date, 'yyyy-MM-dd') })
+      setModalData({ ...BLANK_MODAL_DATA, placa, data: format(date, 'yyyy-MM-dd'), tipo_frota: tipoFrota })
     }
     setIsModalOpen(true)
   }
@@ -373,6 +413,12 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     setIsModalOpen(false)
     setSavedRecord(null)
     setShowModalPreview(false)
+  }
+
+  // Escolha feita na primeira tela do lançamento (Caminhão x Carro) — define o formulário,
+  // o checklist e a lista de placas mostrados em seguida.
+  const selecionarTipoFrota = (tipo: 'pesado' | 'leve') => {
+    setModalData((prev: any) => ({ ...prev, tipo_frota: tipo }))
   }
 
   const toggleItemLavado = (item: string) => {
@@ -396,7 +442,9 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
       id,
       horimetro: Number(modalData.horimetro || 0),
       km: Number(modalData.km || 0),
-      status: !modalData.lavagem_realizada ? 'Não realizado' : (!modalData.horimetro || !modalData.km ? 'Pendente' : 'Lavado')
+      status: !modalData.lavagem_realizada
+        ? 'Não realizado'
+        : ((!modalData.km || (modalData.tipo_frota !== 'leve' && !modalData.horimetro)) ? 'Pendente' : 'Lavado')
     }
 
     // "Colaborador" (quem lavou) não é mais escolhido manualmente — é sempre quem está
@@ -483,8 +531,8 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
 
   const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
 
-  const mostraNav = tab === 'calendario' || tab === 'galeria' || tab === 'historico' || tab === 'painel'
-  const mostraFiltros = tab === 'calendario' || tab === 'galeria' || tab === 'historico'
+  const mostraNav = tab === 'calendario-pesados' || tab === 'calendario-leves' || tab === 'galeria' || tab === 'historico' || tab === 'painel'
+  const mostraFiltros = tab === 'calendario-pesados' || tab === 'calendario-leves' || tab === 'galeria' || tab === 'historico'
 
   return (
     <div className="flex flex-col h-full bg-transparent text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
@@ -568,20 +616,29 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
               </div>
               <div>
                 <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Painel</h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Meta de 1 lavagem por semana / caminhão</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Meta de 1 lavagem por semana — pesados e leves</p>
               </div>
             </button>
 
             <button
-              onClick={() => setTab('calendario')}
+              onClick={() => setTab('calendario-pesados')}
               className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
             >
-              <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
-                <CalendarIcon size={22} />
-              </div>
+              <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md text-lg leading-none">🚛</div>
               <div>
-                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Calendário</h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Em que dia cada placa foi lavada no mês</p>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Calendário Pesados</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Em que dia cada caminhão foi lavado no mês</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTab('calendario-leves')}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md text-lg leading-none">🚗</div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Calendário Leves</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Em que dia cada carro foi lavado no mês</p>
               </div>
             </button>
 
@@ -655,130 +712,76 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
           {/* Main Content */}
           <main className="flex-1 overflow-auto p-4 custom-scrollbar">
             {tab === 'painel' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Caminhões Ativos</p>
-                    <p className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{painelData.totalAtivos}</p>
-                  </div>
-                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Semanas no Mês</p>
-                    <p className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{painelData.totalSemanas}</p>
-                  </div>
-                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm">
-                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Cumprindo a Meta</p>
-                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{painelData.totalCumprindo} / {painelData.totalAtivos}</p>
-                  </div>
-                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-red-200 dark:border-red-900/50 shadow-sm">
-                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Abaixo da Meta</p>
-                    <p className="text-2xl font-black text-red-600 dark:text-red-400">{painelData.totalAtivos - painelData.totalCumprindo}</p>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                      Meta: 1 lavagem por semana · {format(activeDate, 'MMMM yyyy', { locale: ptBR })}
-                    </h4>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-                        <tr>
-                          <th className="px-6 py-3 font-black uppercase text-zinc-400">Placa</th>
-                          <th className="px-4 py-3 font-black uppercase text-zinc-400">Módulo</th>
-                          <th className="px-4 py-3 font-black uppercase text-zinc-400 text-center">Semanas Cumpridas</th>
-                          <th className="px-4 py-3 font-black uppercase text-zinc-400 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                        {painelData.porPlaca.map(({ eq, semanasCumpridas, cumpriuMeta }) => (
-                          <tr key={eq.placa} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
-                            <td className="px-6 py-3 text-blue-600 dark:text-blue-400 text-sm">{eq.placa}</td>
-                            <td className="px-4 py-3 text-zinc-500 font-medium">{eq.modulo || '-'}</td>
-                            <td className="px-4 py-3 text-center">{semanasCumpridas} / {painelData.totalSemanas}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[9px] font-black tracking-widest border",
-                                cumpriuMeta
-                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30"
-                                  : "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30"
-                              )}>
-                                {cumpriuMeta ? 'META CUMPRIDA' : 'ABAIXO DA META'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                        {painelData.porPlaca.length === 0 && (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
-                              Nenhum caminhão ativo encontrado.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              <div className="space-y-10">
+                <PainelSecao titulo="Frota Pesada" emoji="🚛" data={painelPesados} mesLabel={format(activeDate, 'MMMM yyyy', { locale: ptBR })} />
+                <div className="border-t border-zinc-200 dark:border-zinc-800" />
+                <PainelSecao titulo="Frota Leve" emoji="🚗" data={painelLeves} mesLabel={format(activeDate, 'MMMM yyyy', { locale: ptBR })} />
               </div>
             )}
 
-            {tab === 'calendario' && (
-              <div className="bg-white/80 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-260px)] custom-scrollbar">
-                  <table className="w-full border-collapse">
-                    <thead className="sticky top-0 z-20">
-                      <tr className="bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-md">
-                        <th className="p-3 text-left text-[10px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[120px] sticky left-0 z-30 bg-zinc-100 dark:bg-zinc-900">
-                          PLACAS
-                        </th>
-                        {days.map(day => (
-                          <th key={day.toString()} className="p-2 text-center border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[50px]">
-                            <div className="text-[10px] font-bold text-zinc-600 dark:text-zinc-500">{dayNames[getDay(day)]}</div>
-                            <div className="text-sm font-black text-zinc-900 dark:text-white">{format(day, 'dd')}</div>
+            {(tab === 'calendario-pesados' || tab === 'calendario-leves') && (
+              <div>
+                <div className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-300">
+                  <span>{tab === 'calendario-pesados' ? '🚛' : '🚗'}</span>
+                  {tab === 'calendario-pesados' ? 'Frota Pesada' : 'Frota Leve'}
+                </div>
+                <div className="bg-white/80 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+                  <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)] custom-scrollbar">
+                    <table className="w-full border-collapse">
+                      <thead className="sticky top-0 z-20">
+                        <tr className="bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-md">
+                          <th className="p-3 text-left text-[10px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[120px] sticky left-0 z-30 bg-zinc-100 dark:bg-zinc-900">
+                            PLACAS
                           </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {equipamentos.filter(e => {
-                        const matchesSearch = e.placa.toLowerCase().includes(searchTerm.toLowerCase())
-                        const matchesArea = filterArea === 'Todas' || e.area === filterArea
-                        return matchesSearch && matchesArea
-                      }).map(eq => (
-                        <tr key={eq.placa} className="hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors group">
-                          <td className="p-3 border-b border-r border-zinc-200 dark:border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 text-zinc-800 dark:text-zinc-300 transition-colors">
-                            <div className="flex flex-col">
-                              <span className="text-blue-500">{eq.placa}</span>
-                              <span className="text-[10px] text-zinc-500 font-normal">{eq.modulo}</span>
-                            </div>
-                          </td>
-                          {days.map(day => {
-                            const lavagem = getStatus(eq.placa, day)
-                            return (
-                              <td
-                                key={day.toString()}
-                                className="p-1 border-b border-r border-zinc-200 dark:border-zinc-800 text-center cursor-pointer group/cell"
-                                onClick={() => handleOpenModal(eq.placa, day)}
-                              >
-                                <div className={cn(
-                                  "w-8 h-8 mx-auto rounded-lg flex items-center justify-center transition-all transform group-hover/cell:scale-110 relative",
-                                  lavagem ? STATUS_COLORS[lavagem.status as keyof typeof STATUS_COLORS] : STATUS_COLORS.default
-                                )}>
-                                  {lavagem?.status === 'Lavado' && <Check size={14} className="text-white font-bold" />}
-                                  {lavagem?.status === 'Pendente' && <AlertCircle size={14} className="text-white" />}
-                                  {lavagem?.status === 'Não realizado' && <X size={14} className="text-white" />}
-                                  {lavagem && (lavagem as any)._isPendingSync && (
-                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white flex items-center justify-center animate-pulse" title="Lançamento offline pendente de sincronização"></span>
-                                  )}
-                                </div>
-                              </td>
-                            )
-                          })}
+                          {days.map(day => (
+                            <th key={day.toString()} className="p-2 text-center border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[50px]">
+                              <div className="text-[10px] font-bold text-zinc-600 dark:text-zinc-500">{dayNames[getDay(day)]}</div>
+                              <div className="text-sm font-black text-zinc-900 dark:text-white">{format(day, 'dd')}</div>
+                            </th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {equipamentos.filter(e => {
+                          const matchesSearch = e.placa.toLowerCase().includes(searchTerm.toLowerCase())
+                          const matchesArea = filterArea === 'Todas' || e.area === filterArea
+                          const matchesCategoria = tab === 'calendario-pesados' ? isEquipamentoPesado(e) : isEquipamentoLeve(e)
+                          return matchesSearch && matchesArea && matchesCategoria && isEquipamentoAtivo(e)
+                        }).map(eq => (
+                          <tr key={eq.placa} className="hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors group">
+                            <td className="p-3 border-b border-r border-zinc-200 dark:border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 text-zinc-800 dark:text-zinc-300 transition-colors">
+                              <div className="flex flex-col">
+                                <span className="text-blue-500">{eq.placa}</span>
+                                <span className="text-[10px] text-zinc-500 font-normal">{eq.modulo}</span>
+                              </div>
+                            </td>
+                            {days.map(day => {
+                              const lavagem = getStatus(eq.placa, day)
+                              return (
+                                <td
+                                  key={day.toString()}
+                                  className="p-1 border-b border-r border-zinc-200 dark:border-zinc-800 text-center cursor-pointer group/cell"
+                                  onClick={() => handleOpenModal(eq.placa, day, tab === 'calendario-pesados' ? 'pesado' : 'leve')}
+                                >
+                                  <div className={cn(
+                                    "w-8 h-8 mx-auto rounded-lg flex items-center justify-center transition-all transform group-hover/cell:scale-110 relative",
+                                    lavagem ? STATUS_COLORS[lavagem.status as keyof typeof STATUS_COLORS] : STATUS_COLORS.default
+                                  )}>
+                                    {lavagem?.status === 'Lavado' && <Check size={14} className="text-white font-bold" />}
+                                    {lavagem?.status === 'Pendente' && <AlertCircle size={14} className="text-white" />}
+                                    {lavagem?.status === 'Não realizado' && <X size={14} className="text-white" />}
+                                    {lavagem && (lavagem as any)._isPendingSync && (
+                                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white flex items-center justify-center animate-pulse" title="Lançamento offline pendente de sincronização"></span>
+                                    )}
+                                  </div>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -851,6 +854,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                     <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
                       <tr>
                         <th className="px-6 py-4 font-black uppercase text-zinc-400">Placa</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Tipo</th>
                         <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
                         <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Km</th>
                         <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Horímetro</th>
@@ -874,6 +878,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                               <span className="ml-2 inline-flex text-[9px] text-amber-500 font-bold" title="Salvo offline">(Offline)</span>
                             )}
                           </td>
+                          <td className="px-4 py-4 text-center text-lg">{tipoFrotaDaLavagem(l) === 'leve' ? '🚗' : '🚛'}</td>
                           <td className="px-4 py-4 text-zinc-500">{safeFormatDate(l.data, 'dd/MM/yyyy')}</td>
                           <td className="px-4 py-4 text-center text-blue-600">{l.km || '-'}</td>
                           <td className="px-4 py-4 text-center text-zinc-500">{l.horimetro || '-'}</td>
@@ -897,7 +902,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                       ))}
                       {historicoOrdenado.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                          <td colSpan={9} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
                             Nenhuma lavagem encontrada.
                           </td>
                         </tr>
@@ -951,6 +956,39 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                   Fechar
                 </button>
               </div>
+            ) : !modalData.tipo_frota ? (
+              <div className="p-8 flex flex-col items-center text-center gap-6">
+                <div>
+                  <h2 className="text-xl font-black text-zinc-900 dark:text-white tracking-tight flex items-center justify-center gap-2">
+                    <span className="p-1.5 bg-blue-600 rounded-md text-white"><Droplets size={16} /></span>
+                    LANÇAR LAVAGEM
+                  </h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-3">Qual tipo de veículo foi lavado?</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+                  <button
+                    type="button"
+                    onClick={() => selecionarTipoFrota('pesado')}
+                    className="flex flex-col items-center gap-2 p-6 rounded-2xl border-2 border-zinc-200 dark:border-zinc-800 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all"
+                  >
+                    <span className="text-4xl">🚛</span>
+                    <span className="text-sm font-black uppercase text-zinc-800 dark:text-zinc-100">Caminhão</span>
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide font-bold">Frota Pesada</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selecionarTipoFrota('leve')}
+                    className="flex flex-col items-center gap-2 p-6 rounded-2xl border-2 border-zinc-200 dark:border-zinc-800 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all"
+                  >
+                    <span className="text-4xl">🚗</span>
+                    <span className="text-sm font-black uppercase text-zinc-800 dark:text-zinc-100">Carro</span>
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-wide font-bold">Frota Leve</span>
+                  </button>
+                </div>
+                <button type="button" onClick={closeModal} className="text-xs font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                  Cancelar
+                </button>
+              </div>
             ) : (
             <form onSubmit={handleSave}>
               <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
@@ -958,21 +996,33 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                   <h2 className="text-xl font-black text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
                     <span className="p-1.5 bg-blue-600 rounded-md text-white"><Droplets size={16} /></span>
                     LANÇAR LAVAGEM
+                    <span className="text-base">{modalData.tipo_frota === 'leve' ? '🚗' : '🚛'}</span>
                   </h2>
                   <p className="text-xs text-zinc-500 font-bold mt-1 uppercase tracking-widest">
                     Lançado por: <span className="text-blue-500">{(profile as any)?.full_name || '...'}</span>
                   </p>
                 </div>
-                <button type="button" onClick={closeModal} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl text-zinc-500 transition-colors">
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setModalData((prev: any) => ({ ...prev, tipo_frota: '' }))}
+                    className="text-[10px] font-black text-blue-500 hover:underline uppercase tracking-widest"
+                  >
+                    Trocar tipo
+                  </button>
+                  <button type="button" onClick={closeModal} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl text-zinc-500 transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               <div className="p-6 grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Placa *</label>
                   <SearchableSelect
-                    options={equipamentos.map(eq => ({ value: eq.placa, label: eq.placa }))}
+                    options={equipamentos
+                      .filter(eq => isEquipamentoAtivo(eq) && (modalData.tipo_frota === 'leve' ? isEquipamentoLeve(eq) : isEquipamentoPesado(eq)))
+                      .map(eq => ({ value: eq.placa, label: eq.placa }))}
                     value={modalData.placa}
                     onChange={val => setModalData((prev: any) => ({ ...prev, placa: val }))}
                     placeholder="Selecione"
@@ -990,18 +1040,20 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Horímetro</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={modalData.horimetro}
-                    onChange={e => setModalData({...modalData, horimetro: e.target.value})}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white"
-                  />
-                </div>
+                {modalData.tipo_frota !== 'leve' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Horímetro</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={modalData.horimetro}
+                      onChange={e => setModalData({...modalData, horimetro: e.target.value})}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white"
+                    />
+                  </div>
+                )}
 
-                <div className="space-y-1">
+                <div className={cn("space-y-1", modalData.tipo_frota === 'leve' && 'col-span-2')}>
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">KM</label>
                   <input
                     type="number"
@@ -1034,7 +1086,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                 <div className="col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">O que foi lavado?</label>
                   <div className="flex flex-wrap gap-2">
-                    {ITENS_LAVAGEM.map(item => {
+                    {(modalData.tipo_frota === 'leve' ? ITENS_LAVAGEM_LEVE : ITENS_LAVAGEM_PESADO).map(item => {
                       const marcado = (modalData.itens_lavados || []).includes(item)
                       return (
                         <button
@@ -1066,40 +1118,64 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                   />
                 </div>
 
-                {/* File Uploads */}
+                {/* File Uploads — carro leve tem só 2 fotos (externa/interna); caminhão
+                    mantém a foto do horímetro + 3 fotos gerais. */}
                 <div className="col-span-2 pt-4 border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <UploadBox
-                    label="Horímetro"
-                    field="imagem_horimetro_url"
-                    url={modalData.imagem_horimetro_url}
-                    onCapture={handleCapture}
-                    onFileSelect={handleFileSelect}
-                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
-                  />
-                  <UploadBox
-                    label="Foto 01"
-                    field="imagem_1_url"
-                    url={modalData.imagem_1_url}
-                    onCapture={handleCapture}
-                    onFileSelect={handleFileSelect}
-                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
-                  />
-                  <UploadBox
-                    label="Foto 02"
-                    field="imagem_2_url"
-                    url={modalData.imagem_2_url}
-                    onCapture={handleCapture}
-                    onFileSelect={handleFileSelect}
-                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
-                  />
-                  <UploadBox
-                    label="Foto 03"
-                    field="imagem_3_url"
-                    url={modalData.imagem_3_url}
-                    onCapture={handleCapture}
-                    onFileSelect={handleFileSelect}
-                    onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
-                  />
+                  {modalData.tipo_frota === 'leve' ? (
+                    <>
+                      <UploadBox
+                        label="Foto Externa"
+                        field="imagem_1_url"
+                        url={modalData.imagem_1_url}
+                        onCapture={handleCapture}
+                        onFileSelect={handleFileSelect}
+                        onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                      />
+                      <UploadBox
+                        label="Foto Interna"
+                        field="imagem_2_url"
+                        url={modalData.imagem_2_url}
+                        onCapture={handleCapture}
+                        onFileSelect={handleFileSelect}
+                        onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <UploadBox
+                        label="Horímetro"
+                        field="imagem_horimetro_url"
+                        url={modalData.imagem_horimetro_url}
+                        onCapture={handleCapture}
+                        onFileSelect={handleFileSelect}
+                        onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                      />
+                      <UploadBox
+                        label="Foto 01"
+                        field="imagem_1_url"
+                        url={modalData.imagem_1_url}
+                        onCapture={handleCapture}
+                        onFileSelect={handleFileSelect}
+                        onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                      />
+                      <UploadBox
+                        label="Foto 02"
+                        field="imagem_2_url"
+                        url={modalData.imagem_2_url}
+                        onCapture={handleCapture}
+                        onFileSelect={handleFileSelect}
+                        onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                      />
+                      <UploadBox
+                        label="Foto 03"
+                        field="imagem_3_url"
+                        url={modalData.imagem_3_url}
+                        onCapture={handleCapture}
+                        onFileSelect={handleFileSelect}
+                        onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1124,6 +1200,9 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
             <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
               <span className="p-1.5 bg-blue-600 rounded-md text-white"><FileText size={16} /></span>
               DETALHES
+              <span className="text-lg" title={tipoFrotaDaLavagem(selectedLavagem) === 'leve' ? 'Frota Leve' : 'Frota Pesada'}>
+                {tipoFrotaDaLavagem(selectedLavagem) === 'leve' ? '🚗' : '🚛'}
+              </span>
             </h2>
             <button onClick={() => setIsPanelOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-500">
               <X size={20} />
@@ -1265,6 +1344,85 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
           onDownload={() => gerarFichaLavagemPDF(previewLavagem as any)}
         />
       )}
+    </div>
+  )
+}
+
+function PainelSecao({ titulo, emoji, data, mesLabel }: {
+  titulo: string
+  emoji: string
+  data: { porPlaca: { eq: any; semanasCumpridas: number; cumpriuMeta: boolean }[]; totalSemanas: number; totalCumprindo: number; totalAtivos: number }
+  mesLabel: string
+}) {
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
+        <span>{emoji}</span> {titulo}
+      </h3>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Veículos Ativos</p>
+          <p className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{data.totalAtivos}</p>
+        </div>
+        <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Semanas no Mês</p>
+          <p className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{data.totalSemanas}</p>
+        </div>
+        <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm">
+          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Cumprindo a Meta</p>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{data.totalCumprindo} / {data.totalAtivos}</p>
+        </div>
+        <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-red-200 dark:border-red-900/50 shadow-sm">
+          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Abaixo da Meta</p>
+          <p className="text-2xl font-black text-red-600 dark:text-red-400">{data.totalAtivos - data.totalCumprindo}</p>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+            Meta: 1 lavagem por semana · {mesLabel}
+          </h4>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+              <tr>
+                <th className="px-6 py-3 font-black uppercase text-zinc-400">Placa</th>
+                <th className="px-4 py-3 font-black uppercase text-zinc-400">Módulo</th>
+                <th className="px-4 py-3 font-black uppercase text-zinc-400 text-center">Semanas Cumpridas</th>
+                <th className="px-4 py-3 font-black uppercase text-zinc-400 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+              {data.porPlaca.map(({ eq, semanasCumpridas, cumpriuMeta }) => (
+                <tr key={eq.placa} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
+                  <td className="px-6 py-3 text-blue-600 dark:text-blue-400 text-sm">{eq.placa}</td>
+                  <td className="px-4 py-3 text-zinc-500 font-medium">{eq.modulo || '-'}</td>
+                  <td className="px-4 py-3 text-center">{semanasCumpridas} / {data.totalSemanas}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[9px] font-black tracking-widest border",
+                      cumpriuMeta
+                        ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30"
+                        : "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30"
+                    )}>
+                      {cumpriuMeta ? 'META CUMPRIDA' : 'ABAIXO DA META'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {data.porPlaca.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                    Nenhum veículo ativo encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
