@@ -7,6 +7,22 @@ import { createClient } from '@/utils/supabase/server';
 
 const POSICOES = ['de','dd','tei','tee','tdi','tde','tei1','tee1','tdi1','tde1','estepe'] as const
 
+// Cada posição vira 3 chaves de sulco: a base (sem sufixo) é o Sulco 2 (meio, mesmo campo
+// já usado no Dashboard/gráficos principais), "_s1" é o Sulco 1 (lado direito) e "_s3" é o
+// Sulco 3 (lado esquerdo). A condição geral do boletim considera o pior valor entre os 3
+// sulcos de todas as posições — um lado bem desgastado não pode passar despercebido só
+// porque o meio do pneu ainda está bom.
+const CAMPOS_SULCO = POSICOES.flatMap(pos => [pos, `${pos}_s1`, `${pos}_s3`] as const)
+
+function lerSulcosDoFormData(formData: FormData) {
+  const posicoes: Record<string, number | null> = {};
+  for (const campo of CAMPOS_SULCO) {
+    const v = formData.get(campo);
+    posicoes[campo] = v && v !== '' ? parseFloat(v as string) : null;
+  }
+  return posicoes;
+}
+
 // Quem está autenticado no momento — grava em cada boletim pra alimentar o Histórico
 // e a restrição de visualização por usuário (mecânico só vê o que ele mesmo lançou).
 async function getUsuarioAtual() {
@@ -65,11 +81,7 @@ export async function importarInspecoesPneus(rows: any[]) {
 
 export async function registrarInspecaoCompleta(formData: FormData) {
   try {
-    const posicoes: any = {};
-    for (const pos of POSICOES) {
-      const v = formData.get(pos);
-      posicoes[pos] = v && v !== '' ? parseFloat(v as string) : null;
-    }
+    const posicoes = lerSulcosDoFormData(formData);
 
     const rawCondicao = formData.get('condicao') as string;
     const condicao = PneusService.sanitizeCondicao(rawCondicao, PneusService.calcCondicao(posicoes));
@@ -86,11 +98,11 @@ export async function registrarInspecaoCompleta(formData: FormData) {
       ...usuario
     };
 
-    await PneusService.create(data);
+    const res = await PneusService.create(data);
 
     revalidatePath('/pneus');
     revalidatePath('/');
-    return { success: true };
+    return { success: true, data: res.data };
   } catch (error: any) {
     return { error: error.message };
   }
@@ -98,11 +110,7 @@ export async function registrarInspecaoCompleta(formData: FormData) {
 
 export async function atualizarInspecao(id: string, formData: FormData) {
   try {
-    const posicoes: any = {};
-    for (const pos of POSICOES) {
-      const v = formData.get(pos);
-      posicoes[pos] = v && v !== '' ? parseFloat(v as string) : null;
-    }
+    const posicoes = lerSulcosDoFormData(formData);
 
     const rawCondicao = formData.get('condicao') as string;
     const condicao = PneusService.sanitizeCondicao(rawCondicao, PneusService.calcCondicao(posicoes));
@@ -117,11 +125,11 @@ export async function atualizarInspecao(id: string, formData: FormData) {
       ...posicoes
     };
 
-    await PneusService.update(id, data);
-    
+    const res = await PneusService.update(id, data);
+
     revalidatePath('/pneus');
     revalidatePath('/');
-    return { success: true };
+    return { success: true, data: res.data };
   } catch (error: any) {
     return { error: error.message };
   }

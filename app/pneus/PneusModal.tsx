@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Save, AlertCircle, Info, ChevronDown, Camera } from 'lucide-react'
+import { X, Save, AlertCircle, Info, ChevronDown, Camera, FileDown, CheckCircle2 } from 'lucide-react'
 import { registrarInspecaoCompleta, atualizarInspecao } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import { useOffline } from '@/components/offline-provider'
 import { localDb, serializeFormData } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
+import { gerarFichaPneusPDF } from './pdfBoletim'
+import { useAuth } from '@/components/auth-context'
 
 interface PneusModalProps {
   isOpen: boolean
@@ -25,21 +27,34 @@ const POSI_LABELS: [string, string][] = [
   ["ESTEPE", "estepe"],
 ]
 
+// Cada posição tem 3 pontos de medição do sulco: Sulco 1 (lado direito), Sulco 2 (meio —
+// é o campo sem sufixo, o mesmo que já existia e alimenta o Dashboard/gráficos principais)
+// e Sulco 3 (lado esquerdo). Essa lista achatada é usada pra montar o estado do formulário
+// e pra ler/parsear os valores de forma genérica, em vez de repetir os 33 campos à mão.
+const SULCO_FIELDS: string[] = POSI_LABELS.flatMap(([, key]) => [`${key}_s1`, key, `${key}_s3`])
+
 const getCurrentLocalDatetime = () => {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const INITIAL_FORM = {
+const INITIAL_FORM: Record<string, string> = {
   equipamento_id: '',
   data_inspecao: getCurrentLocalDatetime(),
   km_atual: '',
   horimetro_registro: '',
   condicao: 'BOM',
   observacoes: '',
-  de: '', dd: '', tei: '', tee: '', tdi: '', tde: '',
-  tei1: '', tee1: '', tdi1: '', tde1: '', estepe: ''
+  ...Object.fromEntries(SULCO_FIELDS.map(f => [f, '']))
+}
+
+// Converte os campos de sulco do form (strings) pra número (ou null se vazio) — usado
+// tanto pra montar o payload offline quanto o cache local otimista.
+function parseSulcosForm(form: Record<string, string>) {
+  const out: Record<string, number | null> = {}
+  for (const f of SULCO_FIELDS) out[f] = form[f] ? parseFloat(form[f]) : null
+  return out
 }
 
 export default function PneusModal({ 
@@ -50,8 +65,12 @@ export default function PneusModal({
   onSuccess 
 }: PneusModalProps) {
   const { isOnline } = useOffline()
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Preenchido só após salvar com sucesso — troca o formulário pela tela de "Boletim
+  // registrado" com a opção de baixar a ficha em PDF.
+  const [savedRecord, setSavedRecord] = useState<any | null>(null)
 
   const { 
     form, 
@@ -71,17 +90,7 @@ export default function PneusModal({
         horimetro_registro: editData.horimetro_registro?.toString() || '',
         condicao: editData.condicao || 'BOM',
         observacoes: editData.observacoes || '',
-        de: editData.de?.toString() || '',
-        dd: editData.dd?.toString() || '',
-        tei: editData.tei?.toString() || '',
-        tee: editData.tee?.toString() || '',
-        tdi: editData.tdi?.toString() || '',
-        tde: editData.tde?.toString() || '',
-        tei1: editData.tei1?.toString() || '',
-        tee1: editData.tee1?.toString() || '',
-        tdi1: editData.tdi1?.toString() || '',
-        tde1: editData.tde1?.toString() || '',
-        estepe: editData.estepe?.toString() || ''
+        ...Object.fromEntries(SULCO_FIELDS.map(f => [f, editData[f] != null ? String(editData[f]) : '']))
       })
     } else if (isLoaded && !hasContent) {
       setForm(INITIAL_FORM)
@@ -89,10 +98,11 @@ export default function PneusModal({
   }, [editData, isLoaded, setForm])
 
   // --- Automatic Condition Analysis ---
+  // Considera o pior valor entre os 3 sulcos (direito/meio/esquerdo) de todas as posições —
+  // um lado bem desgastado não pode passar despercebido só porque o meio ainda está bom.
   useEffect(() => {
-    const fields = ['de', 'dd', 'tei', 'tee', 'tdi', 'tde', 'tei1', 'tee1', 'tdi1', 'tde1', 'estepe'];
-    const values = fields.map(k => parseFloat((form as any)[k])).filter(v => !isNaN(v));
-    
+    const values = SULCO_FIELDS.map(k => parseFloat((form as any)[k])).filter(v => !isNaN(v));
+
     if (values.length === 0) return;
 
     const min = Math.min(...values);
@@ -104,7 +114,7 @@ export default function PneusModal({
     if (form.condicao !== autoCond) {
       setForm(prev => ({ ...prev, condicao: autoCond }));
     }
-  }, [form.de, form.dd, form.tei, form.tee, form.tdi, form.tde, form.tei1, form.tee1, form.tdi1, form.tde1, form.estepe]);
+  }, [...SULCO_FIELDS.map(f => (form as any)[f])]);
 
   if (!isOpen) return null
 
@@ -117,10 +127,15 @@ export default function PneusModal({
       const formData = new FormData()
       Object.entries(form).forEach(([key, value]) => formData.append(key, value))
 
+      const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
+      // Nome de quem está registrando, pra mostrar/gerar a ficha mesmo offline (sem servidor
+      // pra devolver o registrado_por_nome calculado lá) — o valor de verdade, gravado no
+      // banco, é sempre o do usuário autenticado no momento em que o servidor processa.
+      const registradoPorLocal = (profile as any)?.full_name || (profile as any)?.nome || null
+
       const handleSaveOffline = async () => {
         const serialized = serializeFormData(formData)
-        const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
-        
+
         if (editData?.id) {
           // Editar offline
           const updated = {
@@ -128,22 +143,13 @@ export default function PneusModal({
             ...form,
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
-            de: form.de ? parseFloat(form.de) : null,
-            dd: form.dd ? parseFloat(form.dd) : null,
-            tei: form.tei ? parseFloat(form.tei) : null,
-            tee: form.tee ? parseFloat(form.tee) : null,
-            tdi: form.tdi ? parseFloat(form.tdi) : null,
-            tde: form.tde ? parseFloat(form.tde) : null,
-            tei1: form.tei1 ? parseFloat(form.tei1) : null,
-            tee1: form.tee1 ? parseFloat(form.tee1) : null,
-            tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
-            tde1: form.tde1 ? parseFloat(form.tde1) : null,
-            estepe: form.estepe ? parseFloat(form.estepe) : null,
+            ...parseSulcosForm(form),
             equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : editData.equipamentos,
             _isPendingSync: true
           }
           await localDb.put("pneus_inspecao", updated)
           await localDb.addToQueue("pneu", "update", { id: editData.id, ...serialized })
+          setSavedRecord(updated)
         } else {
           // Criar offline
           const tempId = `temp_pneu_${Date.now()}`
@@ -152,31 +158,21 @@ export default function PneusModal({
             ...form,
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
-            de: form.de ? parseFloat(form.de) : null,
-            dd: form.dd ? parseFloat(form.dd) : null,
-            tei: form.tei ? parseFloat(form.tei) : null,
-            tee: form.tee ? parseFloat(form.tee) : null,
-            tdi: form.tdi ? parseFloat(form.tdi) : null,
-            tde: form.tde ? parseFloat(form.tde) : null,
-            tei1: form.tei1 ? parseFloat(form.tei1) : null,
-            tee1: form.tee1 ? parseFloat(form.tee1) : null,
-            tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
-            tde1: form.tde1 ? parseFloat(form.tde1) : null,
-            estepe: form.estepe ? parseFloat(form.estepe) : null,
+            ...parseSulcosForm(form),
+            registrado_por_nome: registradoPorLocal,
             equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined,
             _isPendingSync: true
           }
           await localDb.put("pneus_inspecao", newInspecao)
           await localDb.addToQueue("pneu", "create", serialized)
+          setSavedRecord(newInspecao)
         }
 
         window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
         window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"))
-        
+
         clearDraft()
         onSuccess()
-        onClose()
-        alert("Boletim de pneus salvo com sucesso (Offline)!");
       };
 
       if (isOnline) {
@@ -192,25 +188,16 @@ export default function PneusModal({
             console.warn("[Pneus] Falha ao salvar online, tentando offline...", result.error);
             await handleSaveOffline();
           } else {
-            // Quando online, salvamos o novo registro no cache local.
-            // Para simplificar, recarregamos a página ou re-buscamos, mas vamos atualizar o cache local também.
-            const eq = equipamentos.find(eq => eq.id === form.equipamento_id)
-            const newLocal = {
+            // O servidor devolve o registro já salvo (com id gerado, nome de quem registrou
+            // e placa do equipamento) — evita uma segunda consulta só pra gerar a ficha.
+            const saved = (result as any)?.data
+            const newLocal = saved || {
               id: editData?.id || `ins_${Date.now()}`,
               ...form,
               km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
               horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
-              de: form.de ? parseFloat(form.de) : null,
-              dd: form.dd ? parseFloat(form.dd) : null,
-              tei: form.tei ? parseFloat(form.tei) : null,
-              tee: form.tee ? parseFloat(form.tee) : null,
-              tdi: form.tdi ? parseFloat(form.tdi) : null,
-              tde: form.tde ? parseFloat(form.tde) : null,
-              tei1: form.tei1 ? parseFloat(form.tei1) : null,
-              tee1: form.tee1 ? parseFloat(form.tei1) : null,
-              tdi1: form.tdi1 ? parseFloat(form.tdi1) : null,
-              tde1: form.tde1 ? parseFloat(form.tde1) : null,
-              estepe: form.estepe ? parseFloat(form.estepe) : null,
+              ...parseSulcosForm(form),
+              registrado_por_nome: registradoPorLocal,
               equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined
             }
             await localDb.put("pneus_inspecao", newLocal)
@@ -218,8 +205,7 @@ export default function PneusModal({
 
             clearDraft()
             onSuccess()
-            onClose()
-            alert("Boletim de pneus salvo com sucesso!");
+            setSavedRecord(newLocal)
           }
         } catch (err: any) {
           console.error("[Pneus] Erro critico no salvamento online, caindo para offline:", err);
@@ -233,6 +219,13 @@ export default function PneusModal({
     } finally {
       setLoading(false)
     }
+  }
+
+  // Fecha o modal e limpa o estado de "sucesso" pra próxima vez que for aberto (registrar
+  // um novo boletim) mostrar o formulário em vez da tela de ficha salva.
+  const handleClose = () => {
+    setSavedRecord(null)
+    onClose()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -271,8 +264,8 @@ export default function PneusModal({
               <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium"> Controle detalhado de sulcos por posição </p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
+          <button
+            onClick={handleClose}
             className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
           >
             <X size={20} />
@@ -280,6 +273,27 @@ export default function PneusModal({
         </div>
 
         {/* Content */}
+        {savedRecord ? (
+          <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1 flex flex-col items-center justify-center text-center">
+            <div className="p-4 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-full shadow-inner">
+              <CheckCircle2 size={40} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold tracking-tight">Boletim registrado com sucesso!</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
+                {savedRecord.equipamentos?.placa && <>Placa <span className="font-bold text-zinc-700 dark:text-zinc-300">{savedRecord.equipamentos.placa}</span> · </>}
+                Registrado por <span className="font-bold text-zinc-700 dark:text-zinc-300">{savedRecord.registrado_por_nome || 'Você'}</span>
+              </p>
+            </div>
+            <button
+              onClick={() => gerarFichaPneusPDF(savedRecord)}
+              className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all"
+            >
+              <FileDown size={18} />
+              Baixar Ficha em PDF
+            </button>
+          </div>
+        ) : (
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
           {error && (
             <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3 text-red-600 dark:text-red-400 animate-in slide-in-from-top-2">
@@ -342,25 +356,57 @@ export default function PneusModal({
                 <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em]">Sulcos por Posição (mm)</h3>
                 <span className="text-[10px] text-zinc-400 italic font-medium">* Deixe vazio se não aplicável</span>
               </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+
+              {/* Cada posição tem 3 medições: Sulco 1 (lado direito), Sulco 2 (meio — campo
+                  sem sufixo, o mesmo do Dashboard/gráficos principais) e Sulco 3 (lado
+                  esquerdo). Isso ajuda a identificar desgaste irregular de um lado só. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {POSI_LABELS.map(([label, key]) => (
-                  <div 
-                    key={key} 
-                    className={`flex flex-col gap-1 pill-group group ${key === 'estepe' ? 'col-span-2 sm:col-span-1' : ''}`}
+                  <div
+                    key={key}
+                    className="flex flex-col gap-1.5 p-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500"
                   >
-                    <div className="flex items-center gap-2 p-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all group-within:ring-2 group-within:ring-orange-500/30 group-within:border-orange-500">
-                      <span className="text-[10px] font-black text-orange-500 dark:text-orange-400 w-8 shrink-0 text-center border-r border-zinc-200 dark:border-zinc-800 mr-2">{label}</span>
-                      <input 
-                        name={key} 
-                        type="number" 
-                        step="0.1" 
-                        min="0" 
-                        value={form[key as keyof typeof form]}
-                        onChange={handleInputChange}
-                        placeholder="--" 
-                        className="bg-transparent text-sm w-full outline-none text-zinc-900 dark:text-zinc-100 font-bold placeholder-zinc-300 dark:placeholder-zinc-700" 
-                      />
+                    <span className="text-[10px] font-black text-orange-500 dark:text-orange-400">{label}</span>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">Dir.</span>
+                        <input
+                          name={`${key}_s1`}
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={form[`${key}_s1` as keyof typeof form]}
+                          onChange={handleInputChange}
+                          placeholder="--"
+                          className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 text-sm w-full outline-none text-zinc-900 dark:text-zinc-100 font-bold placeholder-zinc-300 dark:placeholder-zinc-700"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">Meio</span>
+                        <input
+                          name={key}
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={form[key as keyof typeof form]}
+                          onChange={handleInputChange}
+                          placeholder="--"
+                          className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 text-sm w-full outline-none text-zinc-900 dark:text-zinc-100 font-bold placeholder-zinc-300 dark:placeholder-zinc-700"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">Esq.</span>
+                        <input
+                          name={`${key}_s3`}
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={form[`${key}_s3` as keyof typeof form]}
+                          onChange={handleInputChange}
+                          placeholder="--"
+                          className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 text-sm w-full outline-none text-zinc-900 dark:text-zinc-100 font-bold placeholder-zinc-300 dark:placeholder-zinc-700"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -412,12 +458,24 @@ export default function PneusModal({
             </div>
           </form>
         </div>
+        )}
 
         {/* Footer */}
         <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-between items-center shrink-0">
+          {savedRecord ? (
+            <div className="flex justify-end w-full">
+              <button
+                onClick={handleClose}
+                className="px-8 py-2.5 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all"
+              >
+                Fechar
+              </button>
+            </div>
+          ) : (
+          <>
           <div>
             {!editData && hasContent && (
-              <button 
+              <button
                 onClick={clearDraft}
                 className="text-xs font-semibold text-zinc-500 hover:text-red-500 flex items-center gap-1.5 transition-colors"
                 title="Limpar rascunho salvo"
@@ -427,13 +485,13 @@ export default function PneusModal({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button 
-              onClick={onClose}
+            <button
+              onClick={handleClose}
               className="px-5 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl transition-all"
             >
               Cancelar
             </button>
-            <button 
+            <button
               form="pneus-form"
               type="submit"
               disabled={loading}
@@ -447,6 +505,8 @@ export default function PneusModal({
               {editData ? 'Salvar Edição' : 'Registrar'}
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

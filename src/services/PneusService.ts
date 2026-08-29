@@ -14,21 +14,21 @@ export class PneusService {
       throw new Error('Equipamento e Data são obrigatórios');
     }
 
-    const { error } = await PneusRepository.create(data);
+    const { data: saved, error } = await PneusRepository.create(data);
     if (error) throw new Error(error.message);
-    
+
     // Sync equipment horimetro/km if applicable
     if (data.km_atual) {
       await EquipamentoRepository.update(data.equipamento_id, { ultimoHist: data.km_atual });
     }
 
-    return { success: true };
+    return { success: true, data: saved };
   }
 
   static async update(id: string, data: InspecaoPneuUpdate) {
-    const { error } = await PneusRepository.update(id, data);
+    const { data: saved, error } = await PneusRepository.update(id, data);
     if (error) throw new Error(error.message);
-    return { success: true };
+    return { success: true, data: saved };
   }
 
   static async delete(id: string) {

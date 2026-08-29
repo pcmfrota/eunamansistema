@@ -14,6 +14,7 @@ import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { cn } from "@/lib/utils";
+import { gerarFichaPneusPDF } from "./pdfBoletim";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };
@@ -21,11 +22,25 @@ type Inspecao = {
   id: string;
   equipamento_id: string;
   data_inspecao: string;
+  created_at?: string | null;
   km_atual: number | null;
+  // Sulco 2 (meio) de cada posição — é o que alimenta o Dashboard/gráficos principais.
   de: number | null; dd: number | null;
   tei: number | null; tee: number | null; tdi: number | null; tde: number | null;
   tei1: number | null; tee1: number | null; tdi1: number | null; tde1: number | null;
   estepe: number | null;
+  // Sulco 1 (lado direito) e Sulco 3 (lado esquerdo) de cada posição.
+  de_s1?: number | null; de_s3?: number | null;
+  dd_s1?: number | null; dd_s3?: number | null;
+  tei_s1?: number | null; tei_s3?: number | null;
+  tee_s1?: number | null; tee_s3?: number | null;
+  tdi_s1?: number | null; tdi_s3?: number | null;
+  tde_s1?: number | null; tde_s3?: number | null;
+  tei1_s1?: number | null; tei1_s3?: number | null;
+  tee1_s1?: number | null; tee1_s3?: number | null;
+  tdi1_s1?: number | null; tdi1_s3?: number | null;
+  tde1_s1?: number | null; tde1_s3?: number | null;
+  estepe_s1?: number | null; estepe_s3?: number | null;
   condicao: string;
   equipamentos?: { placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
   _isPendingSync?: boolean;
@@ -67,7 +82,22 @@ function fmtDate(dateStr: string | null) {
   return `${d}/${m}/${y}`;
 }
 
-type Tab = "menu" | "dashboard" | "leves" | "lista" | "historico";
+// Célula com os 3 pontos de medição de uma posição empilhados (Direito / Meio / Esquerdo) —
+// usada na aba "Sulcos Detalhados" pra deixar visível qual lado do pneu está mais desgastado.
+function renderSulcoTriple(s1: number | null | undefined, s2: number | null | undefined, s3: number | null | undefined) {
+  const cell = (v: number | null | undefined) => (
+    <span className={`block w-9 py-0.5 rounded text-[9px] text-center ${sulcoColor(v ?? null)}`}>{v ?? '—'}</span>
+  );
+  return (
+    <div className="flex flex-col gap-0.5 items-center">
+      {cell(s1)}
+      {cell(s2)}
+      {cell(s3)}
+    </div>
+  );
+}
+
+type Tab = "menu" | "dashboard" | "leves" | "lista" | "sulcos" | "historico";
 
 export default function PneusClient({
   equipamentos,
@@ -385,6 +415,14 @@ export default function PneusClient({
   const pesadosData = React.useMemo(() => buildDashData('PESADA'), [equipamentos, filteredInspecoesRows, diasSemBoletimPorEquipamento]);
   const levesData   = React.useMemo(() => buildDashData('LEVE'),   [equipamentos, filteredInspecoesRows, diasSemBoletimPorEquipamento]);
 
+  // Último boletim de cada equipamento (pesado ou leve), pra aba "Sulcos Detalhados" —
+  // que não separa por categoria, só mostra o detalhamento dos 3 pontos de medição.
+  const todosLatestSulcos = React.useMemo(() => {
+    return [...pesadosData.latest, ...levesData.latest].sort((a, b) =>
+      (a.equipamentos?.placa || '').localeCompare(b.equipamentos?.placa || '')
+    );
+  }, [pesadosData.latest, levesData.latest]);
+
   // ── Active category data (feeds shared dashboard JSX) ──
   const isLevesTab = tab === 'leves';
   const activeData = isLevesTab ? levesData : pesadosData;
@@ -475,206 +513,9 @@ export default function PneusClient({
     }
   };
 
-   const downloadBoletimPDF = (ins: Inspecao) => {
-    if (!(window as any).html2pdf) {
-      alert("Aguarde o carregamento do gerador de PDF."); return;
-    }
-    const html = `
-      <div style="padding: 10px; font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 10px; width: 100%; box-sizing: border-box; background: #fff;">
-         <!-- Header -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534;">
-            <tr>
-               <td style="width: 25%; border-right: 2px solid #166534; text-align: center; padding: 5px;">
-                  <div style="font-size: 18px; font-weight: 900; letter-spacing: -1px; color: #000;">EUNAMAN</div>
-               </td>
-               <td style="width: 50%; border-right: 2px solid #166534; text-align: center; vertical-align: middle; color: #000;">
-                  <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 1px;">BOLETIM DE PNEUS</h1>
-               </td>
-               <td style="width: 25%; padding: 5px; font-size: 9px; line-height: 1.2; color: #000;">
-                  <div>Doc. Nº.:</div>
-                  <div>Página: 1</div>
-                  <div>Versão: 1.0</div>
-                  <div style="color: red; font-weight: bold; text-align: left; margin-top: 5px;">${ins.id.split('-')[0].toUpperCase()}</div>
-               </td>
-            </tr>
-         </table>
-
-         <!-- Info Sec -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534; color: #000;">
-            <tr>
-               <td style="border: 1px solid #166534; padding: 4px; width: 15%; vertical-align: top;">
-                  <div style="font-size: 8px;">Ordem de Serviço:</div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 4px; width: 15%; vertical-align: top;">
-                  <div style="font-size: 8px;">Origem:</div>
-                  <div style="margin-top:2px;">[ &nbsp; ] INTERNA</div>
-                  <div style="margin-top:2px;">[ &nbsp; ] CAMPO</div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 0; width: 70%; vertical-align: top;">
-                  <table style="width: 100%; border-collapse: collapse; height: 100%;">
-                     <tr>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 45%;"><div style="font-size: 8px;">FUNCIONÁRIO:</div></td>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 15%;"><div style="font-size: 8px;">ID:</div></td>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 20%; color: #000;"><div style="font-size: 8px;">Data Entrada:</div><div style="font-weight:bold">${fmtDate(ins.data_inspecao)}</div></td>
-                        <td style="border-bottom: 1px solid #166534; padding: 4px; width: 20%;"><div style="font-size: 8px;">Hora:</div></td>
-                     </tr>
-                     <tr>
-                        <td colspan="2" style="border-right: 1px solid #166534; padding: 4px; color: #000;"><div style="font-size: 8px;">EQUIPAMENTO:</div><div style="font-weight:bold; font-size: 14px;">${ins.equipamentos?.placa || ''}</div></td>
-                        <td style="border-right: 1px solid #166534; padding: 4px;"><div style="font-size: 8px;">Data Saída:</div></td>
-                        <td style="padding: 4px;"><div style="font-size: 8px;">Hora:</div></td>
-                     </tr>
-                  </table>
-               </td>
-            </tr>
-         </table>
-
-         <!-- Desmontados Header -->
-         <div style="background-color: #f0fdf4; border: 2px solid #166534; text-align: center; font-weight: bold; padding: 4px; margin-bottom: 5px; color: #000;">P N E U S &nbsp; &nbsp; D E S M O N T A D O S</div>
-         
-         <!-- Tabela Desmontados -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center; color: #000;">
-            <tr style="background-color: #f0fdf4;">
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">POSIÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">TIPO DE<br>INTERVENÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">MOTIVO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">CAUSA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 1</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 2</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 3</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">PRESSÃO<br>MEDIDA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 14%;">PRESSÃO<br>CALIBRADA</th>
-            </tr>
-            ${[
-               { lbl: '1º EIXO DE', val: ins.de }, { lbl: '1º EIXO DD', val: ins.dd },
-               { lbl: '2º EIXO TEE', val: ins.tee }, { lbl: '2º EIXO TEI', val: ins.tei },
-               { lbl: '2º EIXO TDI', val: ins.tdi }, { lbl: '2º EIXO TDE', val: ins.tde },
-               { lbl: '3º EIXO TEE', val: ins.tee1 }, { lbl: '3º EIXO TEI', val: ins.tei1 },
-               { lbl: '3º EIXO TDI', val: ins.tdi1 }, { lbl: '3º EIXO TDE', val: ins.tde1 },
-               { lbl: '98 STEP', val: ins.estepe }
-            ].map((r, i) => r.val != null || i < 2 ? `
-               <tr>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc; color: #000;">${r.lbl}</td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: 900; font-size: 10px; color: #000;">${r.val != null ? r.val : ''}</td>
-                  <td style="border: 1px solid #166534; padding: 4px; background-color: #f1f5f9;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px; background-color: #f1f5f9;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px; background-color: #f1f5f9;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px; background-color: #f1f5f9;"></td>
-               </tr>
-            ` : '').join('')}
-         </table>
-
-         <!-- Montados Header -->
-         <div style="background-color: #f0fdf4; border: 2px solid #166534; border-bottom: none; text-align: center; font-weight: bold; padding: 4px; color: #000;">P N E U S &nbsp; &nbsp; M O N T A D O S</div>
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center; color: #000;">
-            <tr style="background-color: #f0fdf4;">
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">POSIÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">TIPO DE<br>INTERVENÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">MOTIVO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">CAUSA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 1</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 2</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 3</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">PRESSÃO<br>MEDIDA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 14%;">PRESSÃO<br>CALIBRADA</th>
-            </tr>
-            ${[
-               { lbl: '1º EIXO DE' }, { lbl: '1º EIXO DD' },
-               { lbl: '2º EIXO TEE' }, { lbl: '2º EIXO TEI' },
-               { lbl: '98 STEP' }
-            ].map(r => `
-               <tr>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc; color: #000;">${r.lbl}</td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-               </tr>
-            `).join('')}
-         </table>
-
-         <!-- Legends / Dictionary -->
-         <table style="width: 100%; border-collapse: collapse; border: 2px solid #166534; font-size: 7px; margin-bottom: 10px; color: #000;">
-            <tr style="background-color: #f0fdf4;">
-               <th style="border: 1px solid #166534; padding: 4px; width: 25%;">EVENTO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 50%;">MOTIVO DA RETIRADA / MANUTENÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 25%;">TIPO DE REPARO</th>
-            </tr>
-            <tr>
-               <td style="border: 1px solid #166534; padding: 6px; vertical-align: top;">
-                  <div style="margin-bottom:2px;">[ 1 ] MOVIMENTAÇÃO</div>
-                  <div style="margin-bottom:2px;">[ 2 ] CONSERTO</div>
-                  <div style="margin-bottom:2px;">[ 3 ] INVENTÁRIO</div>
-                  <div style="margin-bottom:2px;">[ 4 ] CALIBRAGEM / MEDIÇÃO</div>
-                  <div style="margin-bottom:2px;">[ 5 ] RETIRADA RECAPAGEM</div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 6px; vertical-align: top;">
-                  <div style="column-count: 2; column-gap: 15px;">
-                     <div style="margin-bottom:2px;">[ 1 ] RODOU FURADO</div>
-                     <div style="margin-bottom:2px;">[ 2 ] RODOU BAIXA PRESSÃO</div>
-                     <div style="margin-bottom:2px;">[ 3 ] DESGASTE IRREGULAR</div>
-                     <div style="margin-bottom:2px;">[ 4 ] TALÕES DANIFICADO</div>
-                     <div style="margin-bottom:2px;">[ 5 ] IMPACTO DE FRANCO</div>
-                     <div style="margin-bottom:2px;">[ 6 ] PERFURAÇÃO OBJETOS</div>
-                     <div style="margin-bottom:2px;">[ 7 ] SEPARAÇÃO DE BANDA</div>
-                     <div style="margin-bottom:2px;">[ 19] RECAPAGEM</div>
-                     <div style="margin-bottom:2px;">[ 20] RODÍZIO DE PNEU</div>
-                     <div style="margin-bottom:2px;">[ 31] INVENTÁRIO</div>
-                  </div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 6px; vertical-align: top;">
-                  <div style="column-count: 1;">
-                     <div style="margin-bottom:2px;">[ 1 ] PREGO</div>
-                     <div style="margin-bottom:2px;">[ 2 ] PARAFUSO</div>
-                     <div style="margin-bottom:2px;">[ 3 ] FERRO</div>
-                     <div style="margin-bottom:2px;">[ 4 ] RODA QUEBRADA</div>
-                     <div style="margin-bottom:2px;">[ 7 ] CORTE PNEU</div>
-                  </div>
-               </td>
-            </tr>
-         </table>
-
-         <div style="display: flex; gap: 10px; font-size: 8px; color: #000;">
-            <div style="border: 2px solid #166534; padding: 6px; flex: 1;">
-               <b>STATUS DIAGNOSTICADO:</b> <span style="background-color: ${ins.condicao === 'CRITICO' || ins.condicao === 'TROCAR' ? '#fee2e2' : '#dcfce7'}; padding: 2px 4px; border: 1px solid #166534;">${ins.condicao}</span>
-            </div>
-            <div style="border: 2px solid #166534; padding: 6px; flex: 2; display: flex; flex-direction: column; justify-content: flex-end;">
-               <div style="border-top: 1px solid #166534; margin-top: 20px; text-align: center;">Assinatura do Mecânico / Encarregado</div>
-            </div>
-         </div>
-      </div>
-    `;
-    const element = document.createElement("div");
-    element.innerHTML = html;
-    const filename = `Boletim_${ins.equipamentos?.placa}_${fmtDate(ins.data_inspecao).replace(/\//g, '-')}.pdf`;
-    const opt = {
-      margin: [5, 5, 5, 5],
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    
-    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
-    const worker = (window as any).html2pdf().set(opt).from(element);
-    
-    if (isAndroidApp) {
-      worker.outputPdf('datauristring').then((pdfBase64: string) => {
-        (window as any).EunamanApp.saveBase64File(pdfBase64, filename, 'application/pdf');
-      }).catch((err: any) => {
-        console.error("Erro ao gerar PDF do Boletim para App:", err);
-        alert("Erro ao salvar PDF: " + err.message);
-      });
-    } else {
-      worker.save();
-    }
-  };
+   // Geração de PDF extraída pra app/pneus/pdfBoletim.ts — compartilhada com o PneusModal,
+   // que oferece a ficha logo após o registro.
+   const downloadBoletimPDF = (ins: Inspecao) => gerarFichaPneusPDF(ins);
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[100rem] mx-auto w-full h-full animate-in fade-in duration-500">
@@ -806,6 +647,19 @@ export default function PneusClient({
             <div>
               <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Lista</h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Todas as inspeções em formato de lista</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleSetTab("sulcos")}
+            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
+          >
+            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+              <LayoutGrid size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Sulcos Detalhados</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Medição por lado direito, meio e esquerdo</p>
             </div>
           </button>
 
@@ -1359,6 +1213,70 @@ export default function PneusClient({
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+             </div>
+           </div>
+        )}
+
+        {tab === "sulcos" && (
+           <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
+             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between flex-wrap gap-2">
+               <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 px-2">Sulcos Detalhados por Posição — Último boletim de cada veículo</h4>
+               <div className="flex gap-3 text-[9px] font-black uppercase tracking-widest text-zinc-400 px-2">
+                 <span>D = Lado Direito</span>
+                 <span>M = Meio</span>
+                 <span>E = Lado Esquerdo</span>
+               </div>
+             </div>
+             <div className="overflow-x-auto min-h-[300px]">
+                <table className="w-full text-[10px] text-left">
+                  <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+                    <tr>
+                      <th className="px-6 py-4 font-black uppercase text-zinc-400">Placa</th>
+                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
+                      {POSICOES.map(p => (
+                        <th key={p} className="px-2 py-4 font-black uppercase text-zinc-400 text-center">
+                          {p}
+                          <span className="block text-[8px] text-zinc-300 dark:text-zinc-700 normal-case font-bold">D/M/E</span>
+                        </th>
+                      ))}
+                      <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
+                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Registrado por</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+                    {todosLatestSulcos.map(ins => (
+                      <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
+                        <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black align-top">
+                          <span
+                            onClick={() => setSelectedSchematic(ins)}
+                            className="hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
+                          >
+                            {ins.equipamentos?.placa}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-zinc-500 align-top">{fmtDate(ins.data_inspecao)}</td>
+                        {POSICOES.map(p => (
+                          <td key={p} className="px-2 py-3 text-center">
+                            {renderSulcoTriple((ins as any)[`${p}_s1`], ins[p], (ins as any)[`${p}_s3`])}
+                          </td>
+                        ))}
+                        <td className="px-4 py-4 text-center align-top">
+                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
+                        </td>
+                        <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400 align-top">
+                          {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {todosLatestSulcos.length === 0 && (
+                      <tr>
+                        <td colSpan={POSICOES.length + 4} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                          Nenhum boletim encontrado.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
              </div>
