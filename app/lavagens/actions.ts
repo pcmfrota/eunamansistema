@@ -14,12 +14,35 @@ export type Lavagem = {
   status: 'Lavado' | 'Pendente' | 'Não realizado'
   lavagem_realizada: boolean
   observacoes: string
+  itens_lavados?: string[]
   imagem_1_url?: string
   imagem_2_url?: string
   imagem_3_url?: string
   imagem_horimetro_url?: string
   created_at: string
   validated_at?: string
+  registrado_por?: string | null
+  registrado_por_nome?: string | null
+}
+
+// Quem está autenticado no momento — grava no lançamento (mesmo padrão do Boletim de
+// Pneus) pra saber quem registrou a lavagem, já que o campo "colaborador" agora é
+// preenchido automaticamente com esse mesmo nome (lançamento rápido, sem seleção manual).
+async function getUsuarioAtual() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { registrado_por: null, registrado_por_nome: null };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  return {
+    registrado_por: user.id,
+    registrado_por_nome: profile?.full_name || user.email || 'Usuário',
+  };
 }
 
 export async function getLavagens(mes: number, ano: number) {
@@ -45,7 +68,7 @@ export async function getEquipamentos() {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('equipamentos')
-    .select('placa, modulo, categoria, area')
+    .select('placa, modulo, categoria, area, status')
     .is('deleted_at', null)
     .order('placa')
 
@@ -59,19 +82,24 @@ export async function getEquipamentos() {
 
 export async function saveLavagem(formData: FormData) {
   const supabase = createClient()
-  
+
   const id = formData.get('id') as string
   const placa = formData.get('placa') as string
   const data = formData.get('data') as string
-  const colaborador = formData.get('colaborador') as string
   const horimetro = Number(formData.get('horimetro'))
   const km = Number(formData.get('km'))
   const lavagem_realizada = formData.get('lavagem_realizada') === 'true'
   const observacoes = formData.get('observacoes') as string
-  
-  // Status logic: if horimetro or km or images are missing, status is "Pendente"
+
+  let itens_lavados: string[] = []
+  const itensRaw = formData.get('itens_lavados') as string | null
+  if (itensRaw) {
+    try { itens_lavados = JSON.parse(itensRaw) } catch { itens_lavados = [] }
+  }
+
+  // Status logic: if horimetro or km are missing, status is "Pendente"
   let status = 'Lavado'
-  if (!horimetro || !km || !colaborador) {
+  if (!horimetro || !km) {
     status = 'Pendente'
   }
   if (!lavagem_realizada) {
@@ -81,12 +109,12 @@ export async function saveLavagem(formData: FormData) {
   const lavagemData: any = {
     placa,
     data,
-    colaborador,
     horimetro,
     km,
     status,
     lavagem_realizada,
     observacoes,
+    itens_lavados,
   }
 
   // Handle image uploads if any (simplification: URLs are passed directly for now)
@@ -101,23 +129,29 @@ export async function saveLavagem(formData: FormData) {
   if (img3) lavagemData.imagem_3_url = img3
   if (imgH) lavagemData.imagem_horimetro_url = imgH
 
+  // "Colaborador" (quem lavou) não é mais escolhido manualmente — é sempre quem está
+  // logado fazendo o lançamento (lançamento rápido, pensado pro app). Só preenchemos
+  // isso (e registrado_por/registrado_por_nome) na criação: numa edição, preserva quem
+  // registrou originalmente em vez de trocar pelo usuário que está editando agora.
+  const { data: existing } = id
+    ? await supabase.from('lavagens').select('id').eq('id', id).maybeSingle()
+    : { data: null }
+
+  if (!existing) {
+    const usuario = await getUsuarioAtual()
+    lavagemData.registrado_por = usuario.registrado_por
+    lavagemData.registrado_por_nome = usuario.registrado_por_nome
+    lavagemData.colaborador = usuario.registrado_por_nome
+  }
+
   // O cliente já manda um UUID de verdade mesmo em registros novos (pra poder salvar
   // localmente offline antes de sincronizar) — por isso é upsert por id, não um
   // if/else de "tem id → update, não tem → insert": um id novo que ainda não existe
   // na tabela cairia no update e não salvaria nada (update em id inexistente não dá
   // erro, só não afeta nenhuma linha).
-  let error;
-  if (id) {
-    const { error: upsertError } = await supabase
-      .from('lavagens')
-      .upsert({ ...lavagemData, id }, { onConflict: 'id' })
-    error = upsertError
-  } else {
-    const { error: insertError } = await supabase
-      .from('lavagens')
-      .insert([lavagemData])
-    error = insertError
-  }
+  const { data: saved, error } = id
+    ? await supabase.from('lavagens').upsert({ ...lavagemData, id }, { onConflict: 'id' }).select().single()
+    : await supabase.from('lavagens').insert([lavagemData]).select().single()
 
   if (error) {
     console.error('Error saving lavagem:', error)
@@ -125,7 +159,7 @@ export async function saveLavagem(formData: FormData) {
   }
 
   revalidatePath('/lavagens')
-  return { success: true }
+  return { success: true, data: saved }
 }
 
 export async function deleteLavagem(id: string) {

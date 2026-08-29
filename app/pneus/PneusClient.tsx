@@ -15,7 +15,7 @@ import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { cn } from "@/lib/utils";
 import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from "./pdfBoletim";
-import FichaPreviewModal from "./FichaPreviewModal";
+import FichaPreviewModal from "@/components/FichaPreviewModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };

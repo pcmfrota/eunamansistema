@@ -1,34 +1,42 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { 
-  Calendar as CalendarIcon, 
-  Grid, 
-  Search, 
-  Filter, 
-  Plus, 
-  X, 
-  ChevronLeft, 
-  ChevronRight, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Camera, 
+import {
+  Calendar as CalendarIcon,
+  Grid,
+  Search,
+  Filter,
+  Plus,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle,
+  Droplets,
+  Camera,
   FileText,
   Trash2,
   Check,
   ZoomIn,
   Download,
-  MoreVertical
+  MoreVertical,
+  ArrowLeft,
+  ChevronDown,
+  ClipboardList,
+  Target,
+  Eye,
+  FileDown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, getISOWeek, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Lavagem, saveLavagem, deleteLavagem, validarLavagem } from './actions'
-import { supabase } from '@/lib/supabase'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
+import { useAuth } from '@/components/auth-context'
+import FichaPreviewModal from '@/components/FichaPreviewModal'
+import { gerarFichaLavagemPDF, gerarHtmlFichaLavagem } from './pdfFicha'
 
 // Safe date formatter to prevent RangeError from date-fns
 const safeFormatDate = (dateVal: any, formatPattern: string, options?: any) => {
@@ -63,6 +71,35 @@ const STATUS_COLORS = {
   'Pendente': 'bg-amber-500',
   'Não realizado': 'bg-red-500',
   'default': 'bg-zinc-200 dark:bg-zinc-800'
+}
+
+// Checklist simples do que foi lavado no caminhão — mostrado no lançamento e reaproveitado
+// na ficha em PDF. Lista fixa, pensada pra marcar rápido pelo aplicativo.
+const ITENS_LAVAGEM = [
+  'Cabine (Externa)',
+  'Cabine (Interna)',
+  'Carroceria / Caçamba',
+  'Chassi / Parte de Baixo',
+  'Rodas e Pneus',
+  'Motor',
+  'Para-brisa e Vidros',
+  'Tanque de Combustível',
+]
+
+const BLANK_MODAL_DATA = {
+  id: '',
+  placa: '',
+  data: format(new Date(), 'yyyy-MM-dd'),
+  colaborador: '',
+  horimetro: '',
+  km: '',
+  lavagem_realizada: true,
+  observacoes: '',
+  itens_lavados: [] as string[],
+  imagem_1_url: '',
+  imagem_2_url: '',
+  imagem_3_url: '',
+  imagem_horimetro_url: ''
 }
 
 // Helper para compressão de imagem via canvas para ~50KB
@@ -101,10 +138,15 @@ const compressBase64 = (dataUrl: string, maxWidth = 800, maxHeight = 800, qualit
   });
 };
 
+type Tab = 'menu' | 'painel' | 'calendario' | 'galeria' | 'historico'
+
 export default function LavagensClient({ initialLavagens, equipamentos, colaboradores, currentMes, currentAno }: LavagensClientProps) {
   const { isOnline } = useOffline()
+  const { profile } = useAuth()
   const [mounted, setMounted] = useState(false)
-  const [view, setView] = useState<'calendar' | 'gallery'>('calendar')
+  // Tela inicial é o menu de cards — mais limpa, principalmente pra uso no app.
+  const [tab, setTab] = useState<Tab>('menu')
+  const [showFiltros, setShowFiltros] = useState(false)
   const [lavagens, setLavagens] = useState<Lavagem[]>(initialLavagens)
   const [selectedLavagem, setSelectedLavagem] = useState<Lavagem | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -113,27 +155,27 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('Todos')
   const [filterArea, setFilterArea] = useState('Todas')
+  // Preenchido só após salvar com sucesso — troca o formulário do lançamento pela tela de
+  // "Lavagem registrada" com a opção de ver/baixar a ficha em PDF.
+  const [savedRecord, setSavedRecord] = useState<any | null>(null)
+  const [showModalPreview, setShowModalPreview] = useState(false)
+  // Ficha aberta pra pré-visualização a partir do Histórico ou do painel de Detalhes.
+  const [previewLavagem, setPreviewLavagem] = useState<Lavagem | null>(null)
+
+  const isEquipamentoAtivo = (eq: any) => {
+    if (!eq) return false
+    const st = String(eq.status || 'Ativo').toUpperCase().trim()
+    return st !== 'INATIVO' && st !== 'BAIXADO' && st !== 'DESATIVADO'
+  }
 
   const areaOptions = useMemo(() => {
     const s = new Set<string>()
     equipamentos.forEach(e => { if (e.area) s.add(e.area) })
     return ['Todas', ...Array.from(s).sort()]
   }, [equipamentos])
-  
+
   // Modal State
-  const [modalData, setModalData] = useState<any>({
-    placa: '',
-    data: format(new Date(), 'yyyy-MM-dd'),
-    colaborador: '',
-    horimetro: '',
-    km: '',
-    lavagem_realizada: true,
-    observacoes: '',
-    imagem_1_url: '',
-    imagem_2_url: '',
-    imagem_3_url: '',
-    imagem_horimetro_url: ''
-  })
+  const [modalData, setModalData] = useState<any>(BLANK_MODAL_DATA)
 
   useEffect(() => {
     setMounted(true)
@@ -184,6 +226,15 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     };
   }, [mounted]);
 
+  // Pré-carrega html2pdf.js via CDN pra gerar a ficha em PDF
+  useEffect(() => {
+    if (!(window as any).html2pdf) {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      document.head.appendChild(script);
+    }
+  }, []);
+
   const hasRestoredRef = useRef(false);
 
   // Salvar rascunho do lançamento de lavagem
@@ -233,7 +284,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     return lavagens.filter(l => {
       const matchesSearch = l.placa.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesStatus = filterStatus === 'Todos' || l.status === filterStatus
-      
+
       let matchesArea = true
       if (filterArea !== 'Todas') {
         const eq = equipamentos.find(e => e.placa === l.placa)
@@ -243,6 +294,44 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
       return matchesSearch && matchesStatus && matchesArea
     })
   }, [lavagens, searchTerm, filterStatus, filterArea, equipamentos])
+
+  const historicoOrdenado = useMemo(() => {
+    return [...filteredLavagens].sort((a, b) => {
+      if (a.data !== b.data) return b.data.localeCompare(a.data)
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    })
+  }, [filteredLavagens])
+
+  // Meta: 1 lavagem por semana por caminhão. Considera as semanas ISO que aparecem no mês
+  // selecionado — um caminhão "cumpre a meta" se teve pelo menos 1 lavagem "Lavado" em
+  // cada uma dessas semanas.
+  const painelData = useMemo(() => {
+    const ativos = equipamentos.filter(isEquipamentoAtivo)
+    const semanasDoMes = Array.from(new Set(days.map(d => getISOWeek(d))))
+    const totalSemanas = semanasDoMes.length || 1
+
+    const porPlaca = ativos.map(eq => {
+      const semanasCumpridas = new Set<number>()
+      lavagens.forEach(l => {
+        if (l.placa !== eq.placa || l.status !== 'Lavado') return
+        const d = new Date(l.data.includes('T') ? l.data : l.data + 'T12:00:00')
+        if (isNaN(d.getTime())) return
+        const semana = getISOWeek(d)
+        if (semanasDoMes.includes(semana)) semanasCumpridas.add(semana)
+      })
+      return {
+        eq,
+        semanasCumpridas: semanasCumpridas.size,
+        cumpriuMeta: semanasCumpridas.size >= totalSemanas,
+      }
+    }).sort((a, b) => {
+      if (a.cumpriuMeta !== b.cumpriuMeta) return a.cumpriuMeta ? 1 : -1
+      return a.semanasCumpridas - b.semanasCumpridas
+    })
+
+    const totalCumprindo = porPlaca.filter(p => p.cumpriuMeta).length
+    return { porPlaca, totalSemanas, totalCumprindo, totalAtivos: ativos.length }
+  }, [equipamentos, lavagens, days])
 
   const getStatus = (placa: string, date: Date) => {
     const lavagem = lavagens.find(l => {
@@ -254,29 +343,44 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
   }
 
   const handleOpenModal = (placa: string, date: Date) => {
+    setSavedRecord(null)
+    setShowModalPreview(false)
     const existing = getStatus(placa, date)
     if (existing) {
       setModalData({
+        ...BLANK_MODAL_DATA,
         ...existing,
         horimetro: String(existing.horimetro || ''),
-        km: String(existing.km || '')
+        km: String(existing.km || ''),
+        itens_lavados: existing.itens_lavados || []
       })
     } else {
-      setModalData({
-        placa,
-        data: format(date, 'yyyy-MM-dd'),
-        colaborador: '',
-        horimetro: '',
-        km: '',
-        lavagem_realizada: true,
-        observacoes: '',
-        imagem_1_url: '',
-        imagem_2_url: '',
-        imagem_3_url: '',
-        imagem_horimetro_url: ''
-      })
+      setModalData({ ...BLANK_MODAL_DATA, placa, data: format(date, 'yyyy-MM-dd') })
     }
     setIsModalOpen(true)
+  }
+
+  // Abre o lançamento em branco a partir do card "Registrar" do menu — sem placa/dia
+  // pré-selecionados (esses continuam vindo prontos ao clicar numa célula do Calendário).
+  const handleOpenModalBlank = () => {
+    setSavedRecord(null)
+    setShowModalPreview(false)
+    setModalData({ ...BLANK_MODAL_DATA })
+    setIsModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setSavedRecord(null)
+    setShowModalPreview(false)
+  }
+
+  const toggleItemLavado = (item: string) => {
+    setModalData((prev: any) => {
+      const atual: string[] = prev.itens_lavados || []
+      const proximo = atual.includes(item) ? atual.filter(i => i !== item) : [...atual, item]
+      return { ...prev, itens_lavados: proximo }
+    })
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -292,34 +396,43 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
       id,
       horimetro: Number(modalData.horimetro || 0),
       km: Number(modalData.km || 0),
-      status: !modalData.lavagem_realizada ? 'Não realizado' : (!modalData.horimetro || !modalData.km || !modalData.colaborador ? 'Pendente' : 'Lavado')
+      status: !modalData.lavagem_realizada ? 'Não realizado' : (!modalData.horimetro || !modalData.km ? 'Pendente' : 'Lavado')
     }
+
+    // "Colaborador" (quem lavou) não é mais escolhido manualmente — é sempre quem está
+    // logado fazendo o lançamento. Aqui é só o valor otimista mostrado localmente (offline
+    // ou antes da resposta do servidor); a fonte de verdade é sempre calculada no servidor.
+    const nomeLocal = (profile as any)?.full_name || null
 
     if (isOnline) {
       const formData = new FormData()
       Object.entries(dataToSave).forEach(([key, value]) => {
-        formData.append(key, String(value))
+        if (key === 'itens_lavados') {
+          formData.append(key, JSON.stringify(value || []))
+        } else {
+          formData.append(key, String(value))
+        }
       })
       const res = await saveLavagem(formData)
       if (res.success) {
-        await localDb.put("lavagens", dataToSave)
+        const saved = (res as any).data || { ...dataToSave, colaborador: nomeLocal, registrado_por_nome: nomeLocal }
+        await localDb.put("lavagens", saved)
         window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
-        setIsModalOpen(false)
+        setSavedRecord(saved)
       } else {
         alert('Erro ao salvar: ' + res.error)
       }
     } else {
-      const localData = { ...dataToSave, _isPendingSync: true }
+      const localData = { ...dataToSave, colaborador: nomeLocal, registrado_por_nome: nomeLocal, _isPendingSync: true }
       await localDb.put("lavagens", localData)
       const formDataObj: Record<string, any> = {}
       Object.entries(dataToSave).forEach(([key, value]) => {
-        formDataObj[key] = value
+        formDataObj[key] = key === 'itens_lavados' ? JSON.stringify(value || []) : value
       })
       await localDb.addToQueue("lavagem", modalData.id ? "update" : "create", formDataObj)
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
       window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
-      setIsModalOpen(false)
-      alert("✅ Lançamento salvo localmente! Será sincronizado assim que a conexão voltar.")
+      setSavedRecord(localData)
     }
   }
 
@@ -353,251 +466,562 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
     };
   };
 
+  const handleDeleteLavagem = async (lavagem: Lavagem) => {
+    if (!confirm('Tem certeza que deseja excluir?')) return;
+    if (isOnline) {
+      await deleteLavagem(lavagem.id)
+      await localDb.delete("lavagens", lavagem.id)
+      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+    } else {
+      await localDb.delete("lavagens", lavagem.id)
+      await localDb.addToQueue("lavagem", "delete", { id: lavagem.id })
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
+      alert("✅ Registro excluído localmente! Será sincronizado quando você estiver online.")
+    }
+  }
+
   const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
+
+  const mostraNav = tab === 'calendario' || tab === 'galeria' || tab === 'historico' || tab === 'painel'
+  const mostraFiltros = tab === 'calendario' || tab === 'galeria' || tab === 'historico'
 
   return (
     <div className="flex flex-col h-full bg-transparent text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
       {/* Header */}
-      <header className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
-            <span className="p-2 bg-blue-600 rounded-lg text-white"><Clock size={20} /></span>
-            CONTROLE DE LAVAGENS
-          </h1>
-          <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-lg p-1 border border-zinc-200 dark:border-zinc-800 ml-4">
-            <button 
-              onClick={() => setView('calendar')}
-              className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2", 
-                view === 'calendar' ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-white")}
-            >
-              <CalendarIcon size={14} /> CALENDÁRIO
-            </button>
-            <button 
-              onClick={() => setView('gallery')}
-              className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2", 
-                view === 'gallery' ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-white")}
-            >
-              <Grid size={14} /> GALERIA
-            </button>
-          </div>
-        </div>
+      <header className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0">
+        <h1 className="text-xl font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
+          <span className="p-2 bg-blue-600 rounded-lg text-white"><Droplets size={20} /></span>
+          CONTROLE DE LAVAGENS
+        </h1>
 
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-500 transition-colors" size={16} />
-            <input 
-              type="text" 
-              placeholder="Filtrar por placa..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-48 text-zinc-900 dark:text-white"
-            />
-          </div>
+        {tab !== 'menu' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setTab('menu')}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs font-black text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <ArrowLeft size={15} /> Voltar
+            </button>
 
-          <select
-            value={filterArea}
-            onChange={(e) => setFilterArea(e.target.value)}
-            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer min-w-[120px] font-bold text-zinc-700 dark:text-zinc-400"
-          >
-            {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
-          </select>
-          
-          <button 
-            onClick={() => setActiveDate(subMonths(activeDate, 1))}
-            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <div className="text-sm font-bold min-w-[140px] text-center uppercase tracking-widest bg-white/80 dark:bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800">
-            {format(activeDate, 'MMMM yyyy', { locale: ptBR })}
+            {mostraFiltros && (
+              <button
+                onClick={() => setShowFiltros(v => !v)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors",
+                  showFiltros
+                    ? "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400"
+                    : "bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                )}
+              >
+                <Filter size={15} /> Filtros
+                <ChevronDown size={14} className={cn("transition-transform", showFiltros && "rotate-180")} />
+              </button>
+            )}
+
+            {mostraNav && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveDate(subMonths(activeDate, 1))}
+                  className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-colors"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <div className="text-sm font-bold min-w-[140px] text-center uppercase tracking-widest bg-white/80 dark:bg-zinc-900 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  {format(activeDate, 'MMMM yyyy', { locale: ptBR })}
+                </div>
+                <button
+                  onClick={() => setActiveDate(addMonths(activeDate, 1))}
+                  className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-colors"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
           </div>
-          <button 
-            onClick={() => setActiveDate(addMonths(activeDate, 1))}
-            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
+        )}
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto p-4 custom-scrollbar">
-        {view === 'calendar' ? (
-          <div className="bg-white/80 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 z-20">
-                  <tr className="bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-md">
-                    <th className="p-3 text-left text-[10px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[120px] sticky left-0 z-30 bg-zinc-100 dark:bg-zinc-900">
-                      PLACAS
-                    </th>
-                    {days.map(day => (
-                      <th key={day.toString()} className="p-2 text-center border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[50px]">
-                        <div className="text-[10px] font-bold text-zinc-600 dark:text-zinc-500">{dayNames[getDay(day)]}</div>
-                        <div className="text-sm font-black text-zinc-900 dark:text-white">{format(day, 'dd')}</div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {equipamentos.filter(e => {
-                    const matchesSearch = e.placa.toLowerCase().includes(searchTerm.toLowerCase())
-                    const matchesArea = filterArea === 'Todas' || e.area === filterArea
-                    return matchesSearch && matchesArea
-                  }).map(eq => (
-                    <tr key={eq.placa} className="hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors group">
-                      <td className="p-3 border-b border-r border-zinc-200 dark:border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 text-zinc-800 dark:text-zinc-300 transition-colors">
-                        <div className="flex flex-col">
-                          <span className="text-blue-500">{eq.placa}</span>
-                          <span className="text-[10px] text-zinc-500 font-normal">{eq.modulo}</span>
-                        </div>
-                      </td>
-                      {days.map(day => {
-                        const lavagem = getStatus(eq.placa, day)
-                        return (
-                          <td 
-                            key={day.toString()} 
-                            className="p-1 border-b border-r border-zinc-200 dark:border-zinc-800 text-center cursor-pointer group/cell"
-                            onClick={() => handleOpenModal(eq.placa, day)}
-                          >
-                            <div className={cn(
-                              "w-8 h-8 mx-auto rounded-lg flex items-center justify-center transition-all transform group-hover/cell:scale-110 relative",
-                              lavagem ? STATUS_COLORS[lavagem.status as keyof typeof STATUS_COLORS] : STATUS_COLORS.default
-                            )}>
-                              {lavagem?.status === 'Lavado' && <Check size={14} className="text-white font-bold" />}
-                              {lavagem?.status === 'Pendente' && <AlertCircle size={14} className="text-white" />}
-                              {lavagem?.status === 'Não realizado' && <X size={14} className="text-white" />}
-                              {lavagem && (lavagem as any)._isPendingSync && (
-                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white flex items-center justify-center animate-pulse" title="Lançamento offline pendente de sincronização"></span>
-                              )}
-                            </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* ─── MENU DE CARDS (TELA INICIAL) ─── */}
+      {tab === 'menu' && (
+        <main className="flex-1 overflow-auto p-4 custom-scrollbar">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+            <button
+              onClick={handleOpenModalBlank}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
+                <Plus size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Registrar</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Lançar uma nova lavagem</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTab('painel')}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
+                <Target size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Painel</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Meta de 1 lavagem por semana / caminhão</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTab('calendario')}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+                <CalendarIcon size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Calendário</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Em que dia cada placa foi lavada no mês</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTab('galeria')}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+                <Grid size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Galeria</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Fotos dos caminhões lavados</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTab('historico')}
+              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
+            >
+              <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
+                <ClipboardList size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Histórico</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Lista de lançamentos e fichas</p>
+              </div>
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-            {filteredLavagens.map(l => (
-              <div 
-                key={l.id} 
-                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer group shadow-lg"
-                onClick={() => { setSelectedLavagem(l); setIsPanelOpen(true); }}
+        </main>
+      )}
+
+      {tab !== 'menu' && (
+        <>
+          {mostraFiltros && showFiltros && (
+            <div className="px-4 pt-4 flex flex-wrap items-center gap-3 shrink-0">
+              <div className="relative group">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-500 transition-colors" size={16} />
+                <input
+                  type="text"
+                  placeholder="Filtrar por placa..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-48 text-zinc-900 dark:text-white"
+                />
+              </div>
+
+              <select
+                value={filterArea}
+                onChange={(e) => setFilterArea(e.target.value)}
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer min-w-[120px] font-bold text-zinc-700 dark:text-zinc-400"
               >
-                <div className="aspect-video bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
-                  {l.imagem_1_url ? (
-                    <img src={l.imagem_1_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800">
-                      <Camera size={32} strokeWidth={1} />
-                      <span className="text-[10px] uppercase font-bold mt-2">Sem Evidência</span>
-                    </div>
-                  )}
-                  <div className="absolute top-2 left-2 flex gap-1">
-                    <span className={cn("px-2 py-1 text-[9px] font-black uppercase rounded-md text-white shadow-lg", STATUS_COLORS[l.status as keyof typeof STATUS_COLORS])}>
-                      {l.status}
-                    </span>
-                    {l.validated_at && (
-                      <span className="px-2 py-1 text-[9px] font-black uppercase rounded-md bg-blue-600 text-white shadow-lg">
-                        VALIDADO
-                      </span>
-                    )}
-                    {(l as any)._isPendingSync && (
-                      <span className="px-2 py-1 text-[9px] font-black uppercase rounded-md bg-amber-500 text-white shadow-lg flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        OFFLINE
-                      </span>
-                    )}
+                {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+              </select>
+
+              {(tab === 'galeria' || tab === 'historico') && (
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-700 dark:text-zinc-400"
+                >
+                  <option value="Todos">TODOS STATUS</option>
+                  <option value="Lavado">LAVADO</option>
+                  <option value="Pendente">PENDENTE</option>
+                  <option value="Não realizado">NÃO REALIZADO</option>
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto p-4 custom-scrollbar">
+            {tab === 'painel' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Caminhões Ativos</p>
+                    <p className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{painelData.totalAtivos}</p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Semanas no Mês</p>
+                    <p className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{painelData.totalSemanas}</p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm">
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Cumprindo a Meta</p>
+                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{painelData.totalCumprindo} / {painelData.totalAtivos}</p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-950 p-5 rounded-2xl border border-red-200 dark:border-red-900/50 shadow-sm">
+                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Abaixo da Meta</p>
+                    <p className="text-2xl font-black text-red-600 dark:text-red-400">{painelData.totalAtivos - painelData.totalCumprindo}</p>
                   </div>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-black text-lg text-zinc-900 dark:text-white leading-none">{l.placa}</h3>
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 tracking-wider">{safeFormatDate(l.data, "dd 'de' MMMM", { locale: ptBR })}</p>
-                    </div>
-                    <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500">
-                      <MoreVertical size={16} />
-                    </button>
+
+                <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                      Meta: 1 lavagem por semana · {format(activeDate, 'MMMM yyyy', { locale: ptBR })}
+                    </h4>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 p-2 rounded-lg border border-zinc-100 dark:border-zinc-800/50">
-                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold">
-                      {l.colaborador?.charAt(0) || '?'}
-                    </div>
-                    <span className="truncate flex-1">{l.colaborador || 'Colaborador não informado'}</span>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+                        <tr>
+                          <th className="px-6 py-3 font-black uppercase text-zinc-400">Placa</th>
+                          <th className="px-4 py-3 font-black uppercase text-zinc-400">Módulo</th>
+                          <th className="px-4 py-3 font-black uppercase text-zinc-400 text-center">Semanas Cumpridas</th>
+                          <th className="px-4 py-3 font-black uppercase text-zinc-400 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+                        {painelData.porPlaca.map(({ eq, semanasCumpridas, cumpriuMeta }) => (
+                          <tr key={eq.placa} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
+                            <td className="px-6 py-3 text-blue-600 dark:text-blue-400 text-sm">{eq.placa}</td>
+                            <td className="px-4 py-3 text-zinc-500 font-medium">{eq.modulo || '-'}</td>
+                            <td className="px-4 py-3 text-center">{semanasCumpridas} / {painelData.totalSemanas}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={cn(
+                                "px-3 py-1 rounded-full text-[9px] font-black tracking-widest border",
+                                cumpriuMeta
+                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30"
+                                  : "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30"
+                              )}>
+                                {cumpriuMeta ? 'META CUMPRIDA' : 'ABAIXO DA META'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {painelData.porPlaca.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                              Nenhum caminhão ativo encontrado.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
+            )}
+
+            {tab === 'calendario' && (
+              <div className="bg-white/80 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-260px)] custom-scrollbar">
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 z-20">
+                      <tr className="bg-zinc-100/90 dark:bg-zinc-900/90 backdrop-blur-md">
+                        <th className="p-3 text-left text-[10px] font-black text-zinc-600 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[120px] sticky left-0 z-30 bg-zinc-100 dark:bg-zinc-900">
+                          PLACAS
+                        </th>
+                        {days.map(day => (
+                          <th key={day.toString()} className="p-2 text-center border-b border-zinc-200 dark:border-zinc-800 border-r min-w-[50px]">
+                            <div className="text-[10px] font-bold text-zinc-600 dark:text-zinc-500">{dayNames[getDay(day)]}</div>
+                            <div className="text-sm font-black text-zinc-900 dark:text-white">{format(day, 'dd')}</div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {equipamentos.filter(e => {
+                        const matchesSearch = e.placa.toLowerCase().includes(searchTerm.toLowerCase())
+                        const matchesArea = filterArea === 'Todas' || e.area === filterArea
+                        return matchesSearch && matchesArea
+                      }).map(eq => (
+                        <tr key={eq.placa} className="hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors group">
+                          <td className="p-3 border-b border-r border-zinc-200 dark:border-zinc-800 font-bold text-sm sticky left-0 z-10 bg-white dark:bg-zinc-950 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-900 text-zinc-800 dark:text-zinc-300 transition-colors">
+                            <div className="flex flex-col">
+                              <span className="text-blue-500">{eq.placa}</span>
+                              <span className="text-[10px] text-zinc-500 font-normal">{eq.modulo}</span>
+                            </div>
+                          </td>
+                          {days.map(day => {
+                            const lavagem = getStatus(eq.placa, day)
+                            return (
+                              <td
+                                key={day.toString()}
+                                className="p-1 border-b border-r border-zinc-200 dark:border-zinc-800 text-center cursor-pointer group/cell"
+                                onClick={() => handleOpenModal(eq.placa, day)}
+                              >
+                                <div className={cn(
+                                  "w-8 h-8 mx-auto rounded-lg flex items-center justify-center transition-all transform group-hover/cell:scale-110 relative",
+                                  lavagem ? STATUS_COLORS[lavagem.status as keyof typeof STATUS_COLORS] : STATUS_COLORS.default
+                                )}>
+                                  {lavagem?.status === 'Lavado' && <Check size={14} className="text-white font-bold" />}
+                                  {lavagem?.status === 'Pendente' && <AlertCircle size={14} className="text-white" />}
+                                  {lavagem?.status === 'Não realizado' && <X size={14} className="text-white" />}
+                                  {lavagem && (lavagem as any)._isPendingSync && (
+                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 border border-white flex items-center justify-center animate-pulse" title="Lançamento offline pendente de sincronização"></span>
+                                  )}
+                                </div>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {tab === 'galeria' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                {filteredLavagens.map(l => (
+                  <div
+                    key={l.id}
+                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer group shadow-lg"
+                    onClick={() => { setSelectedLavagem(l); setIsPanelOpen(true); }}
+                  >
+                    <div className="aspect-video bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
+                      {l.imagem_1_url ? (
+                        <img src={l.imagem_1_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800">
+                          <Camera size={32} strokeWidth={1} />
+                          <span className="text-[10px] uppercase font-bold mt-2">Sem Evidência</span>
+                        </div>
+                      )}
+                      <div className="absolute top-2 left-2 flex gap-1">
+                        <span className={cn("px-2 py-1 text-[9px] font-black uppercase rounded-md text-white shadow-lg", STATUS_COLORS[l.status as keyof typeof STATUS_COLORS])}>
+                          {l.status}
+                        </span>
+                        {l.validated_at && (
+                          <span className="px-2 py-1 text-[9px] font-black uppercase rounded-md bg-blue-600 text-white shadow-lg">
+                            VALIDADO
+                          </span>
+                        )}
+                        {(l as any)._isPendingSync && (
+                          <span className="px-2 py-1 text-[9px] font-black uppercase rounded-md bg-amber-500 text-white shadow-lg flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            OFFLINE
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-black text-lg text-zinc-900 dark:text-white leading-none">{l.placa}</h3>
+                          <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 tracking-wider">{safeFormatDate(l.data, "dd 'de' MMMM", { locale: ptBR })}</p>
+                        </div>
+                        <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500">
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 p-2 rounded-lg border border-zinc-100 dark:border-zinc-800/50">
+                        <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold">
+                          {l.colaborador?.charAt(0) || '?'}
+                        </div>
+                        <span className="truncate flex-1">{l.colaborador || 'Não informado'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {filteredLavagens.length === 0 && (
+                  <div className="col-span-full text-center text-zinc-400 text-xs font-bold uppercase tracking-widest py-16">
+                    Nenhuma lavagem encontrada.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'historico' && (
+              <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto min-h-[300px]">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+                      <tr>
+                        <th className="px-6 py-4 font-black uppercase text-zinc-400">Placa</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Km</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Horímetro</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400">Lançado por</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Itens</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
+                        <th className="px-4 py-4 font-black uppercase text-zinc-400 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
+                      {historicoOrdenado.map(l => (
+                        <tr key={l.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors group">
+                          <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
+                            <span
+                              onClick={() => { setSelectedLavagem(l); setIsPanelOpen(true); }}
+                              className="hover:text-blue-500 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors"
+                            >
+                              {l.placa}
+                            </span>
+                            {(l as any)._isPendingSync && (
+                              <span className="ml-2 inline-flex text-[9px] text-amber-500 font-bold" title="Salvo offline">(Offline)</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-zinc-500">{safeFormatDate(l.data, 'dd/MM/yyyy')}</td>
+                          <td className="px-4 py-4 text-center text-blue-600">{l.km || '-'}</td>
+                          <td className="px-4 py-4 text-center text-zinc-500">{l.horimetro || '-'}</td>
+                          <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
+                            {(l as any).registrado_por_nome || l.colaborador || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
+                          </td>
+                          <td className="px-4 py-4 text-center text-zinc-500">{(l.itens_lavados || []).length}</td>
+                          <td className="px-4 py-4 text-center">
+                            <span className={cn("px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest text-white", STATUS_COLORS[l.status as keyof typeof STATUS_COLORS])}>
+                              {l.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => setPreviewLavagem(l)} className="p-2 text-zinc-400 hover:text-blue-500" title="Ver Ficha"><Eye size={16} /></button>
+                              <button onClick={() => gerarFichaLavagemPDF(l as any)} className="p-2 text-zinc-400 hover:text-blue-500" title="Baixar PDF"><Download size={16} /></button>
+                              <button onClick={() => handleDeleteLavagem(l)} className="p-2 text-zinc-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {historicoOrdenado.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                            Nenhuma lavagem encontrada.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </main>
+        </>
+      )}
 
       {/* Modal Lançamento */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={closeModal} />
           <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
+            {savedRecord ? (
+              <div className="p-8 flex flex-col items-center justify-center text-center gap-4">
+                <div className="p-4 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-full shadow-inner">
+                  <CheckCircle2 size={40} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-white">Lavagem registrada com sucesso!</h3>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
+                    Placa <span className="font-bold text-zinc-700 dark:text-zinc-300">{savedRecord.placa}</span> · Lançado por{' '}
+                    <span className="font-bold text-zinc-700 dark:text-zinc-300">{savedRecord.registrado_por_nome || savedRecord.colaborador || 'Você'}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowModalPreview(true)}
+                    className="flex items-center gap-2 px-6 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-all"
+                  >
+                    <Eye size={18} />
+                    Ver Ficha
+                  </button>
+                  <button
+                    onClick={() => gerarFichaLavagemPDF(savedRecord)}
+                    className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 transition-all"
+                  >
+                    <FileDown size={18} />
+                    Baixar Ficha em PDF
+                  </button>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="mt-2 px-8 py-2.5 text-sm font-bold bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleSave}>
               <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
                 <div>
-                  <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-                    <span className="p-1.5 bg-emerald-600 rounded-md"><Check size={16} /></span>
+                  <h2 className="text-xl font-black text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
+                    <span className="p-1.5 bg-blue-600 rounded-md text-white"><Droplets size={16} /></span>
                     LANÇAR LAVAGEM
                   </h2>
-                  <p className="text-xs text-zinc-500 font-bold mt-1 uppercase tracking-widest">Placa: <span className="text-blue-500">{modalData.placa}</span> | Data: {modalData.data}</p>
+                  <p className="text-xs text-zinc-500 font-bold mt-1 uppercase tracking-widest">
+                    Lançado por: <span className="text-blue-500">{(profile as any)?.full_name || '...'}</span>
+                  </p>
                 </div>
-                <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-zinc-800 rounded-xl text-zinc-500 transition-colors">
+                <button type="button" onClick={closeModal} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl text-zinc-500 transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               <div className="p-6 grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                <div className="col-span-2 space-y-1">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Colaborador Responsável</label>
-                  <SearchableSelect 
-                    options={colaboradores.map(c => ({ value: c.nome, label: c.nome }))}
-                    value={modalData.colaborador} 
-                    onChange={val => setModalData({...modalData, colaborador: val})}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Placa *</label>
+                  <SearchableSelect
+                    options={equipamentos.map(eq => ({ value: eq.placa, label: eq.placa }))}
+                    value={modalData.placa}
+                    onChange={val => setModalData((prev: any) => ({ ...prev, placa: val }))}
+                    placeholder="Selecione"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Data *</label>
+                  <input
+                    type="date"
+                    required
+                    value={modalData.data}
+                    onChange={e => setModalData({ ...modalData, data: e.target.value })}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Horímetro</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     step="0.1"
                     value={modalData.horimetro}
                     onChange={e => setModalData({...modalData, horimetro: e.target.value})}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">KM</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={modalData.km}
                     onChange={e => setModalData({...modalData, km: e.target.value})}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 <div className="col-span-2 flex items-center gap-4 py-2">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Lavagem Realizada?</span>
                   <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-xl p-1 border border-zinc-200 dark:border-zinc-800">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setModalData({...modalData, lavagem_realizada: true})}
                       className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", modalData.lavagem_realizada ? "bg-emerald-600 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300")}
                     >
                       SIM
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setModalData({...modalData, lavagem_realizada: false})}
                       className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", !modalData.lavagem_realizada ? "bg-red-600 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300")}
@@ -607,46 +1031,71 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                   </div>
                 </div>
 
+                <div className="col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">O que foi lavado?</label>
+                  <div className="flex flex-wrap gap-2">
+                    {ITENS_LAVAGEM.map(item => {
+                      const marcado = (modalData.itens_lavados || []).includes(item)
+                      return (
+                        <button
+                          type="button"
+                          key={item}
+                          onClick={() => toggleItemLavado(item)}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all",
+                            marcado
+                              ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                              : "bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-blue-300"
+                          )}
+                        >
+                          {marcado && <Check size={12} />}
+                          {item}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <div className="col-span-2 space-y-1">
                   <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Observações</label>
-                  <textarea 
+                  <textarea
                     rows={2}
                     value={modalData.observacoes}
                     onChange={e => setModalData({...modalData, observacoes: e.target.value})}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-zinc-900 dark:text-white" 
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-zinc-900 dark:text-white"
                   />
                 </div>
 
                 {/* File Uploads */}
-                <div className="col-span-2 pt-4 border-t border-zinc-800 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <UploadBox 
-                    label="Horímetro" 
-                    field="imagem_horimetro_url" 
-                    url={modalData.imagem_horimetro_url} 
+                <div className="col-span-2 pt-4 border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <UploadBox
+                    label="Horímetro"
+                    field="imagem_horimetro_url"
+                    url={modalData.imagem_horimetro_url}
                     onCapture={handleCapture}
                     onFileSelect={handleFileSelect}
                     onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
                   />
-                  <UploadBox 
-                    label="Foto 01" 
-                    field="imagem_1_url" 
-                    url={modalData.imagem_1_url} 
+                  <UploadBox
+                    label="Foto 01"
+                    field="imagem_1_url"
+                    url={modalData.imagem_1_url}
                     onCapture={handleCapture}
                     onFileSelect={handleFileSelect}
                     onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
                   />
-                  <UploadBox 
-                    label="Foto 02" 
-                    field="imagem_2_url" 
-                    url={modalData.imagem_2_url} 
+                  <UploadBox
+                    label="Foto 02"
+                    field="imagem_2_url"
+                    url={modalData.imagem_2_url}
                     onCapture={handleCapture}
                     onFileSelect={handleFileSelect}
                     onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
                   />
-                  <UploadBox 
-                    label="Foto 03" 
-                    field="imagem_3_url" 
-                    url={modalData.imagem_3_url} 
+                  <UploadBox
+                    label="Foto 03"
+                    field="imagem_3_url"
+                    url={modalData.imagem_3_url}
                     onCapture={handleCapture}
                     onFileSelect={handleFileSelect}
                     onClear={(field: string) => setModalData((prev: any) => ({ ...prev, [field]: '' }))}
@@ -655,7 +1104,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
               </div>
 
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                <button type="button" onClick={closeModal} className="px-6 py-2.5 text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   CANCELAR
                 </button>
                 <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-600/20 transition-all active:scale-95">
@@ -663,6 +1112,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}
@@ -696,8 +1146,8 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
               <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">COLABORADOR</p>
-                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{selectedLavagem.colaborador || 'Não informado'}</p>
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">LANÇADO POR</p>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{(selectedLavagem as any).registrado_por_nome || selectedLavagem.colaborador || 'Não informado'}</p>
                   </div>
                   <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center font-black text-blue-600 dark:text-blue-500">
                     {selectedLavagem.colaborador?.charAt(0) || '?'}
@@ -714,6 +1164,19 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                   </div>
                 </div>
               </div>
+
+              {(selectedLavagem.itens_lavados || []).length > 0 && (
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">ITENS LAVADOS</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(selectedLavagem.itens_lavados || []).map(item => (
+                      <span key={item} className="px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-[10px] font-bold">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                 <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">OBSERVAÇÕES</p>
@@ -736,7 +1199,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
 
           <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
             {!selectedLavagem.validated_at && (
-              <button 
+              <button
                 onClick={async () => {
                   if (confirm('Validar esta lavagem?')) {
                     if (isOnline) {
@@ -759,26 +1222,23 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                 <CheckCircle2 size={18} /> VALIDAR LAVAGEM
               </button>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <button className="py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-700 transition-all">
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                onClick={() => setPreviewLavagem(selectedLavagem)}
+                className="py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-700 transition-all"
+              >
+                <Eye size={14} /> VER FICHA
+              </button>
+              <button
+                onClick={() => gerarFichaLavagemPDF(selectedLavagem as any)}
+                className="py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-700 transition-all"
+              >
                 <Download size={14} /> PDF
               </button>
-              <button 
+              <button
                 onClick={async () => {
-                  if (confirm('Tem certeza que deseja excluir?')) {
-                    if (isOnline) {
-                      await deleteLavagem(selectedLavagem.id)
-                      await localDb.delete("lavagens", selectedLavagem.id)
-                      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
-                    } else {
-                      await localDb.delete("lavagens", selectedLavagem.id)
-                      await localDb.addToQueue("lavagem", "delete", { id: selectedLavagem.id })
-                      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
-                      window.dispatchEvent(new CustomEvent("offline-db-updated-lavagens"))
-                      alert("✅ Registro excluído localmente! Será sincronizado quando você estiver online.")
-                    }
-                    setIsPanelOpen(false)
-                  }
+                  await handleDeleteLavagem(selectedLavagem)
+                  setIsPanelOpen(false)
                 }}
                 className="py-2.5 bg-zinc-100 hover:bg-red-50 dark:bg-zinc-900 dark:hover:bg-red-950 text-red-600 dark:text-red-500 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-zinc-200 dark:border-red-900/30 transition-all"
               >
@@ -789,35 +1249,51 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
 
         </div>
       )}
+
+      {showModalPreview && savedRecord && (
+        <FichaPreviewModal
+          html={gerarHtmlFichaLavagem(savedRecord)}
+          onClose={() => setShowModalPreview(false)}
+          onDownload={() => gerarFichaLavagemPDF(savedRecord)}
+        />
+      )}
+
+      {previewLavagem && (
+        <FichaPreviewModal
+          html={gerarHtmlFichaLavagem(previewLavagem as any)}
+          onClose={() => setPreviewLavagem(null)}
+          onDownload={() => gerarFichaLavagemPDF(previewLavagem as any)}
+        />
+      )}
     </div>
   )
 }
 
 function UploadBox({ label, field, url, onCapture, onFileSelect, onClear }: any) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
+
   return (
     <div className="relative aspect-square rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 overflow-hidden flex flex-col items-center justify-center p-3 group shadow-sm transition-all duration-300">
       {url ? (
         <div className="absolute inset-0">
           <img src={url} alt={label} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 pointer-events-none group-hover:pointer-events-auto">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               className="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-900 text-[9px] font-black rounded-lg uppercase tracking-wide transition-all shadow-md active:scale-95 pointer-events-auto"
             >
               Galeria
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => onCapture(field)}
               className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black rounded-lg uppercase tracking-wide transition-all shadow-md active:scale-95 pointer-events-auto"
             >
               Câmera
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => onClear(field)}
               className="px-2.5 py-1 bg-red-650 hover:bg-red-750 text-white text-[9px] font-black rounded-lg uppercase tracking-wide transition-all shadow-md active:scale-95 pointer-events-auto"
             >
@@ -849,8 +1325,8 @@ function UploadBox({ label, field, url, onCapture, onFileSelect, onClear }: any)
           </div>
         </div>
       )}
-      <input 
-        type="file" 
+      <input
+        type="file"
         ref={fileInputRef}
         accept="image/*"
         onChange={(e) => onFileSelect(e, field)}

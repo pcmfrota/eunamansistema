@@ -8,7 +8,7 @@ import { useOffline } from '@/components/offline-provider'
 import { localDb, serializeFormData } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
 import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from './pdfBoletim'
-import FichaPreviewModal from './FichaPreviewModal'
+import FichaPreviewModal from '@/components/FichaPreviewModal'
 import { useAuth } from '@/components/auth-context'
 
 interface PneusModalProps {

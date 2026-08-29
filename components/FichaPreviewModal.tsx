@@ -8,8 +8,9 @@ interface FichaPreviewModalProps {
   onDownload: () => void
 }
 
-// Mostra o mesmo HTML usado na geração do PDF (app/pneus/pdfBoletim.ts), dentro de um
-// modal com fundo branco simulando a página — pra conferir a ficha antes de baixar.
+// Mostra o mesmo HTML usado na geração de uma ficha em PDF (pdfBoletim.ts, pdfFicha.ts, etc.),
+// dentro de um modal com fundo branco simulando a página — pra conferir antes de baixar.
+// Compartilhado entre módulos (Pneus, Lavagens, ...) que geram fichas em PDF.
 export default function FichaPreviewModal({ html, onClose, onDownload }: FichaPreviewModalProps) {
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
