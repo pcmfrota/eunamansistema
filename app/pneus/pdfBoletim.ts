@@ -42,13 +42,10 @@ function celulaSulco(v?: number | null) {
   return v != null ? String(v) : '';
 }
 
-export function gerarFichaPneusPDF(ins: InspecaoParaPDF) {
-  if (!(window as any).html2pdf) {
-    alert("Aguarde o carregamento do gerador de PDF.");
-    return;
-  }
-
-  const html = `
+// Monta o HTML da ficha — usado tanto pra gerar o PDF quanto pra pré-visualizar antes de
+// baixar (FichaPreviewModal renderiza esse mesmo markup dentro de um modal).
+export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
+  return `
       <div style="padding: 10px; font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 10px; width: 100%; box-sizing: border-box; background: #fff;">
          <!-- Header -->
          <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534;">
@@ -224,6 +221,15 @@ export function gerarFichaPneusPDF(ins: InspecaoParaPDF) {
          </div>
       </div>
     `;
+}
+
+export function gerarFichaPneusPDF(ins: InspecaoParaPDF) {
+  if (!(window as any).html2pdf) {
+    alert("Aguarde o carregamento do gerador de PDF.");
+    return;
+  }
+
+  const html = gerarHtmlFichaPneus(ins);
   const element = document.createElement("div");
   element.innerHTML = html;
   const filename = `Boletim_${ins.equipamentos?.placa}_${fmtDataPDF(ins.data_inspecao).replace(/\//g, '-')}.pdf`;

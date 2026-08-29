@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, ArrowLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid } from "lucide-react";
+import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, Eye, ArrowLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { registrarInspecaoCompleta, atualizarInspecao, excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
@@ -14,7 +14,8 @@ import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { cn } from "@/lib/utils";
-import { gerarFichaPneusPDF } from "./pdfBoletim";
+import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from "./pdfBoletim";
+import FichaPreviewModal from "./FichaPreviewModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };
@@ -159,6 +160,8 @@ export default function PneusClient({
     setCondicaoFiltro(prev => (prev === label ? "TODOS" : label));
   };
   const [selectedSchematic, setSelectedSchematic] = useState<Inspecao | null>(null);
+  // Boletim aberto na pré-visualização da ficha (ver antes de baixar o PDF).
+  const [previewInspecao, setPreviewInspecao] = useState<Inspecao | null>(null);
 
   // Pré-carrega SheetJS via CDN para Export e Import
   useEffect(() => {
@@ -1205,7 +1208,8 @@ export default function PneusClient({
                         <td className="px-4 py-4 text-right" colSpan={3}>
                            {!isVisitante && (
                               <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => downloadBoletimPDF(ins)} className="p-2 text-zinc-400 hover:text-orange-500" title="Imprimir PDF"><Printer size={16} /></button>
+                                <button onClick={() => setPreviewInspecao(ins)} className="p-2 text-zinc-400 hover:text-orange-500" title="Ver Ficha"><Eye size={16} /></button>
+                                <button onClick={() => downloadBoletimPDF(ins)} className="p-2 text-zinc-400 hover:text-orange-500" title="Baixar PDF"><Printer size={16} /></button>
                                 <button onClick={() => { setEditingItem(ins); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-blue-500"><Plus size={16} /></button>
                                 <button onClick={() => handleDelete(ins.id)} className="p-2 text-zinc-400 hover:text-red-500"><Plus size={16} className="rotate-45" /></button>
                               </div>
@@ -1368,6 +1372,14 @@ export default function PneusClient({
         <PneuEsquemaModal
           inspecao={selectedSchematic}
           onClose={() => setSelectedSchematic(null)}
+        />
+      )}
+
+      {previewInspecao && (
+        <FichaPreviewModal
+          html={gerarHtmlFichaPneus(previewInspecao)}
+          onClose={() => setPreviewInspecao(null)}
+          onDownload={() => downloadBoletimPDF(previewInspecao)}
         />
       )}
     </div>

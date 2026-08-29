@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Save, AlertCircle, Info, ChevronDown, Camera, FileDown, CheckCircle2 } from 'lucide-react'
+import { X, Save, AlertCircle, Info, ChevronDown, Camera, FileDown, CheckCircle2, Eye } from 'lucide-react'
 import { registrarInspecaoCompleta, atualizarInspecao } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import { useOffline } from '@/components/offline-provider'
 import { localDb, serializeFormData } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
-import { gerarFichaPneusPDF } from './pdfBoletim'
+import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from './pdfBoletim'
+import FichaPreviewModal from './FichaPreviewModal'
 import { useAuth } from '@/components/auth-context'
 
 interface PneusModalProps {
@@ -71,6 +72,7 @@ export default function PneusModal({
   // Preenchido só após salvar com sucesso — troca o formulário pela tela de "Boletim
   // registrado" com a opção de baixar a ficha em PDF.
   const [savedRecord, setSavedRecord] = useState<any | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const { 
     form, 
@@ -225,6 +227,7 @@ export default function PneusModal({
   // um novo boletim) mostrar o formulário em vez da tela de ficha salva.
   const handleClose = () => {
     setSavedRecord(null)
+    setShowPreview(false)
     onClose()
   }
 
@@ -285,13 +288,22 @@ export default function PneusModal({
                 Registrado por <span className="font-bold text-zinc-700 dark:text-zinc-300">{savedRecord.registrado_por_nome || 'Você'}</span>
               </p>
             </div>
-            <button
-              onClick={() => gerarFichaPneusPDF(savedRecord)}
-              className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all"
-            >
-              <FileDown size={18} />
-              Baixar Ficha em PDF
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowPreview(true)}
+                className="flex items-center gap-2 px-6 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-all"
+              >
+                <Eye size={18} />
+                Ver Ficha
+              </button>
+              <button
+                onClick={() => gerarFichaPneusPDF(savedRecord)}
+                className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all"
+              >
+                <FileDown size={18} />
+                Baixar Ficha em PDF
+              </button>
+            </div>
           </div>
         ) : (
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
@@ -509,6 +521,14 @@ export default function PneusModal({
           )}
         </div>
       </div>
+
+      {showPreview && savedRecord && (
+        <FichaPreviewModal
+          html={gerarHtmlFichaPneus(savedRecord)}
+          onClose={() => setShowPreview(false)}
+          onDownload={() => gerarFichaPneusPDF(savedRecord)}
+        />
+      )}
     </div>
   )
 }
