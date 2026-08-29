@@ -587,10 +587,19 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorColaborador}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="nome" stroke="#888888" fontSize={9} interval={0} angle={-25} textAnchor="end" height={60} />
+                  <XAxis
+                    dataKey="nome"
+                    stroke="#888888"
+                    fontSize={9}
+                    interval={0}
+                    angle={-25}
+                    textAnchor="end"
+                    height={55}
+                    tickFormatter={(v: string) => v?.split(" ")[0] || v}
+                  />
                   <YAxis stroke="#888888" fontSize={10} />
                   <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
                   <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]}>
                     <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
                   </Bar>
