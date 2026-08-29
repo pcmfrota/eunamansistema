@@ -15,7 +15,7 @@ import {
   Legend,
   LabelList
 } from "recharts";
-import { BarChart2, Clock, Users, TrendingUp } from "lucide-react";
+import { BarChart2, Clock, Users, TrendingUp, ClipboardList } from "lucide-react";
 import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
 import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 
@@ -41,6 +41,11 @@ function calcNaoApontado(f: FichaMaoObraItem): number {
 // Formata o valor de uma barra/fatia só quando há algo relevante pra mostrar — evita poluir
 // o gráfico com rótulos "0h" em toda barra vazia.
 const horasLabel = (v: any) => (typeof v === "number" && v > 0 ? `${v}h` : "");
+const minutosParaHoras = (min: number) => {
+  const h = Math.floor((min || 0) / 60);
+  const m = (min || 0) % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
 
 interface Props {
   fichas: FichaMaoObraItem[];
@@ -73,6 +78,10 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
   const [filterColaborador, setFilterColaborador] = useState("");
+  // Filtro exclusivo da seção "Atividades e Observações" abaixo — não afeta os gráficos
+  // acima, só o detalhamento apontamento-por-apontamento (junto com o colaborador, permite
+  // abrir exatamente o dia de um único colaborador).
+  const [filterDia, setFilterDia] = useState("");
 
   // Período personalizado (De/Até): quando preenchido, vale mais que o mês/ano do calendário
   // Suzano acima — dá pra olhar uma janela de datas qualquer, sem ficar preso a um RF inteiro.
@@ -278,6 +287,73 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
   }, [fichasFiltradas, apontamentos]);
+
+  // Detalhamento apontamento-por-apontamento (Atividades e Observações), respeitando o
+  // período/colaborador filtrados acima mais o filtro de "Dia" exclusivo dessa seção.
+  const apontamentosDetalhados = useMemo(() => {
+    const fichaById: Record<string, FichaMaoObraItem> = {};
+    fichasFiltradas.forEach(f => { fichaById[f.id] = f; });
+
+    type Linha = {
+      id: string; data: string; colaborador: string; hora_inicio: string; hora_fim: string;
+      tipo_atividade: string; minutos: number; descricao: string; placa?: string;
+    };
+    const linhas: Linha[] = [];
+
+    (apontamentos || []).forEach(a => {
+      if (!a.jornada_id) return;
+      const f = fichaById[a.jornada_id];
+      if (!f) return;
+      const data = f.data_jornada || f.created_at?.split("T")[0] || "";
+      if (filterDia && data !== filterDia) return;
+      linhas.push({
+        id: a.id,
+        data,
+        colaborador: f.mecanico_nome,
+        hora_inicio: a.hora_inicio || "-",
+        hora_fim: a.hora_fim || "-",
+        tipo_atividade: a.tipo_atividade,
+        minutos: typeof a.tempo_gasto_minutos === "number" ? a.tempo_gasto_minutos : 0,
+        descricao: a.descricao || "",
+        placa: a.placa,
+      });
+    });
+
+    // Fallback legado: fichas sem nenhum apontamento próprio, usando o JSONB antigo.
+    const jornadasComApontamento = new Set((apontamentos || []).map(a => a.jornada_id).filter(Boolean));
+    fichasFiltradas.forEach(f => {
+      if (jornadasComApontamento.has(f.id)) return;
+      const data = f.data_jornada || f.created_at?.split("T")[0] || "";
+      if (filterDia && data !== filterDia) return;
+      (f.atividades || []).forEach(a => {
+        const [h, m] = (a.tempo_gasto || "0:00").split(":").map(Number);
+        linhas.push({
+          id: a.id,
+          data,
+          colaborador: f.mecanico_nome,
+          hora_inicio: a.hora_inicio || "-",
+          hora_fim: a.hora_fim || "-",
+          tipo_atividade: a.tipo_atividade,
+          minutos: (isNaN(h) ? 0 : h * 60) + (isNaN(m) ? 0 : m),
+          descricao: a.descricao || "",
+          placa: a.placa,
+        });
+      });
+    });
+
+    return linhas.sort((x, y) => {
+      if (x.data !== y.data) return y.data.localeCompare(x.data);
+      if (x.colaborador !== y.colaborador) return x.colaborador.localeCompare(y.colaborador);
+      return (x.hora_inicio || "").localeCompare(y.hora_inicio || "");
+    });
+  }, [fichasFiltradas, apontamentos, filterDia]);
+
+  // Quando dia + colaborador estão os dois selecionados, dá pra identificar a jornada exata
+  // e mostrar o cabeçalho dela (horário do turno, status, observação da jornada).
+  const fichaUnicaSelecionada = useMemo(() => {
+    if (!filterDia || !filterColaborador) return null;
+    return fichasFiltradas.find(f => (f.data_jornada || f.created_at?.split("T")[0]) === filterDia) || null;
+  }, [fichasFiltradas, filterDia, filterColaborador]);
 
   const selectCls =
     "px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none";
@@ -566,6 +642,82 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
             </div>
           ) : (
             <p className="text-xs text-slate-400 italic">Sem apontamentos no período.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Atividades e Observações — detalhamento apontamento-por-apontamento. Use o
+          colaborador no filtro do topo + o "Dia" abaixo pra ver so um colaborador num dia. */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <ClipboardList size={14} /> Atividades e Observações
+          </h3>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Dia</span>
+            <input
+              type="date"
+              value={filterDia}
+              onChange={e => setFilterDia(e.target.value)}
+              className={selectCls}
+            />
+            {filterDia && (
+              <button
+                type="button"
+                onClick={() => setFilterDia("")}
+                title="Limpar filtro de dia"
+                className="px-2 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {fichaUnicaSelecionada && (
+          <div className="mx-4 mt-4 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-slate-700 dark:text-slate-300">
+            <p>
+              <span className="font-black">{fichaUnicaSelecionada.mecanico_nome}</span>
+              {" · "}{fichaUnicaSelecionada.data_jornada?.split("-").reverse().join("/")}
+              {" · "}Jornada {fichaUnicaSelecionada.hora_inicio_jornada || "-"} às {fichaUnicaSelecionada.hora_fim_jornada || "-"}
+              {" · "}<span className="font-bold">{fichaUnicaSelecionada.status}</span>
+            </p>
+            {fichaUnicaSelecionada.observacoes && (
+              <p className="mt-1 italic text-slate-500 dark:text-slate-400">"{fichaUnicaSelecionada.observacoes}"</p>
+            )}
+          </div>
+        )}
+
+        <div className="p-4">
+          {apontamentosDetalhados.length > 0 ? (
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase sticky top-0">
+                  <tr>
+                    <th className="p-2">Data</th>
+                    <th className="p-2">Colaborador</th>
+                    <th className="p-2">Horário</th>
+                    <th className="p-2">Tipo de Atividade</th>
+                    <th className="p-2 text-right">Tempo</th>
+                    <th className="p-2">Observação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {apontamentosDetalhados.map(a => (
+                    <tr key={a.id}>
+                      <td className="p-2 font-semibold whitespace-nowrap">{a.data ? a.data.split("-").reverse().join("/") : "-"}</td>
+                      <td className="p-2 font-bold whitespace-nowrap">{a.colaborador}</td>
+                      <td className="p-2 whitespace-nowrap">{a.hora_inicio} – {a.hora_fim}</td>
+                      <td className="p-2">{a.tipo_atividade}{a.placa ? ` (${a.placa})` : ""}</td>
+                      <td className="p-2 text-right font-semibold">{minutosParaHoras(a.minutos)}</td>
+                      <td className="p-2 text-slate-500 dark:text-slate-400 max-w-xs">{a.descricao || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic">Nenhum apontamento encontrado para os filtros selecionados.</p>
           )}
         </div>
       </div>
