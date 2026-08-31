@@ -369,7 +369,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 {authLoading ? 'Carregando...' : (
                   profile?.role === 'admin' ? 'Administrador' :
                   profile?.role === 'pcm' ? 'PCM' :
-                  profile?.role === 'gestao' ? 'Gestão' : 
+                  profile?.role === 'gestao' ? 'Gestão' :
+                  profile?.role === 'supervisor_manutencao' ? 'Supervisor Manutenção' :
                   profile?.role === 'mecanico' ? 'Mecânico' :
                   profile?.role === 'motorista' ? 'Motorista' :
                   profile?.role === 'afiador' ? 'Afiador' : 'Visitante'

@@ -94,6 +94,7 @@ export default function LoginPage({
           if (finalRole === 'admin') finalPerms = allTabs;
           else if (finalRole === 'visitante') finalPerms = ['/', '/preventivas', '/backlog', '/calendario', '/documentos'];
           else if (finalRole === 'mecanico') finalPerms = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos'];
+          else if (finalRole === 'supervisor_manutencao') finalPerms = ['/', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos'];
           else if (finalRole === 'motorista') finalPerms = ['/', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
           else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
         }

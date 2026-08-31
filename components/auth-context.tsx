@@ -11,7 +11,7 @@ type Profile = {
   email: string
   full_name: string | null
   avatar_url: string | null
-  role: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' | 'afiador'
+  role: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' | 'supervisor_manutencao'
   filial_id: string          // ID da filial do usuário (ex: 'MATRIZ', 'ACAILANDIA')
   filial_nome: string        // Nome exibido (ex: 'FILIAL AÇAILÂNDIA')
 }
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
 
       // 3. Determinação da Role (tabela de perfis do banco -> app_metadata do token -> user_metadata -> fallback)
-      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' = 
+      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' | 'supervisor_manutencao' =
         (profileData?.role as any) || 
         (u.app_metadata?.role as any) || 
         (u.user_metadata?.role as any) || 
@@ -228,13 +228,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (finalRole === 'admin') finalPerms = allTabs;
         else if (finalRole === 'visitante') finalPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
         else if (finalRole === 'mecanico') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/lubrificacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
+        else if (finalRole === 'supervisor_manutencao') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/afiacao', '/checklist-mecanicos'];
         else if (finalRole === 'motorista') finalPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
         else if (finalRole === 'afiador') finalPerms = ['/dashboard', '/afiacao'];
         else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
       }
 
       // Garantir que /lubrificacao seja sempre incluída para perfis autorizados
-      if (['admin', 'pcm', 'gestao', 'mecanico', 'tecnico', 'gestor'].includes(finalRole) && !finalPerms.includes('/lubrificacao')) {
+      if (['admin', 'pcm', 'gestao', 'mecanico', 'tecnico', 'gestor', 'supervisor_manutencao'].includes(finalRole) && !finalPerms.includes('/lubrificacao')) {
         finalPerms.push('/lubrificacao');
       }
 

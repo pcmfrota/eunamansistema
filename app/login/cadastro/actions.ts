@@ -20,7 +20,7 @@ const getAdminClient = () => {
   });
 };
 
-const CARGOS_VALIDOS = ['motorista', 'mecanico', 'pcm', 'admin', 'gestao', 'afiador', 'visitante'];
+const CARGOS_VALIDOS = ['motorista', 'mecanico', 'supervisor_manutencao', 'pcm', 'admin', 'gestao', 'afiador', 'visitante'];
 
 export async function solicitarCadastro(formData: FormData) {
   try {

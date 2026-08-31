@@ -8,6 +8,7 @@ import { solicitarCadastro } from "./actions";
 const CARGOS = [
   { value: "motorista", label: "Motorista" },
   { value: "mecanico", label: "Mecânico" },
+  { value: "supervisor_manutencao", label: "Supervisor Manutenção" },
   { value: "pcm", label: "PCM" },
   { value: "admin", label: "Admin" },
   { value: "gestao", label: "Gestão" },

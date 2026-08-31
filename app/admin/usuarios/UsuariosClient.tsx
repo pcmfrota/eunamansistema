@@ -53,11 +53,16 @@ const CARGO_LABEL: Record<string, string> = {
   admin: "Administrador",
   pcm: "PCM",
   gestao: "Gestão",
+  supervisor_manutencao: "Supervisor Manutenção",
   mecanico: "Mecânico",
   motorista: "Motorista",
   afiador: "Afiador",
   visitante: "Visitante",
 };
+
+// Fonte única dos cargos disponíveis na Config. de Acesso por Cargo e nos seletores de
+// cargo do usuário — deriva de CARGO_LABEL pra não duplicar a mesma lista em 3 lugares.
+const CARGOS_DISPONIVEIS = Object.keys(CARGO_LABEL);
 
 type RolePermission = {
   role: string;
@@ -472,7 +477,7 @@ export default function UsuariosClient({
         </div>
         
         <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
-          {['admin', 'pcm', 'gestao', 'mecanico', 'motorista', 'afiador', 'visitante'].map(role => {
+          {CARGOS_DISPONIVEIS.map(role => {
             const rolePerm = permissions.find(p => p.role === role);
             const isEditing = editingPermissions === role;
             
@@ -488,6 +493,7 @@ export default function UsuariosClient({
                       role === 'admin' ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30" :
                       role === 'pcm' ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30" :
                       role === 'gestao' ? "bg-green-100 text-green-600 dark:bg-green-900/30" :
+                      role === 'supervisor_manutencao' ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30" :
                       role === 'mecanico' ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30" :
                       role === 'motorista' ? "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30" :
                       role === 'afiador' ? "bg-sky-100 text-sky-600 dark:bg-sky-900/30" :
@@ -496,7 +502,7 @@ export default function UsuariosClient({
                       <Layout size={18} />
                     </div>
                     <div className="text-left">
-                      <p className="font-bold text-sm capitalize text-zinc-900 dark:text-zinc-100">{role}</p>
+                      <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{CARGO_LABEL[role] || role}</p>
                       <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
                         {rolePerm?.allowed_tabs.length || 0} abas liberadas
                       </p>
@@ -603,13 +609,9 @@ export default function UsuariosClient({
                           isVisitante ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                         )}
                       >
-                        <option value="admin">Administrador</option>
-                        <option value="pcm">PCM</option>
-                        <option value="gestao">Gestão</option>
-                        <option value="mecanico">Mecânico</option>
-                        <option value="motorista">Motorista</option>
-                        <option value="afiador">Afiador</option>
-                        <option value="visitante">Visitante</option>
+                        {CARGOS_DISPONIVEIS.map(r => (
+                          <option key={r} value={r}>{CARGO_LABEL[r]}</option>
+                        ))}
                       </select>
                     </div>
                   </td>
@@ -709,11 +711,11 @@ export default function UsuariosClient({
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase text-zinc-500 tracking-wider">Atribuir Cargo 🔒</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {['admin', 'pcm', 'gestao', 'mecanico', 'motorista', 'afiador', 'visitante'].map(r => (
+                    {CARGOS_DISPONIVEIS.map(r => (
                       <label key={r} className="relative flex items-center p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
                         <input type="radio" name="role" value={r} defaultChecked={r === 'visitante'} className="sr-only peer" />
                         <div className="w-full flex items-center justify-between">
-                          <span className="text-sm font-medium capitalize text-zinc-700 dark:text-zinc-300">{r}</span>
+                          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{CARGO_LABEL[r]}</span>
                           <CheckCircle2 size={16} className="text-blue-600 opacity-0 peer-checked:opacity-100 transition-opacity" />
                         </div>
                         <div className="absolute inset-0 rounded-xl border-2 border-blue-600 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
