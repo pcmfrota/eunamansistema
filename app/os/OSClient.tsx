@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText, Printer, ArrowLeft, Filter, ChevronDown } from "lucide-react";
+import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText, Printer, ArrowLeft, Filter, ChevronDown, ShieldCheck, MessageCircle, Eye } from "lucide-react";
 import {
   criarOrdemServico,
   atualizarStatusOS,
@@ -47,6 +47,17 @@ type OS = {
   equipamento_id: string;
   assinatura_mecanico?: string | null;
   fotos?: string[] | null;
+  km?: number | null;
+  foto_horimetro?: string | null;
+  foto_km?: string | null;
+  qual_reserva?: string | null;
+  horas_reserva_chegou?: string | null;
+  aprovado?: boolean | null;
+  created_by?: string | null;
+  created_by_nome?: string | null;
+  aprovado_por?: string | null;
+  aprovado_por_nome?: string | null;
+  aprovado_em?: string | null;
 };
 
 type Equipamento = {
@@ -259,7 +270,7 @@ export default function ControleOSClient({
   }, []);
 
   // Tela inicial é o menu de cards — mais limpa, principalmente pra uso no app.
-  const [activeTab, setActiveTab] = useState<"menu" | "dashboard" | "lista">("menu");
+  const [activeTab, setActiveTab] = useState<"menu" | "dashboard" | "lista" | "validacao">("menu");
   const [showFiltros, setShowFiltros] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos Status");
@@ -279,6 +290,9 @@ export default function ControleOSClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
+  // OS fechada agora mesmo (pelo atalho rápido ou pelo formulário) — dispara o convite pra
+  // compartilhar a ficha em PDF (WhatsApp etc.) sem precisar navegar até "Ações da OS".
+  const [osFechadaRecente, setOsFechadaRecente] = useState<OS | null>(null);
   const [selectedOSActions, setSelectedOSActions] = useState<OS | null>(null);
   const [pdfAction, setPdfAction] = useState<'download' | 'share' | 'print' | null>(null);
   const [exportingOS, setExportingOS] = useState<OS | null>(null);
@@ -704,6 +718,17 @@ export default function ControleOSClient({
       });
   }, [ordens, busca, filtroStatus, filtroModulo, filtroArea, filtroPeriodo, filtroAprovacao, filtroSuzano, filtroOrdem, periodos, equipamentos]);
 
+  // Quem pode validar/aprovar OS lançadas por mecânico — mesma regra já usada em
+  // aprovarOrdemServico (app/os/actions.ts) e no botão "Aprovar" de cada linha.
+  const podeAprovar = !isVisitante && profile?.role !== 'mecanico';
+
+  // Todas as OS pendentes de aprovação, sem nenhum filtro da Lista aplicado — a aba
+  // Validação é sempre a lista completa/canônica, pra garantir que nada passe despercebido.
+  const pendentesAprovacao = React.useMemo(
+    () => ordens.filter(o => o.aprovado === false).sort((a, b) => new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime()),
+    [ordens]
+  );
+
   const toggleSelectAll = () => {
     if (selectedIds.size === filtradas.length) {
       setSelectedIds(new Set());
@@ -777,8 +802,10 @@ export default function ControleOSClient({
         } else {
           const os = ordens.find(o => o.id === id);
           if (os) {
-            await localDb.put('ordens_servico', { ...os, status: novoStatus });
+            const updated = { ...os, status: novoStatus };
+            await localDb.put('ordens_servico', updated);
             window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+            if (novoStatus === 'Fechada') setOsFechadaRecente(updated);
           }
         }
       } else {
@@ -789,6 +816,7 @@ export default function ControleOSClient({
           await localDb.addToQueue('os', 'update_status', { id, status: novoStatus });
           window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
           window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
+          if (novoStatus === 'Fechada') setOsFechadaRecente(updated);
         }
       }
     });
@@ -1067,6 +1095,26 @@ export default function ControleOSClient({
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Indicadores e gráficos das ordens de serviço</p>
             </div>
           </button>
+
+          {podeAprovar && (
+            <button
+              onClick={() => setActiveTab("validacao")}
+              className="relative flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-amber-300 dark:hover:border-amber-800 transition-all text-left"
+            >
+              {pendentesAprovacao.length > 0 && (
+                <span className="absolute top-4 right-4 flex items-center justify-center min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-black">
+                  {pendentesAprovacao.length}
+                </span>
+              )}
+              <div className="p-3 bg-amber-500 text-white rounded-xl shadow-md">
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Validação</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">OS lançadas por mecânicos aguardando aprovação</p>
+              </div>
+            </button>
+          )}
         </div>
       )}
 
@@ -1306,6 +1354,73 @@ export default function ControleOSClient({
         </div>
       )}
 
+      {/* ══ VALIDAÇÃO TAB — lista completa e sem filtros, pra garantir que nenhuma OS
+           lançada por mecânico passe despercebida pelo PCM/admin ══ */}
+      {activeTab === "validacao" && podeAprovar && (
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+            <ShieldCheck size={16} className="text-amber-500" />
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              {pendentesAprovacao.length} ordem(ns) de serviço aguardando validação
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Nº OS</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Placa</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Módulo</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Lançado por</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Abertura</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Descrição</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendentesAprovacao.map(os => (
+                  <tr key={os.id} className="border-b border-zinc-50 dark:border-zinc-900 hover:bg-amber-50/40 dark:hover:bg-amber-900/5 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">{os.numero_os}</td>
+                    <td className="px-4 py-3 font-semibold text-zinc-800 dark:text-zinc-200">{os.placa}</td>
+                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{os.modulo || "-"}</td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{os.created_by_nome || "-"}</td>
+                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{fmt(os.data_abertura)}</td>
+                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 max-w-xs truncate" title={os.descricao || ""}>{os.descricao || "-"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          title="Ver Ficha da O.S"
+                          onClick={() => setFichaOS(os as unknown as OSFichaData)}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
+                        >
+                          <Eye size={13} />
+                          Ver
+                        </button>
+                        <button
+                          title="Aprovar Lançamento"
+                          onClick={() => handleApproveOS(os.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 transition-all shadow-sm"
+                        >
+                          <Check size={13} />
+                          Aprovar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {pendentesAprovacao.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-zinc-400">
+                      Nenhuma ordem de serviço pendente de validação. 🎉
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Delete confirmation modal ── */}
       {deletingId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -1383,7 +1498,54 @@ export default function ControleOSClient({
           fotoKm={fotoKm}
           setFotoKm={setFotoKm}
           ordensExistentes={ordens}
+          onSavedFechada={(os: any) => setOsFechadaRecente(os)}
         />
+      )}
+
+      {/* ── OS fechada agora — convite pra compartilhar a ficha (WhatsApp/PDF) ── */}
+      {osFechadaRecente && (
+        <div className="fixed inset-0 z-[1150] flex items-end sm:items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 flex flex-col items-center text-center gap-2 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full">
+                <Check size={24} />
+              </div>
+              <h3 className="font-bold text-zinc-900 dark:text-zinc-100">OS Fechada com sucesso!</h3>
+              <p className="text-xs text-zinc-500">
+                Nº <span className="font-mono font-semibold">{osFechadaRecente.numero_os}</span> · Placa {osFechadaRecente.placa}
+              </p>
+            </div>
+            <div className="p-4 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setPdfAction('share');
+                  setFichaOS(osFechadaRecente as unknown as OSFichaData);
+                  setOsFechadaRecente(null);
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
+              >
+                <MessageCircle size={16} />
+                Compartilhar Ficha em PDF (WhatsApp)
+              </button>
+              <button
+                onClick={() => {
+                  setFichaOS(osFechadaRecente as unknown as OSFichaData);
+                  setOsFechadaRecente(null);
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+              >
+                <Eye size={15} />
+                Ver Ficha Completa
+              </button>
+              <button
+                onClick={() => setOsFechadaRecente(null)}
+                className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Ficha Impressão Modal ── */}

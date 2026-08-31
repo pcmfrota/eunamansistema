@@ -38,6 +38,11 @@ const OSSchema = z.object({
   assinatura_mecanico: z.string().optional().nullable(),
   fotos: z.array(z.string()).optional().nullable().default([]),
   aprovado: z.boolean().optional().default(true),
+  created_by: z.string().optional().nullable(),
+  created_by_nome: z.string().optional().nullable(),
+  aprovado_por: z.string().optional().nullable(),
+  aprovado_por_nome: z.string().optional().nullable(),
+  aprovado_em: z.string().optional().nullable(),
 });
 
 export class OSService {

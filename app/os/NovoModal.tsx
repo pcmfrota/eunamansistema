@@ -217,6 +217,9 @@ interface OSFormModalProps {
   // consulta nova ao servidor). Tipado como any[] de propósito: o componente pai
   // (OSClient) tem seu próprio tipo local "OS", incompatível estruturalmente com o daqui.
   ordensExistentes?: any[];
+  // Chamado quando a OS é salva já com status "Fechada" — o pai usa isso pra oferecer
+  // compartilhar a ficha em PDF (WhatsApp etc.) assim que o serviço é finalizado.
+  onSavedFechada?: (os: any) => void;
 }
 
 function getLocalDT() {
@@ -237,6 +240,7 @@ export default function OSFormModal({
   fotoKm,
   setFotoKm,
   ordensExistentes = [],
+  onSavedFechada,
 }: OSFormModalProps) {
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
@@ -807,6 +811,7 @@ export default function OSFormModal({
 
       const handleSaveOffline = async () => {
         const dataFechamentoVal = (fd.get("data_fechamento") as string) || null;
+        let savedOfflineOS: any = null;
         if (initialData) {
           // Editar OS Offline
           const serialized = serializeFormData(fd);
@@ -846,6 +851,7 @@ export default function OSFormModal({
           };
           await localDb.put("ordens_servico", updatedOS);
           await localDb.addToQueue("os", "update", { id: initialData.id, ...serialized });
+          savedOfflineOS = updatedOS;
         } else {
           // Criar OS Offline
           const tempId = `temp_os_${Date.now()}`;
@@ -909,6 +915,7 @@ export default function OSFormModal({
           };
           await localDb.put("ordens_servico", newOS);
           await localDb.addToQueue("os", "create", serialized);
+          savedOfflineOS = newOS;
         }
 
         // Notifica as tabelas e fecha o modal
@@ -916,7 +923,11 @@ export default function OSFormModal({
         window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
         await clearDraft();
         onClose();
-        alert("Ordem de serviço salva com sucesso (Offline)!");
+        if (savedOfflineOS?.status === "Fechada" && onSavedFechada) {
+          onSavedFechada(savedOfflineOS);
+        } else {
+          alert("Ordem de serviço salva com sucesso (Offline)!");
+        }
       };
 
       if (isOnline) {
@@ -970,7 +981,11 @@ export default function OSFormModal({
           window.dispatchEvent(new CustomEvent("offline-db-updated-ordens_servico"));
           await clearDraft();
           onClose();
-          alert("Ordem de serviço salva com sucesso!");
+          if (res && typeof res === "object" && (res as any).status === "Fechada" && onSavedFechada) {
+            onSavedFechada(res);
+          } else {
+            alert("Ordem de serviço salva com sucesso!");
+          }
         } catch (err: any) {
           console.error("[OS] Erro critico no salvamento online, caindo para offline:", err);
           await handleSaveOffline();

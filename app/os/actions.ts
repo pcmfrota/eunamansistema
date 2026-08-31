@@ -60,7 +60,7 @@ export async function criarOrdemServico(formData: FormData) {
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, filial_id')
+        .select('role, filial_id, full_name')
         .eq('id', user.id)
         .single();
       if (profile) {
@@ -68,8 +68,12 @@ export async function criarOrdemServico(formData: FormData) {
         // Injeta a filial_id automaticamente a partir do perfil do usuário
         ;(data as any).filial_id = profile.filial_id || 'MATRIZ';
       }
+      // Quem lançou — pra dar visibilidade ao PCM/admin de quem registrou cada OS
+      // (fica gravado só na criação; editar não muda quem lançou originalmente).
+      ;(data as any).created_by = user.id;
+      ;(data as any).created_by_nome = profile?.full_name || user.email || 'Usuário';
     }
-    
+
     // Se criado por mecânico, inicia como pendente de aprovação (aprovado = false)
     data.aprovado = userRole !== 'mecanico';
 
@@ -171,15 +175,20 @@ export async function aprovarOrdemServico(id: string) {
     
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, full_name')
       .eq('id', user.id)
       .single();
-      
+
     if (!profile || profile.role === 'mecanico' || profile.role === 'visitante') {
       return { error: "Apenas administradores, PCM ou gestores podem aprovar ordens de serviço." };
     }
-    
-    const result = await OSService.updateOS(id, { aprovado: true } as any)
+
+    const result = await OSService.updateOS(id, {
+      aprovado: true,
+      aprovado_por: user.id,
+      aprovado_por_nome: profile.full_name || user.email || 'Usuário',
+      aprovado_em: getCurrentLocalDatetime(),
+    } as any)
     revalidatePath('/os')
     revalidatePath('/')
     if (result.success && result.data) {

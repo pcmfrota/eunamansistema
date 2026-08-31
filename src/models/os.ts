@@ -29,6 +29,11 @@ export interface OS {
   assinatura_mecanico?: string | null;
   fotos?: string[] | null;
   aprovado?: boolean;
+  created_by?: string | null;
+  created_by_nome?: string | null;
+  aprovado_por?: string | null;
+  aprovado_por_nome?: string | null;
+  aprovado_em?: string | null;
   created_at?: string;
 }
 
