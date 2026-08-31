@@ -32,6 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from './premium-loader';
 import AlterarSenhaModal from './AlterarSenhaModal';
+import NotificacoesBell from './NotificacoesBell';
 
 const ModernWaterIcon = (props: any) => (
   <svg 
@@ -377,6 +378,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 )}
               </p>
             </div>
+            <NotificacoesBell />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -596,7 +598,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
 
-            <Link href="/perfil" className="lg:hidden">
+            <div className="flex items-center gap-2 lg:hidden">
+              <NotificacoesBell />
+              <Link href="/perfil">
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} className="w-8 h-8 rounded-full" style={{ border: '1.5px solid rgba(45,122,45,0.5)' }} />
               ) : (
@@ -607,7 +611,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   {profile?.full_name?.charAt(0) || <User size={14} />}
                 </div>
               )}
-            </Link>
+              </Link>
+            </div>
           </div>
         </header>
 

@@ -6,6 +6,7 @@ import { OSInsert, OSUpdate } from '@/src/models/os'
 import { createClient } from '@/utils/supabase/server'
 import { getUserFilial } from '@/utils/filial'
 import { getCurrentLocalDatetime } from '@/src/utils/dateUtils'
+import { notificarPapeis } from '@/lib/notificacoes'
 
 const parseFormData = (formData: FormData): OSInsert => ({
   equipamento_id: formData.get('equipamento_id') as string,
@@ -81,6 +82,14 @@ export async function criarOrdemServico(formData: FormData) {
     revalidatePath('/os')
     revalidatePath('/')
     if (result.success && result.data) {
+      if (!result.data.aprovado) {
+        await notificarPapeis(['admin', 'supervisor_manutencao'], {
+          tipo: 'os_pendente_validacao',
+          titulo: 'Nova OS pendente de validação',
+          mensagem: `${(data as any).created_by_nome || 'Um mecânico'} lançou a OS ${result.data.numero_os} na placa ${result.data.placa}.`,
+          link: `/os?abrir=${result.data.id}`,
+        })
+      }
       return result.data
     }
     return result
@@ -137,15 +146,19 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     let userRole = 'visitante';
+    let userNome = 'Um mecânico';
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, full_name')
         .eq('id', user.id)
         .single();
-      if (profile) userRole = profile.role;
+      if (profile) {
+        userRole = profile.role;
+        userNome = profile.full_name || user.email || userNome;
+      }
     }
-    
+
     if (userRole === 'mecanico') {
       data.aprovado = false;
     }
@@ -156,6 +169,14 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
     if (result.success && result.data) {
       if (result.data.status === 'Fechada') {
         await closeLinkedBacklogs(result.data)
+      }
+      if (userRole === 'mecanico') {
+        await notificarPapeis(['admin', 'supervisor_manutencao'], {
+          tipo: 'os_pendente_validacao',
+          titulo: 'OS editada por mecânico — pendente de validação',
+          mensagem: `${userNome} editou a OS ${result.data.numero_os} na placa ${result.data.placa}.`,
+          link: `/os?abrir=${result.data.id}`,
+        })
       }
       return result.data
     }
