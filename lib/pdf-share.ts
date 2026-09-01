@@ -1,7 +1,8 @@
-// Compartilhado por todo módulo que gera uma ficha em PDF via html2pdf.js (carregado
-// globalmente como window.html2pdf) — extrai o padrão de "baixar" e "baixar e compartilhar
-// o arquivo de verdade" que só existia no Controle de OS, pra ficar disponível em qualquer
-// ficha do sistema (Mão de Obra, Pneus, Lavagens, etc.), inclusive offline/no app Android.
+// Compartilhado por todo módulo que gera uma ficha em PDF — via html2pdf.js (carregado
+// globalmente como window.html2pdf) OU já com um Blob pronto (ex: jsPDF direto, como o
+// módulo de Lubrificação usa) — extrai o padrão de "baixar" e "baixar e compartilhar o
+// arquivo de verdade" que só existia no Controle de OS, pra ficar disponível em qualquer
+// ficha do sistema, inclusive offline/no app Android.
 //
 // Sempre salva o arquivo primeiro (download no navegador, ou pela ponte nativa do app) antes
 // de tentar abrir o menu de compartilhamento do sistema — nunca compartilha sem ter salvo.
@@ -28,12 +29,13 @@ function isAndroidApp() {
   );
 }
 
-function base64ParaBlob(pdfBase64: string): Blob {
-  const cleanBase64 = pdfBase64.includes(",") ? pdfBase64.split(",")[1] : pdfBase64;
-  const binaryStr = atob(cleanBase64);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-  return new Blob([bytes], { type: "application/pdf" });
+function blobParaBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 async function tentarCompartilhar(blob: Blob, filename: string, shareTitle: string, shareText: string) {
@@ -48,6 +50,51 @@ async function tentarCompartilhar(blob: Blob, filename: string, shareTitle: stri
     }
   } else {
     alert("Compartilhamento de arquivo não é suportado neste navegador. O PDF foi salvo — envie manualmente pelo WhatsApp.");
+  }
+}
+
+/**
+ * Salva (download no navegador, ou ponte nativa no app Android) e, se `modo === 'share'`,
+ * também tenta abrir o menu de compartilhamento do sistema (WhatsApp etc.) com o PDF já
+ * pronto (Blob) anexado. Use isso diretamente quando o PDF já foi gerado por outro meio
+ * (ex: jsPDF puro, como em app/lubrificacao/components/LubrificacaoPDF.ts).
+ */
+export async function salvarOuCompartilharBlob(
+  blob: Blob,
+  filename: string,
+  shareTitle: string,
+  shareText: string,
+  modo: "download" | "share"
+): Promise<void> {
+  if (isAndroidApp()) {
+    try {
+      const base64 = await blobParaBase64(blob);
+      (window as any).EunamanApp.saveBase64File(base64, filename, "application/pdf");
+      if (modo === "share") {
+        await tentarCompartilhar(blob, filename, shareTitle, shareText);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar PDF no app:", err);
+      alert("Erro ao salvar o PDF.");
+    }
+  } else {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      if (modo === "share") {
+        await tentarCompartilhar(blob, filename, shareTitle, shareText);
+      }
+    } catch (err) {
+      console.error("Erro ao baixar PDF:", err);
+      alert("Erro ao baixar o PDF.");
+    }
   }
 }
 
@@ -69,49 +116,19 @@ export async function baixarOuCompartilharPdf(
     return;
   }
 
-  const fullOpt = { ...DEFAULT_OPT, ...opt, filename };
-  const worker = (window as any).html2pdf().set(fullOpt).from(element);
-
-  if (isAndroidApp()) {
-    try {
-      const pdfBase64: string = await worker.outputPdf("datauristring");
-      (window as any).EunamanApp.saveBase64File(pdfBase64, filename, "application/pdf");
-      if (modo === "share") {
-        try {
-          const blob = base64ParaBlob(pdfBase64);
-          await tentarCompartilhar(blob, filename, shareTitle, shareText);
-        } catch (shareErr) {
-          console.log("Compartilhamento pelo app falhou ou foi cancelado:", shareErr);
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao gerar/salvar PDF no app:", err);
-      alert("Erro ao gerar o PDF.");
-    }
-  } else {
-    try {
-      const blob: Blob = await worker.toPdf().output("blob");
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      if (modo === "share") {
-        await tentarCompartilhar(blob, filename, shareTitle, shareText);
-      }
-    } catch (err) {
-      console.error("Erro ao gerar/baixar PDF:", err);
-      alert("Erro ao gerar o PDF.");
-    }
+  try {
+    const fullOpt = { ...DEFAULT_OPT, ...opt, filename };
+    const worker = (window as any).html2pdf().set(fullOpt).from(element);
+    const blob: Blob = await worker.toPdf().output("blob");
+    await salvarOuCompartilharBlob(blob, filename, shareTitle, shareText, modo);
+  } catch (err) {
+    console.error("Erro ao gerar PDF:", err);
+    alert("Erro ao gerar o PDF.");
   }
 }
 
 // Pré-carrega o html2pdf.js via CDN, se ainda não estiver carregado — mesmo script usado
-// em todos os módulos que geram ficha em PDF.
+// em todos os módulos que geram ficha em PDF a partir de um elemento HTML.
 export function preCarregarHtml2Pdf() {
   if (typeof window === "undefined" || (window as any).html2pdf) return;
   const script = document.createElement("script");

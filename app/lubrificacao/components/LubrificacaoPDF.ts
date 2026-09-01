@@ -1,8 +1,9 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { FichaLubrificacao } from "@/src/services/LubrificacaoService";
+import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 
-export async function gerarPDFLubrificacao(ficha: Partial<FichaLubrificacao>, download = true) {
+export async function gerarPDFLubrificacao(ficha: Partial<FichaLubrificacao>, modo: "download" | "share" = "download") {
   // Cria elemento HTML invisível no DOM temporariamente para renderizar com fidelidade idêntica à ficha física
   const container = document.createElement("div");
   container.style.position = "absolute";
@@ -249,10 +250,15 @@ export async function gerarPDFLubrificacao(ficha: Partial<FichaLubrificacao>, do
     }
 
     const filename = `Ficha_Lubrificacao_${ficha.placa || "EUNAMAN"}_${dataFmt.replace(/\//g, "-")}.pdf`;
+    const blob: Blob = pdf.output("blob");
 
-    if (download) {
-      pdf.save(filename);
-    }
+    await salvarOuCompartilharBlob(
+      blob,
+      filename,
+      `Ficha de Lubrificação — ${ficha.placa || "EUNAMAN"}`,
+      `Ficha de Lubrificação da placa ${ficha.placa || "EUNAMAN"} (${dataFmt})`,
+      modo
+    );
 
     return pdf.output("dataurlstring");
   } catch (err) {

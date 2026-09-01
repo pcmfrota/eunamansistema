@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, X, Loader2 } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, Share2, X, Loader2 } from 'lucide-react'
 import { localDb } from '@/lib/offline-db'
 import { salvarChecklist, excluirChecklist } from './actions'
 import { getComboioConfig, getPipaConfig, getMultifuncionalConfig, getMunckConfig, ChecklistGroup, ChecklistItem } from './checklistConfig'
+import { baixarOuCompartilharPdf, preCarregarHtml2Pdf } from '@/lib/pdf-share'
 
 export default function ChecklistClient({ initialChecklists, userRole, userId }: { initialChecklists: any[], userRole: string, userId: string }) {
   const [checklists, setChecklists] = useState(initialChecklists)
@@ -12,6 +13,11 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [viewChecklist, setViewChecklist] = useState<any>(null)
+  const [exportandoPdf, setExportandoPdf] = useState<"download" | "share" | null>(null)
+
+  useEffect(() => {
+    preCarregarHtml2Pdf()
+  }, [])
   
   // States do formulário
   const [tipo, setTipo] = useState('')
@@ -106,10 +112,27 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
     }
   }
 
-  const gerarPDF = (checklist: any) => {
+  const handleExportPDF = (checklist: any, modo: "download" | "share" = "download") => {
     setViewChecklist(checklist)
-    setTimeout(() => {
-      window.print()
+    setExportandoPdf(modo)
+    setTimeout(async () => {
+      try {
+        const element = document.getElementById('ficha-checklist-print')
+        if (!element) {
+          alert('Erro ao localizar a ficha para gerar o PDF.')
+          return
+        }
+        const filename = `Checklist_${checklist.tipo_caminhao}_${checklist.placa}_${String(checklist.id).padStart(5, '0')}.pdf`
+        await baixarOuCompartilharPdf(
+          element,
+          filename,
+          `Checklist Mecânico — ${checklist.placa}`,
+          `Checklist Mecânico (${checklist.tipo_caminhao}) da placa ${checklist.placa}`,
+          modo
+        )
+      } finally {
+        setExportandoPdf(null)
+      }
     }, 500)
   }
 
@@ -339,8 +362,11 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
                     <button onClick={() => handleView(item)} className="p-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100" title="Ver Checklist">
                       <FileText size={16} />
                     </button>
-                    <button onClick={() => gerarPDF(item)} className="p-1.5 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100" title="Baixar PDF">
+                    <button onClick={() => handleExportPDF(item, "download")} className="p-1.5 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100" title="Baixar PDF">
                       <Download size={16} />
+                    </button>
+                    <button onClick={() => handleExportPDF(item, "share")} className="p-1.5 bg-green-50 text-green-700 rounded hover:bg-green-100" title="Compartilhar PDF">
+                      <Share2 size={16} />
                     </button>
                     {((userRole === 'admin' || userRole === 'administrador') || userRole === 'gestao') && (
                       <button onClick={() => handleDelete(item.id)} className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200">
@@ -475,52 +501,60 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
       <div className="fixed inset-0 z-[100] flex justify-center bg-zinc-100 dark:bg-zinc-950 overflow-y-auto print:bg-white print:p-0">
         <div className="w-full max-w-4xl bg-white p-8 print:p-2 min-h-screen print:min-h-0 print:h-auto shadow-xl print:shadow-none relative">
           
-          <div className="absolute top-4 right-4 flex gap-2 print:hidden">
-            <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded font-bold text-sm shadow hover:bg-blue-700 flex items-center gap-2">
-              <Download size={16}/> Baixar PDF / Imprimir
+          <div className="absolute top-4 right-4 flex gap-2 print:hidden flex-wrap justify-end">
+            <button onClick={() => window.print()} className="px-4 py-2 bg-zinc-600 text-white rounded font-bold text-sm shadow hover:bg-zinc-700 flex items-center gap-2">
+              Imprimir
+            </button>
+            <button onClick={() => handleExportPDF(viewChecklist, "download")} disabled={!!exportandoPdf} className="px-4 py-2 bg-blue-600 text-white rounded font-bold text-sm shadow hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
+              <Download size={16}/> {exportandoPdf === "download" ? "Gerando..." : "Baixar PDF"}
+            </button>
+            <button onClick={() => handleExportPDF(viewChecklist, "share")} disabled={!!exportandoPdf} className="px-4 py-2 bg-emerald-600 text-white rounded font-bold text-sm shadow hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-60">
+              <Share2 size={16}/> {exportandoPdf === "share" ? "Gerando..." : "Compartilhar PDF"}
             </button>
             <button onClick={() => setViewChecklist(null)} className="p-2 bg-zinc-200 text-zinc-600 rounded hover:bg-zinc-300 shadow">
               <X size={20}/>
             </button>
           </div>
 
-          <div className="border-b-2 border-zinc-900 pb-4 mb-6">
-            <h1 className="text-2xl font-black text-center uppercase tracking-widest text-zinc-900">Checklist Mecânico - {viewChecklist.tipo_caminhao}</h1>
-            <div className="flex justify-between items-center mt-4 text-xs font-bold text-zinc-700">
-              <span>Data: {new Date(viewChecklist.criado_em).toLocaleDateString('pt-BR')}</span>
-              <span>ID: {String(viewChecklist.id).padStart(5,'0')}</span>
+          <div id="ficha-checklist-print">
+            <div className="border-b-2 border-zinc-900 pb-4 mb-6">
+              <h1 className="text-2xl font-black text-center uppercase tracking-widest text-zinc-900">Checklist Mecânico - {viewChecklist.tipo_caminhao}</h1>
+              <div className="flex justify-between items-center mt-4 text-xs font-bold text-zinc-700">
+                <span>Data: {new Date(viewChecklist.criado_em).toLocaleDateString('pt-BR')}</span>
+                <span>ID: {String(viewChecklist.id).padStart(5,'0')}</span>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-6 p-4 border rounded bg-zinc-50 border-zinc-300 text-zinc-800 text-sm">
-            <div><span className="font-bold">Placa:</span> {viewChecklist.placa}</div>
-            <div><span className="font-bold">C.O:</span> {viewChecklist.co}</div>
-            <div><span className="font-bold">Local:</span> {viewChecklist.local}</div>
-            <div><span className="font-bold">Status:</span> {viewChecklist.status}</div>
-          </div>
+            <div className="grid grid-cols-2 gap-4 mb-6 p-4 border rounded bg-zinc-50 border-zinc-300 text-zinc-800 text-sm">
+              <div><span className="font-bold">Placa:</span> {viewChecklist.placa}</div>
+              <div><span className="font-bold">C.O:</span> {viewChecklist.co}</div>
+              <div><span className="font-bold">Local:</span> {viewChecklist.local}</div>
+              <div><span className="font-bold">Status:</span> {viewChecklist.status}</div>
+            </div>
 
-          <div className="space-y-6 text-zinc-800">
-            {getViewConfig(viewChecklist.tipo_caminhao).map(group => (
-              <div key={group.id} className="space-y-2">
-                <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs">{group.title}</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {group.items.map(item => renderItem(item, viewChecklist.respostas))}
+            <div className="space-y-6 text-zinc-800">
+              {getViewConfig(viewChecklist.tipo_caminhao).map(group => (
+                <div key={group.id} className="space-y-2">
+                  <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs">{group.title}</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {group.items.map(item => renderItem(item, viewChecklist.respostas))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {viewChecklist.pendencias_adicionais && (
-              <div className="mt-8">
-                <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs mb-2">Pendências Adicionais / Observações</h3>
-                <div className="border border-zinc-300 p-3 whitespace-pre-wrap text-sm">
-                  {viewChecklist.pendencias_adicionais}
+              {viewChecklist.pendencias_adicionais && (
+                <div className="mt-8">
+                  <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs mb-2">Pendências Adicionais / Observações</h3>
+                  <div className="border border-zinc-300 p-3 whitespace-pre-wrap text-sm">
+                    {viewChecklist.pendencias_adicionais}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-12 text-center text-xs text-zinc-500 border-t pt-4 print:block">
-            Documento gerado automaticamente pelo EUNAMAN Sistema.
+              )}
+            </div>
+
+            <div className="mt-12 text-center text-xs text-zinc-500 border-t pt-4 print:block">
+              Documento gerado automaticamente pelo EUNAMAN Sistema.
+            </div>
           </div>
         </div>
       </div>

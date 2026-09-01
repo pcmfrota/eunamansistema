@@ -1133,13 +1133,47 @@ export default function LubrificacaoClient() {
                       observacoes,
                       assinatura_mecanico: sigMecanicoBase64,
                       assinatura_lider: sigLiderBase64,
-                    });
+                    }, "download");
                   }
                 }}
                 className="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-blue-600/30 active:scale-95 transition-all flex items-center gap-2"
               >
                 <FileText size={16} />
                 Gerar PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (validateForm()) {
+                    gerarPDFLubrificacao({
+                      placa,
+                      data_registro: new Date().toISOString(),
+                      hora_inicio: horaInicio,
+                      hora_fim: horaFim,
+                      horimetro_inicio: parseFloat(horimetroInicio),
+                      horimetro_fim: parseFloat(horimetroFim),
+                      mecanico_responsavel: mecanicoResponsavel,
+                      ajudante,
+                      local_servico: localServico,
+                      modulo,
+                      cliente,
+                      checklist_lubrificacao: checklistLub,
+                      checklist_geral: checklistGeral,
+                      calibragem,
+                      reapertos,
+                      fotos_antes: fotosAntes,
+                      fotos_depois: fotosDepois,
+                      observacoes,
+                      assinatura_mecanico: sigMecanicoBase64,
+                      assinatura_lider: sigLiderBase64,
+                    }, "share");
+                  }
+                }}
+                className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <Share2 size={16} />
+                Compartilhar PDF
               </button>
             </div>
           </div>

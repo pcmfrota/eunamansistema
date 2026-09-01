@@ -15,6 +15,7 @@ import {
   UserCheck,
   CheckCircle2,
   Copy,
+  Share2,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { FichaLubrificacao } from "@/src/services/LubrificacaoService";
@@ -104,10 +105,10 @@ export function LubrificacaoHistorico({
     setModalOpen(true);
   };
 
-  const handleGeneratePDF = async (f: FichaLubrificacao) => {
+  const handleGeneratePDF = async (f: FichaLubrificacao, modo: "download" | "share" = "download") => {
     try {
       setGeneratingPdf(true);
-      await gerarPDFLubrificacao(f, true);
+      await gerarPDFLubrificacao(f, modo);
     } catch (e) {
       alert("Erro ao gerar PDF da ficha.");
     } finally {
@@ -305,11 +306,19 @@ export function LubrificacaoHistorico({
                       </button>
 
                       <button
-                        onClick={() => handleGeneratePDF(f)}
+                        onClick={() => handleGeneratePDF(f, "download")}
                         className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
-                        title="Gerar PDF"
+                        title="Baixar PDF"
                       >
                         <FileText size={15} />
+                      </button>
+
+                      <button
+                        onClick={() => handleGeneratePDF(f, "share")}
+                        className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                        title="Compartilhar PDF"
+                      >
+                        <Share2 size={15} />
                       </button>
 
                       {onDuplicate && (
@@ -373,12 +382,20 @@ export function LubrificacaoHistorico({
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleGeneratePDF(selectedFicha)}
+                  onClick={() => handleGeneratePDF(selectedFicha, "download")}
                   disabled={generatingPdf}
                   className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-extrabold text-xs uppercase flex items-center gap-1.5 shadow-md hover:bg-blue-700"
                 >
                   <FileText size={14} />
                   {generatingPdf ? "Gerando..." : "Baixar PDF"}
+                </button>
+                <button
+                  onClick={() => handleGeneratePDF(selectedFicha, "share")}
+                  disabled={generatingPdf}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs uppercase flex items-center gap-1.5 shadow-md hover:bg-emerald-700"
+                >
+                  <Share2 size={14} />
+                  Compartilhar
                 </button>
                 <button
                   onClick={() => setModalOpen(false)}

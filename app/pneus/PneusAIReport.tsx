@@ -1,19 +1,21 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { 
-  BrainCircuit, 
-  TrendingDown, 
-  AlertOctagon, 
-  CheckCircle2, 
-  FileText, 
-  Zap, 
+import React, { useMemo, useState } from 'react';
+import {
+  BrainCircuit,
+  TrendingDown,
+  AlertOctagon,
+  CheckCircle2,
+  FileText,
+  Zap,
   ArrowRight,
   Target,
   BarChart3,
   Waves,
+  Share2,
   X
 } from 'lucide-react';
+import { baixarOuCompartilharPdf } from '@/lib/pdf-share';
 
 interface Inspecao {
   id: string;
@@ -69,32 +71,27 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
     };
   }, [inspecoes]);
 
-  const downloadReportPDF = () => {
+  const [gerandoPdf, setGerandoPdf] = useState<"download" | "share" | null>(null);
+
+  const downloadReportPDF = async (modo: "download" | "share" = "download") => {
     if (!(window as any).html2pdf) {
       alert("Aguarde o carregamento do gerador de PDF."); return;
     }
     const element = document.getElementById("ai-report-content");
-    const filename = `Relatorio_Inteligencia_Pneus.pdf`;
-    const opt = {
-      margin: 10,
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-    };
-    
-    const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
-    const worker = (window as any).html2pdf().set(opt).from(element);
-    
-    if (isAndroidApp) {
-      worker.outputPdf('datauristring').then((pdfBase64: string) => {
-        (window as any).EunamanApp.saveBase64File(pdfBase64, filename, 'application/pdf');
-      }).catch((err: any) => {
-        console.error("Erro ao gerar PDF do Relatório de Inteligência para App:", err);
-        alert("Erro ao salvar PDF: " + err.message);
-      });
-    } else {
-      worker.save();
+    if (!element) return;
+
+    setGerandoPdf(modo);
+    try {
+      await baixarOuCompartilharPdf(
+        element,
+        "Relatorio_Inteligencia_Pneus.pdf",
+        "Relatório de Inteligência de Pneus",
+        `Relatório de Inteligência de Pneus — ${analysis?.totalVehicles ?? 0} veículos analisados`,
+        modo,
+        { margin: [10, 10, 10, 10], image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }
+      );
+    } finally {
+      setGerandoPdf(null);
     }
   };
 
@@ -207,10 +204,14 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
                 />
               </div>
 
-              <div className="pt-4" data-html2canvas-ignore="true">
-                 <button onClick={downloadReportPDF} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-900/40 transition-all flex items-center justify-center gap-3 group">
-                   Baixar Relatório Executivo (PDF)
+              <div className="pt-4 space-y-3" data-html2canvas-ignore="true">
+                 <button onClick={() => downloadReportPDF("download")} disabled={!!gerandoPdf} className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-900/40 transition-all flex items-center justify-center gap-3 group disabled:opacity-60">
+                   {gerandoPdf === "download" ? "Gerando..." : "Baixar Relatório Executivo (PDF)"}
                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                 </button>
+                 <button onClick={() => downloadReportPDF("share")} disabled={!!gerandoPdf} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-emerald-900/40 transition-all flex items-center justify-center gap-3 group disabled:opacity-60">
+                   <Share2 size={18} />
+                   {gerandoPdf === "share" ? "Gerando..." : "Compartilhar PDF"}
                  </button>
               </div>
             </div>

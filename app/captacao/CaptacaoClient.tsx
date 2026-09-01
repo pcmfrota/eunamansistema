@@ -34,6 +34,7 @@ import { useAuth } from '@/components/auth-context';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { baixarOuCompartilharPdf } from '@/lib/pdf-share';
 import {
   criarFicha,
   fecharFicha,
@@ -1103,54 +1104,40 @@ export default function CaptacaoClient({
     }
   };
 
-  const handleExportPDF = () => {
-    const html2pdf = (window as any).html2pdf;
-    if (!html2pdf) {
+  const handleExportPDF = (modo: "download" | "share" = "download") => {
+    if (!(window as any).html2pdf) {
       alert("Biblioteca PDF ainda carregando...");
       return;
     }
-    
+
     setIsExporting(true);
-    
+
     const element = document.getElementById("ficha-captacao-print");
     if (!element) {
       alert("Erro ao localizar elemento da ficha.");
       setIsExporting(false);
       return;
     }
-    
-    const opt = {
-      margin:       [5, 5, 5, 5],
-      filename:     `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
-    };
-    
-    // Use rAF to let the UI update and show the loading overlay
+
+    const filename = `Ficha_Captacao_${selectedFicha.placa}_${selectedFicha.ano}_${selectedFicha.mes}.pdf`;
+
+    // Use rAF to let the UI update and show the loading overlay antes do trabalho pesado
+    // do html2canvas travar a thread principal por um instante.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        setTimeout(() => {
-          const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
-          const worker = html2pdf().set(opt).from(element);
-          
-          if (isAndroidApp) {
-            worker.outputPdf('datauristring').then((pdfBase64: string) => {
-              (window as any).EunamanApp.saveBase64File(pdfBase64, opt.filename, 'application/pdf');
-              setIsExporting(false);
-            }).catch((err: any) => {
-              console.error("Erro ao gerar PDF para App:", err);
-              setIsExporting(false);
-              alert("Erro ao salvar PDF: " + err.message);
-            });
-          } else {
-            worker.save().then(() => {
-              setIsExporting(false);
-              alert("Ficha em PDF gerada e baixada com sucesso!");
-            }).catch((err: any) => {
-              console.error("Erro ao gerar PDF:", err);
-              setIsExporting(false);
-            });
+        setTimeout(async () => {
+          try {
+            await baixarOuCompartilharPdf(
+              element,
+              filename,
+              `Ficha de Captação — ${selectedFicha.placa}`,
+              `Ficha de Captação de Água da placa ${selectedFicha.placa} (${selectedFicha.mes}/${selectedFicha.ano})`,
+              modo,
+              { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }
+            );
+            if (modo === "download") alert("Ficha em PDF gerada e baixada com sucesso!");
+          } finally {
+            setIsExporting(false);
           }
         }, 50);
       });
@@ -2157,12 +2144,21 @@ export default function CaptacaoClient({
                     type="button"
                     onClick={() => {
                       if (window.confirm("Deseja realmente baixar o PDF?")) {
-                        handleExportPDF();
+                        handleExportPDF("download");
                       }
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
                   >
                     <span>BAIXAR PDF</span>
+                  </button>
+
+                  {/* 6b. Compartilhar pdf (WhatsApp etc.) */}
+                  <button
+                    type="button"
+                    onClick={() => handleExportPDF("share")}
+                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-emerald-600 hover:bg-emerald-700 rounded-2xl border border-emerald-600 text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
+                  >
+                    <span>COMPARTILHAR PDF</span>
                   </button>
 
                   {/* 7. Baixar excel */}
