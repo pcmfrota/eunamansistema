@@ -1380,6 +1380,7 @@ export default function PneusClient({
           html={gerarHtmlFichaPneus(previewInspecao)}
           onClose={() => setPreviewInspecao(null)}
           onDownload={() => downloadBoletimPDF(previewInspecao)}
+          onShare={() => gerarFichaPneusPDF(previewInspecao, 'share')}
         />
       )}
     </div>

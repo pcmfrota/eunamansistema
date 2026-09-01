@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Share2, Send, Mail, Clock } from "lucide-react";
+import { X, Printer, Share2, Send, Mail, Clock, FileDown, Loader2 } from "lucide-react";
 import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
+import { baixarOuCompartilharPdf, preCarregarHtml2Pdf } from "@/lib/pdf-share";
 
 export type AtividadeJornada = {
   id: string;
@@ -59,6 +60,12 @@ function formatHoras(h?: number): string {
 }
 
 export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDFModalProps) {
+  const [gerandoPdf, setGerandoPdf] = useState<"baixar" | "compartilhar" | null>(null);
+
+  useEffect(() => {
+    preCarregarHtml2Pdf();
+  }, []);
+
   if (!ficha) return null;
 
   const dataJornada = ficha.data_jornada || ficha.created_at?.split("T")[0];
@@ -118,20 +125,23 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
     window.location.href = url;
   };
 
-  const handleNativeShare = async () => {
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({
-          title: `Ficha ${ficha.numero_ficha}`,
-          text: shareText,
-        });
-      } catch (err: any) {
-        if (err?.name !== "AbortError") {
-          handleWhatsApp();
-        }
-      }
-    } else {
-      handleWhatsApp();
+  // Gera a ficha em PDF de verdade (a partir do mesmo #print-area usado na impressão) e
+  // baixa ou compartilha o arquivo — antes disso, "Compartilhar" só mandava um resumo em
+  // texto, sem a ficha de fato anexada.
+  const gerarPdfFicha = async (modo: "download" | "share") => {
+    const element = document.getElementById("print-area");
+    if (!element) return;
+    setGerandoPdf(modo === "download" ? "baixar" : "compartilhar");
+    try {
+      await baixarOuCompartilharPdf(
+        element,
+        `Ficha_MaoObra_${ficha.numero_ficha}.pdf`,
+        `Ficha ${ficha.numero_ficha} — ${ficha.mecanico_nome}`,
+        `Apontamento de Mão de Obra — ${ficha.mecanico_nome} (${dataFormatada})`,
+        modo
+      );
+    } finally {
+      setGerandoPdf(null);
     }
   };
 
@@ -177,31 +187,41 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
             >
               <Printer size={15} />
-              <span>Imprimir / PDF</span>
+              <span>Imprimir</span>
+            </button>
+            <button
+              onClick={() => gerarPdfFicha("download")}
+              disabled={gerandoPdf !== null}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
+            >
+              {gerandoPdf === "baixar" ? <Loader2 size={15} className="animate-spin" /> : <FileDown size={15} />}
+              <span>Baixar PDF</span>
+            </button>
+            <button
+              onClick={() => gerarPdfFicha("share")}
+              disabled={gerandoPdf !== null}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
+            >
+              {gerandoPdf === "compartilhar" ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
+              <span>Compartilhar PDF</span>
             </button>
             <button
               onClick={handleWhatsApp}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
+              title="Manda só um resumo em texto, sem a ficha em PDF anexada"
             >
               <Send size={15} />
-              <span>WhatsApp</span>
+              <span>Resumo (texto)</span>
             </button>
             <button
               onClick={handleEmail}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
             >
               <Mail size={15} />
               <span>E-mail</span>
-            </button>
-            <button
-              onClick={handleNativeShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
-            >
-              <Share2 size={15} />
-              <span>Compartilhar</span>
             </button>
             <button
               onClick={onClose}

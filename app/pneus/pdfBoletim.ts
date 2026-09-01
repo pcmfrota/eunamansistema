@@ -3,6 +3,8 @@
 // Preenche os 3 sulcos (direito/meio/esquerdo) de cada posição, além de quem registrou e
 // a data/hora do lançamento.
 
+import { baixarOuCompartilharPdf } from "@/lib/pdf-share";
+
 export type InspecaoParaPDF = {
   id: string;
   data_inspecao: string;
@@ -223,35 +225,18 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
     `;
 }
 
-export function gerarFichaPneusPDF(ins: InspecaoParaPDF) {
-  if (!(window as any).html2pdf) {
-    alert("Aguarde o carregamento do gerador de PDF.");
-    return;
-  }
-
+export function gerarFichaPneusPDF(ins: InspecaoParaPDF, modo: "download" | "share" = "download") {
   const html = gerarHtmlFichaPneus(ins);
   const element = document.createElement("div");
   element.innerHTML = html;
   const filename = `Boletim_${ins.equipamentos?.placa}_${fmtDataPDF(ins.data_inspecao).replace(/\//g, '-')}.pdf`;
-  const opt = {
-    margin: [5, 5, 5, 5],
-    filename: filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
 
-  const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
-  const worker = (window as any).html2pdf().set(opt).from(element);
-
-  if (isAndroidApp) {
-    worker.outputPdf('datauristring').then((pdfBase64: string) => {
-      (window as any).EunamanApp.saveBase64File(pdfBase64, filename, 'application/pdf');
-    }).catch((err: any) => {
-      console.error("Erro ao gerar PDF do Boletim para App:", err);
-      alert("Erro ao salvar PDF: " + err.message);
-    });
-  } else {
-    worker.save();
-  }
+  baixarOuCompartilharPdf(
+    element,
+    filename,
+    `Boletim de Pneus — ${ins.equipamentos?.placa || ''}`,
+    `Boletim de Pneus da placa ${ins.equipamentos?.placa || ''} em ${fmtDataPDF(ins.data_inspecao)}`,
+    modo,
+    { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 } }
+  );
 }

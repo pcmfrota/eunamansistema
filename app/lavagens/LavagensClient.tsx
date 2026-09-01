@@ -24,7 +24,8 @@ import {
   ClipboardList,
   Target,
   Eye,
-  FileDown
+  FileDown,
+  Share2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, getISOWeek, addMonths, subMonths } from 'date-fns'
@@ -965,7 +966,14 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                     className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 transition-all"
                   >
                     <FileDown size={18} />
-                    Baixar Ficha em PDF
+                    Baixar PDF
+                  </button>
+                  <button
+                    onClick={() => gerarFichaLavagemPDF(savedRecord, 'share')}
+                    className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
+                  >
+                    <Share2 size={18} />
+                    Compartilhar
                   </button>
                 </div>
                 <button
@@ -1369,6 +1377,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
           html={gerarHtmlFichaLavagem(savedRecord)}
           onClose={() => setShowModalPreview(false)}
           onDownload={() => gerarFichaLavagemPDF(savedRecord)}
+          onShare={() => gerarFichaLavagemPDF(savedRecord, 'share')}
         />
       )}
 
@@ -1377,6 +1386,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
           html={gerarHtmlFichaLavagem(previewLavagem as any)}
           onClose={() => setPreviewLavagem(null)}
           onDownload={() => gerarFichaLavagemPDF(previewLavagem as any)}
+          onShare={() => gerarFichaLavagemPDF(previewLavagem as any, 'share')}
         />
       )}
     </div>

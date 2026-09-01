@@ -2,6 +2,8 @@
 // (app/pneus/pdfBoletim.ts): monta o HTML da ficha (reaproveitado pela pré-visualização em
 // FichaPreviewModal) e depois converte pra PDF via html2pdf.js.
 
+import { baixarOuCompartilharPdf } from "@/lib/pdf-share";
+
 export type LavagemParaPDF = {
   id: string;
   placa: string;
@@ -132,35 +134,18 @@ export function gerarHtmlFichaLavagem(l: LavagemParaPDF) {
     `;
 }
 
-export function gerarFichaLavagemPDF(l: LavagemParaPDF) {
-  if (!(window as any).html2pdf) {
-    alert("Aguarde o carregamento do gerador de PDF.");
-    return;
-  }
-
+export function gerarFichaLavagemPDF(l: LavagemParaPDF, modo: "download" | "share" = "download") {
   const html = gerarHtmlFichaLavagem(l);
   const element = document.createElement("div");
   element.innerHTML = html;
   const filename = `Lavagem_${l.placa}_${fmtDataPDF(l.data).replace(/\//g, '-')}.pdf`;
-  const opt = {
-    margin: [5, 5, 5, 5],
-    filename: filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
 
-  const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
-  const worker = (window as any).html2pdf().set(opt).from(element);
-
-  if (isAndroidApp) {
-    worker.outputPdf('datauristring').then((pdfBase64: string) => {
-      (window as any).EunamanApp.saveBase64File(pdfBase64, filename, 'application/pdf');
-    }).catch((err: any) => {
-      console.error("Erro ao gerar PDF da Ficha de Lavagem para App:", err);
-      alert("Erro ao salvar PDF: " + err.message);
-    });
-  } else {
-    worker.save();
-  }
+  baixarOuCompartilharPdf(
+    element,
+    filename,
+    `Ficha de Lavagem — ${l.placa}`,
+    `Ficha de Lavagem da placa ${l.placa} em ${fmtDataPDF(l.data)}`,
+    modo,
+    { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true } }
+  );
 }

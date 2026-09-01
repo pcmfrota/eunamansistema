@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Save, AlertCircle, Info, ChevronDown, Camera, FileDown, CheckCircle2, Eye } from 'lucide-react'
+import { X, Save, AlertCircle, Info, ChevronDown, Camera, FileDown, CheckCircle2, Eye, Share2 } from 'lucide-react'
 import { registrarInspecaoCompleta, atualizarInspecao } from './actions'
 import { useFormDraft } from '@/hooks/use-form-draft'
 import { useOffline } from '@/components/offline-provider'
@@ -301,7 +301,14 @@ export default function PneusModal({
                 className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all"
               >
                 <FileDown size={18} />
-                Baixar Ficha em PDF
+                Baixar PDF
+              </button>
+              <button
+                onClick={() => gerarFichaPneusPDF(savedRecord, 'share')}
+                className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
+              >
+                <Share2 size={18} />
+                Compartilhar
               </button>
             </div>
           </div>
@@ -527,6 +534,7 @@ export default function PneusModal({
           html={gerarHtmlFichaPneus(savedRecord)}
           onClose={() => setShowPreview(false)}
           onDownload={() => gerarFichaPneusPDF(savedRecord)}
+          onShare={() => gerarFichaPneusPDF(savedRecord, 'share')}
         />
       )}
     </div>
