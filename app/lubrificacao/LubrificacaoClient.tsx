@@ -312,33 +312,30 @@ export default function LubrificacaoClient() {
     return Math.min(100, Math.round((done / steps) * 100));
   }, [placa, horimetroInicio, horimetroFim, mecanicoResponsavel, checklistLub, checklistGeral, calibragem, fotosAntes, fotosDepois, hasSigMecanico, sigMecanicoBase64]);
 
+  // Converte o campo (opcional) de horímetro pra número, ou undefined se vazio/ inválido
+  const parseHorimetro = (val: string): number | undefined => {
+    if (!val) return undefined;
+    const n = parseFloat(val);
+    return isNaN(n) ? undefined : n;
+  };
+
   // Validação Rigorosa das Regras de Negócio
   const validateForm = (): boolean => {
-    const hInic = parseFloat(horimetroInicio);
-    const hFim = parseFloat(horimetroFim);
-
     if (!placa) {
       alert("Selecione um Equipamento / Placa antes de prosseguir.");
       return false;
     }
-    if (isNaN(hInic) || isNaN(hFim)) {
-      alert("Informe o Horímetro Inicial e o Horímetro Final corretamente.");
-      return false;
-    }
-    if (hFim < hInic) {
-      alert("O Horímetro Final deve ser maior ou igual ao Horímetro Inicial.");
-      return false;
+    // Horímetro Inicial/Final é opcional — se ambos forem informados, valida a consistência.
+    if (horimetroInicio && horimetroFim) {
+      const hInic = parseFloat(horimetroInicio);
+      const hFim = parseFloat(horimetroFim);
+      if (!isNaN(hInic) && !isNaN(hFim) && hFim < hInic) {
+        alert("O Horímetro Final deve ser maior ou igual ao Horímetro Inicial.");
+        return false;
+      }
     }
     if (!mecanicoResponsavel) {
       alert("Informe o Mecânico Responsável pela execução da lubrificação.");
-      return false;
-    }
-    if (fotosAntes.length < 1) {
-      alert("É OBRIGATÓRIO adicionar no mínimo 1 Foto Antes do serviço.");
-      return false;
-    }
-    if (fotosDepois.length < 1) {
-      alert("É OBRIGATÓRIO adicionar no mínimo 1 Foto Depois do serviço.");
       return false;
     }
     if (!hasSigMecanico && !sigMecanicoBase64) {
@@ -385,8 +382,8 @@ export default function LubrificacaoClient() {
         modulo,
         local_servico: localServico,
         cliente,
-        horimetro_inicio: parseFloat(horimetroInicio),
-        horimetro_fim: parseFloat(horimetroFim),
+        horimetro_inicio: parseHorimetro(horimetroInicio),
+        horimetro_fim: parseHorimetro(horimetroFim),
         mecanico_responsavel: mecanicoResponsavel,
         ajudante: ajudante || null,
         checklist_lubrificacao: checklistLub,
@@ -610,7 +607,7 @@ export default function LubrificacaoClient() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">Horímetro Inicial *</label>
+                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">Horímetro Inicial (Opcional)</label>
                 <input
                   type="number"
                   step="0.1"
@@ -622,7 +619,7 @@ export default function LubrificacaoClient() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">Horímetro Final *</label>
+                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">Horímetro Final (Opcional)</label>
                 <input
                   type="number"
                   step="0.1"
@@ -906,7 +903,7 @@ export default function LubrificacaoClient() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-extrabold uppercase text-zinc-700 dark:text-zinc-300">
-                    📷 Fotos Antes (Mín. 1, Máx. 5) *
+                    📷 Fotos Antes (Opcional, Máx. 5)
                   </label>
                   <span className="text-[10px] font-bold text-zinc-400">{fotosAntes.length} / 5</span>
                 </div>
@@ -946,7 +943,7 @@ export default function LubrificacaoClient() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-extrabold uppercase text-zinc-700 dark:text-zinc-300">
-                    📷 Fotos Depois (Mín. 1, Máx. 5) *
+                    📷 Fotos Depois (Opcional, Máx. 5)
                   </label>
                   <span className="text-[10px] font-bold text-zinc-400">{fotosDepois.length} / 5</span>
                 </div>
@@ -1117,8 +1114,8 @@ export default function LubrificacaoClient() {
                       data_registro: new Date().toISOString(),
                       hora_inicio: horaInicio,
                       hora_fim: horaFim,
-                      horimetro_inicio: parseFloat(horimetroInicio),
-                      horimetro_fim: parseFloat(horimetroFim),
+                      horimetro_inicio: parseHorimetro(horimetroInicio),
+                      horimetro_fim: parseHorimetro(horimetroFim),
                       mecanico_responsavel: mecanicoResponsavel,
                       ajudante,
                       local_servico: localServico,
@@ -1151,8 +1148,8 @@ export default function LubrificacaoClient() {
                       data_registro: new Date().toISOString(),
                       hora_inicio: horaInicio,
                       hora_fim: horaFim,
-                      horimetro_inicio: parseFloat(horimetroInicio),
-                      horimetro_fim: parseFloat(horimetroFim),
+                      horimetro_inicio: parseHorimetro(horimetroInicio),
+                      horimetro_fim: parseHorimetro(horimetroFim),
                       mecanico_responsavel: mecanicoResponsavel,
                       ajudante,
                       local_servico: localServico,

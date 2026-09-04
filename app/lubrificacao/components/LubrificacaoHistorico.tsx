@@ -85,9 +85,9 @@ export function LubrificacaoHistorico({
       Modulo: f.modulo,
       "Local Servico": f.local_servico,
       Cliente: f.cliente,
-      "Horimetro Inicial": f.horimetro_inicio,
-      "Horimetro Final": f.horimetro_fim,
-      "Horas Trabalhadas": f.horimetro_fim - f.horimetro_inicio,
+      "Horimetro Inicial": f.horimetro_inicio ?? "",
+      "Horimetro Final": f.horimetro_fim ?? "",
+      "Horas Trabalhadas": f.horimetro_inicio != null && f.horimetro_fim != null ? f.horimetro_fim - f.horimetro_inicio : "",
       "Mecanico Responsavel": f.mecanico_responsavel,
       Ajudante: f.ajudante || "",
       Status: f.status,
@@ -276,8 +276,14 @@ export function LubrificacaoHistorico({
                     <div className="text-[10px] text-zinc-500 truncate max-w-[140px]">{f.local_servico}</div>
                   </td>
                   <td className="px-4 py-3 text-center font-mono font-bold">
-                    <div>{f.horimetro_inicio}h → {f.horimetro_fim}h</div>
-                    <div className="text-[9px] text-emerald-500 font-black">+{f.horimetro_fim - f.horimetro_inicio}h trabalhado</div>
+                    {f.horimetro_inicio != null && f.horimetro_fim != null ? (
+                      <>
+                        <div>{f.horimetro_inicio}h → {f.horimetro_fim}h</div>
+                        <div className="text-[9px] text-emerald-500 font-black">+{f.horimetro_fim - f.horimetro_inicio}h trabalhado</div>
+                      </>
+                    ) : (
+                      <div className="text-zinc-400 text-[10px]">Não informado</div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-bold">{f.mecanico_responsavel}</div>
@@ -376,7 +382,10 @@ export function LubrificacaoHistorico({
                   Ficha de Lubrificação - Placa {selectedFicha.placa}
                 </h3>
                 <p className="text-xs text-zinc-500">
-                  Data: {new Date(selectedFicha.data_registro).toLocaleDateString("pt-BR")} | Horímetro: {selectedFicha.horimetro_inicio}h → {selectedFicha.horimetro_fim}h
+                  Data: {new Date(selectedFicha.data_registro).toLocaleDateString("pt-BR")}
+                  {selectedFicha.horimetro_inicio != null && selectedFicha.horimetro_fim != null && (
+                    <> | Horímetro: {selectedFicha.horimetro_inicio}h → {selectedFicha.horimetro_fim}h</>
+                  )}
                 </p>
               </div>
 

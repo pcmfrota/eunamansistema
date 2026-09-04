@@ -12,8 +12,8 @@ export interface FichaLubrificacao {
   modulo: string;
   local_servico: string;
   cliente: string;
-  horimetro_inicio: number;
-  horimetro_fim: number;
+  horimetro_inicio?: number | null;
+  horimetro_fim?: number | null;
   mecanico_responsavel: string;
   ajudante?: string | null;
   checklist_lubrificacao: any[];
