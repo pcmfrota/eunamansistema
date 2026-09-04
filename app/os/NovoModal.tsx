@@ -758,18 +758,6 @@ export default function OSFormModal({
     // Guard contra duplo clique / duplo submit
     if (isSubmitting.current) return;
 
-    // Fotos de horímetro e km são obrigatórias — validado aqui (antes de tentar salvar,
-    // online ou offline) pra não depender do caminho de erro do servidor, que trata
-    // qualquer falha como "sem conexão" e tentaria salvar offline mesmo sem as fotos.
-    if (!fotoHorimetro) {
-      alert("Tire ou anexe uma foto do horímetro antes de salvar.");
-      return;
-    }
-    if (!fotoKm) {
-      alert("Tire ou anexe uma foto do KM antes de salvar.");
-      return;
-    }
-
     // Horímetro não pode ser menor que o último já lançado pra essa placa.
     const horimetroInformadoRaw = new FormData(e.currentTarget).get("horimetro") as string;
     const horimetroInformado = horimetroInformadoRaw ? parseFloat(horimetroInformadoRaw) : NaN;
@@ -1095,18 +1083,18 @@ export default function OSFormModal({
             </Field>
           </div>
 
-          {/* Fotos obrigatórias do horímetro e do KM */}
+          {/* Fotos opcionais do horímetro e do KM */}
           <div className="grid grid-cols-2 gap-3">
-            <FotoObrigatoria
-              label="Foto do Horímetro *"
+            <FotoOpcional
+              label="Foto do Horímetro (Opcional)"
               url={fotoHorimetro}
               onCapture={() => abrirCamera("horimetro")}
               onClear={() => setFotoHorimetro("")}
               inputId="foto-horimetro-galeria"
               onFileSelect={(dataUrl) => setFotoHorimetro(dataUrl)}
             />
-            <FotoObrigatoria
-              label="Foto do KM *"
+            <FotoOpcional
+              label="Foto do KM (Opcional)"
               url={fotoKm}
               onCapture={() => abrirCamera("km")}
               onClear={() => setFotoKm("")}
@@ -1747,7 +1735,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // Slot de foto único e obrigatório (horímetro / km) — diferente do array "Fotos do
 // Serviço", que é opcional e aceita até 5. Câmera nativa/in-page via onCapture; galeria via
 // input de arquivo direto (comprime no cliente antes de guardar).
-function FotoObrigatoria({ label, url, onCapture, onClear, inputId, onFileSelect }: {
+function FotoOpcional({ label, url, onCapture, onClear, inputId, onFileSelect }: {
   label: string;
   url: string;
   onCapture: () => void;
@@ -1796,7 +1784,7 @@ function FotoObrigatoria({ label, url, onCapture, onClear, inputId, onFileSelect
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-950/10">
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
           <label htmlFor={inputId} className="cursor-pointer text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
             Galeria
           </label>
