@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS public.fichas_lubrificacao (
     modulo TEXT NOT NULL DEFAULT 'BASE',
     local_servico TEXT NOT NULL DEFAULT 'OFICINA BASE',
     cliente TEXT NOT NULL DEFAULT 'SUZANO',
-    horimetro_inicio NUMERIC NOT NULL,
-    horimetro_fim NUMERIC NOT NULL,
+    horimetro_inicio NUMERIC,
+    horimetro_fim NUMERIC,
     mecanico_responsavel TEXT NOT NULL,
     ajudante TEXT,
     checklist_lubrificacao JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS public.fichas_lubrificacao (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+
+-- RLS (padrão do sistema: acesso liberado pra usuários autenticados, controle fica na app)
+ALTER TABLE public.fichas_lubrificacao ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir acesso total temporário" ON public.fichas_lubrificacao FOR ALL USING (true) WITH CHECK (true);
 
 -- Índices de Performance
 CREATE INDEX IF NOT EXISTS idx_fichas_lubrificacao_equipamento ON public.fichas_lubrificacao(equipamento_id);
