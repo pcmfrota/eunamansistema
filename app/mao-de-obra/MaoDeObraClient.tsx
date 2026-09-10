@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Wrench,
   Plus,
@@ -122,6 +123,8 @@ export default function MaoDeObraClient({
 
   const [activeTab, setActiveTab] = useState<"menu" | "form" | "historico" | "dashboard" | "catalogos">("menu");
   const [openMenuFichaId, setOpenMenuFichaId] = useState<string | null>(null);
+  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [showFiltros, setShowFiltros] = useState(false);
   const [fichas, setFichas] = useState<FichaMaoObraItem[]>(initialFichas || []);
   const [apontamentos, setApontamentos] = useState<AtividadeJornada[]>(initialApontamentos || []);
@@ -138,14 +141,28 @@ export default function MaoDeObraClient({
   useEffect(() => { setCatalogos(initialCatalogos || []); }, [initialCatalogos]);
   useEffect(() => { setApontamentosCatalogo(initialApontamentosCatalogo || []); }, [initialApontamentosCatalogo]);
 
-  // Fecha o menu flutuante de ações do Histórico ao pressionar Esc
+  useEffect(() => { setMounted(true); }, []);
+
+  const fecharMenuFicha = () => {
+    setOpenMenuFichaId(null);
+    setMenuAnchorRect(null);
+  };
+
+  // Fecha o menu flutuante de ações do Histórico ao pressionar Esc, rolar a página
+  // ou redimensionar a janela — nesses casos a posição ancorada à linha fica desatualizada.
   useEffect(() => {
     if (!openMenuFichaId) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenMenuFichaId(null);
+      if (e.key === "Escape") fecharMenuFicha();
     };
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", fecharMenuFicha, true);
+    window.addEventListener("resize", fecharMenuFicha);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", fecharMenuFicha, true);
+      window.removeEventListener("resize", fecharMenuFicha);
+    };
   }, [openMenuFichaId]);
 
   // Estados do Formulário (Jornada do Dia)
@@ -1327,7 +1344,14 @@ export default function MaoDeObraClient({
                       return (
                         <tr
                           key={f.id}
-                          onClick={() => setOpenMenuFichaId(prev => prev === f.id ? null : f.id)}
+                          onClick={(e) => {
+                            if (openMenuFichaId === f.id) {
+                              fecharMenuFicha();
+                            } else {
+                              setMenuAnchorRect(e.currentTarget.getBoundingClientRect());
+                              setOpenMenuFichaId(f.id);
+                            }
+                          }}
                           className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer"
                         >
                           <td className="p-3 font-semibold">
@@ -1349,56 +1373,8 @@ export default function MaoDeObraClient({
                               {f.status}
                             </span>
                           </td>
-                          <td className="p-3 text-right relative">
+                          <td className="p-3 text-right">
                             <MoreVertical size={16} className="ml-auto text-slate-400" />
-
-                            {openMenuFichaId === f.id && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={(e) => { e.stopPropagation(); setOpenMenuFichaId(null); }}
-                                />
-                                <div
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="absolute right-3 top-full mt-1 z-50 w-48 py-1.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl text-left"
-                                >
-                                  <button
-                                    onClick={() => { setSelectedFichaForPDF(f); setOpenMenuFichaId(null); }}
-                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                  >
-                                    <Printer size={14} /> Ver / Imprimir
-                                  </button>
-                                  <button
-                                    onClick={() => { handleEditFicha(f); setOpenMenuFichaId(null); }}
-                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                  >
-                                    <Pencil size={14} /> Editar
-                                  </button>
-                                  <button
-                                    onClick={() => { handleDuplicateFicha(f.id); setOpenMenuFichaId(null); }}
-                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                  >
-                                    <Copy size={14} /> Duplicar
-                                  </button>
-                                  {isAdmin && f.status === "Finalizado" && (
-                                    <button
-                                      onClick={() => { handleReabrirJornada(f.id); setOpenMenuFichaId(null); }}
-                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
-                                    >
-                                      <RefreshCcw size={14} /> Reabrir Jornada
-                                    </button>
-                                  )}
-                                  {isAdmin && (
-                                    <button
-                                      onClick={() => { handleDeleteFicha(f.id); setOpenMenuFichaId(null); }}
-                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-                                    >
-                                      <Trash2 size={14} /> Excluir
-                                    </button>
-                                  )}
-                                </div>
-                              </>
-                            )}
                           </td>
                         </tr>
                       );
@@ -1432,6 +1408,73 @@ export default function MaoDeObraClient({
           onApontamentoRemovido={id => setApontamentosCatalogo(prev => prev.filter(c => c.id !== id))}
         />
       )}
+
+      {/* MENU FLUTUANTE DE AÇÕES DO HISTÓRICO — via portal em document.body, ancorado à
+          linha clicada e reposicionado com position: fixed. Assim ele nunca fica preso
+          (cortado) pelo overflow-hidden/overflow-x-auto do card da tabela, mesmo quando a
+          linha clicada é a última visível: nesse caso ele abre para cima em vez de para baixo. */}
+      {openMenuFichaId && menuAnchorRect && mounted && typeof document !== "undefined" && (() => {
+        const f = fichasFiltradas.find(x => x.id === openMenuFichaId);
+        if (!f) return null;
+
+        const MENU_WIDTH = 192;
+        const MENU_HEIGHT_ESTIMATE = 220;
+        const MARGIN = 8;
+        const abrirParaCima = menuAnchorRect.bottom + MENU_HEIGHT_ESTIMATE > window.innerHeight;
+        const top = abrirParaCima
+          ? Math.max(MARGIN, menuAnchorRect.top - MENU_HEIGHT_ESTIMATE)
+          : menuAnchorRect.bottom + 4;
+        const left = Math.min(
+          Math.max(MARGIN, menuAnchorRect.right - MENU_WIDTH),
+          window.innerWidth - MENU_WIDTH - MARGIN
+        );
+
+        return createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={fecharMenuFicha} />
+            <div
+              style={{ position: "fixed", top, left, width: MENU_WIDTH }}
+              className="z-50 py-1.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl text-left"
+            >
+              <button
+                onClick={() => { setSelectedFichaForPDF(f); fecharMenuFicha(); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <Printer size={14} /> Ver / Imprimir
+              </button>
+              <button
+                onClick={() => { handleEditFicha(f); fecharMenuFicha(); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <Pencil size={14} /> Editar
+              </button>
+              <button
+                onClick={() => { handleDuplicateFicha(f.id); fecharMenuFicha(); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <Copy size={14} /> Duplicar
+              </button>
+              {isAdmin && f.status === "Finalizado" && (
+                <button
+                  onClick={() => { handleReabrirJornada(f.id); fecharMenuFicha(); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
+                >
+                  <RefreshCcw size={14} /> Reabrir Jornada
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => { handleDeleteFicha(f.id); fecharMenuFicha(); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                >
+                  <Trash2 size={14} /> Excluir
+                </button>
+              )}
+            </div>
+          </>,
+          document.body
+        );
+      })()}
 
       {/* MODAL DE EXIBIÇÃO / GERAÇÃO DE RELATÓRIO */}
       {selectedFichaForPDF && (
