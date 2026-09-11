@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer, Clock } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type OSFichaData = {
@@ -17,6 +18,9 @@ export type OSFichaData = {
   horas_manutencao: number | null;
   descricao: string | null;
   horimetro: number | null;
+  km?: number | null;
+  foto_horimetro?: string | null;
+  foto_km?: string | null;
   operacao_tipo: string | null;
   local: string | null;
   classe: string | null;
@@ -32,6 +36,10 @@ export type OSFichaData = {
   equipamento_id: string;
   horas_impacto_do?: number;
   mecanicos?: string[] | null;
+  created_by_nome?: string | null;
+  aprovado?: boolean | null;
+  aprovado_por_nome?: string | null;
+  aprovado_em?: string | null;
   // Pode ser JSON array de strings (novo) ou string simples (antigo)
   assinatura_mecanico?: string | null;
   fotos?: string[] | null;
@@ -378,7 +386,25 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
             ${rows("Módulo / Operação", os.modulo ? `${os.modulo}${os.operacao_tipo ? ` — ${os.operacao_tipo}` : ''}` : os.operacao_tipo || "—")}
             ${rows("Local", os.local || "—")}
             ${rows("Horímetro", os.horimetro != null ? String(os.horimetro) : "—")}
+            ${rows("KM", os.km != null ? String(os.km) : "—")}
           </div>
+          ${(os.foto_horimetro || os.foto_km) ? `
+          <div style="display:flex;gap:8px;padding:0 10px 8px 10px;">
+            ${os.foto_horimetro ? `
+              <div style="flex:1;">
+                <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin:0 0 3px 0;">Foto do Horímetro</p>
+                <div style="border:1px solid #e2e8f0;border-radius:4px;overflow:hidden;height:90px;background:#000;display:flex;align-items:center;justify-content:center;">
+                  <img src="${os.foto_horimetro}" style="max-width:100%;max-height:100%;object-fit:cover;" />
+                </div>
+              </div>` : ''}
+            ${os.foto_km ? `
+              <div style="flex:1;">
+                <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin:0 0 3px 0;">Foto do KM</p>
+                <div style="border:1px solid #e2e8f0;border-radius:4px;overflow:hidden;height:90px;background:#000;display:flex;align-items:center;justify-content:center;">
+                  <img src="${os.foto_km}" style="max-width:100%;max-height:100%;object-fit:cover;" />
+                </div>
+              </div>` : ''}
+          </div>` : ''}
         </div>
 
         <!-- Datas -->
@@ -391,6 +417,17 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
             ${rows("Tempo Total", horasCalc, true, true)}
           </div>
         </div>
+
+        <!-- Lançamento e Validação Interna -->
+        ${(os.created_by_nome || os.aprovado != null) ? `
+        <div style="border-bottom:1px solid #111;">
+          ${secTitle("Lançamento e Validação Interna")}
+          <div style="display:flex;padding:8px 2px 4px 2px;">
+            ${os.created_by_nome ? rows("Lançado por", os.created_by_nome) : ""}
+            ${os.aprovado != null ? rows("Status de Validação", os.aprovado ? "✅ Validada" : "⏳ Pendente de Validação", true, !!os.aprovado) : ""}
+            ${(os.aprovado && os.aprovado_por_nome) ? rows("Validado por", `${os.aprovado_por_nome}${os.aprovado_em ? ` em ${fmtDT(os.aprovado_em)}` : ""}`) : ""}
+          </div>
+        </div>` : ''}
 
         <!-- Classificação -->
         <div style="border-bottom:1px solid #111;">
@@ -518,10 +555,13 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
 
       const html2pdf = (window as any).html2pdf;
       if (!html2pdf) {
-        const t = setTimeout(() => {
-          setMinutosDO((prev) => (prev !== null ? prev : 0));
-        }, 300);
-        return () => clearTimeout(t);
+        // Mesmo aviso usado nos outros módulos (Captação, Lavagens etc.) quando o
+        // script do gerador de PDF ainda não terminou de carregar — antes, aqui na OS,
+        // esse caso ficava mudo (não gerava PDF nem avisava nada), então o clique
+        // parecia simplesmente não ter feito nada.
+        alert("Biblioteca de PDF ainda carregando. Aguarde alguns segundos e tente novamente.");
+        onClose();
+        return;
       }
 
       // Mostra o spinner ANTES de iniciar o processamento pesado
@@ -529,117 +569,36 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
 
       // Usa rAF + setTimeout para garantir que o React renderize o overlay
       // antes de bloquear a thread com html2canvas
-      const runPdf = () => {
+      const runPdf = async () => {
         const element = document.getElementById("ficha-os-print");
+        const filename = `OS_${os.numero_os}.pdf`;
         const opt = {
           margin:       [5, 5, 5, 5],
-          filename:     `OS_${os.numero_os}.pdf`,
+          filename,
           image:        { type: 'jpeg', quality: 0.92 },
           html2canvas:  { scale: 1.5, useCORS: true, logging: false },
           jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        const isAndroidApp = typeof window !== "undefined" && (window as any).EunamanApp && typeof (window as any).EunamanApp.saveBase64File === "function";
-
-        if (pdfAction === "download") {
-          const worker = html2pdf().set(opt).from(element);
-          if (isAndroidApp) {
-            worker.outputPdf('datauristring').then((pdfBase64: string) => {
-              (window as any).EunamanApp.saveBase64File(pdfBase64, opt.filename, 'application/pdf');
-              setIsExporting(false);
-              onClose();
-            }).catch((err: any) => {
-              console.error("Erro ao gerar PDF da OS para App:", err);
-              setIsExporting(false);
-              onClose();
-              alert("Erro ao salvar PDF: " + err.message);
-            });
-          } else {
-            worker.save()
-              .then(() => {
-                setIsExporting(false);
-                onClose();
-              })
-              .catch((err: any) => {
-                console.error("Erro ao gerar PDF:", err);
-                setIsExporting(false);
-                onClose();
-              });
-          }
-        } else if (pdfAction === "share") {
-          const worker = html2pdf().set(opt).from(element);
-          if (isAndroidApp) {
-            worker.outputPdf('datauristring').then(async (pdfBase64: string) => {
-              // Salva localmente primeiro
-              (window as any).EunamanApp.saveBase64File(pdfBase64, opt.filename, 'application/pdf');
-              
-              // E tenta compartilhar se o navigator.share estiver disponível
-              try {
-                const cleanBase64 = pdfBase64.includes(",") ? pdfBase64.split(",")[1] : pdfBase64;
-                const binaryStr = atob(cleanBase64);
-                const len = binaryStr.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                  bytes[i] = binaryStr.charCodeAt(i);
-                }
-                const blob = new Blob([bytes], { type: "application/pdf" });
-                const file = new File([blob], opt.filename, { type: "application/pdf" });
-                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                  await navigator.share({
-                    files: [file],
-                    title: `OS ${os.numero_os}`,
-                    text: `Ficha da Ordem de Serviço ${os.numero_os}`
-                  });
-                }
-              } catch (shareErr) {
-                console.log("Compartilhamento pelo App falhou ou cancelado:", shareErr);
-              }
-              
-              setIsExporting(false);
-              onClose();
-            }).catch((err: any) => {
-              console.error("Erro ao compartilhar PDF no App:", err);
-              setIsExporting(false);
-              onClose();
-            });
-          } else {
-            worker.toPdf()
-              .output("blob")
-              .then(async (blob: Blob) => {
-                // 1. Baixar localmente primeiro
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = opt.filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                // 2. Compartilhar
-                const file = new File([blob], opt.filename, { type: "application/pdf" });
-                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                  try {
-                    await navigator.share({
-                      files: [file],
-                      title: `OS ${os.numero_os}`,
-                      text: `Ficha da Ordem de Serviço ${os.numero_os}`
-                    });
-                  } catch (shareErr) {
-                    console.log("Compartilhamento cancelado ou falhou:", shareErr);
-                  }
-                } else {
-                  alert("Compartilhamento não suportado neste dispositivo. O arquivo foi apenas baixado.");
-                }
-                setIsExporting(false);
-                onClose();
-              })
-              .catch((err: any) => {
-                console.error("Erro ao compartilhar PDF:", err);
-                setIsExporting(false);
-                onClose();
-              });
-          }
+        try {
+          // Mesmo utilitário usado pra compartilhar a ficha em PDF (WhatsApp etc.) em
+          // Mão de Obra, Pneus, Lavagens, Lubrificação e Captação — antes a OS tinha sua
+          // própria lógica duplicada de baixar+compartilhar, que só chegava a enviar o
+          // texto (número da OS) sem o arquivo em alguns dispositivos/apps.
+          const blob: Blob = await html2pdf().set(opt).from(element).toPdf().output("blob");
+          await salvarOuCompartilharBlob(
+            blob,
+            filename,
+            `OS ${os.numero_os}`,
+            `Ficha da Ordem de Serviço ${os.numero_os}`,
+            pdfAction as "download" | "share"
+          );
+        } catch (err: any) {
+          console.error("Erro ao gerar/compartilhar PDF da OS:", err);
+          alert("Erro ao gerar o PDF da OS: " + (err?.message || String(err)));
+        } finally {
+          setIsExporting(false);
+          onClose();
         }
       };
 
@@ -743,7 +702,7 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
                     Identificação do Equipamento
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-3 py-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 px-3 py-2">
                     <FP label="Placa" value={placa} bold />
                     <FP
                       label="Módulo / Operação"
@@ -755,7 +714,32 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                     />
                     <FP label="Local" value={os.local || "—"} />
                     <FP label="Horímetro" value={os.horimetro != null ? String(os.horimetro) : "—"} />
+                    <FP label="KM" value={os.km != null ? String(os.km) : "—"} />
                   </div>
+                  {(os.foto_horimetro || os.foto_km) && (
+                    <div className="grid grid-cols-2 gap-3 px-3 pb-2">
+                      {os.foto_horimetro && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[8px] text-gray-500 uppercase tracking-wider font-semibold">
+                            Foto do Horímetro
+                          </label>
+                          <div className="h-20 rounded-md overflow-hidden border border-gray-300 bg-black flex items-center justify-center">
+                            <img src={os.foto_horimetro} alt="Foto do Horímetro" className="max-w-full max-h-full object-cover" />
+                          </div>
+                        </div>
+                      )}
+                      {os.foto_km && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[8px] text-gray-500 uppercase tracking-wider font-semibold">
+                            Foto do KM
+                          </label>
+                          <div className="h-20 rounded-md overflow-hidden border border-gray-300 bg-black flex items-center justify-center">
+                            <img src={os.foto_km} alt="Foto do KM" className="max-w-full max-h-full object-cover" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Bloco 2 — Datas e Tempos ── */}
@@ -772,6 +756,32 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                     <FP label="Tempo Total" value={horasCalc} bold highlight />
                   </div>
                 </div>
+
+                {/* ── Bloco Novo — Lançamento e Validação Interna ── */}
+                {(os.created_by_nome || os.aprovado != null) && (
+                  <div className="border-b border-gray-900">
+                    <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
+                      Lançamento e Validação Interna
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 px-3 py-2">
+                      {os.created_by_nome && <FP label="Lançado por" value={os.created_by_nome} />}
+                      {os.aprovado != null && (
+                        <FP
+                          label="Status de Validação"
+                          value={os.aprovado ? "✅ Validada" : "⏳ Pendente de Validação"}
+                          bold
+                          highlight={!!os.aprovado}
+                        />
+                      )}
+                      {os.aprovado && os.aprovado_por_nome && (
+                        <FP
+                          label="Validado por"
+                          value={`${os.aprovado_por_nome}${os.aprovado_em ? ` em ${fmtDT(os.aprovado_em)}` : ""}`}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Bloco 3 — Classificação ── */}
                 <div className="border-b border-gray-900">
