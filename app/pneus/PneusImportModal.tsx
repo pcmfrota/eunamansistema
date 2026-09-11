@@ -14,14 +14,12 @@ import {
 } from 'lucide-react'
 import { importarInspecoesPneus } from './actions'
 
-interface PreviewRow {
+const POSICOES = ["de", "dd", "tei", "tee", "tdi", "tde", "tei1", "tee1", "tdi1", "tde1", "estepe"] as const
+
+interface PreviewRow extends Record<string, any> {
   placa: string
   data_inspecao: string
   km_atual: number | null
-  de: number | null; dd: number | null
-  tei: number | null; tee: number | null; tdi: number | null; tde: number | null
-  tei1: number | null; tee1: number | null; tdi1: number | null; tde1: number | null
-  estepe: number | null
   condicao: string
   observacoes: string
   _ok: boolean
@@ -40,6 +38,19 @@ const COL_ALIASES: Record<string, string> = {
   condicao: "condicao", "condição": "condicao", condition: "condicao", cond: "condicao",
   observacoes: "observacoes", "observações": "observacoes", obs: "observacoes",
 }
+
+// Colunas opcionais de Sulco 1 (lado direito) e Sulco 3 (lado esquerdo) de cada posição —
+// além do valor único já suportado (que sempre foi o Sulco 2 / meio). Ex: coluna "DE (D)"
+// vira de_s1, "DE (E)" vira de_s3. Sem essas colunas, só o valor do meio é importado, como
+// já acontecia antes de o boletim ganhar a medição em 3 pontos.
+POSICOES.forEach(pos => {
+  COL_ALIASES[`${pos} d`] = `${pos}_s1`;
+  COL_ALIASES[`${pos} direito`] = `${pos}_s1`;
+  COL_ALIASES[`${pos} lado direito`] = `${pos}_s1`;
+  COL_ALIASES[`${pos} e`] = `${pos}_s3`;
+  COL_ALIASES[`${pos} esquerdo`] = `${pos}_s3`;
+  COL_ALIASES[`${pos} lado esquerdo`] = `${pos}_s3`;
+});
 
 function normalizeKey(k: string) {
   return k.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "").trim();
@@ -107,19 +118,20 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
       const placa = String(get("placa")).trim().toUpperCase()
       const data_inspecao = normalizeDate(get("data_inspecao"))
       const ok = !!placa && !!data_inspecao
-      return {
+
+      const preview: PreviewRow = {
         placa, data_inspecao, km_atual: parseNum(get("km_atual")),
-        de: parseNum(get("de")), dd: parseNum(get("dd")),
-        tei: parseNum(get("tei")), tee: parseNum(get("tee")),
-        tdi: parseNum(get("tdi")), tde: parseNum(get("tde")),
-        tei1: parseNum(get("tei1")), tee1: parseNum(get("tee1")),
-        tdi1: parseNum(get("tdi1")), tde1: parseNum(get("tde1")),
-        estepe: parseNum(get("estepe")),
         condicao: String(get("condicao")).trim().toUpperCase() || "BOM",
         observacoes: String(get("observacoes")).trim(),
         _ok: ok,
         _err: !ok ? (!placa ? "Placa ausente" : "Data ausente") : undefined,
       }
+      POSICOES.forEach(pos => {
+        preview[pos] = parseNum(get(pos));
+        preview[`${pos}_s1`] = parseNum(get(`${pos}_s1`));
+        preview[`${pos}_s3`] = parseNum(get(`${pos}_s3`));
+      });
+      return preview
     })
   }
 
@@ -171,7 +183,7 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
   const downloadTemplate = () => {
     if (!XLSX) return
     const ws = XLSX.utils.json_to_sheet([
-      { 'Placa': 'ABC1234', 'Data': '2024-03-20', 'Km': 15000, 'DE': 12, 'DD': 12, 'Condicao': 'BOM', 'Obs': 'Nova' }
+      { 'Placa': 'ABC1234', 'Data': '2024-03-20', 'Km': 15000, 'DE': 12, 'DE (D)': 12, 'DE (E)': 11, 'DD': 12, 'Condicao': 'BOM', 'Obs': 'Nova' }
     ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
@@ -255,6 +267,7 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
                      <li>Use o formato <b>AAAA-MM-DD</b> para datas.</li>
                      <li>A coluna <b>Placa</b> deve ser idêntica ao cadastro da frota.</li>
                      <li>As colunas de sulco (DE, DD, etc) aceitam números decimais (ex: 8.5).</li>
+                     <li>Opcional: colunas <b>"DE (D)"</b> e <b>"DE (E)"</b> (idem para as outras posições) registram o sulco do lado direito e esquerdo — sem elas, só o valor do meio é salvo.</li>
                    </ul>
                  </div>
               </div>

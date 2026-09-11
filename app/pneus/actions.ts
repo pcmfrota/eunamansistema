@@ -70,7 +70,8 @@ export async function registrarInspecaoPneu(formData: FormData) {
 
 export async function importarInspecoesPneus(rows: any[]) {
   try {
-    const result = await PneusService.import(rows);
+    const usuario = await getUsuarioAtual();
+    const result = await PneusService.import(rows, usuario);
     revalidatePath('/pneus');
     revalidatePath('/');
     return result;

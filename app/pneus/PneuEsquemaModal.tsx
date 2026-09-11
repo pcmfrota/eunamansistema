@@ -1,18 +1,33 @@
 "use client";
 
 import React from "react";
-import { X, Calendar, Gauge, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { X, Calendar, Gauge, AlertTriangle, CheckCircle, Clock, FileDown, Share2 } from "lucide-react";
+import { gerarFichaPneusPDF } from "./pdfBoletim";
 
 type Inspecao = {
   id: string;
   equipamento_id: string;
   data_inspecao: string;
+  created_at?: string | null;
   km_atual: number | null;
   de: number | null; dd: number | null;
   tei: number | null; tee: number | null; tdi: number | null; tde: number | null;
   tei1: number | null; tee1: number | null; tdi1: number | null; tde1: number | null;
   estepe: number | null;
+  // Sulco 1 (lado direito) e Sulco 3 (lado esquerdo) de cada posição — usados na ficha em PDF.
+  de_s1?: number | null; de_s3?: number | null;
+  dd_s1?: number | null; dd_s3?: number | null;
+  tei_s1?: number | null; tei_s3?: number | null;
+  tee_s1?: number | null; tee_s3?: number | null;
+  tdi_s1?: number | null; tdi_s3?: number | null;
+  tde_s1?: number | null; tde_s3?: number | null;
+  tei1_s1?: number | null; tei1_s3?: number | null;
+  tee1_s1?: number | null; tee1_s3?: number | null;
+  tdi1_s1?: number | null; tdi1_s3?: number | null;
+  tde1_s1?: number | null; tde1_s3?: number | null;
+  estepe_s1?: number | null; estepe_s3?: number | null;
   condicao: string;
+  registrado_por_nome?: string | null;
   equipamentos?: { placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null };
 };
 
@@ -303,17 +318,34 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+        <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-3 flex-wrap shrink-0">
+          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2 flex-wrap">
             <Clock size={11} />
             Inspeção: {fmtDate(ins.data_inspecao)}
+            <span className="normal-case font-semibold text-zinc-400">
+              · Registrado por {ins.registrado_por_nome || "—"}
+            </span>
           </div>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-          >
-            Fechar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => gerarFichaPneusPDF(ins)}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            >
+              <FileDown size={14} /> Baixar PDF
+            </button>
+            <button
+              onClick={() => gerarFichaPneusPDF(ins, "share")}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            >
+              <Share2 size={14} /> Compartilhar
+            </button>
+            <button
+              onClick={onClose}
+              className="px-5 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       </div>
     </div>

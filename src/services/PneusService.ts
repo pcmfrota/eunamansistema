@@ -43,7 +43,7 @@ export class PneusService {
     return { success: true };
   }
 
-  static async import(rows: any[]) {
+  static async import(rows: any[], usuario: { registrado_por: string | null; registrado_por_nome: string | null } = { registrado_por: null, registrado_por_nome: null }) {
     const { data: eqs } = await EquipamentoRepository.list();
     const eqMap: Record<string, { id: string; ultimoHist: number | null }> = {};
     for (const e of eqs || []) eqMap[e.placa.toUpperCase()] = { id: e.id, ultimoHist: e.ultimoHist };
@@ -92,6 +92,11 @@ export class PneusService {
 
       for (const [pos, aliases] of Object.entries(posAliases)) {
         posicoes[pos] = this.parseFloatSafe(this.getVal(row, aliases));
+        // Sulco 1 (lado direito) e Sulco 3 (lado esquerdo) — opcionais, só vêm preenchidos
+        // quando a linha já passou pelo parser de planilha (PneusImportModal), que aceita
+        // colunas extras "<POS> (D)"/"<POS> (E)" além do valor único do meio.
+        posicoes[`${pos}_s1`] = this.parseFloatSafe(row[`${pos}_s1`]);
+        posicoes[`${pos}_s3`] = this.parseFloatSafe(row[`${pos}_s3`]);
       }
 
       const condicaoFallback = this.calcCondicao(posicoes);
@@ -104,6 +109,7 @@ export class PneusService {
         observacoes: this.getVal(row, ['observacoes', 'Observações', 'Notas']),
         condicao,
         ...posicoes,
+        ...usuario,
       });
     }
 
