@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import {
   BarChart,
   Bar,
@@ -15,8 +17,9 @@ import {
   Legend,
   LabelList
 } from "recharts";
-import { BarChart2, Clock, Users, TrendingUp, ClipboardList } from "lucide-react";
+import { BarChart2, Clock, Users, TrendingUp, ClipboardList, Download, Loader2 } from "lucide-react";
 import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
+import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 
 const PRODUTIVO_COLOR = "#4f46e5"; // indigo — paleta padrão do projeto
@@ -78,6 +81,10 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
   const [filterColaborador, setFilterColaborador] = useState("");
+  const [exportandoPdf, setExportandoPdf] = useState(false);
+  // Envolve todo o conteúdo do relatório (KPIs + gráficos + tabelas) — é essa área que vira
+  // a imagem capturada pelo html2canvas na exportação em PDF, sem incluir a barra de filtros.
+  const reportRef = useRef<HTMLDivElement>(null);
   // Filtro exclusivo da seção "Atividades e Observações" abaixo — não afeta os gráficos
   // acima, só o detalhamento apontamento-por-apontamento (junto com o colaborador, permite
   // abrir exatamente o dia de um único colaborador).
@@ -358,6 +365,70 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   const selectCls =
     "px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none";
 
+  // Baixa o dashboard inteiro (KPIs + todos os gráficos + tabelas, exatamente como está na
+  // tela, já filtrado) em PDF — tira uma "foto" real do layout renderizado (html2canvas) e
+  // encaixa em página(s) A4 (jsPDF), quebrando em várias páginas quando o conteúdo é mais
+  // alto que uma folha.
+  const handleExportarPdf = async () => {
+    if (!reportRef.current) return;
+    setExportandoPdf(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        // As tabelas de Ranking e de Atividades/Observações têm altura limitada com scroll
+        // na tela (max-h + overflow-y-auto) — sem isso, o PDF sairia cortado, mostrando só
+        // a fatia visível. Expande essas duas só no clone usado pra captura.
+        onclone: (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll<HTMLElement>('[data-pdf-expand="true"]').forEach(el => {
+            el.style.maxHeight = "none";
+            el.style.overflow = "visible";
+          });
+        }
+      });
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const periodoLabel = periodoPersonalizadoAtivo
+        ? `${filtroDataInicio.split("-").reverse().join("-")}_a_${filtroDataFim.split("-").reverse().join("-")}`
+        : `${filterMes}_${filterAno}`;
+      const filename = `Dashboard_Mao_de_Obra_${periodoLabel}.pdf`;
+      const blob: Blob = pdf.output("blob");
+
+      await salvarOuCompartilharBlob(
+        blob,
+        filename,
+        "Dashboard de Mão de Obra",
+        `Dashboard de Mão de Obra — período ${periodoLabel}`,
+        "download"
+      );
+    } catch (err) {
+      console.error("Erro ao gerar PDF do dashboard:", err);
+      alert("Erro ao gerar o PDF do dashboard.");
+    } finally {
+      setExportandoPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -416,12 +487,25 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           )}
         </div>
 
-        <span className="text-[10px] text-slate-400 font-semibold ml-auto">
+        <span className="text-[10px] text-slate-400 font-semibold">
           {periodoPersonalizadoAtivo ? "Período personalizado: " : "Período: "}
           {selectedPeriodo.data_inicio?.split("-").reverse().join("/")} — {selectedPeriodo.data_fim?.split("-").reverse().join("/")}
         </span>
+
+        <button
+          type="button"
+          onClick={handleExportarPdf}
+          disabled={exportandoPdf}
+          className="ml-auto flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {exportandoPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          {exportandoPdf ? "Gerando PDF..." : "Baixar PDF"}
+        </button>
       </div>
 
+      {/* A partir daqui é o que entra na exportação em PDF (handleExportarPdf) — KPIs,
+          todos os gráficos e as tabelas, exatamente como aparecem na tela e já filtrados. */}
+      <div ref={reportRef} className="space-y-6 bg-slate-50 dark:bg-slate-950">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
         <KpiCard label="Jornadas Finalizadas" value={kpis.finalizadas} color="text-slate-900 dark:text-white" />
@@ -442,19 +526,19 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           <div className="h-64 w-full">
             {dadosPorDia.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dadosPorDia}>
+                <BarChart data={dadosPorDia} barCategoryGap="35%">
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis dataKey="data" stroke="#888888" fontSize={10} />
                   <YAxis stroke="#888888" fontSize={10} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]}>
+                  <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]} maxBarSize={70}>
                     <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
                   </Bar>
-                  <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={[0, 0, 0, 0]}>
+                  <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={[0, 0, 0, 0]} maxBarSize={70}>
                     <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
                   </Bar>
-                  <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]} maxBarSize={70}>
                     <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
                   </Bar>
                 </BarChart>
@@ -623,7 +707,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
             <Users size={14} /> Ranking por Colaborador
           </h3>
           {ranking.length > 0 ? (
-            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+            <div data-pdf-expand="true" className="overflow-x-auto max-h-64 overflow-y-auto">
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase sticky top-0">
                   <tr>
@@ -699,7 +783,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
 
         <div className="p-4">
           {apontamentosDetalhados.length > 0 ? (
-            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <div data-pdf-expand="true" className="overflow-x-auto max-h-96 overflow-y-auto">
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase sticky top-0">
                   <tr>
@@ -729,6 +813,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
             <p className="text-xs text-slate-400 italic">Nenhum apontamento encontrado para os filtros selecionados.</p>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
