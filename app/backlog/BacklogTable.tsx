@@ -191,7 +191,7 @@ export default function BacklogTable({
                        </div>
                     </td>
                     <td className="px-4 py-4 max-w-xs">
-                       <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 line-clamp-1">{item.descricao}</p>
+                       <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 line-clamp-1" title={item.descricao}>{item.descricao}</p>
                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                          <span className="text-[10px] text-zinc-400 opacity-60 font-medium">{item.tipo}</span>
                          {item.colaborador && (
@@ -223,7 +223,7 @@ export default function BacklogTable({
                                 </span>
                               )}
                             </span>
-                             <p className="text-[10px] font-bold text-zinc-400 line-clamp-1 max-w-[200px]">{item.descricao}</p>
+                             <p className="text-[10px] font-bold text-zinc-400 line-clamp-1 max-w-[200px]" title={item.descricao}>{item.descricao}</p>
                              {item.colaborador && (
                                <p className="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-tight mt-0.5">👤 {item.colaborador}</p>
                              )}
