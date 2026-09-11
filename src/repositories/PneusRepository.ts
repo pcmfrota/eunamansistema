@@ -5,7 +5,7 @@ import { registrarExclusao, registrarExclusoesEmLote } from '@/lib/audit-log'
 export class PneusRepository {
   static async list() {
     const supabase = createClient()
-    return await supabase.from('inspecoes_pneus').select('*, equipamentos(placa)')
+    return await supabase.from('inspecoes_pneus').select('*, equipamentos(placa, tipo, modulo, categoria)')
       .order('data_inspecao', { ascending: false })
       .order('created_at', { ascending: false })
   }
@@ -15,7 +15,7 @@ export class PneusRepository {
     // .select().single() pra devolver o registro salvo (com id gerado e nome de quem
     // registrou) — usado pra gerar a ficha em PDF logo após o registro, sem precisar
     // de uma segunda consulta.
-    return await supabase.from('inspecoes_pneus').insert(data).select('*, equipamentos(placa, tipo)').single()
+    return await supabase.from('inspecoes_pneus').insert(data).select('*, equipamentos(placa, tipo, modulo, categoria)').single()
   }
 
   static async createMany(data: InspecaoPneuInsert[]) {
@@ -25,7 +25,7 @@ export class PneusRepository {
 
   static async update(id: string, data: InspecaoPneuUpdate) {
     const supabase = createClient()
-    return await supabase.from('inspecoes_pneus').update(data).eq('id', id).select('*, equipamentos(placa, tipo)').single()
+    return await supabase.from('inspecoes_pneus').update(data).eq('id', id).select('*, equipamentos(placa, tipo, modulo, categoria)').single()
   }
 
   static async delete(id: string) {

@@ -1,7 +1,9 @@
 // Geração da Ficha em PDF do Boletim de Pneus — compartilhada entre a Lista/Histórico
-// (reimprimir um boletim já lançado) e o PneusModal (baixar a ficha logo após registrar).
-// Preenche os 3 sulcos (direito/meio/esquerdo) de cada posição, além de quem registrou e
-// a data/hora do lançamento.
+// (reimprimir um boletim já lançado), o PneuEsquemaModal (baixar/compartilhar a partir do
+// esquema do veículo) e o PneusModal (baixar a ficha logo após registrar).
+// Preenche os 3 sulcos (direito/meio/esquerdo) de cada posição num esquema por eixo e numa
+// tabela completa (sempre as 11 posições, mesmo vazias), além de quem registrou, módulo, KM
+// e observações — nada fica de fora só porque a posição não tem leitura.
 
 import { baixarOuCompartilharPdf } from "@/lib/pdf-share";
 
@@ -10,7 +12,9 @@ export type InspecaoParaPDF = {
   data_inspecao: string;
   created_at?: string | null;
   condicao: string;
-  equipamentos?: { placa?: string | null; tipo?: string | null } | null;
+  km_atual?: number | null;
+  observacoes?: string | null;
+  equipamentos?: { placa?: string | null; tipo?: string | null; modulo?: string | null; categoria?: string | null } | null;
   registrado_por_nome?: string | null;
   de?: number | null;   de_s1?: number | null;   de_s3?: number | null;
   dd?: number | null;   dd_s1?: number | null;   dd_s3?: number | null;
@@ -41,186 +45,170 @@ function fmtHoraPDF(dateStr?: string | null) {
 }
 
 function celulaSulco(v?: number | null) {
-  return v != null ? String(v) : '';
+  return v != null ? String(v) : '—';
 }
+
+// Mesma faixa de cor usada no esquema em tela (PneuEsquemaModal) — < 3mm trocar, 3-5 crítico,
+// 6-9 atenção, ≥10 bom — pro PDF refletir visualmente a mesma leitura do app.
+function corSulco(v: number | null): string {
+  if (v == null) return "#d4d4d8";
+  if (v < 3) return "#ef4444";
+  if (v <= 5) return "#fb923c";
+  if (v <= 9) return "#facc15";
+  return "#10b981";
+}
+
+function corCondicao(condicao: string): { bg: string; text: string } {
+  if (condicao === "CRITICO" || condicao === "TROCAR") return { bg: "#fee2e2", text: "#b91c1c" };
+  if (condicao === "REGULAR" || condicao === "ATENCAO") return { bg: "#fef9c3", text: "#a16207" };
+  return { bg: "#dcfce7", text: "#166534" };
+}
+
+// Uma posição do esquema — mostra os 3 sulcos (D/M/E) empilhados dentro de uma caixinha
+// colorida pelo pior valor, igual à leitura já usada no esquema em tela e no dashboard.
+function caixaPosicao(label: string, s1: number | null | undefined, s2: number | null | undefined, s3: number | null | undefined) {
+  const vals = [s1, s2, s3].filter((v): v is number => v != null);
+  const pior = vals.length ? Math.min(...vals) : null;
+  const preenchida = vals.length > 0;
+  const bg = corSulco(pior);
+  return `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="width:44px;padding:3px 1px;border-radius:6px;text-align:center;
+        ${preenchida ? `background:${bg};color:#fff;border:1px solid ${bg};` : 'background:#fafafa;color:#a1a1aa;border:1px dashed #d4d4d8;'}">
+        <div style="font-size:7px;font-weight:900;line-height:1.3;">${celulaSulco(s1)}/${celulaSulco(s2)}/${celulaSulco(s3)}</div>
+      </div>
+      <span style="font-size:7px;font-weight:900;color:#52525b;letter-spacing:0.5px;">${label}</span>
+    </div>
+  `;
+}
+
+const barraEixo = `<div style="width:26px;height:3px;background:#d4d4d8;border-radius:2px;"></div>`;
 
 // Monta o HTML da ficha — usado tanto pra gerar o PDF quanto pra pré-visualizar antes de
 // baixar (FichaPreviewModal renderiza esse mesmo markup dentro de um modal).
 export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
+  const placa = ins.equipamentos?.placa || '—';
+  const modulo = ins.equipamentos?.modulo || '—';
+  const funcionario = ins.registrado_por_nome || '—';
+  const cond = corCondicao(ins.condicao);
+
+  const hasEixo2 = ins.tei1 != null || ins.tee1 != null || ins.tdi1 != null || ins.tde1 != null
+    || ins.tei1_s1 != null || ins.tee1_s1 != null || ins.tdi1_s1 != null || ins.tde1_s1 != null
+    || ins.tei1_s3 != null || ins.tee1_s3 != null || ins.tdi1_s3 != null || ins.tde1_s3 != null;
+
+  const posicoes = [
+    { lbl: 'DE', s1: ins.de_s1, s2: ins.de, s3: ins.de_s3 },
+    { lbl: 'DD', s1: ins.dd_s1, s2: ins.dd, s3: ins.dd_s3 },
+    { lbl: 'TEE', s1: ins.tee_s1, s2: ins.tee, s3: ins.tee_s3 },
+    { lbl: 'TEI', s1: ins.tei_s1, s2: ins.tei, s3: ins.tei_s3 },
+    { lbl: 'TDI', s1: ins.tdi_s1, s2: ins.tdi, s3: ins.tdi_s3 },
+    { lbl: 'TDE', s1: ins.tde_s1, s2: ins.tde, s3: ins.tde_s3 },
+    { lbl: 'TEE1', s1: ins.tee1_s1, s2: ins.tee1, s3: ins.tee1_s3 },
+    { lbl: 'TEI1', s1: ins.tei1_s1, s2: ins.tei1, s3: ins.tei1_s3 },
+    { lbl: 'TDI1', s1: ins.tdi1_s1, s2: ins.tdi1, s3: ins.tdi1_s3 },
+    { lbl: 'TDE1', s1: ins.tde1_s1, s2: ins.tde1, s3: ins.tde1_s3 },
+    { lbl: 'ESTEPE', s1: ins.estepe_s1, s2: ins.estepe, s3: ins.estepe_s3 },
+  ];
+
   return `
       <div style="padding: 10px; font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 10px; width: 100%; box-sizing: border-box; background: #fff;">
+
          <!-- Header -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534;">
+         <div style="display:flex; align-items:center; border: 2px solid #166534; margin-bottom: 8px;">
+            <div style="width: 24%; border-right: 2px solid #166534; text-align: center; padding: 6px;">
+               <img src="/logo-eunaman-full.png" style="height: 42px; object-fit: contain;" />
+            </div>
+            <div style="width: 50%; border-right: 2px solid #166534; text-align: center; padding: 6px;">
+               <h1 style="margin: 0; font-size: 21px; font-weight: 900; letter-spacing: 1px; color:#000;">BOLETIM DE PNEUS</h1>
+               <p style="margin: 2px 0 0; font-size: 9px; color: #6b7280;">Monitoramento e Inspeção de Frotas</p>
+            </div>
+            <div style="width: 26%; padding: 6px; font-size: 9px; line-height: 1.5; color:#000;">
+               <div>Doc. Nº: <b style="color:#b91c1c;">${ins.id.split('-')[0].toUpperCase()}</b></div>
+               <div>Data: <b>${fmtDataPDF(ins.data_inspecao)}</b></div>
+               <div>Hora: <b>${fmtHoraPDF(ins.created_at || ins.data_inspecao)}</b></div>
+            </div>
+         </div>
+
+         <!-- Info -->
+         <table style="width: 100%; border-collapse: collapse; border: 2px solid #166534; margin-bottom: 8px; font-size: 9px; color:#000;">
             <tr>
-               <td style="width: 25%; border-right: 2px solid #166534; text-align: center; padding: 5px;">
-                  <div style="font-size: 18px; font-weight: 900; letter-spacing: -1px; color: #000;">EUNAMAN</div>
-               </td>
-               <td style="width: 50%; border-right: 2px solid #166534; text-align: center; vertical-align: middle; color: #000;">
-                  <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 1px;">BOLETIM DE PNEUS</h1>
-               </td>
-               <td style="width: 25%; padding: 5px; font-size: 9px; line-height: 1.2; color: #000;">
-                  <div>Doc. Nº.:</div>
-                  <div>Página: 1</div>
-                  <div>Versão: 1.0</div>
-                  <div style="color: red; font-weight: bold; text-align: left; margin-top: 5px;">${ins.id.split('-')[0].toUpperCase()}</div>
-               </td>
+               <td style="border-right: 1px solid #166534; padding: 6px; width: 22%;"><div style="color:#6b7280;">EQUIPAMENTO</div><div style="font-weight:900; font-size:15px;">${placa}</div></td>
+               <td style="border-right: 1px solid #166534; padding: 6px; width: 18%;"><div style="color:#6b7280;">MÓDULO</div><div style="font-weight:700;">${modulo}</div></td>
+               <td style="border-right: 1px solid #166534; padding: 6px; width: 14%;"><div style="color:#6b7280;">KM</div><div style="font-weight:700;">${ins.km_atual != null ? ins.km_atual.toLocaleString('pt-BR') : '—'}</div></td>
+               <td style="border-right: 1px solid #166534; padding: 6px; width: 24%;"><div style="color:#6b7280;">REGISTRADO POR</div><div style="font-weight:700;">${funcionario}</div></td>
+               <td style="padding: 6px; width: 22%;"><div style="color:#6b7280;">CONDIÇÃO GERAL</div><span style="display:inline-block; margin-top:2px; padding:2px 8px; border-radius:10px; font-weight:900; font-size:10px; background:${cond.bg}; color:${cond.text};">${ins.condicao}</span></td>
             </tr>
          </table>
 
-         <!-- Info Sec -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #166534; color: #000;">
-            <tr>
-               <td style="border: 1px solid #166534; padding: 4px; width: 15%; vertical-align: top;">
-                  <div style="font-size: 8px;">Ordem de Serviço:</div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 4px; width: 15%; vertical-align: top;">
-                  <div style="font-size: 8px;">Origem:</div>
-                  <div style="margin-top:2px;">[ &nbsp; ] INTERNA</div>
-                  <div style="margin-top:2px;">[ &nbsp; ] CAMPO</div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 0; width: 70%; vertical-align: top;">
-                  <table style="width: 100%; border-collapse: collapse; height: 100%;">
-                     <tr>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 45%; color: #000;"><div style="font-size: 8px;">FUNCIONÁRIO:</div><div style="font-weight:bold">${ins.registrado_por_nome || ''}</div></td>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 15%;"><div style="font-size: 8px;">ID:</div></td>
-                        <td style="border-right: 1px solid #166534; border-bottom: 1px solid #166534; padding: 4px; width: 20%; color: #000;"><div style="font-size: 8px;">Data Entrada:</div><div style="font-weight:bold">${fmtDataPDF(ins.data_inspecao)}</div></td>
-                        <td style="border-bottom: 1px solid #166534; padding: 4px; width: 20%; color: #000;"><div style="font-size: 8px;">Hora:</div><div style="font-weight:bold">${fmtHoraPDF(ins.created_at || ins.data_inspecao)}</div></td>
-                     </tr>
-                     <tr>
-                        <td colspan="2" style="border-right: 1px solid #166534; padding: 4px; color: #000;"><div style="font-size: 8px;">EQUIPAMENTO:</div><div style="font-weight:bold; font-size: 14px;">${ins.equipamentos?.placa || ''}</div></td>
-                        <td style="border-right: 1px solid #166534; padding: 4px;"><div style="font-size: 8px;">Data Saída:</div></td>
-                        <td style="padding: 4px;"><div style="font-size: 8px;">Hora:</div></td>
-                     </tr>
-                  </table>
-               </td>
-            </tr>
-         </table>
+         <!-- Esquema por eixo -->
+         <div style="border: 2px solid #166534; margin-bottom: 8px;">
+            <div style="background:#166534; color:#fff; text-align:center; font-weight:900; font-size:10px; letter-spacing:1px; padding:4px;">ESQUEMA DE MEDIÇÃO — SULCO 1 / SULCO 2 / SULCO 3 (mm)</div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding: 10px 6px;">
+               <span style="font-size:8px; font-weight:900; color:#9ca3af; letter-spacing:2px;">▲ FRENTE</span>
 
-         <!-- Desmontados Header -->
-         <div style="background-color: #f0fdf4; border: 2px solid #166534; text-align: center; font-weight: bold; padding: 4px; margin-bottom: 5px; color: #000;">P N E U S &nbsp; &nbsp; D E S M O N T A D O S</div>
+               <div style="display:flex; align-items:center; gap:6px;">
+                  ${caixaPosicao('DE', ins.de_s1, ins.de, ins.de_s3)}
+                  ${barraEixo}
+                  <div style="width:60px; height:14px; background:#e4e4e7; border-radius:3px;"></div>
+                  ${barraEixo}
+                  ${caixaPosicao('DD', ins.dd_s1, ins.dd, ins.dd_s3)}
+               </div>
 
-         <!-- Tabela Desmontados -->
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center; color: #000;">
+               <div style="display:flex; align-items:center; gap:4px;">
+                  ${caixaPosicao('TEE', ins.tee_s1, ins.tee, ins.tee_s3)}
+                  ${caixaPosicao('TEI', ins.tei_s1, ins.tei, ins.tei_s3)}
+                  ${barraEixo}
+                  <div style="width:60px; height:10px; background:#d4d4d8; border-radius:3px;"></div>
+                  ${barraEixo}
+                  ${caixaPosicao('TDI', ins.tdi_s1, ins.tdi, ins.tdi_s3)}
+                  ${caixaPosicao('TDE', ins.tde_s1, ins.tde, ins.tde_s3)}
+               </div>
+
+               ${hasEixo2 ? `
+               <div style="display:flex; align-items:center; gap:4px;">
+                  ${caixaPosicao('TEE1', ins.tee1_s1, ins.tee1, ins.tee1_s3)}
+                  ${caixaPosicao('TEI1', ins.tei1_s1, ins.tei1, ins.tei1_s3)}
+                  ${barraEixo}
+                  <div style="width:60px; height:10px; background:#d4d4d8; border-radius:3px;"></div>
+                  ${barraEixo}
+                  ${caixaPosicao('TDI1', ins.tdi1_s1, ins.tdi1, ins.tdi1_s3)}
+                  ${caixaPosicao('TDE1', ins.tde1_s1, ins.tde1, ins.tde1_s3)}
+               </div>` : ''}
+
+               <span style="font-size:8px; font-weight:900; color:#9ca3af; letter-spacing:2px;">▼ TRASEIRA</span>
+               ${caixaPosicao('ESTEPE', ins.estepe_s1, ins.estepe, ins.estepe_s3)}
+            </div>
+         </div>
+
+         <!-- Tabela completa de sulcos -->
+         <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px; border: 2px solid #166534; font-size: 9px; text-align: center; color:#000;">
             <tr style="background-color: #f0fdf4;">
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">POSIÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">TIPO DE<br>INTERVENÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">MOTIVO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">CAUSA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 1<br><span style="font-weight: normal;">(dir.)</span></th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 2<br><span style="font-weight: normal;">(meio)</span></th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 3<br><span style="font-weight: normal;">(esq.)</span></th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">PRESSÃO<br>MEDIDA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 14%;">PRESSÃO<br>CALIBRADA</th>
+               <th style="border: 1px solid #166534; padding: 4px; text-align:left; padding-left:8px;">POSIÇÃO</th>
+               <th style="border: 1px solid #166534; padding: 4px;">SULCO 1 (DIR.)</th>
+               <th style="border: 1px solid #166534; padding: 4px;">SULCO 2 (MEIO)</th>
+               <th style="border: 1px solid #166534; padding: 4px;">SULCO 3 (ESQ.)</th>
             </tr>
-            ${[
-               { lbl: '1º EIXO DE', s1: ins.de_s1, s2: ins.de, s3: ins.de_s3 },
-               { lbl: '1º EIXO DD', s1: ins.dd_s1, s2: ins.dd, s3: ins.dd_s3 },
-               { lbl: '2º EIXO TEE', s1: ins.tee_s1, s2: ins.tee, s3: ins.tee_s3 },
-               { lbl: '2º EIXO TEI', s1: ins.tei_s1, s2: ins.tei, s3: ins.tei_s3 },
-               { lbl: '2º EIXO TDI', s1: ins.tdi_s1, s2: ins.tdi, s3: ins.tdi_s3 },
-               { lbl: '2º EIXO TDE', s1: ins.tde_s1, s2: ins.tde, s3: ins.tde_s3 },
-               { lbl: '3º EIXO TEE', s1: ins.tee1_s1, s2: ins.tee1, s3: ins.tee1_s3 },
-               { lbl: '3º EIXO TEI', s1: ins.tei1_s1, s2: ins.tei1, s3: ins.tei1_s3 },
-               { lbl: '3º EIXO TDI', s1: ins.tdi1_s1, s2: ins.tdi1, s3: ins.tdi1_s3 },
-               { lbl: '3º EIXO TDE', s1: ins.tde1_s1, s2: ins.tde1, s3: ins.tde1_s3 },
-               { lbl: '98 STEP', s1: ins.estepe_s1, s2: ins.estepe, s3: ins.estepe_s3 }
-            ].map((r, i) => (r.s1 != null || r.s2 != null || r.s3 != null || i < 2) ? `
+            ${posicoes.map(p => `
                <tr>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc; color: #000;">${r.lbl}</td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: 900; font-size: 10px; color: #000;">${celulaSulco(r.s1)}</td>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: 900; font-size: 10px; color: #000;">${celulaSulco(r.s2)}</td>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: 900; font-size: 10px; color: #000;">${celulaSulco(r.s3)}</td>
-                  <td style="border: 1px solid #166534; padding: 4px; background-color: #f1f5f9;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px; background-color: #f1f5f9;"></td>
-               </tr>
-            ` : '').join('')}
-         </table>
-
-         <!-- Montados Header -->
-         <div style="background-color: #f0fdf4; border: 2px solid #166534; border-bottom: none; text-align: center; font-weight: bold; padding: 4px; color: #000;">P N E U S &nbsp; &nbsp; M O N T A D O S</div>
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #166534; font-size: 8px; text-align: center; color: #000;">
-            <tr style="background-color: #f0fdf4;">
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">POSIÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">TIPO DE<br>INTERVENÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">MOTIVO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 15%;">CAUSA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 1</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 2</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 8%;">SULCO 3</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 12%;">PRESSÃO<br>MEDIDA</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 14%;">PRESSÃO<br>CALIBRADA</th>
-            </tr>
-            ${[
-               { lbl: '1º EIXO DE' }, { lbl: '1º EIXO DD' },
-               { lbl: '2º EIXO TEE' }, { lbl: '2º EIXO TEI' },
-               { lbl: '98 STEP' }
-            ].map(r => `
-               <tr>
-                  <td style="border: 1px solid #166534; padding: 4px; font-weight: bold; background-color: #f8fafc; color: #000;">${r.lbl}</td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
-                  <td style="border: 1px solid #166534; padding: 4px;"></td>
+                  <td style="border: 1px solid #166534; padding: 4px; text-align:left; padding-left:8px; font-weight:bold; background-color:#f8fafc;">${p.lbl}</td>
+                  <td style="border: 1px solid #166534; padding: 4px; font-weight:900;">${celulaSulco(p.s1)}</td>
+                  <td style="border: 1px solid #166534; padding: 4px; font-weight:900;">${celulaSulco(p.s2)}</td>
+                  <td style="border: 1px solid #166534; padding: 4px; font-weight:900;">${celulaSulco(p.s3)}</td>
                </tr>
             `).join('')}
          </table>
 
-         <!-- Legends / Dictionary -->
-         <table style="width: 100%; border-collapse: collapse; border: 2px solid #166534; font-size: 7px; margin-bottom: 10px; color: #000;">
-            <tr style="background-color: #f0fdf4;">
-               <th style="border: 1px solid #166534; padding: 4px; width: 25%;">EVENTO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 50%;">MOTIVO DA RETIRADA / MANUTENÇÃO</th>
-               <th style="border: 1px solid #166534; padding: 4px; width: 25%;">TIPO DE REPARO</th>
-            </tr>
-            <tr>
-               <td style="border: 1px solid #166534; padding: 6px; vertical-align: top;">
-                  <div style="margin-bottom:2px;">[ 1 ] MOVIMENTAÇÃO</div>
-                  <div style="margin-bottom:2px;">[ 2 ] CONSERTO</div>
-                  <div style="margin-bottom:2px;">[ 3 ] INVENTÁRIO</div>
-                  <div style="margin-bottom:2px;">[ 4 ] CALIBRAGEM / MEDIÇÃO</div>
-                  <div style="margin-bottom:2px;">[ 5 ] RETIRADA RECAPAGEM</div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 6px; vertical-align: top;">
-                  <div style="column-count: 2; column-gap: 15px;">
-                     <div style="margin-bottom:2px;">[ 1 ] RODOU FURADO</div>
-                     <div style="margin-bottom:2px;">[ 2 ] RODOU BAIXA PRESSÃO</div>
-                     <div style="margin-bottom:2px;">[ 3 ] DESGASTE IRREGULAR</div>
-                     <div style="margin-bottom:2px;">[ 4 ] TALÕES DANIFICADO</div>
-                     <div style="margin-bottom:2px;">[ 5 ] IMPACTO DE FRANCO</div>
-                     <div style="margin-bottom:2px;">[ 6 ] PERFURAÇÃO OBJETOS</div>
-                     <div style="margin-bottom:2px;">[ 7 ] SEPARAÇÃO DE BANDA</div>
-                     <div style="margin-bottom:2px;">[ 19] RECAPAGEM</div>
-                     <div style="margin-bottom:2px;">[ 20] RODÍZIO DE PNEU</div>
-                     <div style="margin-bottom:2px;">[ 31] INVENTÁRIO</div>
-                  </div>
-               </td>
-               <td style="border: 1px solid #166534; padding: 6px; vertical-align: top;">
-                  <div style="column-count: 1;">
-                     <div style="margin-bottom:2px;">[ 1 ] PREGO</div>
-                     <div style="margin-bottom:2px;">[ 2 ] PARAFUSO</div>
-                     <div style="margin-bottom:2px;">[ 3 ] FERRO</div>
-                     <div style="margin-bottom:2px;">[ 4 ] RODA QUEBRADA</div>
-                     <div style="margin-bottom:2px;">[ 7 ] CORTE PNEU</div>
-                  </div>
-               </td>
-            </tr>
-         </table>
-
-         <div style="display: flex; gap: 10px; font-size: 8px; color: #000;">
-            <div style="border: 2px solid #166534; padding: 6px; flex: 1;">
-               <b>STATUS DIAGNOSTICADO:</b> <span style="background-color: ${ins.condicao === 'CRITICO' || ins.condicao === 'TROCAR' ? '#fee2e2' : '#dcfce7'}; padding: 2px 4px; border: 1px solid #166534;">${ins.condicao}</span>
-            </div>
-            <div style="border: 2px solid #166534; padding: 6px; flex: 2; display: flex; flex-direction: column; justify-content: flex-end;">
-               <div style="border-top: 1px solid #166534; margin-top: 20px; text-align: center;">Assinatura do Mecânico / Encarregado</div>
-            </div>
+         <!-- Observações -->
+         <div style="border: 2px solid #166534; padding: 6px; margin-bottom: 10px; min-height: 30px; color:#000;">
+            <div style="font-size:8px; font-weight:900; text-transform:uppercase; color:#6b7280; margin-bottom:3px;">Observações</div>
+            <div style="font-size:10px; white-space:pre-wrap;">${ins.observacoes || '—'}</div>
          </div>
+
+         <!-- Assinatura -->
+         <div style="border: 2px solid #166534; padding: 10px; display:flex; flex-direction:column; align-items:center; gap:24px;">
+            <div style="width:60%; border-top: 1px solid #000; text-align:center; padding-top:4px; font-size:9px; color:#000;">Assinatura do Mecânico / Encarregado</div>
+         </div>
+
       </div>
     `;
 }
@@ -229,7 +217,7 @@ export function gerarFichaPneusPDF(ins: InspecaoParaPDF, modo: "download" | "sha
   const html = gerarHtmlFichaPneus(ins);
   const element = document.createElement("div");
   element.innerHTML = html;
-  const filename = `Boletim_${ins.equipamentos?.placa}_${fmtDataPDF(ins.data_inspecao).replace(/\//g, '-')}.pdf`;
+  const filename = `Boletim_${ins.equipamentos?.placa || 'EUNAMAN'}_${fmtDataPDF(ins.data_inspecao).replace(/\//g, '-')}.pdf`;
 
   baixarOuCompartilharPdf(
     element,
@@ -237,6 +225,6 @@ export function gerarFichaPneusPDF(ins: InspecaoParaPDF, modo: "download" | "sha
     `Boletim de Pneus — ${ins.equipamentos?.placa || ''}`,
     `Boletim de Pneus da placa ${ins.equipamentos?.placa || ''} em ${fmtDataPDF(ins.data_inspecao)}`,
     modo,
-    { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 } }
+    { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true } }
   );
 }

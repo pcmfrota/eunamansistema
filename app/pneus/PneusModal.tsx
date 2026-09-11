@@ -146,7 +146,7 @@ export default function PneusModal({
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
             ...parseSulcosForm(form),
-            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : editData.equipamentos,
+            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : editData.equipamentos,
             _isPendingSync: true
           }
           await localDb.put("pneus_inspecao", updated)
@@ -162,7 +162,7 @@ export default function PneusModal({
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
             ...parseSulcosForm(form),
             registrado_por_nome: registradoPorLocal,
-            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined,
+            equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : undefined,
             _isPendingSync: true
           }
           await localDb.put("pneus_inspecao", newInspecao)
@@ -200,7 +200,7 @@ export default function PneusModal({
               horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
               ...parseSulcosForm(form),
               registrado_por_nome: registradoPorLocal,
-              equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo } : undefined
+              equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : undefined
             }
             await localDb.put("pneus_inspecao", newLocal)
             window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"))
