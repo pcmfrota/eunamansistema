@@ -1,12 +1,14 @@
 "use client"
 
-import { useState, useTransition, useMemo, useCallback } from "react"
+import { useState, useTransition, useMemo, useCallback, useRef } from "react"
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas"
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
   CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart, LabelList
 } from "recharts"
 import { SearchableSelect } from '@/components/SearchableSelect'
-import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff, Download, Upload, CalendarClock } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff, Download, Upload, CalendarClock, FileDown, Loader2 } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import type { ProgSemanal } from "./actions"
 import {
@@ -168,6 +170,52 @@ export default function ProgPrevClient({
   const isVisitante = profile?.role === 'visitante'
   const [tab, setTab] = useState<Tab>("prog-semanal")
 
+  // Baixa em PDF exatamente o que está sendo exibido na aba ativa (tabela ou gráficos do
+  // Provisionamento) — mesmo padrão do Dashboard de Mão de Obra: html2canvas tira uma "foto"
+  // do conteúdo já renderizado e jsPDF encaixa em página(s) A4.
+  const [exportandoPdf, setExportandoPdf] = useState(false)
+  const reportRef = useRef<HTMLDivElement>(null)
+
+  const handleExportarPdf = async () => {
+    if (!reportRef.current) return
+    setExportandoPdf(true)
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false
+      })
+
+      const pdf = new jsPDF("p", "mm", "a4")
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pageWidth
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const imgData = canvas.toDataURL("image/jpeg", 0.95)
+
+      let heightLeft = imgHeight
+      let position = 0
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      const tabLabel = TABS.find(t => t.id === tab)?.label.replace(/[^\w]+/g, "_") || tab
+      pdf.save(`Programacao_Preventiva_${tabLabel}_${MESES[mesAtivo - 1]}_${anoAtivo}.pdf`)
+    } catch (err) {
+      console.error("Erro ao gerar PDF da Programação Preventiva:", err)
+      alert("Erro ao gerar o PDF.")
+    } finally {
+      setExportandoPdf(false)
+    }
+  }
+
   // Mes operacional ativo (auto detecta pelo dia atual usando ISO_CALENDAR para a preventiva)
   const [mesAtivo, setMesAtivo] = useState<number>(() => {
     const now = new Date()
@@ -282,6 +330,11 @@ export default function ProgPrevClient({
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 pr-4 shrink-0">
+          <button type="button" onClick={handleExportarPdf} disabled={exportandoPdf}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+            {exportandoPdf ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+            {exportandoPdf ? "Gerando..." : "Baixar PDF"}
+          </button>
           <Calendar size={13} className="text-gray-500" />
           <select value={mesAtivo} onChange={e => handleMesChange(Number(e.target.value))}
             className="px-2 py-1.5 text-xs rounded-lg border border-gray-300 bg-gray-50 text-gray-700 outline-none">
@@ -290,7 +343,7 @@ export default function ProgPrevClient({
         </div>
       </div>
 
-      <div className={`p-4 md:p-6 flex flex-col gap-6 ${tab !== "prog-semanal" ? "bg-gray-50" : "bg-gray-50"}`}>
+      <div ref={reportRef} className={`p-4 md:p-6 flex flex-col gap-6 bg-gray-50`}>
         {tab === "prog-semanal" && (
           <TabProgSemanal
             itensDaSemana={itensDaSemana}
