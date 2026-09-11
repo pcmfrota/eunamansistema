@@ -1041,6 +1041,17 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
   const reprog      = provComputado.filter(p => p.status === "REPROGRAMADO").length
   const pct         = provComputado.length > 0 ? Math.round(concluidos / provComputado.length * 100) : 0
 
+  // Cards de KPI (abaixo) contam EQUIPAMENTOS distintos, não lançamentos — uma placa
+  // reprogramada aparece em mais de uma semana (mais de uma linha em provComputado), mas
+  // continua sendo o mesmo caminhão, então não deve ser contada duas vezes no Total. Já o
+  // gráfico "Status" e a tabela "Detalhe por Semana" continuam por lançamento (linha), que é
+  // a granularidade certa pra visão semana a semana.
+  const placasUnicas = (rows: ProgSemanal[]) => new Set(rows.map(p => p.placa).filter((v): v is string => !!v)).size
+  const totalEquip      = placasUnicas(provComputado)
+  const concluidosEquip = placasUnicas(provComputado.filter(p => p.status === "CONCLUÍDO"))
+  const emAndamentoEquip = placasUnicas(provComputado.filter(p => p.status === "EM ANDAMENTO"))
+  const pctEquip        = totalEquip > 0 ? Math.round(concluidosEquip / totalEquip * 100) : 0
+
   const statusData = [
     { name: "CONCLUÍDO",    value: concluidos  },
     { name: "EM ANDAMENTO", value: emAndamento },
@@ -1076,10 +1087,10 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Total", value: provComputado.length, color: "#22c55e" },
-          { label: "Concluídas", value: concluidos, color: "#22c55e" },
-          { label: "Em Andamento", value: emAndamento, color: "#3b82f6" },
-          { label: "% Execução", value: `${pct}%`, color: pct >= 100 ? "#22c55e" : "#f59e0b" },
+          { label: "Total", value: totalEquip, color: "#22c55e" },
+          { label: "Concluídas", value: concluidosEquip, color: "#22c55e" },
+          { label: "Em Andamento", value: emAndamentoEquip, color: "#3b82f6" },
+          { label: "% Execução", value: `${pctEquip}%`, color: pctEquip >= 100 ? "#22c55e" : "#f59e0b" },
         ].map(k => (
           <div key={k.label} className="relative rounded-2xl border border-gray-200 bg-white p-4 overflow-hidden">
             <div className="absolute top-0 left-0 bottom-0 w-1 rounded-l-2xl" style={{ background: k.color }} />
