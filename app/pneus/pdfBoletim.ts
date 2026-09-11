@@ -5,7 +5,9 @@
 // tabela completa (sempre as 11 posições, mesmo vazias), além de quem registrou, módulo, KM
 // e observações — nada fica de fora só porque a posição não tem leitura.
 
-import { baixarOuCompartilharPdf } from "@/lib/pdf-share";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 
 export type InspecaoParaPDF = {
   id: string;
@@ -213,18 +215,55 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
     `;
 }
 
-export function gerarFichaPneusPDF(ins: InspecaoParaPDF, modo: "download" | "share" = "download") {
-  const html = gerarHtmlFichaPneus(ins);
-  const element = document.createElement("div");
-  element.innerHTML = html;
+export async function gerarFichaPneusPDF(ins: InspecaoParaPDF, modo: "download" | "share" = "download") {
+  // O esquema de medição usa varias caixas flex — pra medir/pintar isso direito, o
+  // html2canvas precisa que o elemento esteja de fato no documento (fora da tela), não só
+  // criado em memória. Sem isso o layout sai errado (conteúdo cortado, espaço em branco).
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.style.width = "800px";
+  container.style.backgroundColor = "#ffffff";
+  container.innerHTML = gerarHtmlFichaPneus(ins);
+  document.body.appendChild(container);
+
   const filename = `Boletim_${ins.equipamentos?.placa || 'EUNAMAN'}_${fmtDataPDF(ins.data_inspecao).replace(/\//g, '-')}.pdf`;
 
-  baixarOuCompartilharPdf(
-    element,
-    filename,
-    `Boletim de Pneus — ${ins.equipamentos?.placa || ''}`,
-    `Boletim de Pneus da placa ${ins.equipamentos?.placa || ''} em ${fmtDataPDF(ins.data_inspecao)}`,
-    modo,
-    { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true } }
-  );
+  try {
+    const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false });
+    document.body.removeChild(container);
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const blob: Blob = pdf.output("blob");
+    await salvarOuCompartilharBlob(
+      blob,
+      filename,
+      `Boletim de Pneus — ${ins.equipamentos?.placa || ''}`,
+      `Boletim de Pneus da placa ${ins.equipamentos?.placa || ''} em ${fmtDataPDF(ins.data_inspecao)}`,
+      modo
+    );
+  } catch (err) {
+    if (document.body.contains(container)) document.body.removeChild(container);
+    console.error("Erro ao gerar PDF do Boletim de Pneus:", err);
+    alert("Erro ao gerar o PDF.");
+  }
 }
