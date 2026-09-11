@@ -122,7 +122,7 @@ const StatusBadge = ({ status }: { status: string }) => {
     "CANCELADO":    "bg-red-100 text-red-700 border-red-300 shadow-sm",
   }
   return (
-    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-wider ${cl[status] ?? "bg-gray-100 text-gray-700 border-gray-300 shadow-sm"}`}>
+    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-wider whitespace-nowrap ${cl[status] ?? "bg-gray-100 text-gray-700 border-gray-300 shadow-sm"}`}>
       {status}
     </span>
   )
@@ -1064,7 +1064,7 @@ function TabProvisionamento({ provComputado, semanasDoMes, mesAtivo, calMes }: {
           Provisionamento das Preventivas — {MESES[mesAtivo - 1]}
         </h2>
         <p className="text-xs text-gray-500 mt-1">
-          Periodicidade: COMBOIO 550hr / RIPA – MUNCK – MULT 500hr · Dados da Programação Semanal
+          Periodicidade: COMBOIO 550hr / PIPA – MUNCK – MULT 500hr · Dados da Programação Semanal
         </p>
         {calMes && (
           <p className="text-[11px] text-green-500 mt-0.5">
