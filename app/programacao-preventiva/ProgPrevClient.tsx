@@ -160,7 +160,7 @@ export default function ProgPrevClient({
 }: {
   progSemanais: ProgSemanal[]
   calendario: { mes: number; ano: number; data_inicio: string; data_fim: string }[]
-  equipamentos: { id: string; placa: string; categoria?: string }[]
+  equipamentos: { id: string; placa: string; categoria?: string; tipo?: string; modulo?: string }[]
   anoAtivo: number
 }) {
   const { profile } = useAuth()
@@ -339,7 +339,7 @@ function TabProgSemanal({
   setSemanaIsoAtiva: (w: number) => void
   weekInfo: WeekInfo | undefined
   mesAtivo: number; anoAtivo: number
-  equipamentos: { id: string; placa: string; categoria?: string }[]
+  equipamentos: { id: string; placa: string; categoria?: string; tipo?: string; modulo?: string }[]
   calendario: { mes: number; ano: number; data_inicio: string; data_fim: string }[]
   progSemanais: ProgSemanal[]
   isVisitante: boolean
@@ -1188,7 +1188,7 @@ function ProgSemanalForm({
   item, equipamentos, mesAtivo, anoAtivo, semanaIso, weekInfo, semanasDoMes, calendario, onClose,
 }: {
   item: ProgSemanal | null
-  equipamentos: { id: string; placa: string; categoria?: string }[]
+  equipamentos: { id: string; placa: string; categoria?: string; tipo?: string; modulo?: string }[]
   mesAtivo: number; anoAtivo: number
   semanaIso: number; weekInfo: WeekInfo | undefined
   semanasDoMes: WeekInfo[]
@@ -1415,10 +1415,18 @@ function ProgSemanalForm({
             </div>
             <div>
               <label className={lbl}>Placa</label>
-              <SearchableSelect 
+              <SearchableSelect
                 options={equipamentos.map(eq => ({ value: eq.placa, label: eq.placa }))}
-                value={form.placa} 
-                onChange={val => set("placa", val)}
+                value={form.placa}
+                onChange={val => {
+                  set("placa", val)
+                  // Ao escolher a placa, puxa módulo e tipo (C.O) já cadastrados no
+                  // equipamento — só sobrescreve quando o equipamento realmente tem o
+                  // dado, pra não apagar um valor digitado à mão (ex: módulo "RESERVA").
+                  const eq = equipamentos.find(e => e.placa === val)
+                  if (eq?.modulo) set("modulo", eq.modulo)
+                  if (eq?.tipo) set("categoria_operacional", eq.tipo)
+                }}
               />
             </div>
           </div>

@@ -38,6 +38,8 @@ export default function ProgramacaoPreventiva() {
           id: e.id,
           placa: e.placa,
           categoria: e.categoria,
+          tipo: e.tipo,
+          modulo: e.modulo,
         }));
 
         if (active) {
@@ -68,6 +70,8 @@ export default function ProgramacaoPreventiva() {
               id: e.id,
               placa: e.placa,
               categoria: e.categoria,
+              tipo: e.tipo,
+              modulo: e.modulo,
             }));
 
             if (active) {
