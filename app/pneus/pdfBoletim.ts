@@ -74,17 +74,17 @@ function caixaPosicao(label: string, s1: number | null | undefined, s2: number |
   const preenchida = vals.length > 0;
   const bg = corSulco(pior);
   return `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-      <div style="width:44px;padding:3px 1px;border-radius:6px;text-align:center;
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:74px;padding:5px 2px;border-radius:9px;text-align:center;
         ${preenchida ? `background:${bg};color:#fff;border:1px solid ${bg};` : 'background:#fafafa;color:#a1a1aa;border:1px dashed #d4d4d8;'}">
-        <div style="font-size:7px;font-weight:900;line-height:1.3;">${celulaSulco(s1)}/${celulaSulco(s2)}/${celulaSulco(s3)}</div>
+        <div style="font-size:12px;font-weight:900;line-height:1.3;letter-spacing:0.2px;">${celulaSulco(s1)}/${celulaSulco(s2)}/${celulaSulco(s3)}</div>
       </div>
-      <span style="font-size:7px;font-weight:900;color:#52525b;letter-spacing:0.5px;">${label}</span>
+      <span style="font-size:10px;font-weight:900;color:#3f3f46;letter-spacing:0.5px;">${label}</span>
     </div>
   `;
 }
 
-const barraEixo = `<div style="width:26px;height:3px;background:#d4d4d8;border-radius:2px;"></div>`;
+const barraEixo = `<div style="width:36px;height:4px;background:#d4d4d8;border-radius:2px;"></div>`;
 
 // Monta o HTML da ficha — usado tanto pra gerar o PDF quanto pra pré-visualizar antes de
 // baixar (FichaPreviewModal renderiza esse mesmo markup dentro de um modal).
@@ -144,40 +144,40 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
 
          <!-- Esquema por eixo -->
          <div style="border: 2px solid #166534; margin-bottom: 8px;">
-            <div style="background:#166534; color:#fff; text-align:center; font-weight:900; font-size:10px; letter-spacing:1px; padding:4px;">ESQUEMA DE MEDIÇÃO — SULCO 1 / SULCO 2 / SULCO 3 (mm)</div>
-            <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding: 10px 6px;">
-               <span style="font-size:8px; font-weight:900; color:#9ca3af; letter-spacing:2px;">▲ FRENTE</span>
+            <div style="background:#166534; color:#fff; text-align:center; font-weight:900; font-size:12px; letter-spacing:1px; padding:6px;">ESQUEMA DE MEDIÇÃO — SULCO 1 / SULCO 2 / SULCO 3 (mm)</div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:18px; padding: 18px 10px;">
+               <span style="font-size:10px; font-weight:900; color:#9ca3af; letter-spacing:2px;">▲ FRENTE</span>
 
-               <div style="display:flex; align-items:center; gap:6px;">
+               <div style="display:flex; align-items:center; gap:10px;">
                   ${caixaPosicao('DE', ins.de_s1, ins.de, ins.de_s3)}
                   ${barraEixo}
-                  <div style="width:60px; height:14px; background:#e4e4e7; border-radius:3px;"></div>
+                  <div style="width:80px; height:18px; background:#e4e4e7; border-radius:4px;"></div>
                   ${barraEixo}
                   ${caixaPosicao('DD', ins.dd_s1, ins.dd, ins.dd_s3)}
                </div>
 
-               <div style="display:flex; align-items:center; gap:4px;">
+               <div style="display:flex; align-items:center; gap:8px;">
                   ${caixaPosicao('TEE', ins.tee_s1, ins.tee, ins.tee_s3)}
                   ${caixaPosicao('TEI', ins.tei_s1, ins.tei, ins.tei_s3)}
                   ${barraEixo}
-                  <div style="width:60px; height:10px; background:#d4d4d8; border-radius:3px;"></div>
+                  <div style="width:80px; height:14px; background:#d4d4d8; border-radius:4px;"></div>
                   ${barraEixo}
                   ${caixaPosicao('TDI', ins.tdi_s1, ins.tdi, ins.tdi_s3)}
                   ${caixaPosicao('TDE', ins.tde_s1, ins.tde, ins.tde_s3)}
                </div>
 
                ${hasEixo2 ? `
-               <div style="display:flex; align-items:center; gap:4px;">
+               <div style="display:flex; align-items:center; gap:8px;">
                   ${caixaPosicao('TEE1', ins.tee1_s1, ins.tee1, ins.tee1_s3)}
                   ${caixaPosicao('TEI1', ins.tei1_s1, ins.tei1, ins.tei1_s3)}
                   ${barraEixo}
-                  <div style="width:60px; height:10px; background:#d4d4d8; border-radius:3px;"></div>
+                  <div style="width:80px; height:14px; background:#d4d4d8; border-radius:4px;"></div>
                   ${barraEixo}
                   ${caixaPosicao('TDI1', ins.tdi1_s1, ins.tdi1, ins.tdi1_s3)}
                   ${caixaPosicao('TDE1', ins.tde1_s1, ins.tde1, ins.tde1_s3)}
                </div>` : ''}
 
-               <span style="font-size:8px; font-weight:900; color:#9ca3af; letter-spacing:2px;">▼ TRASEIRA</span>
+               <span style="font-size:10px; font-weight:900; color:#9ca3af; letter-spacing:2px;">▼ TRASEIRA</span>
                ${caixaPosicao('ESTEPE', ins.estepe_s1, ins.estepe, ins.estepe_s3)}
             </div>
          </div>
