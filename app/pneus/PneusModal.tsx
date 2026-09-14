@@ -10,6 +10,7 @@ import { SearchableSelect } from '@/components/SearchableSelect'
 import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from './pdfBoletim'
 import FichaPreviewModal from '@/components/FichaPreviewModal'
 import { useAuth } from '@/components/auth-context'
+import { condicaoPorSulco } from '@/src/models/pneus'
 
 interface PneusModalProps {
   isOpen: boolean
@@ -107,11 +108,7 @@ export default function PneusModal({
 
     if (values.length === 0) return;
 
-    const min = Math.min(...values);
-    let autoCond = 'BOM';
-    if (min < 3) autoCond = 'TROCAR';
-    else if (min <= 5) autoCond = 'CRITICO';
-    else if (min <= 9) autoCond = 'REGULAR';
+    const autoCond = condicaoPorSulco(Math.min(...values));
 
     if (form.condicao !== autoCond) {
       setForm(prev => ({ ...prev, condicao: autoCond }));
@@ -443,9 +440,8 @@ export default function PneusModal({
                     className="w-full pl-3 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none appearance-none font-bold"
                   >
                     <option value="BOM">BOM</option>
-                    <option value="REGULAR">REGULAR</option>
+                    <option value="RECAPAGEM">RECAPAGEM</option>
                     <option value="CRITICO">CRÍTICO</option>
-                    <option value="TROCAR">TROCAR</option>
                   </select>
                   <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                 </div>

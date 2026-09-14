@@ -1,4 +1,74 @@
-export type CondicaoPneu = 'BOM' | 'REGULAR' | 'CRITICO' | 'TROCAR';
+// Escala de sulco (mm) em 3 faixas — fonte única usada por todo o módulo de Pneus (telas,
+// esquema, PDF, filtros, dashboard): abaixo de 5mm é crítico (troca imediata), de 5 a 6mm
+// entra em recapagem, acima de 6mm está bom. Cada boletim usa o PIOR valor entre todas as
+// leituras (Sulco 1/2/3 de todas as posições) pra decidir a condição geral do veículo.
+export type CondicaoPneu = 'BOM' | 'RECAPAGEM' | 'CRITICO';
+
+export function condicaoPorSulco(v: number | null | undefined): CondicaoPneu {
+  if (v == null) return 'BOM';
+  if (v < 5) return 'CRITICO';
+  if (v <= 6) return 'RECAPAGEM';
+  return 'BOM';
+}
+
+export function calcCondicaoPneu(posicoes: Record<string, number | null | undefined>): CondicaoPneu {
+  const vals = Object.values(posicoes).filter((v): v is number => v != null);
+  if (!vals.length) return 'BOM';
+  return condicaoPorSulco(Math.min(...vals));
+}
+
+// Normaliza qualquer valor gravado (inclusive rótulos antigos de antes dessa escala de 3
+// faixas — REGULAR, ATENCAO, TROCAR — e sinônimos aceitos na importação por Excel) pro
+// conjunto atual de 3 condições. Sem isso, boletins já lançados ficariam sem bater com
+// nenhuma cor/filtro depois da mudança de escala.
+const SINONIMOS_CONDICAO: Record<string, CondicaoPneu> = {
+  BOM: 'BOM', BOA: 'BOM', GOOD: 'BOM', OK: 'BOM', OTIMO: 'BOM', EXCELENTE: 'BOM', NOVO: 'BOM',
+  RECAPAGEM: 'RECAPAGEM', REGULAR: 'RECAPAGEM', REG: 'RECAPAGEM', ATENCAO: 'RECAPAGEM', WATCH: 'RECAPAGEM', MODERADO: 'RECAPAGEM',
+  CRITICO: 'CRITICO', CRITICA: 'CRITICO', CRITICAL: 'CRITICO', URGENTE: 'CRITICO', ALERTA: 'CRITICO',
+  TROCAR: 'CRITICO', REPLACE: 'CRITICO', SUBSTITUIR: 'CRITICO', RUIM: 'CRITICO', MAU: 'CRITICO',
+  DESGASTADO: 'CRITICO', SUCATA: 'CRITICO',
+};
+
+export function normalizarCondicaoPneu(raw: string | null | undefined, fallback: CondicaoPneu = 'BOM'): CondicaoPneu {
+  if (!raw || !raw.trim()) return fallback;
+  const clean = raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  return SINONIMOS_CONDICAO[clean] ?? fallback;
+}
+
+// Cor por leitura de sulco (mm), em hex — usada nas caixinhas do esquema (tela e PDF).
+export function corSulcoHex(v: number | null | undefined): string {
+  if (v == null) return '#d4d4d8';
+  const c = condicaoPorSulco(v);
+  return c === 'CRITICO' ? '#ef4444' : c === 'RECAPAGEM' ? '#facc15' : '#10b981';
+}
+
+// Mesma leitura, em classes Tailwind — usada nas caixinhas do esquema em tela e nas tabelas.
+export function sulcoTailwind(v: number | null | undefined): string {
+  if (v == null) return 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400';
+  const c = condicaoPorSulco(v);
+  if (c === 'CRITICO') return 'bg-red-500 text-white';
+  if (c === 'RECAPAGEM') return 'bg-yellow-400 text-zinc-900';
+  return 'bg-emerald-500 text-white';
+}
+
+export const CONDICAO_LABEL: Record<CondicaoPneu, string> = {
+  BOM: 'BOM', RECAPAGEM: 'RECAPAGEM', CRITICO: 'CRÍTICO',
+};
+
+// Classes de badge (fundo + texto + borda) por condição já normalizada.
+export const CONDICAO_BADGE_CLASSES: Record<CondicaoPneu, string> = {
+  BOM: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-900/30',
+  RECAPAGEM: 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-900/30',
+  CRITICO: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-900/30',
+};
+
+export const CONDICAO_DOT_CLASSES: Record<CondicaoPneu, string> = {
+  BOM: 'bg-emerald-500', RECAPAGEM: 'bg-yellow-400', CRITICO: 'bg-red-500',
+};
+
+export const CONDICAO_HEX: Record<CondicaoPneu, string> = {
+  BOM: '#22c55e', RECAPAGEM: '#facc15', CRITICO: '#ef4444',
+};
 
 export interface InspecaoPneu {
   id?: string;

@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { baixarOuCompartilharPdf } from '@/lib/pdf-share';
+import { normalizarCondicaoPneu } from '@/src/models/pneus';
 
 interface Inspecao {
   id: string;
@@ -45,9 +46,9 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
     }, {} as Record<string, Inspecao>));
 
     const totalVehicles = latestByEq.length;
-    const criticalVehicles = latestByEq.filter(i => i.condicao === 'CRITICO' || i.condicao === 'TROCAR');
-    const warningVehicles = latestByEq.filter(i => i.condicao === 'ATENCAO' || i.condicao === 'REGULAR');
-    const goodVehicles = latestByEq.filter(i => i.condicao === 'BOM');
+    const criticalVehicles = latestByEq.filter(i => normalizarCondicaoPneu(i.condicao, 'BOM') === 'CRITICO');
+    const warningVehicles = latestByEq.filter(i => normalizarCondicaoPneu(i.condicao, 'BOM') === 'RECAPAGEM');
+    const goodVehicles = latestByEq.filter(i => normalizarCondicaoPneu(i.condicao, 'BOM') === 'BOM');
 
     // Média de sulco geral
     const posicoes = ['de','dd','tei','tee','tdi','tde','tei1','tee1','tdi1','tde1','estepe'];

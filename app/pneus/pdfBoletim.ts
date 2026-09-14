@@ -8,6 +8,7 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
+import { corSulcoHex, normalizarCondicaoPneu, CONDICAO_LABEL } from "@/src/models/pneus";
 
 export type InspecaoParaPDF = {
   id: string;
@@ -50,19 +51,16 @@ function celulaSulco(v?: number | null) {
   return v != null ? String(v) : '—';
 }
 
-// Mesma faixa de cor usada no esquema em tela (PneuEsquemaModal) — < 3mm trocar, 3-5 crítico,
-// 6-9 atenção, ≥10 bom — pro PDF refletir visualmente a mesma leitura do app.
+// Mesma faixa de cor usada no esquema em tela (PneuEsquemaModal) e no resto do módulo —
+// fonte única em src/models/pneus.ts: < 5mm crítico, 5-6mm recapagem, > 6mm bom.
 function corSulco(v: number | null): string {
-  if (v == null) return "#d4d4d8";
-  if (v < 3) return "#ef4444";
-  if (v <= 5) return "#fb923c";
-  if (v <= 9) return "#facc15";
-  return "#10b981";
+  return corSulcoHex(v);
 }
 
 function corCondicao(condicao: string): { bg: string; text: string } {
-  if (condicao === "CRITICO" || condicao === "TROCAR") return { bg: "#fee2e2", text: "#b91c1c" };
-  if (condicao === "REGULAR" || condicao === "ATENCAO") return { bg: "#fef9c3", text: "#a16207" };
+  const cond = normalizarCondicaoPneu(condicao, "BOM");
+  if (cond === "CRITICO") return { bg: "#fee2e2", text: "#b91c1c" };
+  if (cond === "RECAPAGEM") return { bg: "#fef9c3", text: "#a16207" };
   return { bg: "#dcfce7", text: "#166534" };
 }
 
@@ -93,6 +91,7 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
   const modulo = ins.equipamentos?.modulo || '—';
   const funcionario = ins.registrado_por_nome || '—';
   const cond = corCondicao(ins.condicao);
+  const condLabel = CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, "BOM")];
 
   const hasEixo2 = ins.tei1 != null || ins.tee1 != null || ins.tdi1 != null || ins.tde1 != null
     || ins.tei1_s1 != null || ins.tee1_s1 != null || ins.tdi1_s1 != null || ins.tde1_s1 != null
@@ -138,7 +137,7 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
                <td style="border-right: 1px solid #166534; padding: 6px; width: 18%;"><div style="color:#6b7280;">MÓDULO</div><div style="font-weight:700;">${modulo}</div></td>
                <td style="border-right: 1px solid #166534; padding: 6px; width: 14%;"><div style="color:#6b7280;">KM</div><div style="font-weight:700;">${ins.km_atual != null ? ins.km_atual.toLocaleString('pt-BR') : '—'}</div></td>
                <td style="border-right: 1px solid #166534; padding: 6px; width: 24%;"><div style="color:#6b7280;">REGISTRADO POR</div><div style="font-weight:700;">${funcionario}</div></td>
-               <td style="padding: 6px; width: 22%;"><div style="color:#6b7280;">CONDIÇÃO GERAL</div><span style="display:inline-block; margin-top:2px; padding:2px 8px; border-radius:10px; font-weight:900; font-size:10px; background:${cond.bg}; color:${cond.text};">${ins.condicao}</span></td>
+               <td style="padding: 6px; width: 22%;"><div style="color:#6b7280;">CONDIÇÃO GERAL</div><span style="display:inline-block; margin-top:2px; padding:2px 8px; border-radius:10px; font-weight:900; font-size:10px; background:${cond.bg}; color:${cond.text};">${condLabel}</span></td>
             </tr>
          </table>
 

@@ -1,6 +1,9 @@
 import { PneusRepository } from '../repositories/PneusRepository';
 import { EquipamentoRepository } from '../repositories/EquipamentoRepository';
-import { InspecaoPneuInsert, InspecaoPneuUpdate, CondicaoPneu } from '../models/pneus';
+import {
+  InspecaoPneuInsert, InspecaoPneuUpdate, CondicaoPneu,
+  calcCondicaoPneu, normalizarCondicaoPneu,
+} from '../models/pneus';
 
 export class PneusService {
   static async getAll() {
@@ -134,26 +137,11 @@ export class PneusService {
   // --- Logic Helpers ---
 
   static calcCondicao(posicoes: Record<string, number | null>): CondicaoPneu {
-    const vals = Object.values(posicoes).filter(v => v != null) as number[];
-    if (!vals.length) return 'BOM';
-    const min = Math.min(...vals);
-    if (min < 3) return 'TROCAR';
-    if (min < 5) return 'CRITICO';
-    if (min < 9) return 'REGULAR';
-    return 'BOM';
+    return calcCondicaoPneu(posicoes);
   }
 
   static sanitizeCondicao(raw: string | null | undefined, fallback: CondicaoPneu): CondicaoPneu {
-    if (!raw || !raw.trim()) return fallback;
-    const clean = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
-    const map: Record<string, CondicaoPneu> = {
-      BOM: 'BOM', BOA: 'BOM', GOOD: 'BOM', OK: 'BOM', OTIMO: 'BOM', EXCELENTE: 'BOM', NOVO: 'BOM',
-      REGULAR: 'REGULAR', REG: 'REGULAR', ATENCAO: 'REGULAR', WATCH: 'REGULAR', MODERADO: 'REGULAR',
-      CRITICO: 'CRITICO', CRITICA: 'CRITICO', CRITICAL: 'CRITICO', URGENTE: 'CRITICO', ALERTA: 'CRITICO',
-      TROCAR: 'TROCAR', REPLACE: 'TROCAR', SUBSTITUIR: 'TROCAR', RUIM: 'TROCAR', MAU: 'TROCAR',
-      DESGASTADO: 'TROCAR', SUCATA: 'TROCAR',
-    };
-    return map[clean] ?? fallback;
+    return normalizarCondicaoPneu(raw, fallback);
   }
 
   private static getVal(row: any, aliases: string[]) {

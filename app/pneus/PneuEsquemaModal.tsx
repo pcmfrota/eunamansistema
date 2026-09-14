@@ -3,6 +3,7 @@
 import React from "react";
 import { X, Calendar, Gauge, AlertTriangle, CheckCircle, Clock, FileDown, Share2 } from "lucide-react";
 import { gerarFichaPneusPDF } from "./pdfBoletim";
+import { condicaoPorSulco, normalizarCondicaoPneu, sulcoTailwind } from "@/src/models/pneus";
 
 type Inspecao = {
   id: string;
@@ -32,29 +33,25 @@ type Inspecao = {
 };
 
 // ── Color helpers ────────────────────────────────────────────────────────────
+// Faixa de sulco (mm) em 3 níveis (fonte única em src/models/pneus.ts): < 5mm crítico,
+// 5-6mm recapagem, > 6mm bom.
 function sulcoBg(v: number | null): string {
-  if (v == null) return "bg-zinc-100 dark:bg-zinc-800 text-zinc-300 dark:text-zinc-600";
-  if (v < 3)  return "bg-red-500 text-white shadow-red-500/50";
-  if (v <= 5) return "bg-orange-400 text-white shadow-orange-400/50";
-  if (v <= 9) return "bg-yellow-400 text-zinc-900 shadow-yellow-400/50";
-  return "bg-emerald-500 text-white shadow-emerald-500/50";
+  return sulcoTailwind(v);
 }
 
 function sulcoGlow(v: number | null): string {
   if (v == null) return "";
-  if (v < 3)  return "shadow-lg shadow-red-500/40";
-  if (v <= 5) return "shadow-lg shadow-orange-400/40";
-  if (v <= 9) return "shadow-lg shadow-yellow-400/40";
+  const c = condicaoPorSulco(v);
+  if (c === "CRITICO") return "shadow-lg shadow-red-500/40";
+  if (c === "RECAPAGEM") return "shadow-lg shadow-yellow-400/40";
   return "shadow-lg shadow-emerald-500/40";
 }
 
 function condColor(c: string) {
-  return c === "BOM"    ? "text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/30"
-       : c === "REGULAR"? "text-yellow-600 bg-yellow-50 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-400"
-       : c === "ATENCAO"? "text-yellow-600 bg-yellow-50 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-400"
-       : c === "CRITICO"? "text-orange-600 bg-orange-50 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400"
-       : c === "TROCAR" ? "text-red-600 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400"
-       : "text-zinc-500 bg-zinc-50 border-zinc-200";
+  const cond = normalizarCondicaoPneu(c, "BOM");
+  return cond === "BOM" ? "text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/30"
+       : cond === "RECAPAGEM" ? "text-yellow-600 bg-yellow-50 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-400"
+       : "text-red-600 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400";
 }
 
 function fmtDate(s: string | null) {

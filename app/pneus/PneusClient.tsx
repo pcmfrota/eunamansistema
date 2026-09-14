@@ -16,6 +16,10 @@ import { localDb } from "@/lib/offline-db";
 import { cn } from "@/lib/utils";
 import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from "./pdfBoletim";
 import FichaPreviewModal from "@/components/FichaPreviewModal";
+import {
+  normalizarCondicaoPneu, sulcoTailwind,
+  CONDICAO_BADGE_CLASSES, CONDICAO_HEX, CONDICAO_LABEL,
+} from "@/src/models/pneus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };
@@ -53,28 +57,17 @@ const POSICOES = ["de","dd","tei","tee","tdi","tde","tei1","tee1","tdi1","tde1",
 type Pos = typeof POSICOES[number];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Faixa de sulco (mm) e cor/rótulo por condição — fonte única em src/models/pneus.ts:
+// < 5mm crítico, 5-6mm recapagem, > 6mm bom.
 function sulcoColor(v: number | null): string {
-  if (v == null) return "bg-zinc-100 dark:bg-zinc-800 text-zinc-400";
-  if (v < 3) return "bg-red-500 text-white"; // < 3mm (Trocar)
-  if (v <= 5) return "bg-orange-400 text-white"; // 3-5mm (Crítico)
-  if (v <= 9) return "bg-yellow-400 text-zinc-900"; // 6-9mm (Atenção)
-  return "bg-emerald-500 text-white"; // >= 10mm (Bom)
+  return sulcoTailwind(v);
 }
 
 function condBadge(c: string) {
-  const map: Record<string, string> = {
-    BOM: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-    REGULAR: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400",
-    ATENCAO: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400",
-    CRITICO: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
-    TROCAR: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-  };
-  return map[c] || map.BOM;
+  return CONDICAO_BADGE_CLASSES[normalizarCondicaoPneu(c, "BOM")];
 }
 
-const COND_COLOR: Record<string, string> = {
-  BOM: "#22c55e", REGULAR: "#facc15", ATENCAO: "#facc15", CRITICO: "#f97316", TROCAR: "#ef4444",
-};
+const COND_COLOR: Record<string, string> = CONDICAO_HEX;
 
 function fmtDate(dateStr: string | null) {
   if (!dateStr) return "-";
@@ -153,7 +146,7 @@ export default function PneusClient({
   const [editingItem, setEditingItem] = useState<Inspecao | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moduloFiltro, setModuloFiltro] = useState<string>("TODOS");
-  // "TODOS" ou um dos rótulos dos cartões de KPI (BOM/REGULAR/ATENCAO/CRITICO/TROCAR/PENDENTE) —
+  // "TODOS" ou um dos rótulos dos cartões de KPI (BOM/RECAPAGEM/CRITICO/PENDENTE) —
   // clicar num cartão filtra a tabela de veículos abaixo por aquele status; clicar de novo limpa.
   const [condicaoFiltro, setCondicaoFiltro] = useState<string>("TODOS");
   const handleClickCondicao = (label: string) => {
@@ -297,7 +290,7 @@ export default function PneusClient({
     const eq = i.equipamento_id ? equipamentos.find(e => e.id === i.equipamento_id) : null;
     if (eq && !isEquipamentoAtivo(eq)) return false;
     const matchesSearch = !search || i.equipamentos?.placa?.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !searchStatus || i.condicao === searchStatus;
+    const matchesStatus = !searchStatus || normalizarCondicaoPneu(i.condicao, 'BOM') === searchStatus;
     const iDate = i.data_inspecao.split('T')[0];
     const matchesDate = (!dateInicio || iDate >= dateInicio) && (!dateFim || iDate <= dateFim);
     return matchesSearch && matchesStatus && matchesDate;
@@ -327,11 +320,10 @@ export default function PneusClient({
 
   // ── Per-module KPI helper ──
   const getModuloCounts = (items: DashRow[]) => {
-    const c = { BOM: 0, REGULAR: 0, ATENCAO: 0, CRITICO: 0, TROCAR: 0, PENDENTE: 0 };
+    const c = { BOM: 0, RECAPAGEM: 0, CRITICO: 0, PENDENTE: 0 };
     items.forEach(row => {
       if (row.kind === 'pendente') { c.PENDENTE++; return; }
-      const cond = row.ins.condicao;
-      if (cond in c) (c as any)[cond]++;
+      c[normalizarCondicaoPneu(row.ins.condicao, 'BOM')]++;
     });
     return c;
   };
@@ -386,12 +378,12 @@ export default function PneusClient({
       a === 'SEM MÓDULO' ? 1 : b === 'SEM MÓDULO' ? -1 : a.localeCompare(b)
     )];
 
-    const counts = { BOM: 0, REGULAR: 0, ATENCAO: 0, CRITICO: 0, TROCAR: 0 };
+    const counts = { BOM: 0, RECAPAGEM: 0, CRITICO: 0 };
     latest.forEach(ins => {
-      if (ins.condicao in counts) (counts as any)[ins.condicao]++;
+      counts[normalizarCondicaoPneu(ins.condicao, 'BOM')]++;
     });
     const pendentesCount = eqs.length - latest.length;
-    const critList = latest.filter(i => i.condicao === 'CRITICO' || i.condicao === 'TROCAR');
+    const critList = latest.filter(i => normalizarCondicaoPneu(i.condicao, 'BOM') === 'CRITICO');
     const pieData = Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
     const latestDate = latest.length > 0
       ? latest.reduce((l, c) => (!l || c.data_inspecao > l ? c.data_inspecao : l), '')
@@ -466,7 +458,7 @@ export default function PneusClient({
           } else {
             const matches = condicaoFiltro === 'PENDENTE'
               ? row.kind === 'pendente'
-              : row.kind === 'inspecao' && row.ins.condicao === condicaoFiltro;
+              : row.kind === 'inspecao' && normalizarCondicaoPneu(row.ins.condicao, 'BOM') === condicaoFiltro;
             if (!matches) return;
           }
         }
@@ -803,9 +795,8 @@ export default function PneusClient({
                 </div>
                 <div className="flex gap-3 text-[10px] font-black uppercase tracking-tighter text-zinc-400 ml-2">
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Atenção</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-400" /> Crítico</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Trocar</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Recapagem</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Crítico</span>
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-300" /> Pendente</span>
                 </div>
               </div>
@@ -845,8 +836,7 @@ export default function PneusClient({
                      <div className="flex items-center justify-between mb-3">
                         <span className={`p-2 rounded-xl ${
                           label === 'BOM' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10' :
-                          label === 'REGULAR' || label === 'ATENCAO' ? 'bg-yellow-50 text-yellow-500 dark:bg-yellow-500/10' :
-                          label === 'CRITICO' ? 'bg-orange-50 text-orange-500 dark:bg-orange-500/10' :
+                          label === 'RECAPAGEM' ? 'bg-yellow-50 text-yellow-500 dark:bg-yellow-500/10' :
                           'bg-red-50 text-red-500 dark:bg-red-500/10'
                         }`}>
                            <Circle size={18} fill="currentColor" fillOpacity={0.2} />
@@ -904,7 +894,7 @@ export default function PneusClient({
               const items = todosItensFiltrados.map(x => x.row);
               const modCounts = getModuloCounts(items);
               const modTotal = items.length || 1;
-              const totalCriticos = items.filter(row => row.kind === 'inspecao' && (row.ins.condicao === "CRITICO" || row.ins.condicao === "TROCAR")).length;
+              const totalCriticos = items.filter(row => row.kind === 'inspecao' && normalizarCondicaoPneu(row.ins.condicao, 'BOM') === "CRITICO").length;
               const totalPendentes = items.filter(row => row.kind === 'pendente').length;
 
               return (
@@ -947,9 +937,8 @@ export default function PneusClient({
                       {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
                         <span key={lbl} className={`px-2.5 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
                           lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
-                          lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
-                          lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' :
-                          lbl === 'TROCAR' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                          lbl === 'RECAPAGEM' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
+                          lbl === 'CRITICO' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
                           'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
                         }`}>
                           {v} {lbl}
@@ -1020,13 +1009,8 @@ export default function PneusClient({
                                   </td>
                                 ))}
                                 <td className="px-4 py-3 text-center">
-                                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${
-                                    ins.condicao === 'BOM' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-900/30' :
-                                    ins.condicao === 'ATENCAO' || ins.condicao === 'REGULAR' ? 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-900/30' :
-                                    ins.condicao === 'CRITICO' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-900/30' :
-                                    'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-900/30'
-                                  }`}>
-                                    {ins.condicao}
+                                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>
+                                    {CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}
                                   </span>
                                 </td>
                               </tr>
@@ -1105,9 +1089,8 @@ export default function PneusClient({
                               {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
                                 <span key={lbl} className={`px-2 py-0.5 text-[8px] font-black rounded-full uppercase ${
                                   lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700' :
-                                  lbl === 'ATENCAO' || lbl === 'REGULAR' ? 'bg-yellow-100 text-yellow-700' :
-                                  lbl === 'CRITICO' ? 'bg-orange-100 text-orange-700' :
-                                  lbl === 'TROCAR' ? 'bg-red-100 text-red-700' :
+                                  lbl === 'RECAPAGEM' ? 'bg-yellow-100 text-yellow-700' :
+                                  lbl === 'CRITICO' ? 'bg-red-100 text-red-700' :
                                   'bg-zinc-100 text-zinc-500'
                                 }`}>
                                   {v} {lbl} ({Math.round((v/modTotal)*100)}%)
@@ -1200,7 +1183,7 @@ export default function PneusClient({
                         <td className="px-4 py-4 text-zinc-500">{fmtDate(ins.data_inspecao)}</td>
                         <td className="px-4 py-4 text-center font-black text-blue-600">{ins.km_atual || '??'}</td>
                         <td className="px-4 py-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
+                          <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}</span>
                         </td>
                         <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
                           {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
@@ -1267,7 +1250,7 @@ export default function PneusClient({
                           </td>
                         ))}
                         <td className="px-4 py-4 text-center align-top">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
+                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}</span>
                         </td>
                         <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400 align-top">
                           {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
@@ -1330,7 +1313,7 @@ export default function PneusClient({
                            </td>
                         ))}
                         <td className="px-4 py-4 text-center">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{ins.condicao}</span>
+                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}</span>
                         </td>
                         <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
                           {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
