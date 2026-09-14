@@ -58,7 +58,7 @@ type Pos = typeof POSICOES[number];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // Faixa de sulco (mm) e cor/rótulo por condição — fonte única em src/models/pneus.ts:
-// < 5mm crítico, 5-6mm recapagem, > 6mm bom.
+// até 4mm crítico, 5-6mm recapagem, acima de 6mm bom.
 function sulcoColor(v: number | null): string {
   return sulcoTailwind(v);
 }

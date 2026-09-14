@@ -161,7 +161,7 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
                   <InsightCard 
                     icon={<AlertOctagon size={20} className="text-red-500" />}
                     title="Ação Imediata Necessária"
-                    desc={`Identificamos ${analysis.criticalCount} veículos com sulco inferior a 3.0mm. Estes pneus representam risco de segurança e multa.`}
+                    desc={`Identificamos ${analysis.criticalCount} veículos com sulco de até 4.0mm. Estes pneus representam risco de segurança e multa.`}
                     color="red"
                   />
                 )}
@@ -174,7 +174,7 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
                 <InsightCard 
                   icon={<Target size={20} className="text-blue-500" />}
                   title="Foco Operacional"
-                  desc="Aumentar a frequência de inspeção bi-semanal para placas com sulco entre 6mm-9mm para prever compras."
+                  desc="Aumentar a frequência de inspeção bi-semanal para placas com sulco entre 5mm-6mm (recapagem) para prever compras."
                   color="blue"
                 />
               </div>

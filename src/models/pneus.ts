@@ -1,12 +1,12 @@
 // Escala de sulco (mm) em 3 faixas — fonte única usada por todo o módulo de Pneus (telas,
-// esquema, PDF, filtros, dashboard): abaixo de 5mm é crítico (troca imediata), de 5 a 6mm
-// entra em recapagem, acima de 6mm está bom. Cada boletim usa o PIOR valor entre todas as
-// leituras (Sulco 1/2/3 de todas as posições) pra decidir a condição geral do veículo.
+// esquema, PDF, filtros, dashboard): até 4mm é crítico (troca imediata), de 5 a 6mm entra em
+// recapagem, acima de 6mm está bom. Cada boletim usa o PIOR valor entre todas as leituras
+// (Sulco 1/2/3 de todas as posições) pra decidir a condição geral do veículo.
 export type CondicaoPneu = 'BOM' | 'RECAPAGEM' | 'CRITICO';
 
 export function condicaoPorSulco(v: number | null | undefined): CondicaoPneu {
   if (v == null) return 'BOM';
-  if (v < 5) return 'CRITICO';
+  if (v <= 4) return 'CRITICO';
   if (v <= 6) return 'RECAPAGEM';
   return 'BOM';
 }

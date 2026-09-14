@@ -52,7 +52,7 @@ function celulaSulco(v?: number | null) {
 }
 
 // Mesma faixa de cor usada no esquema em tela (PneuEsquemaModal) e no resto do módulo —
-// fonte única em src/models/pneus.ts: < 5mm crítico, 5-6mm recapagem, > 6mm bom.
+// fonte única em src/models/pneus.ts: até 4mm crítico, 5-6mm recapagem, acima de 6mm bom.
 function corSulco(v: number | null): string {
   return corSulcoHex(v);
 }

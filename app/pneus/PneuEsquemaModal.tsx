@@ -33,8 +33,8 @@ type Inspecao = {
 };
 
 // ── Color helpers ────────────────────────────────────────────────────────────
-// Faixa de sulco (mm) em 3 níveis (fonte única em src/models/pneus.ts): < 5mm crítico,
-// 5-6mm recapagem, > 6mm bom.
+// Faixa de sulco (mm) em 3 níveis (fonte única em src/models/pneus.ts): até 4mm crítico,
+// 5-6mm recapagem, acima de 6mm bom.
 function sulcoBg(v: number | null): string {
   return sulcoTailwind(v);
 }
@@ -200,10 +200,9 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
             <span className="text-zinc-900 dark:text-zinc-50">{allValues.length} preenchidas</span>
           </div>
           <div className="flex gap-3 ml-auto text-[9px] font-black text-zinc-400">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> ≥10mm Bom</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-400 inline-block" /> 6-9mm Aten.</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-orange-400 inline-block" /> 3-5mm Crít.</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /> &lt;3mm Trocar</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> &gt;6mm Bom</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-yellow-400 inline-block" /> 5-6mm Recap.</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /> ≤4mm Crít.</span>
           </div>
         </div>
 
