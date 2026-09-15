@@ -9,9 +9,9 @@ const POSICOES = ['de','dd','tei','tee','tdi','tde','tei1','tee1','tdi1','tde1',
 
 // Cada posição vira 3 chaves de sulco: a base (sem sufixo) é o Sulco 2 (meio, mesmo campo
 // já usado no Dashboard/gráficos principais), "_s1" é o Sulco 1 (lado direito) e "_s3" é o
-// Sulco 3 (lado esquerdo). A condição geral do boletim considera o pior valor entre os 3
-// sulcos de todas as posições — um lado bem desgastado não pode passar despercebido só
-// porque o meio do pneu ainda está bom.
+// Sulco 3 (lado esquerdo). A condição geral do boletim considera só o pior Sulco 2 (meio)
+// entre todas as posições — Sulco 1/3 são gravados e aparecem na aba Sulcos Detalhados, mas
+// não entram nesse cálculo (calcCondicaoPneu, em src/models/pneus.ts).
 const CAMPOS_SULCO = POSICOES.flatMap(pos => [pos, `${pos}_s1`, `${pos}_s3`] as const)
 
 function lerSulcosDoFormData(formData: FormData) {

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, Eye, ArrowLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid } from "lucide-react";
-import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { registrarInspecaoCompleta, atualizarInspecao, excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import PneusModal from "./PneusModal";
@@ -388,10 +388,18 @@ export default function PneusClient({
     const latestDate = latest.length > 0
       ? latest.reduce((l, c) => (!l || c.data_inspecao > l ? c.data_inspecao : l), '')
       : null;
-    const pMedia = POSICOES.map(pos => {
-      const vals = latest.map(i => i[pos]).filter(v => v != null) as number[];
-      return { pos: pos.toUpperCase(), media: vals.length ? Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10 : 0 };
-    }).filter(d => d.media > 0);
+    // Média das 3 medições (Direito/Meio/Esquerdo) de cada posição — pro gráfico "Média de
+    // Desgaste" mostrar o desgaste lateral, não só o meio que alimenta a condição geral.
+    const avg = (vals: (number | null | undefined)[]) => {
+      const nums = vals.filter((v): v is number => v != null);
+      return nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : 0;
+    };
+    const pMedia = POSICOES.map(pos => ({
+      pos: pos.toUpperCase(),
+      mediaDir: avg(latest.map(i => (i as any)[`${pos}_s1`])),
+      media: avg(latest.map(i => i[pos])),
+      mediaEsq: avg(latest.map(i => (i as any)[`${pos}_s3`])),
+    })).filter(d => d.media > 0 || d.mediaDir > 0 || d.mediaEsq > 0);
 
     // Placas há mais de LIMITE_DIAS_BOLETIM dias sem nenhum boletim (ou que nunca tiveram
     // um) — independe do período selecionado nos filtros de data, usa o histórico real.
@@ -812,7 +820,7 @@ export default function PneusClient({
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> Bom — sulco acima de 6mm</span>
               </div>
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                Vale o <b>pior valor</b> entre todas as medições (Direito, Meio e Esquerdo de todas as posições) — um único ponto ruim já classifica o veículo inteiro. <b>Exemplo:</b> se 10 leituras estão em 12mm e só o Sulco 1 do TDE está em 3mm, a condição geral vira <b>CRÍTICO</b>.
+                Vale o <b>pior valor entre o Sulco 2 (meio)</b> de todas as posições — Sulco 1 (direito) e Sulco 3 (esquerdo) são só apoio visual, não entram nessa conta. <b>Exemplo:</b> se 10 posições estão com meio em 12mm e o TDE está com meio em 3mm, a condição geral vira <b>CRÍTICO</b>.
               </p>
             </div>
 
@@ -1138,14 +1146,17 @@ export default function PneusClient({
                </div>
 
                <div className="bg-white dark:bg-zinc-950 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm min-h-[400px]">
-                 <h3 className="font-bold text-zinc-800 dark:text-zinc-200 mb-8 flex items-center gap-2">📈 Média de Desgaste (Sulcos)</h3>
+                 <h3 className="font-bold text-zinc-800 dark:text-zinc-200 mb-8 flex items-center gap-2">📈 Média de Desgaste (Sulcos) — Direito / Meio / Esquerdo</h3>
                  <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={posMedia} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" opacity={0.5} />
                       <XAxis dataKey="pos" tick={{ fontSize: 9, fontWeight: 800, fill: '#71717a' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fontWeight: 700, fill: '#71717a' }} axisLine={false} tickLine={false} />
                       <Tooltip cursor={{ fill: '#f4f4f5', radius: 10 }} contentStyle={{ borderRadius: '12px' }} />
-                      <Bar dataKey="media" fill="#f97316" radius={[6, 6, 0, 0]} barSize={30} />
+                      <Legend wrapperStyle={{ fontSize: 10, fontWeight: 700 }} />
+                      <Bar dataKey="mediaDir" name="Direito" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={16} />
+                      <Bar dataKey="media" name="Meio" fill="#f97316" radius={[6, 6, 0, 0]} barSize={16} />
+                      <Bar dataKey="mediaEsq" name="Esquerdo" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={16} />
                     </BarChart>
                  </ResponsiveContainer>
                </div>

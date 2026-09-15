@@ -35,6 +35,10 @@ const POSI_LABELS: [string, string][] = [
 // e pra ler/parsear os valores de forma genérica, em vez de repetir os 33 campos à mão.
 const SULCO_FIELDS: string[] = POSI_LABELS.flatMap(([, key]) => [`${key}_s1`, key, `${key}_s3`])
 
+// Só o Sulco 2 (meio) de cada posição entra no cálculo automático da condição geral —
+// Sulco 1/3 (laterais) ficam de fora de propósito, pra deixar a classificação previsível.
+const MEIO_FIELDS: string[] = POSI_LABELS.map(([, key]) => key)
+
 const getCurrentLocalDatetime = () => {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -101,10 +105,11 @@ export default function PneusModal({
   }, [editData, isLoaded, setForm])
 
   // --- Automatic Condition Analysis ---
-  // Considera o pior valor entre os 3 sulcos (direito/meio/esquerdo) de todas as posições —
-  // um lado bem desgastado não pode passar despercebido só porque o meio ainda está bom.
+  // Considera só o pior valor entre os Sulco 2 (meio) de todas as posições — Sulco 1/3
+  // (laterais) não entram, pra manter a classificação previsível e ligada à mesma leitura
+  // que sempre alimentou o Dashboard.
   useEffect(() => {
-    const values = SULCO_FIELDS.map(k => parseFloat((form as any)[k])).filter(v => !isNaN(v));
+    const values = MEIO_FIELDS.map(k => parseFloat((form as any)[k])).filter(v => !isNaN(v));
 
     if (values.length === 0) return;
 
@@ -113,7 +118,7 @@ export default function PneusModal({
     if (form.condicao !== autoCond) {
       setForm(prev => ({ ...prev, condicao: autoCond }));
     }
-  }, [...SULCO_FIELDS.map(f => (form as any)[f])]);
+  }, [...MEIO_FIELDS.map(f => (form as any)[f])]);
 
   if (!isOpen) return null
 
@@ -439,7 +444,7 @@ export default function PneusModal({
                   <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> Bom — sulco acima de 6mm</span>
                 </div>
                 <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                  Vale o <b>pior valor</b> entre todas as medições (Direito, Meio e Esquerdo de todas as posições) — um único ponto ruim já classifica o veículo inteiro. <b>Exemplo:</b> se 10 leituras estão em 12mm e só o Sulco 1 do TDE está em 3mm, a condição geral vira <b>CRÍTICO</b>.
+                  Vale o <b>pior valor entre o Sulco 2 (meio)</b> de todas as posições — Sulco 1 (direito) e Sulco 3 (esquerdo) são só apoio visual, não entram nessa conta. <b>Exemplo:</b> se 10 posições estão com meio em 12mm e o TDE está com meio em 3mm, a condição geral vira <b>CRÍTICO</b>.
                 </p>
               </div>
             </div>

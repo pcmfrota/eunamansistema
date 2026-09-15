@@ -1,7 +1,6 @@
 // Escala de sulco (mm) em 3 faixas — fonte única usada por todo o módulo de Pneus (telas,
 // esquema, PDF, filtros, dashboard): até 4mm é crítico (troca imediata), de 5 a 6mm entra em
-// recapagem, acima de 6mm está bom. Cada boletim usa o PIOR valor entre todas as leituras
-// (Sulco 1/2/3 de todas as posições) pra decidir a condição geral do veículo.
+// recapagem, acima de 6mm está bom.
 export type CondicaoPneu = 'BOM' | 'RECAPAGEM' | 'CRITICO';
 
 export function condicaoPorSulco(v: number | null | undefined): CondicaoPneu {
@@ -11,8 +10,16 @@ export function condicaoPorSulco(v: number | null | undefined): CondicaoPneu {
   return 'BOM';
 }
 
+// Posições base (Sulco 2 / meio) de cada pneu — é só esse valor que entra no cálculo da
+// condição geral. Sulco 1 (direito) e Sulco 3 (esquerdo) ficam de fora de propósito: são
+// medidas de apoio pra enxergar desgaste irregular na aba Sulcos Detalhados, mas tornavam a
+// condição imprevisível quando um deles vinha pior que o meio sem o operador perceber.
+const CAMPOS_MEIO = ['de', 'dd', 'tei', 'tee', 'tdi', 'tde', 'tei1', 'tee1', 'tdi1', 'tde1', 'estepe'] as const;
+
 export function calcCondicaoPneu(posicoes: Record<string, number | null | undefined>): CondicaoPneu {
-  const vals = Object.values(posicoes).filter((v): v is number => v != null);
+  const vals = CAMPOS_MEIO
+    .map(k => posicoes[k])
+    .filter((v): v is number => v != null);
   if (!vals.length) return 'BOM';
   return condicaoPorSulco(Math.min(...vals));
 }
