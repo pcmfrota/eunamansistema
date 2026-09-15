@@ -16,10 +16,13 @@ export function condicaoPorSulco(v: number | null | undefined): CondicaoPneu {
 // condição imprevisível quando um deles vinha pior que o meio sem o operador perceber.
 const CAMPOS_MEIO = ['de', 'dd', 'tei', 'tee', 'tdi', 'tde', 'tei1', 'tee1', 'tdi1', 'tde1', 'estepe'] as const;
 
-export function calcCondicaoPneu(posicoes: Record<string, number | null | undefined>): CondicaoPneu {
+// Aceita qualquer objeto com os campos de posição (de, dd, ...), inclusive uma InspecaoPneu
+// completa com outros campos misturados (id, equipamentos, condicao gravada etc.) — só as
+// chaves de CAMPOS_MEIO são lidas, o resto é ignorado.
+export function calcCondicaoPneu(posicoes: Record<string, any>): CondicaoPneu {
   const vals = CAMPOS_MEIO
     .map(k => posicoes[k])
-    .filter((v): v is number => v != null);
+    .filter((v): v is number => typeof v === 'number');
   if (!vals.length) return 'BOM';
   return condicaoPorSulco(Math.min(...vals));
 }

@@ -3,7 +3,7 @@
 import React from "react";
 import { X, Calendar, Gauge, AlertTriangle, CheckCircle, Clock, FileDown, Share2 } from "lucide-react";
 import { gerarFichaPneusPDF } from "./pdfBoletim";
-import { condicaoPorSulco, normalizarCondicaoPneu, sulcoTailwind } from "@/src/models/pneus";
+import { condicaoPorSulco, normalizarCondicaoPneu, sulcoTailwind, calcCondicaoPneu, CONDICAO_LABEL } from "@/src/models/pneus";
 
 type Inspecao = {
   id: string;
@@ -141,6 +141,13 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
   const categoria = ins.equipamentos?.categoria ?? "PESADA";
   const isLeve = categoria.toUpperCase() === "LEVE";
 
+  // Calcula a condição ao vivo a partir do Sulco 2 (meio) de cada posição, em vez de
+  // confiar no campo salvo — assim bate com as cores das caixinhas do esquema mesmo em
+  // boletins lançados antes de alguma mudança de regra. "PENDENTE" é um marcador sintético
+  // (veículo nunca inspecionado, ver PneusClient), não uma condição de sulco de verdade.
+  const isPendente = ins.condicao === "PENDENTE";
+  const condicaoAtual = isPendente ? null : calcCondicaoPneu(ins);
+
   const hasEixo2 = !isLeve && (
     ins.tei1 != null || ins.tee1 != null || ins.tdi1 != null || ins.tde1 != null
   );
@@ -167,8 +174,12 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-50 tracking-tight">{placa}</h2>
-                <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest border ${condColor(ins.condicao)}`}>
-                  {ins.condicao}
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest border ${
+                  isPendente
+                    ? "text-zinc-500 bg-zinc-50 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                    : condColor(condicaoAtual!)
+                }`}>
+                  {isPendente ? "PENDENTE" : CONDICAO_LABEL[condicaoAtual!]}
                 </span>
               </div>
               <div className="flex items-center gap-4 mt-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wide">

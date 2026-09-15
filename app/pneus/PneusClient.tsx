@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from "./pdfBoletim";
 import FichaPreviewModal from "@/components/FichaPreviewModal";
 import {
-  normalizarCondicaoPneu, sulcoTailwind,
+  normalizarCondicaoPneu, sulcoTailwind, calcCondicaoPneu,
   CONDICAO_BADGE_CLASSES, CONDICAO_HEX, CONDICAO_LABEL,
 } from "@/src/models/pneus";
 
@@ -290,7 +290,7 @@ export default function PneusClient({
     const eq = i.equipamento_id ? equipamentos.find(e => e.id === i.equipamento_id) : null;
     if (eq && !isEquipamentoAtivo(eq)) return false;
     const matchesSearch = !search || i.equipamentos?.placa?.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !searchStatus || normalizarCondicaoPneu(i.condicao, 'BOM') === searchStatus;
+    const matchesStatus = !searchStatus || calcCondicaoPneu(i) === searchStatus;
     const iDate = i.data_inspecao.split('T')[0];
     const matchesDate = (!dateInicio || iDate >= dateInicio) && (!dateFim || iDate <= dateFim);
     return matchesSearch && matchesStatus && matchesDate;
@@ -323,7 +323,7 @@ export default function PneusClient({
     const c = { BOM: 0, RECAPAGEM: 0, CRITICO: 0, PENDENTE: 0 };
     items.forEach(row => {
       if (row.kind === 'pendente') { c.PENDENTE++; return; }
-      c[normalizarCondicaoPneu(row.ins.condicao, 'BOM')]++;
+      c[calcCondicaoPneu(row.ins)]++;
     });
     return c;
   };
@@ -380,10 +380,10 @@ export default function PneusClient({
 
     const counts = { BOM: 0, RECAPAGEM: 0, CRITICO: 0 };
     latest.forEach(ins => {
-      counts[normalizarCondicaoPneu(ins.condicao, 'BOM')]++;
+      counts[calcCondicaoPneu(ins)]++;
     });
     const pendentesCount = eqs.length - latest.length;
-    const critList = latest.filter(i => normalizarCondicaoPneu(i.condicao, 'BOM') === 'CRITICO');
+    const critList = latest.filter(i => calcCondicaoPneu(i) === 'CRITICO');
     const pieData = Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
     const latestDate = latest.length > 0
       ? latest.reduce((l, c) => (!l || c.data_inspecao > l ? c.data_inspecao : l), '')
@@ -466,7 +466,7 @@ export default function PneusClient({
           } else {
             const matches = condicaoFiltro === 'PENDENTE'
               ? row.kind === 'pendente'
-              : row.kind === 'inspecao' && normalizarCondicaoPneu(row.ins.condicao, 'BOM') === condicaoFiltro;
+              : row.kind === 'inspecao' && calcCondicaoPneu(row.ins) === condicaoFiltro;
             if (!matches) return;
           }
         }
@@ -492,7 +492,7 @@ export default function PneusClient({
       return;
     }
     const rows = inspecoes.map(i => ({
-      Placa: i.equipamentos?.placa, Data: fmtDate(i.data_inspecao), Km: i.km_atual, Condicao: i.condicao,
+      Placa: i.equipamentos?.placa, Data: fmtDate(i.data_inspecao), Km: i.km_atual, Condicao: CONDICAO_LABEL[calcCondicaoPneu(i)],
       DE: i.de, DD: i.dd, TEI: i.tei, TEE: i.tee, TDI: i.tdi, TDE: i.tde, ESTEPE: i.estepe
     }));
     const ws = XLSXLib.utils.json_to_sheet(rows);
@@ -916,7 +916,7 @@ export default function PneusClient({
               const items = todosItensFiltrados.map(x => x.row);
               const modCounts = getModuloCounts(items);
               const modTotal = items.length || 1;
-              const totalCriticos = items.filter(row => row.kind === 'inspecao' && normalizarCondicaoPneu(row.ins.condicao, 'BOM') === "CRITICO").length;
+              const totalCriticos = items.filter(row => row.kind === 'inspecao' && calcCondicaoPneu(row.ins) === "CRITICO").length;
               const totalPendentes = items.filter(row => row.kind === 'pendente').length;
 
               return (
@@ -1196,7 +1196,7 @@ export default function PneusClient({
                         <td className="px-4 py-4 text-zinc-500">{fmtDate(ins.data_inspecao)}</td>
                         <td className="px-4 py-4 text-center font-black text-blue-600">{ins.km_atual || '??'}</td>
                         <td className="px-4 py-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}</span>
+                          <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>{CONDICAO_LABEL[calcCondicaoPneu(ins)]}</span>
                         </td>
                         <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
                           {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
@@ -1263,7 +1263,7 @@ export default function PneusClient({
                           </td>
                         ))}
                         <td className="px-4 py-4 text-center align-top">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}</span>
+                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>{CONDICAO_LABEL[calcCondicaoPneu(ins)]}</span>
                         </td>
                         <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400 align-top">
                           {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
@@ -1326,7 +1326,7 @@ export default function PneusClient({
                            </td>
                         ))}
                         <td className="px-4 py-4 text-center">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>{CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}</span>
+                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>{CONDICAO_LABEL[calcCondicaoPneu(ins)]}</span>
                         </td>
                         <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
                           {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}

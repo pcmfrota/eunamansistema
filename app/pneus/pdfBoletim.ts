@@ -8,7 +8,7 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
-import { corSulcoHex, normalizarCondicaoPneu, CONDICAO_LABEL } from "@/src/models/pneus";
+import { corSulcoHex, normalizarCondicaoPneu, calcCondicaoPneu, CONDICAO_LABEL } from "@/src/models/pneus";
 
 export type InspecaoParaPDF = {
   id: string;
@@ -89,8 +89,11 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
   const placa = ins.equipamentos?.placa || '—';
   const modulo = ins.equipamentos?.modulo || '—';
   const funcionario = ins.registrado_por_nome || '—';
-  const cond = corCondicao(ins.condicao);
-  const condLabel = CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, "BOM")];
+  // Calculada ao vivo a partir do Sulco 2 (meio) — não confia no campo salvo, que pode ser
+  // de antes de alguma mudança de regra.
+  const condicaoAtual = calcCondicaoPneu(ins);
+  const cond = corCondicao(condicaoAtual);
+  const condLabel = CONDICAO_LABEL[condicaoAtual];
 
   const hasEixo2 = ins.tei1 != null || ins.tee1 != null || ins.tdi1 != null || ins.tde1 != null
     || ins.tei1_s1 != null || ins.tee1_s1 != null || ins.tdi1_s1 != null || ins.tde1_s1 != null
