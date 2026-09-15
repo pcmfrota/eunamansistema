@@ -64,13 +64,12 @@ function corCondicao(condicao: string): { bg: string; text: string } {
   return { bg: "#dcfce7", text: "#166534" };
 }
 
-// Uma posição do esquema — mostra os 3 sulcos (D/M/E) empilhados dentro de uma caixinha
-// colorida pelo pior valor, igual à leitura já usada no esquema em tela e no dashboard.
+// Uma posição do esquema — mostra os 3 sulcos (D/M/E) lado a lado, mas a cor da caixinha
+// segue só o Sulco 2 (meio), igual a toda regra de condição do sistema (crítico/recapagem/
+// bom nunca considera Sulco 1/3, que são só apoio visual pra desgaste irregular).
 function caixaPosicao(label: string, s1: number | null | undefined, s2: number | null | undefined, s3: number | null | undefined) {
-  const vals = [s1, s2, s3].filter((v): v is number => v != null);
-  const pior = vals.length ? Math.min(...vals) : null;
-  const preenchida = vals.length > 0;
-  const bg = corSulco(pior);
+  const preenchida = s2 != null;
+  const bg = corSulco(s2 ?? null);
   return `
     <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
       <div style="width:74px;padding:5px 2px;border-radius:9px;text-align:center;
