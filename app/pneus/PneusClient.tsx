@@ -981,7 +981,6 @@ export default function PneusClient({
                           <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
                           <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
                           <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Status</th>
                         </tr>
                         <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
                           <th className="px-6 py-1.5" />
@@ -990,7 +989,6 @@ export default function PneusClient({
                           {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
                             <th key={l} className="px-1 py-1.5 text-center text-orange-500/70 font-black">{l}</th>
                           ))}
-                          <th className="px-4 py-1.5" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
@@ -1030,11 +1028,6 @@ export default function PneusClient({
                                     }
                                   </td>
                                 ))}
-                                <td className="px-4 py-3 text-center">
-                                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(ins.condicao)}`}>
-                                    {CONDICAO_LABEL[normalizarCondicaoPneu(ins.condicao, 'BOM')]}
-                                  </span>
-                                </td>
                               </tr>
                             );
                           } else {
@@ -1083,11 +1076,6 @@ export default function PneusClient({
                                     <span className="inline-block w-8 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 text-zinc-200 dark:text-zinc-700 text-center">—</span>
                                   </td>
                                 ))}
-                                <td className="px-4 py-3 text-center">
-                                  <span className="px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border border-dashed border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500">
-                                    PENDENTE
-                                  </span>
-                                </td>
                               </tr>
                             );
                           }
