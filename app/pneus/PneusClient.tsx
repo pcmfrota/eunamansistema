@@ -802,6 +802,20 @@ export default function PneusClient({
               </div>
             </div>
 
+            {/* Explica a lógica de cálculo da condição geral (mesmo texto do formulário de
+                registro), aqui na aba principal do Boletim pra quem só está consultando. */}
+            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-5 space-y-2">
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Como a condição geral é calculada</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" /> Crítico — sulco até 4mm</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shrink-0" /> Recapagem — sulco de 5 a 6mm</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> Bom — sulco acima de 6mm</span>
+              </div>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                Vale o <b>pior valor</b> entre todas as medições (Direito, Meio e Esquerdo de todas as posições) — um único ponto ruim já classifica o veículo inteiro. <b>Exemplo:</b> se 10 leituras estão em 12mm e só o Sulco 1 do TDE está em 3mm, a condição geral vira <b>CRÍTICO</b>.
+              </p>
+            </div>
+
             {/* Aviso: placas há mais de LIMITE_DIAS_BOLETIM dias sem nenhum boletim (independe
                 do período selecionado nos filtros de data acima — usa o histórico real). */}
             {atrasados15d.length > 0 && (
