@@ -1061,16 +1061,6 @@ export default function PneusClient({
                                   >
                                     {row.eq.placa}
                                   </span>
-                                  {(() => {
-                                    const dias = diasSemBoletimPorEquipamento[row.eq.id] ?? null;
-                                    const atrasada = dias === null || dias > LIMITE_DIAS_BOLETIM;
-                                    const texto = dias == null ? "nunca teve boletim" : `${dias} dia${dias !== 1 ? "s" : ""} sem boletim`;
-                                    return (
-                                      <span className={`text-[9px] block tracking-widest italic ${atrasada ? "text-red-500 dark:text-red-400 not-italic font-black" : "text-zinc-300 dark:text-zinc-600"}`}>
-                                        {texto}
-                                      </span>
-                                    );
-                                  })()}
                                 </td>
                                 <td className="px-4 py-3">
                                   <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase">{modulo}</span>
