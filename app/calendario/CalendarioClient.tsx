@@ -1,12 +1,26 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Edit2, Save, X, Calendar as CalendarIcon, ShieldAlert } from "lucide-react";
-import { saveCalendario, importarCronograma2026, limparDuplicatasCalendario } from "./actions";
+import { Edit2, Save, X, Calendar as CalendarIcon, ShieldAlert, FileSpreadsheet, Download } from "lucide-react";
+import { saveCalendario, limparDuplicatasCalendario } from "./actions";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 
 import { useAuth } from "@/components/auth-context";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+
+function loadXLSX(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).XLSX) return resolve((window as any).XLSX);
+    const script = document.createElement("script");
+    script.src = "https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js";
+    script.onload = () => resolve((window as any).XLSX);
+    script.onerror = () => reject(new Error("Falha ao carregar biblioteca de exportação."));
+    document.head.appendChild(script);
+  });
+}
 
 const MESES_NOME = [
   "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -21,23 +35,103 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
   const [data, setData] = useState(initialData);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
-  const [isImporting, setIsImporting] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     setData(initialData);
   }, [initialData]);
 
-  async function handleImport() {
-    if (!confirm("Isso irá importar todos os meses de 2026. Deseja continuar?")) return;
-    setIsImporting(true);
+  async function handleExportExcel() {
+    setIsExporting(true);
     try {
-      await importarCronograma2026();
-      window.location.reload();
+      const XLSX = await loadXLSX();
+      const rows = data.map((item) => ({
+        "Mês": MESES_NOME[item.mes] || item.mes,
+        "Ano": item.ano,
+        "Data Inicial": new Date(item.data_inicio + "T12:00:00").toLocaleDateString("pt-BR"),
+        "Data Final": new Date(item.data_fim + "T12:00:00").toLocaleDateString("pt-BR"),
+        "Qtd. Dias": item.total_dias,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [{ wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 10 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Calendário Suzano");
+      XLSX.writeFile(wb, "Calendario_Suzano.xlsx");
     } catch (error: any) {
-      alert(error?.message || "Erro ao importar!");
+      alert(error?.message || "Erro ao exportar Excel!");
     } finally {
-      setIsImporting(false);
+      setIsExporting(false);
+    }
+  }
+
+  async function handleExportPDF() {
+    setIsGeneratingPdf(true);
+    const container = document.createElement("div");
+    container.style.position = "absolute";
+    container.style.left = "-9999px";
+    container.style.top = "-9999px";
+    container.style.width = "700px";
+    container.style.backgroundColor = "#ffffff";
+    container.style.color = "#000000";
+    container.style.fontFamily = "Arial, sans-serif";
+    container.style.padding = "20px";
+    container.style.boxSizing = "border-box";
+
+    container.innerHTML = `
+      <div style="border: 2px solid #000; padding: 12px; font-size: 11px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:12px;">
+          <div style="background-color:#005a2b; color:#fff; padding:6px 12px; font-weight:bold; border-radius:4px; font-size:16px; letter-spacing:1px;">EUNAMAN</div>
+          <h2 style="margin:0; font-size:16px; text-transform:uppercase; letter-spacing:1px; font-weight:900;">Calendário Operacional Suzano</h2>
+          <div style="font-size:9px; font-weight:bold; text-align:right;">Gerado em:<br/>${new Date().toLocaleDateString("pt-BR")}</div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:10px;" border="1" cellpadding="6">
+          <thead style="background-color:#e0e0e0; font-weight:bold;">
+            <tr>
+              <th>MÊS</th><th>ANO</th><th>DATA INICIAL</th><th>DATA FINAL</th><th>QTD. DIAS</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map((item) => `
+              <tr>
+                <td style="text-align:center; font-weight:bold;">${MESES_NOME[item.mes] || item.mes}</td>
+                <td style="text-align:center;">${item.ano}</td>
+                <td style="text-align:center;">${new Date(item.data_inicio + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                <td style="text-align:center;">${new Date(item.data_fim + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                <td style="text-align:center;">${item.total_dias} dias</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
+
+      const blob: Blob = pdf.output("blob");
+      await salvarOuCompartilharBlob(
+        blob,
+        "Calendario_Suzano.pdf",
+        "Calendário Suzano",
+        "Calendário operacional Suzano",
+        "download"
+      );
+    } catch (error: any) {
+      if (document.body.contains(container)) document.body.removeChild(container);
+      alert(error?.message || "Erro ao gerar PDF!");
+    } finally {
+      setIsGeneratingPdf(false);
     }
   }
 
@@ -87,18 +181,27 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
         ) : (
           <>
             <button
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+            >
+              <FileSpreadsheet size={14} />
+              {isExporting ? "Exportando..." : "Exportar Calendário"}
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={isGeneratingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+            >
+              <Download size={14} />
+              {isGeneratingPdf ? "Gerando..." : "Baixar PDF"}
+            </button>
+            <button
               onClick={handleLimparDuplicatas}
               disabled={isCleaning}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-500/20 disabled:opacity-50"
             >
               {isCleaning ? "Limpando..." : "🧹 Limpar Duplicatas"}
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={isImporting}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
-            >
-              {isImporting ? "Importando..." : "Importar Cronograma 2026"}
             </button>
           </>
         )}
@@ -205,7 +308,7 @@ export default function CalendarioClient({ initialData }: { initialData: any[] }
             {data.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
-                  Nenhuma data cadastrada. Clique no botão acima para importar o cronograma 2026.
+                  Nenhuma data cadastrada.
                 </td>
               </tr>
             )}
