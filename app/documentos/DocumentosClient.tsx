@@ -83,22 +83,23 @@ const GRUPOS_DOC: { key: Exclude<TabType, "visao_geral">; label: string; curto: 
   { key: "crlve_leve", label: "CRLVE Leve", curto: "CRLVE Leve", temAno: true },
 ];
 // Cor "forte" (cabeçalho do grupo, faixa 1) e "clara" (faixa 2 + fundo das células de dado) —
-// mesma família de cor pra dar pra seguir a coluna com o olho de cima a baixo, estilo planilha.
+// neutras (tons de cinza) em vez de uma cor por tipo de documento; o que separa cada grupo é
+// a borda cheia da grade e a faixa clara/branca alternada, não o matiz.
 const GRUPO_COR_FORTE: Record<string, string> = {
-  tacografo: "bg-blue-600 text-white",
-  civ_cipp: "bg-emerald-600 text-white",
-  laudo_eletromecanico: "bg-amber-500 text-white",
-  laudo_implemento: "bg-purple-600 text-white",
-  crlve_pesados: "bg-sky-600 text-white",
-  crlve_leve: "bg-teal-600 text-white",
+  tacografo: "bg-zinc-700 dark:bg-zinc-800 text-white",
+  civ_cipp: "bg-zinc-700 dark:bg-zinc-800 text-white",
+  laudo_eletromecanico: "bg-zinc-700 dark:bg-zinc-800 text-white",
+  laudo_implemento: "bg-zinc-700 dark:bg-zinc-800 text-white",
+  crlve_pesados: "bg-zinc-700 dark:bg-zinc-800 text-white",
+  crlve_leve: "bg-zinc-700 dark:bg-zinc-800 text-white",
 };
 const GRUPO_COR: Record<string, string> = {
-  tacografo: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
-  civ_cipp: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400",
-  laudo_eletromecanico: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400",
-  laudo_implemento: "bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400",
-  crlve_pesados: "bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-400",
-  crlve_leve: "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400",
+  tacografo: "bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400",
+  civ_cipp: "bg-zinc-50 dark:bg-zinc-900/40 text-zinc-500 dark:text-zinc-400",
+  laudo_eletromecanico: "bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400",
+  laudo_implemento: "bg-zinc-50 dark:bg-zinc-900/40 text-zinc-500 dark:text-zinc-400",
+  crlve_pesados: "bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400",
+  crlve_leve: "bg-zinc-50 dark:bg-zinc-900/40 text-zinc-500 dark:text-zinc-400",
 };
 
 export default function DocumentosClient({
