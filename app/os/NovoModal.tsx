@@ -758,16 +758,17 @@ export default function OSFormModal({
     // Guard contra duplo clique / duplo submit
     if (isSubmitting.current) return;
 
-    // Horímetro não pode ser menor que o último já lançado pra essa placa.
+    // Horímetro menor que o último lançado só avisa agora — não bloqueia mais o salvamento.
+    // Vira opcional confirmar e seguir mesmo assim (ex: troca de instrumento, correção de lançamento).
     const horimetroInformadoRaw = new FormData(e.currentTarget).get("horimetro") as string;
     const horimetroInformado = horimetroInformadoRaw ? parseFloat(horimetroInformadoRaw) : NaN;
     if (ultimoRegistroHorimetro && !isNaN(horimetroInformado) && horimetroInformado < Number(ultimoRegistroHorimetro.horimetro)) {
-      alert(
+      const continuarMesmoAssim = confirm(
         `O horímetro informado (${horimetroInformado}h) é menor que o último registrado para ${equip?.placa} ` +
         `(${ultimoRegistroHorimetro.horimetro}h em ${new Date(ultimoRegistroHorimetro.data_abertura).toLocaleDateString('pt-BR')}). ` +
-        `Confira o valor antes de salvar.`
+        `Deseja salvar assim mesmo?`
       );
-      return;
+      if (!continuarMesmoAssim) return;
     }
 
     isSubmitting.current = true;

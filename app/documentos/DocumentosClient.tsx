@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
-import { Clipboard, ShieldCheck, Truck, Zap, Plus, AlertCircle, Edit2, Trash2, X, ChevronDown, Calendar as CalendarIcon, Search, Eye, Download, FileText, Upload, Loader2 } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { Clipboard, ShieldCheck, Truck, Zap, Plus, AlertCircle, Edit2, Trash2, X, ChevronDown, Calendar as CalendarIcon, Search, Eye, Download, FileText, Upload, Loader2, Table2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
@@ -70,7 +70,36 @@ const ModalBase = ({ isOpen, title, onClose, children }: any) => {
 
 // --- Tipos de Abas ---
 
-type TabType = "tacografo" | "civ_cipp" | "laudo_eletromecanico" | "laudo_implemento" | "crlve_pesados" | "crlve_leve";
+type TabType = "visao_geral" | "tacografo" | "civ_cipp" | "laudo_eletromecanico" | "laudo_implemento" | "crlve_pesados" | "crlve_leve";
+
+// Grupos de documentos usados na Visão Geral consolidada — uma linha por placa, com os
+// dados de cada tipo de documento lado a lado (mesmo espírito da planilha de referência).
+const GRUPOS_DOC: { key: Exclude<TabType, "visao_geral">; label: string; curto: string; temPeriodo?: boolean; temAno?: boolean }[] = [
+  { key: "tacografo", label: "Tacógrafo", curto: "Tacógrafo" },
+  { key: "civ_cipp", label: "CIV/CIPP", curto: "CIV/CIPP" },
+  { key: "laudo_eletromecanico", label: "Laudo Eletromecânico", curto: "L. Eletromec.", temPeriodo: true },
+  { key: "laudo_implemento", label: "Laudo Implemento", curto: "L. Implemento", temPeriodo: true },
+  { key: "crlve_pesados", label: "CRLVE Pesados", curto: "CRLVE Pesados", temAno: true },
+  { key: "crlve_leve", label: "CRLVE Leve", curto: "CRLVE Leve", temAno: true },
+];
+// Cor "forte" (cabeçalho do grupo, faixa 1) e "clara" (faixa 2 + fundo das células de dado) —
+// mesma família de cor pra dar pra seguir a coluna com o olho de cima a baixo, estilo planilha.
+const GRUPO_COR_FORTE: Record<string, string> = {
+  tacografo: "bg-blue-600 text-white",
+  civ_cipp: "bg-emerald-600 text-white",
+  laudo_eletromecanico: "bg-amber-500 text-white",
+  laudo_implemento: "bg-purple-600 text-white",
+  crlve_pesados: "bg-sky-600 text-white",
+  crlve_leve: "bg-teal-600 text-white",
+};
+const GRUPO_COR: Record<string, string> = {
+  tacografo: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
+  civ_cipp: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400",
+  laudo_eletromecanico: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400",
+  laudo_implemento: "bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400",
+  crlve_pesados: "bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-400",
+  crlve_leve: "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400",
+};
 
 export default function DocumentosClient({
   isVisitante,
@@ -90,7 +119,7 @@ export default function DocumentosClient({
   initialCrlveLeves: DocCrlve[];
 }) {
   const { isOnline } = useOffline();
-  const [activeTab, setActiveTab] = useState<TabType>("tacografo");
+  const [activeTab, setActiveTab] = useState<TabType>("visao_geral");
   const [searchTerm, setSearchTerm] = useState("");
 
   // Filtros
@@ -137,10 +166,14 @@ export default function DocumentosClient({
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<any>(null);
+  // Tipo de documento sendo criado/editado no modal — normalmente igual a activeTab, mas na
+  // Visão Geral cada célula pode abrir o modal de um tipo diferente do que está sendo exibido.
+  const [editingTab, setEditingTab] = useState<TabType>("tacografo");
   const [loading, setLoading] = useState(false);
 
-  const openModal = (data: any = null) => {
+  const openModal = (data: any = null, tab: TabType = activeTab) => {
     setEditingData(data);
+    setEditingTab(tab);
     setModalOpen(true);
   };
 
@@ -151,6 +184,33 @@ export default function DocumentosClient({
     const XLSX = (window as any).XLSX;
     if (!XLSX) {
       alert("A biblioteca do Excel ainda está carregando.");
+      return;
+    }
+
+    if (activeTab === "visao_geral") {
+      const linhas = buildLinhasConsolidadas();
+      const exportRows = linhas.map(linha => {
+        const row: any = {
+          'Placa': linha.placa,
+          'Módulo': linha.local || '',
+          'C.O': linha.co || '',
+        };
+        GRUPOS_DOC.forEach(grupo => {
+          const item = linha.porGrupo[grupo.key];
+          const isDateNull = !item || !item.data_vencimento || item.data_vencimento === "-" || item.data_vencimento === "";
+          const dias = isDateNull ? "-" : calcularDias(item.data_vencimento);
+          if (grupo.temPeriodo) row[`${grupo.curto} — Período`] = item?.periodo || '';
+          if (grupo.temAno) row[`${grupo.curto} — Ano`] = item?.ano || '';
+          row[`${grupo.curto} — Venc.`] = item ? formatarData(item.data_vencimento) : '-';
+          row[`${grupo.curto} — Status`] = dias;
+        });
+        return row;
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Visão Geral");
+      XLSX.writeFile(workbook, "documentos_visao_geral.xlsx");
       return;
     }
 
@@ -262,8 +322,8 @@ export default function DocumentosClient({
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    
-    if (editingData) {
+
+    if (editingData?.id) {
       formData.append('id', editingData.id);
     }
 
@@ -273,14 +333,14 @@ export default function DocumentosClient({
       co: formData.get('co') as string,
       placa: formData.get('placa') as string,
     };
-    
-    const isLaudo = activeTab === "laudo_eletromecanico" || activeTab === "laudo_implemento";
+
+    const isLaudo = editingTab === "laudo_eletromecanico" || editingTab === "laudo_implemento";
     if (isLaudo) {
       formValues.periodo = formData.get('periodo') as string;
       formValues.data_expedicao = formData.get('data_expedicao') as string;
       formValues.observacoes = formData.get('observacoes') as string;
     }
-    
+
     // date
     const rawDate = formData.get('data_vencimento') as string | null;
     formValues.data_vencimento = rawDate && rawDate.trim() !== "" ? rawDate : null;
@@ -288,12 +348,12 @@ export default function DocumentosClient({
     // determine entity name in IndexedDB
     let storeName = "";
     let entityName: any = "";
-    if (activeTab === "tacografo") { storeName = "docs_tacografo"; entityName = "docs_tacografo"; }
-    if (activeTab === "civ_cipp") { storeName = "docs_civ_cipp"; entityName = "docs_civ_cipp"; }
-    if (activeTab === "laudo_eletromecanico") { storeName = "docs_laudo_eletromecanico"; entityName = "docs_laudo_eletromecanico"; }
-    if (activeTab === "laudo_implemento") { storeName = "docs_laudo_implemento"; entityName = "docs_laudo_implemento"; }
-    if (activeTab === "crlve_pesados") { storeName = "docs_crlve_pesados"; entityName = "docs_crlve_pesados"; }
-    if (activeTab === "crlve_leve") { storeName = "docs_crlve_leve"; entityName = "docs_crlve_leve"; }
+    if (editingTab === "tacografo") { storeName = "docs_tacografo"; entityName = "docs_tacografo"; }
+    if (editingTab === "civ_cipp") { storeName = "docs_civ_cipp"; entityName = "docs_civ_cipp"; }
+    if (editingTab === "laudo_eletromecanico") { storeName = "docs_laudo_eletromecanico"; entityName = "docs_laudo_eletromecanico"; }
+    if (editingTab === "laudo_implemento") { storeName = "docs_laudo_implemento"; entityName = "docs_laudo_implemento"; }
+    if (editingTab === "crlve_pesados") { storeName = "docs_crlve_pesados"; entityName = "docs_crlve_pesados"; }
+    if (editingTab === "crlve_leve") { storeName = "docs_crlve_leve"; entityName = "docs_crlve_leve"; }
 
     let anexo_url = editingData?.anexo_url || "";
     
@@ -328,12 +388,12 @@ export default function DocumentosClient({
       formData.set('anexo_url', anexo_url);
       if (isOnline) {
         let result: any;
-        if (activeTab === "tacografo") result = await upsertTacografo(formData);
-        if (activeTab === "civ_cipp") result = await upsertCivCipp(formData);
-        if (activeTab === "laudo_eletromecanico") result = await upsertLaudoEletro(formData);
-        if (activeTab === "laudo_implemento") result = await upsertLaudoImplemento(formData);
-        if (activeTab === "crlve_pesados") result = await upsertCrlvePesados(formData);
-        if (activeTab === "crlve_leve") result = await upsertCrlveLeve(formData);
+        if (editingTab === "tacografo") result = await upsertTacografo(formData);
+        if (editingTab === "civ_cipp") result = await upsertCivCipp(formData);
+        if (editingTab === "laudo_eletromecanico") result = await upsertLaudoEletro(formData);
+        if (editingTab === "laudo_implemento") result = await upsertLaudoImplemento(formData);
+        if (editingTab === "crlve_pesados") result = await upsertCrlvePesados(formData);
+        if (editingTab === "crlve_leve") result = await upsertCrlveLeve(formData);
 
         if (result && result.error) {
           throw new Error(result.error);
@@ -386,28 +446,28 @@ export default function DocumentosClient({
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, tab: TabType = activeTab) => {
     if (isVisitante) return;
     if (!confirm("Tem certeza que deseja excluir este registro?")) return;
 
     let storeName = "";
     let entityName: any = "";
-    if (activeTab === "tacografo") { storeName = "docs_tacografo"; entityName = "docs_tacografo"; }
-    if (activeTab === "civ_cipp") { storeName = "docs_civ_cipp"; entityName = "docs_civ_cipp"; }
-    if (activeTab === "laudo_eletromecanico") { storeName = "docs_laudo_eletromecanico"; entityName = "docs_laudo_eletromecanico"; }
-    if (activeTab === "laudo_implemento") { storeName = "docs_laudo_implemento"; entityName = "docs_laudo_implemento"; }
-    if (activeTab === "crlve_pesados") { storeName = "docs_crlve_pesados"; entityName = "docs_crlve_pesados"; }
-    if (activeTab === "crlve_leve") { storeName = "docs_crlve_leve"; entityName = "docs_crlve_leve"; }
-    
+    if (tab === "tacografo") { storeName = "docs_tacografo"; entityName = "docs_tacografo"; }
+    if (tab === "civ_cipp") { storeName = "docs_civ_cipp"; entityName = "docs_civ_cipp"; }
+    if (tab === "laudo_eletromecanico") { storeName = "docs_laudo_eletromecanico"; entityName = "docs_laudo_eletromecanico"; }
+    if (tab === "laudo_implemento") { storeName = "docs_laudo_implemento"; entityName = "docs_laudo_implemento"; }
+    if (tab === "crlve_pesados") { storeName = "docs_crlve_pesados"; entityName = "docs_crlve_pesados"; }
+    if (tab === "crlve_leve") { storeName = "docs_crlve_leve"; entityName = "docs_crlve_leve"; }
+
     try {
       if (isOnline) {
         let result: any;
-        if (activeTab === "tacografo") result = await deleteTacografo(id);
-        if (activeTab === "civ_cipp") result = await deleteCivCipp(id);
-        if (activeTab === "laudo_eletromecanico") result = await deleteLaudoEletro(id);
-        if (activeTab === "laudo_implemento") result = await deleteLaudoImplemento(id);
-        if (activeTab === "crlve_pesados") result = await deleteCrlvePesados(id);
-        if (activeTab === "crlve_leve") result = await deleteCrlveLeve(id);
+        if (tab === "tacografo") result = await deleteTacografo(id);
+        if (tab === "civ_cipp") result = await deleteCivCipp(id);
+        if (tab === "laudo_eletromecanico") result = await deleteLaudoEletro(id);
+        if (tab === "laudo_implemento") result = await deleteLaudoImplemento(id);
+        if (tab === "crlve_pesados") result = await deleteCrlvePesados(id);
+        if (tab === "crlve_leve") result = await deleteCrlveLeve(id);
         
         if (result && result.error) {
           throw new Error(result.error);
@@ -437,9 +497,222 @@ export default function DocumentosClient({
     }
   };
 
+  // Mescla os 6 tipos de documento em uma linha por placa — base da Visão Geral e da sua
+  // exportação em Excel. Local/C.O da linha vêm do primeiro tipo de documento que tiver o
+  // campo preenchido (a mesma placa pode ter sido cadastrada com local/CO diferente em cada
+  // aba, então isso é só uma melhor estimativa pra exibição, não uma fonte de verdade).
+  const buildLinhasConsolidadas = () => {
+    const porPlaca = new Map<string, any>();
+
+    GRUPOS_DOC.forEach(grupo => {
+      const dados: any[] =
+        grupo.key === "tacografo" ? initialTacografos :
+        grupo.key === "civ_cipp" ? initialCivCipps :
+        grupo.key === "laudo_eletromecanico" ? initialLaudosEletro :
+        grupo.key === "laudo_implemento" ? initialLaudosImplemento :
+        grupo.key === "crlve_pesados" ? initialCrlvePesados :
+        initialCrlveLeves;
+
+      dados.forEach((item: any) => {
+        if (!item.placa) return;
+        const chave = String(item.placa).toUpperCase().trim();
+        if (!porPlaca.has(chave)) {
+          porPlaca.set(chave, { placa: chave, local: item.local || "", co: item.co || "", porGrupo: {} });
+        }
+        const linha = porPlaca.get(chave);
+        if (!linha.local && item.local) linha.local = item.local;
+        if (!linha.co && item.co) linha.co = item.co;
+        linha.porGrupo[grupo.key] = item;
+      });
+    });
+
+    const linhas = Array.from(porPlaca.values());
+
+    // Pior status (menor "dias") entre os documentos presentes na linha — usado pra ordenar
+    // os veículos mais urgentes (vencidos/próximos do vencimento) no topo da tabela.
+    linhas.forEach(linha => {
+      const diasPresentes = GRUPOS_DOC.map(grupo => {
+        const item = linha.porGrupo[grupo.key];
+        if (!item || !item.data_vencimento || item.data_vencimento === "-") return null;
+        return calcularDias(item.data_vencimento);
+      }).filter((d): d is number => d !== null);
+      linha.piorDias = diasPresentes.length ? Math.min(...diasPresentes) : null;
+    });
+
+    linhas.sort((a, b) => {
+      if (a.piorDias === null && b.piorDias === null) return a.placa.localeCompare(b.placa);
+      if (a.piorDias === null) return 1;
+      if (b.piorDias === null) return -1;
+      return a.piorDias - b.piorDias;
+    });
+
+    return linhas;
+  };
+
+  const renderVisaoGeral = () => {
+    let linhas = buildLinhasConsolidadas();
+
+    const term = searchTerm.toLowerCase().trim();
+    if (term) {
+      linhas = linhas.filter(l =>
+        l.placa.toLowerCase().includes(term) ||
+        (l.local || "").toLowerCase().includes(term) ||
+        (l.co || "").toLowerCase().includes(term)
+      );
+    }
+    if (filterLocal) linhas = linhas.filter(l => l.local === filterLocal);
+    if (filterPlaca) linhas = linhas.filter(l => l.placa === filterPlaca);
+
+    const locaisUnicos = Array.from(new Set(linhas.map(l => l.local))).filter(Boolean).sort() as string[];
+    const placasUnicas = Array.from(new Set(linhas.map(l => l.placa))).filter(Boolean).sort() as string[];
+
+    const cellBorder = "border border-zinc-200 dark:border-zinc-800";
+
+    // Cada grupo agora vira células DE VERDADE, uma por sub-coluna do cabeçalho (Período/Ano,
+    // Venc., Status) — antes tudo ficava empilhado dentro de uma única célula, o que não batia
+    // com as colunas declaradas no cabeçalho e deixava tudo embolado.
+    const celulas = (linha: any, grupo: typeof GRUPOS_DOC[number]) => {
+      const item = linha.porGrupo[grupo.key];
+      const bg = GRUPO_COR[grupo.key];
+
+      if (!item) {
+        const vazia = (chave: string) => (
+          <td key={chave} className={cn(cellBorder, "px-2 py-2 text-center text-zinc-300 dark:text-zinc-700", bg)}>-</td>
+        );
+        return (
+          <Fragment key={grupo.key}>
+            {(grupo.temPeriodo || grupo.temAno) && vazia(`${grupo.key}-periodo`)}
+            {vazia(`${grupo.key}-venc`)}
+            <td key={`${grupo.key}-status`} className={cn(cellBorder, "px-2 py-2 text-center", bg)}>
+              {!isVisitante ? (
+                <button
+                  onClick={() => openModal({ placa: linha.placa, local: linha.local, co: linha.co }, grupo.key)}
+                  title={`Adicionar ${grupo.label}`}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-zinc-400 hover:text-white hover:bg-blue-500 transition-colors"
+                >
+                  <Plus size={12} />
+                </button>
+              ) : (
+                <span className="text-zinc-300 dark:text-zinc-700">-</span>
+              )}
+            </td>
+          </Fragment>
+        );
+      }
+
+      const isDateNull = !item.data_vencimento || item.data_vencimento === "-" || item.data_vencimento === "";
+      const dias = isDateNull ? null : calcularDias(item.data_vencimento);
+
+      return (
+        <Fragment key={grupo.key}>
+          {(grupo.temPeriodo || grupo.temAno) && (
+            <td className={cn(cellBorder, "px-2 py-2 text-center text-[11px] font-semibold uppercase text-zinc-600 dark:text-zinc-300", bg)}>
+              {grupo.temPeriodo ? (item.periodo || "-") : (item.ano || "-")}
+            </td>
+          )}
+          <td className={cn(cellBorder, "px-2 py-2 text-center text-xs font-medium text-zinc-700 dark:text-zinc-200", bg)}>
+            {formatarData(item.data_vencimento)}
+          </td>
+          <td className={cn(cellBorder, "px-2 py-2", bg)}>
+            <div className="flex items-center justify-center gap-1.5">
+              {getStatusBadge(dias)}
+              {!isVisitante && (
+                <div className="flex gap-0.5">
+                  <button onClick={() => openModal(item, grupo.key)} className="p-0.5 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400"><Edit2 size={11} /></button>
+                  <button onClick={() => handleDelete(item.id, grupo.key)} className="p-0.5 text-zinc-400 hover:text-red-600 dark:hover:text-red-400"><Trash2 size={11} /></button>
+                </div>
+              )}
+            </div>
+          </td>
+        </Fragment>
+      );
+    };
+
+    return (
+      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        {showFilters && (
+          <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-zinc-500 mb-1 block">Módulo/Local</label>
+              <select value={filterLocal} onChange={e => setFilterLocal(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
+                <option value="">Todos</option>
+                {locaisUnicos.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-zinc-500 mb-1 block">Placa</label>
+              <select value={filterPlaca} onChange={e => setFilterPlaca(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
+                <option value="">Todas</option>
+                {placasUnicas.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="text-[11px] uppercase tracking-wide">
+              <tr>
+                <th rowSpan={2} className={cn(cellBorder, "px-3 py-2 align-bottom bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300")}>Placa</th>
+                <th rowSpan={2} className={cn(cellBorder, "px-3 py-2 align-bottom bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300")}>Módulo</th>
+                <th rowSpan={2} className={cn(cellBorder, "px-3 py-2 align-bottom bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300")}>C.O</th>
+                {GRUPOS_DOC.map(grupo => (
+                  <th
+                    key={grupo.key}
+                    colSpan={grupo.temPeriodo || grupo.temAno ? 3 : 2}
+                    className={cn(cellBorder, "px-2 py-2 text-center font-bold text-[12px]", GRUPO_COR_FORTE[grupo.key])}
+                  >
+                    {grupo.curto}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {GRUPOS_DOC.map(grupo => (
+                  <Fragment key={grupo.key}>
+                    {(grupo.temPeriodo || grupo.temAno) && (
+                      <th key={`${grupo.key}-sub`} className={cn(cellBorder, "px-2 py-1.5 font-semibold text-center", GRUPO_COR[grupo.key])}>
+                        {grupo.temPeriodo ? "Período" : "Ano"}
+                      </th>
+                    )}
+                    <th key={`${grupo.key}-venc`} className={cn(cellBorder, "px-2 py-1.5 font-semibold text-center", GRUPO_COR[grupo.key])}>
+                      Venc.
+                    </th>
+                    <th key={`${grupo.key}-status`} className={cn(cellBorder, "px-2 py-1.5 font-semibold text-center", GRUPO_COR[grupo.key])}>
+                      Status
+                    </th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="text-zinc-700 dark:text-zinc-300">
+              {linhas.map((linha, idx) => (
+                <tr key={linha.placa} className={idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : ""}>
+                  <td className={cn(cellBorder, "px-3 py-2 font-mono font-bold text-xs whitespace-nowrap")}>{linha.placa}</td>
+                  <td className={cn(cellBorder, "px-3 py-2 uppercase text-xs font-medium whitespace-nowrap")}>{linha.local || "-"}</td>
+                  <td className={cn(cellBorder, "px-3 py-2 uppercase text-xs whitespace-nowrap")}>{linha.co || "-"}</td>
+                  {GRUPOS_DOC.map(grupo => celulas(linha, grupo))}
+                </tr>
+              ))}
+              {linhas.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={3 + GRUPOS_DOC.reduce((acc, g) => acc + (g.temPeriodo || g.temAno ? 3 : 2), 0)}
+                    className={cn(cellBorder, "px-4 py-6 text-center text-zinc-500 dark:text-zinc-400")}
+                  >
+                    Nenhum veículo com documentos cadastrados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderFormContent = () => {
-    const isLaudo = activeTab === "laudo_eletromecanico" || activeTab === "laudo_implemento";
-    const isCrlve = activeTab === "crlve_pesados" || activeTab === "crlve_leve";
+    const isLaudo = editingTab === "laudo_eletromecanico" || editingTab === "laudo_implemento";
+    const isCrlve = editingTab === "crlve_pesados" || editingTab === "crlve_leve";
     const inputCls = "w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-blue-500 uppercase";
 
     return (
@@ -481,7 +754,7 @@ export default function DocumentosClient({
             <input 
               type="date" 
               name="data_vencimento" 
-              required={activeTab !== "civ_cipp"} 
+              required={editingTab !== "civ_cipp"}
               defaultValue={editingData?.data_vencimento || ""} 
               className={inputCls} 
             />
@@ -520,6 +793,8 @@ export default function DocumentosClient({
   };
 
   const renderTable = () => {
+    if (activeTab === "visao_geral") return renderVisaoGeral();
+
     let data: any[] = [];
     if (activeTab === "tacografo") data = initialTacografos;
     if (activeTab === "civ_cipp") data = initialCivCipps;
@@ -718,11 +993,11 @@ export default function DocumentosClient({
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Gestão de CIV/CIPP, Tacógrafo e Laudos</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {!isVisitante && (
+          {!isVisitante && activeTab !== "visao_geral" && (
             <>
               <input type="file" accept=".xlsx,.xls,.csv" ref={importFileInputRef} onChange={handleImportExcel} className="hidden" />
-              <button 
-                onClick={() => importFileInputRef.current?.click()} 
+              <button
+                onClick={() => importFileInputRef.current?.click()}
                 disabled={isImporting}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-sm",
@@ -753,6 +1028,15 @@ export default function DocumentosClient({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-px">
         {/* Tabs */}
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveTab("visao_geral")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors",
+              activeTab === "visao_geral" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-800"
+            )}
+          >
+            <Table2 size={16} /> Visão Geral
+          </button>
           <button
             onClick={() => setActiveTab("tacografo")}
             className={cn(
@@ -846,13 +1130,13 @@ export default function DocumentosClient({
         isOpen={modalOpen} 
         onClose={() => setModalOpen(false)}
         title={
-          editingData ? `Editar Registro` : 
+          editingData?.id ? `Editar Registro` :
           `Novo Registro: ${
-            activeTab === 'tacografo' ? 'Tacógrafo' :
-            activeTab === 'civ_cipp' ? 'CIV/CIPP' :
-            activeTab === 'laudo_eletromecanico' ? 'Laudo Eletromecânico' :
-            activeTab === 'crlve_pesados' ? 'CRLVE Pesados' :
-            activeTab === 'crlve_leve' ? 'CRLVE Leve' :
+            editingTab === 'tacografo' ? 'Tacógrafo' :
+            editingTab === 'civ_cipp' ? 'CIV/CIPP' :
+            editingTab === 'laudo_eletromecanico' ? 'Laudo Eletromecânico' :
+            editingTab === 'crlve_pesados' ? 'CRLVE Pesados' :
+            editingTab === 'crlve_leve' ? 'CRLVE Leve' :
             'Laudo Implemento'
           }`
         }
