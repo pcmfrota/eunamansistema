@@ -495,24 +495,26 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Evolução Mensal — Peças vs Mão de Obra</h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evolucaoMensal} margin={{ left: -10, right: 10, top: 5, bottom: 5 }} barCategoryGap="35%">
+                  <BarChart data={evolucaoMensal} margin={{ left: 5, right: 10, top: 20, bottom: 5 }} barCategoryGap="35%">
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                     <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar
-                      dataKey="pecas" name="Peças" radius={[4, 4, 0, 0]} maxBarSize={40}
+                      dataKey="pecas" name="Peças" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={40}
                       cursor="pointer" onClick={(d: any) => toggleFiltroMesAno(d.mesNum, d.ano)}
                     >
+                      <LabelList dataKey="pecas" position="top" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 9, fill: "#2563eb", fontWeight: 700 }} />
                       {evolucaoMensal.map((entry, i) => (
                         <Cell key={i} fill="#2563eb" opacity={filterMes && (filterMes !== entry.mesNum || filterAno !== entry.ano) ? 0.3 : 1} />
                       ))}
                     </Bar>
                     <Bar
-                      dataKey="maoObra" name="Mão de Obra" radius={[4, 4, 0, 0]} maxBarSize={40}
+                      dataKey="maoObra" name="Mão de Obra" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40}
                       cursor="pointer" onClick={(d: any) => toggleFiltroMesAno(d.mesNum, d.ano)}
                     >
+                      <LabelList dataKey="maoObra" position="top" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 9, fill: "#b45309", fontWeight: 700 }} />
                       {evolucaoMensal.map((entry, i) => (
                         <Cell key={i} fill="#f59e0b" opacity={filterMes && (filterMes !== entry.mesNum || filterAno !== entry.ano) ? 0.3 : 1} />
                       ))}
