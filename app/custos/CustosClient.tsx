@@ -642,7 +642,6 @@ export default function CustosClient({
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                     <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar
                       dataKey="pecas" name="Peças" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={40}
