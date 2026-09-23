@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, LayoutGrid, ListTree, X, Building2,
+  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -75,6 +75,8 @@ export default function CustosClient({
   const [filterDataIni, setFilterDataIni] = useState("");
   const [filterDataFim, setFilterDataFim] = useState("");
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [sortColuna, setSortColuna] = useState("data");
+  const [sortDirecao, setSortDirecao] = useState<"asc" | "desc">("asc");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<CustoManutencao | null>(null);
@@ -122,6 +124,48 @@ export default function CustosClient({
       return true;
     });
   }, [initialCustos, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus, filterMes, filterAno, filterDataIni, filterDataFim]);
+
+  // Ordenação da tabela por coluna, igual planilha — clicar alterna crescente/decrescente;
+  // clicar numa coluna diferente troca a coluna e volta pra crescente.
+  function alternarOrdenacao(coluna: string) {
+    if (sortColuna === coluna) {
+      setSortDirecao((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColuna(coluna);
+      setSortDirecao("asc");
+    }
+  }
+
+  const dadosTabela = useMemo(() => {
+    const valorDaColuna = (c: CustoManutencao): string | number => {
+      switch (sortColuna) {
+        case "data": return c.data || "";
+        case "placa": return c.placa || "";
+        case "tipo": return c.tipo_manutencao || "";
+        case "descricao": return c.descricao || "";
+        case "fornecedor": return c.fornecedor || "";
+        case "pecas": return Number(c.pecas);
+        case "mao_obra": return Number(c.mao_obra);
+        case "total": return Number(c.pecas) + Number(c.mao_obra);
+        case "status": return STATUS_LABEL[c.status] || "";
+        case "observacoes": return c.observacoes || "";
+        default: return "";
+      }
+    };
+    const copia = [...filteredData];
+    copia.sort((a, b) => {
+      const va = valorDaColuna(a);
+      const vb = valorDaColuna(b);
+      const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb), "pt-BR");
+      return sortDirecao === "asc" ? cmp : -cmp;
+    });
+    return copia;
+  }, [filteredData, sortColuna, sortDirecao]);
+
+  function IconeOrdenacao({ coluna }: { coluna: string }) {
+    if (sortColuna !== coluna) return <ArrowUpDown size={11} className="opacity-30" />;
+    return sortDirecao === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />;
+  }
 
   // Filtros disparados por clique nos gráficos — clicar de novo no mesmo valor limpa o filtro
   // (efeito toggle), dando aos gráficos uma função de "abrir o detalhe" além de só mostrar.
@@ -776,21 +820,34 @@ export default function CustosClient({
                     <input type="checkbox" checked={selectedIds.length > 0 && selectedIds.length === filteredData.length} onChange={toggleSelectAll} />
                   </th>
                 )}
-                <th className={cn(cellBorder, "px-3 py-2")}>Data</th>
-                <th className={cn(cellBorder, "px-3 py-2")}>Placa</th>
-                <th className={cn(cellBorder, "px-3 py-2")}>Tipo</th>
-                <th className={cn(cellBorder, "px-3 py-2")}>Descrição</th>
-                <th className={cn(cellBorder, "px-3 py-2")}>Fornecedor</th>
-                <th className={cn(cellBorder, "px-3 py-2 text-right")}>Peças (R$)</th>
-                <th className={cn(cellBorder, "px-3 py-2 text-right")}>Mão de Obra (R$)</th>
-                <th className={cn(cellBorder, "px-3 py-2 text-right")}>Total (R$)</th>
-                <th className={cn(cellBorder, "px-3 py-2 text-center")}>Status</th>
-                <th className={cn(cellBorder, "px-3 py-2")}>Observações / PC</th>
+                {[
+                  { coluna: "data", label: "Data", align: "" },
+                  { coluna: "placa", label: "Placa", align: "" },
+                  { coluna: "tipo", label: "Tipo", align: "" },
+                  { coluna: "descricao", label: "Descrição", align: "" },
+                  { coluna: "fornecedor", label: "Fornecedor", align: "" },
+                  { coluna: "pecas", label: "Peças (R$)", align: "text-right" },
+                  { coluna: "mao_obra", label: "Mão de Obra (R$)", align: "text-right" },
+                  { coluna: "total", label: "Total (R$)", align: "text-right" },
+                  { coluna: "status", label: "Status", align: "text-center" },
+                  { coluna: "observacoes", label: "Observações / PC", align: "" },
+                ].map((col) => (
+                  <th
+                    key={col.coluna}
+                    onClick={() => alternarOrdenacao(col.coluna)}
+                    className={cn(cellBorder, "px-3 py-2 cursor-pointer select-none hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors", col.align)}
+                  >
+                    <span className={cn("inline-flex items-center gap-1", col.align === "text-right" && "flex-row-reverse")}>
+                      {col.label}
+                      <IconeOrdenacao coluna={col.coluna} />
+                    </span>
+                  </th>
+                ))}
                 {!isVisitante && <th className={cn(cellBorder, "px-3 py-2 text-right")}>Ações</th>}
               </tr>
             </thead>
             <tbody className="text-zinc-700 dark:text-zinc-300 text-xs">
-              {filteredData.map((c, idx) => {
+              {dadosTabela.map((c, idx) => {
                 const total = Number(c.pecas) + Number(c.mao_obra);
                 const destacar = c.status === "AG_PAGAMENTO";
                 return (
