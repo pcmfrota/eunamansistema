@@ -26,6 +26,15 @@ export type CustoManutencao = {
   updated_at?: string;
 };
 
+export type Fornecedor = {
+  id: string;
+  nome_fantasia: string;
+  razao_social: string | null;
+  filial_id: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 // Mesmo padrão de app/pneus/actions.ts — identifica quem está lançando/editando o registro.
 async function getUsuarioAtual(supabase: any) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -55,6 +64,81 @@ export async function getCustos() {
     return [];
   }
   return data as CustoManutencao[];
+}
+
+export async function getFornecedores() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("custos_fornecedores")
+    .select("*")
+    .order("nome_fantasia", { ascending: true });
+
+  if (error) {
+    console.error("Erro getFornecedores:", error);
+    return [];
+  }
+  return data as Fornecedor[];
+}
+
+export async function upsertFornecedor(formData: FormData) {
+  try {
+    const supabase = createClient();
+
+    const id = formData.get("id") as string | null;
+    const payload = {
+      nome_fantasia: String(formData.get("nome_fantasia") || "").trim(),
+      razao_social: (formData.get("razao_social") as string)?.trim() || null,
+    };
+
+    if (!payload.nome_fantasia) return { error: "Nome fantasia é obrigatório" };
+
+    if (id) {
+      const { error } = await supabase.from("custos_fornecedores").update(payload).eq("id", id);
+      if (error) throw error;
+    } else {
+      const { cookies } = await import("next/headers");
+      const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
+      const { error } = await supabase.from("custos_fornecedores").insert({ ...payload, filial_id: filialId });
+      if (error) throw error;
+    }
+
+    revalidatePath("/custos");
+    return { success: true };
+  } catch (error: any) {
+    if (error?.code === "23505") return { error: "Já existe um fornecedor com esse nome fantasia." };
+    return { error: error.message || "Erro ao salvar fornecedor" };
+  }
+}
+
+export async function deleteFornecedor(id: string) {
+  try {
+    const supabase = createClient();
+
+    let row: any = null;
+    try {
+      const { data } = await supabase.from("custos_fornecedores").select("*").eq("id", id).maybeSingle();
+      row = data;
+    } catch (err) {
+      console.warn("[deleteFornecedor] Falha ao buscar snapshot antes da exclusão:", err);
+    }
+
+    const { error } = await supabase.from("custos_fornecedores").delete().eq("id", id);
+    if (error) throw error;
+
+    await registrarExclusao({
+      supabase,
+      modulo: "Controle de Custos — Fornecedores",
+      tabelaOrigem: "custos_fornecedores",
+      registroId: id,
+      descricao: row?.nome_fantasia || null,
+      dados: row,
+    });
+
+    revalidatePath("/custos");
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || "Erro ao excluir fornecedor" };
+  }
 }
 
 export async function upsertCusto(formData: FormData) {

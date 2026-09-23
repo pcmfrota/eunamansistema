@@ -7,7 +7,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { createClient } from "@/utils/supabase/client";
 import { localDb, serializeFormData } from "@/lib/offline-db";
-import { upsertCusto, CustoManutencao, StatusCusto } from "./actions";
+import { upsertCusto, CustoManutencao, StatusCusto, Fornecedor } from "./actions";
 import { formatarMoeda } from "./CustosClient";
 
 const STATUS_OPTIONS: { value: StatusCusto; label: string; cls: string }[] = [
@@ -21,15 +21,18 @@ export default function CustoModal({
   onClose,
   editingData,
   equipamentos,
+  fornecedores,
   isOnline,
 }: {
   isOpen: boolean;
   onClose: () => void;
   editingData: CustoManutencao | null;
   equipamentos: any[];
+  fornecedores: Fornecedor[];
   isOnline: boolean;
 }) {
   const [placa, setPlaca] = useState(editingData?.placa || "");
+  const [fornecedor, setFornecedor] = useState(editingData?.fornecedor || "");
   const [pecas, setPecas] = useState(editingData?.pecas || 0);
   const [maoObra, setMaoObra] = useState(editingData?.mao_obra || 0);
   const [status, setStatus] = useState<StatusCusto>(editingData?.status || "AG_PAGAMENTO");
@@ -42,6 +45,10 @@ export default function CustoModal({
   const placasOptions = equipamentos
     .map((eq) => ({ value: eq.placa, label: eq.placa }))
     .filter((o, i, arr) => o.value && arr.findIndex((a) => a.value === o.value) === i)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const fornecedoresOptions = fornecedores
+    .map((f) => ({ value: f.nome_fantasia, label: f.nome_fantasia }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   async function salvar(formData: FormData, manterAberto: boolean) {
@@ -102,6 +109,8 @@ export default function CustoModal({
 
       if (manterAberto) {
         formRef.current?.reset();
+        setPlaca("");
+        setFornecedor("");
         setPecas(0);
         setMaoObra(0);
         setStatus("AG_PAGAMENTO");
@@ -161,7 +170,7 @@ export default function CustoModal({
             </div>
             <div>
               <label className="text-xs font-bold uppercase text-zinc-500">Fornecedor / Oficina</label>
-              <input name="fornecedor" defaultValue={editingData?.fornecedor || ""} className={inputCls} placeholder="Ex: Malut Pneus" />
+              <SearchableSelect name="fornecedor" options={fornecedoresOptions} value={fornecedor} onChange={setFornecedor} placeholder="Selecione o fornecedor..." />
             </div>
           </div>
 

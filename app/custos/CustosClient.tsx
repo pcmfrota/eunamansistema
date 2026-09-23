@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, LayoutGrid, ListTree, X,
+  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, LayoutGrid, ListTree, X, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -13,8 +13,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
 } from "recharts";
-import { CustoManutencao, StatusCusto, deleteCusto, bulkDeleteCustos } from "./actions";
+import { CustoManutencao, StatusCusto, Fornecedor, deleteCusto, bulkDeleteCustos, deleteFornecedor } from "./actions";
 import CustoModal from "./CustoModal";
+import FornecedorModal from "./FornecedorModal";
 import ImportExportModal from "./ImportExportModal";
 import { gerarPDFCustos, imprimirRelatorioCustos } from "./CustosPDF";
 
@@ -55,10 +56,12 @@ export function formatarDataCusto(iso: string | null | undefined) {
 export default function CustosClient({
   isVisitante,
   initialCustos,
+  fornecedores,
   equipamentos,
 }: {
   isVisitante: boolean;
   initialCustos: CustoManutencao[];
+  fornecedores: Fornecedor[];
   equipamentos: any[];
 }) {
   const { isOnline } = useOffline();
@@ -78,7 +81,10 @@ export default function CustosClient({
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [viewTab, setViewTab] = useState<"geral" | "detalhamento">("geral");
+  const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores">("geral");
+  const [fornecedorModalOpen, setFornecedorModalOpen] = useState(false);
+  const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
+  const [buscaFornecedor, setBuscaFornecedor] = useState("");
 
   const placasUnicas = useMemo(
     () => Array.from(new Set(initialCustos.map((c) => c.placa))).filter(Boolean).sort(),
@@ -276,6 +282,37 @@ export default function CustosClient({
     setModalOpen(true);
   }
 
+  function openFornecedorModal(data: Fornecedor | null = null) {
+    setEditingFornecedor(data);
+    setFornecedorModalOpen(true);
+  }
+
+  async function handleDeleteFornecedor(id: string) {
+    if (isVisitante) return;
+    if (!confirm("Tem certeza que deseja excluir este fornecedor? Lançamentos já registrados com o nome dele continuam intactos.")) return;
+    try {
+      if (isOnline) {
+        const result = await deleteFornecedor(id);
+        if (result?.error) throw new Error(result.error);
+      } else {
+        await localDb.addToQueue("custos_fornecedores", "delete", { id });
+      }
+      await localDb.delete("custos_fornecedores", id);
+      window.dispatchEvent(new CustomEvent("offline-db-updated-custos_fornecedores"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+    } catch (err: any) {
+      alert("Erro ao excluir fornecedor: " + (err.message || String(err)));
+    }
+  }
+
+  const fornecedoresFiltrados = useMemo(() => {
+    const term = buscaFornecedor.toLowerCase().trim();
+    if (!term) return fornecedores;
+    return fornecedores.filter(
+      (f) => f.nome_fantasia?.toLowerCase().includes(term) || f.razao_social?.toLowerCase().includes(term)
+    );
+  }, [fornecedores, buscaFornecedor]);
+
   async function handleDelete(id: string) {
     if (isVisitante) return;
     if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
@@ -453,6 +490,15 @@ export default function CustosClient({
           >
             <ListTree size={14} /> Detalhamento Financeiro
           </button>
+          <button
+            onClick={() => setViewTab("fornecedores")}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
+              viewTab === "fornecedores" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+            )}
+          >
+            <Building2 size={14} /> Fornecedores
+          </button>
         </div>
 
         {temFiltroDeGrafico && (
@@ -470,7 +516,60 @@ export default function CustosClient({
         )}
       </div>
 
-      {viewTab === "geral" ? (
+      {viewTab === "fornecedores" ? (
+        <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+              <input
+                value={buscaFornecedor}
+                onChange={(e) => setBuscaFornecedor(e.target.value)}
+                placeholder="Buscar fornecedor..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-emerald-500"
+              />
+            </div>
+            {!isVisitante && (
+              <button
+                onClick={() => openFornecedorModal(null)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm active:scale-95"
+              >
+                <Plus size={18} /> Novo Fornecedor
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="text-[11px] uppercase">
+                <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                  <th className={cn(cellBorder, "px-3 py-2")}>Nome Fantasia</th>
+                  <th className={cn(cellBorder, "px-3 py-2")}>Razão Social</th>
+                  {!isVisitante && <th className={cn(cellBorder, "px-3 py-2 text-right")}>Ações</th>}
+                </tr>
+              </thead>
+              <tbody className="text-zinc-700 dark:text-zinc-300 text-xs">
+                {fornecedoresFiltrados.map((f, idx) => (
+                  <tr key={f.id} className={idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : ""}>
+                    <td className={cn(cellBorder, "px-3 py-2 font-semibold")}>{f.nome_fantasia}</td>
+                    <td className={cn(cellBorder, "px-3 py-2")}>{f.razao_social || "-"}</td>
+                    {!isVisitante && (
+                      <td className={cn(cellBorder, "px-3 py-2 text-right whitespace-nowrap")}>
+                        <button onClick={() => openFornecedorModal(f)} className="p-1 text-zinc-400 hover:text-blue-500 mx-0.5"><Edit2 size={13} /></button>
+                        <button onClick={() => handleDeleteFornecedor(f.id)} className="p-1 text-zinc-400 hover:text-red-500 mx-0.5"><Trash2 size={13} /></button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {fornecedoresFiltrados.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className={cn(cellBorder, "px-4 py-8 text-center text-zinc-500")}>Nenhum fornecedor cadastrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : viewTab === "geral" ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {[
@@ -665,6 +764,8 @@ export default function CustosClient({
         </>
       )}
 
+      {viewTab !== "fornecedores" && (
+      <>
       <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -751,6 +852,8 @@ export default function CustosClient({
           <button onClick={() => setSelectedIds([])} className="text-zinc-400 hover:text-white text-sm">Cancelar</button>
         </div>
       )}
+      </>
+      )}
 
       {modalOpen && (
         <CustoModal
@@ -758,6 +861,16 @@ export default function CustosClient({
           onClose={() => { setModalOpen(false); setEditingData(null); }}
           editingData={editingData}
           equipamentos={equipamentos}
+          fornecedores={fornecedores}
+          isOnline={isOnline}
+        />
+      )}
+
+      {fornecedorModalOpen && (
+        <FornecedorModal
+          isOpen={fornecedorModalOpen}
+          onClose={() => { setFornecedorModalOpen(false); setEditingFornecedor(null); }}
+          editingData={editingFornecedor}
           isOnline={isOnline}
         />
       )}

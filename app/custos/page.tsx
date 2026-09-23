@@ -7,11 +7,14 @@ import { useOffline } from "@/components/offline-provider";
 import { useAuth } from "@/components/auth-context";
 import { PremiumLoader } from "@/components/premium-loader";
 
+const STORES = ["custos_manutencao", "custos_fornecedores", "equipamentos"];
+
 export default function CustosPage() {
   const { isOnline } = useOffline();
   const { isVisitante } = useAuth();
   const [loading, setLoading] = useState(true);
   const [custos, setCustos] = useState<any[]>([]);
+  const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
 
   useEffect(() => {
@@ -19,23 +22,26 @@ export default function CustosPage() {
 
     const loadData = async () => {
       try {
-        const stores = await localDb.getManyStores<Record<string, any[]>>(["custos_manutencao", "equipamentos"]);
+        const stores = await localDb.getManyStores<Record<string, any[]>>(STORES);
         const localCustos = stores.custos_manutencao || [];
+        const localFornecedores = stores.custos_fornecedores || [];
         const localEquip = stores.equipamentos || [];
 
         if (active) {
           setCustos(localCustos);
+          setFornecedores(localFornecedores);
           setEquipamentos(localEquip);
           setLoading(false);
         }
 
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["custos_manutencao", "equipamentos"]);
+          const syncSuccess = await syncTables(STORES);
           if (syncSuccess) {
-            const freshStores = await localDb.getManyStores<Record<string, any[]>>(["custos_manutencao", "equipamentos"]);
+            const freshStores = await localDb.getManyStores<Record<string, any[]>>(STORES);
             if (active) {
               setCustos(freshStores.custos_manutencao || []);
+              setFornecedores(freshStores.custos_fornecedores || []);
               setEquipamentos(freshStores.equipamentos || []);
             }
           }
@@ -50,12 +56,14 @@ export default function CustosPage() {
 
     window.addEventListener("offline-sync-completed", loadData);
     window.addEventListener("offline-db-updated-custos_manutencao", loadData);
+    window.addEventListener("offline-db-updated-custos_fornecedores", loadData);
     window.addEventListener("offline-db-updated-equipamentos", loadData);
 
     return () => {
       active = false;
       window.removeEventListener("offline-sync-completed", loadData);
       window.removeEventListener("offline-db-updated-custos_manutencao", loadData);
+      window.removeEventListener("offline-db-updated-custos_fornecedores", loadData);
       window.removeEventListener("offline-db-updated-equipamentos", loadData);
     };
   }, [isOnline]);
@@ -70,7 +78,12 @@ export default function CustosPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
-      <CustosClient isVisitante={isVisitante} initialCustos={custos} equipamentos={equipamentos} />
+      <CustosClient
+        isVisitante={isVisitante}
+        initialCustos={custos}
+        fornecedores={fornecedores}
+        equipamentos={equipamentos}
+      />
     </div>
   );
 }

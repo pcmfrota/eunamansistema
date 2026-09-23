@@ -184,6 +184,9 @@ const syncTasks: Record<
 
   custos_manutencao: (supabase) =>
     supabase.from("custos_manutencao").select("*").order("data", { ascending: false }),
+
+  custos_fornecedores: (supabase) =>
+    supabase.from("custos_fornecedores").select("*").order("nome_fantasia", { ascending: true }),
 };
 
 /**
