@@ -24,7 +24,8 @@ import {
   X,
   BarChart2,
   Plus,
-  Wrench
+  Wrench,
+  BadgeDollarSign
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -150,12 +151,19 @@ const portalItems = [
     icon: ModernWaterIcon, 
     color: "from-blue-500 to-sky-600 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25 dark:border-blue-400/20" 
   },
-  { 
-    name: "Documentos da Frota", 
-    path: "/documentos", 
-    desc: "Gerenciamento de CIV/CIPP, Tacógrafo e Laudos.", 
-    icon: Clipboard, 
-    color: "from-orange-500 to-red-600 bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25 dark:border-orange-400/20" 
+  {
+    name: "Documentos da Frota",
+    path: "/documentos",
+    desc: "Gerenciamento de CIV/CIPP, Tacógrafo e Laudos.",
+    icon: Clipboard,
+    color: "from-orange-500 to-red-600 bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25 dark:border-orange-400/20"
+  },
+  {
+    name: "Controle de Custos",
+    path: "/custos",
+    desc: "Custos de manutenção, faturamento e status de pagamento da frota.",
+    icon: BadgeDollarSign,
+    color: "from-emerald-500 to-green-600 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 dark:border-emerald-400/20"
   }
 ];
 
