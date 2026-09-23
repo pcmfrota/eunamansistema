@@ -11,7 +11,7 @@ import { localDb } from "@/lib/offline-db";
 import { MultiSelect } from "@/components/MultiSelect";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, LineChart, Line,
+  PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
 } from "recharts";
 import { CustoManutencao, StatusCusto, deleteCusto, bulkDeleteCustos } from "./actions";
 import CustoModal from "./CustoModal";
@@ -452,14 +452,14 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Evolução Mensal — Peças vs Mão de Obra</h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evolucaoMensal} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+                  <BarChart data={evolucaoMensal} margin={{ left: -10, right: 10, top: 5, bottom: 5 }} barCategoryGap="35%">
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                     <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="pecas" name="Peças" stackId="a" fill="#2563eb" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="maoObra" name="Mão de Obra" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="pecas" name="Peças" stackId="a" fill="#2563eb" radius={[0, 0, 0, 0]} maxBarSize={70} />
+                    <Bar dataKey="maoObra" name="Mão de Obra" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={70} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -470,7 +470,16 @@ export default function CustosClient({
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={distribuicaoTipo} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}>
+                    <Pie
+                      data={distribuicaoTipo}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={3}
+                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
                       {distribuicaoTipo.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                     </Pie>
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} />
@@ -484,12 +493,14 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Top 10 Veículos por Custo</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topVeiculos} layout="vertical" margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
+                  <BarChart data={topVeiculos} layout="vertical" margin={{ left: 0, right: 45, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={70} />
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Bar dataKey="value" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={14} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
+                    <Bar dataKey="value" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={14}>
+                      <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -499,12 +510,14 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Fornecedor</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={custosPorFornecedor} layout="vertical" margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
+                  <BarChart data={custosPorFornecedor} layout="vertical" margin={{ left: 0, right: 45, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Bar dataKey="value" fill="#16a34a" radius={[0, 4, 4, 0]} barSize={14} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(22,163,74,0.06)" }} />
+                    <Bar dataKey="value" fill="#16a34a" radius={[0, 4, 4, 0]} barSize={14}>
+                      <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
