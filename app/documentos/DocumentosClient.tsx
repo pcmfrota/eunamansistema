@@ -86,12 +86,12 @@ const GRUPOS_DOC: { key: Exclude<TabType, "visao_geral">; label: string; curto: 
 // neutras (tons de cinza) em vez de uma cor por tipo de documento; o que separa cada grupo é
 // a borda cheia da grade e a faixa clara/branca alternada, não o matiz.
 const GRUPO_COR_FORTE: Record<string, string> = {
-  tacografo: "bg-zinc-700 dark:bg-zinc-800 text-white",
-  civ_cipp: "bg-zinc-700 dark:bg-zinc-800 text-white",
-  laudo_eletromecanico: "bg-zinc-700 dark:bg-zinc-800 text-white",
-  laudo_implemento: "bg-zinc-700 dark:bg-zinc-800 text-white",
-  crlve_pesados: "bg-zinc-700 dark:bg-zinc-800 text-white",
-  crlve_leve: "bg-zinc-700 dark:bg-zinc-800 text-white",
+  tacografo: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-100",
+  civ_cipp: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-100",
+  laudo_eletromecanico: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-100",
+  laudo_implemento: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-100",
+  crlve_pesados: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-100",
+  crlve_leve: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-100",
 };
 const GRUPO_COR: Record<string, string> = {
   tacografo: "bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400",

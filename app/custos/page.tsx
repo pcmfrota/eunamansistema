@@ -1,28 +1,76 @@
 "use client";
 
-import { BadgeDollarSign, Construction } from "lucide-react";
+import { useEffect, useState } from "react";
+import CustosClient from "./CustosClient";
+import { localDb } from "@/lib/offline-db";
+import { useOffline } from "@/components/offline-provider";
+import { useAuth } from "@/components/auth-context";
+import { PremiumLoader } from "@/components/premium-loader";
 
 export default function CustosPage() {
-  return (
-    <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="p-5 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl">
-          <BadgeDollarSign size={40} className="text-emerald-500 dark:text-emerald-400" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-            Controle de Custos
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 max-w-md">
-            Este módulo está em desenvolvimento. Em breve você poderá registrar
-            e acompanhar os custos de manutenção da frota aqui.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-700 dark:text-amber-400 text-sm font-medium">
-          <Construction size={16} />
-          Em Desenvolvimento
-        </div>
+  const { isOnline } = useOffline();
+  const { isVisitante } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [custos, setCustos] = useState<any[]>([]);
+  const [equipamentos, setEquipamentos] = useState<any[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadData = async () => {
+      try {
+        const stores = await localDb.getManyStores<Record<string, any[]>>(["custos_manutencao", "equipamentos"]);
+        const localCustos = stores.custos_manutencao || [];
+        const localEquip = stores.equipamentos || [];
+
+        if (active) {
+          setCustos(localCustos);
+          setEquipamentos(localEquip);
+          setLoading(false);
+        }
+
+        if (isOnline) {
+          const { syncTables } = await import("@/lib/offline-sync");
+          const syncSuccess = await syncTables(["custos_manutencao", "equipamentos"]);
+          if (syncSuccess) {
+            const freshStores = await localDb.getManyStores<Record<string, any[]>>(["custos_manutencao", "equipamentos"]);
+            if (active) {
+              setCustos(freshStores.custos_manutencao || []);
+              setEquipamentos(freshStores.equipamentos || []);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar custos de manutenção:", err);
+        if (active) setLoading(false);
+      }
+    };
+
+    loadData();
+
+    window.addEventListener("offline-sync-completed", loadData);
+    window.addEventListener("offline-db-updated-custos_manutencao", loadData);
+    window.addEventListener("offline-db-updated-equipamentos", loadData);
+
+    return () => {
+      active = false;
+      window.removeEventListener("offline-sync-completed", loadData);
+      window.removeEventListener("offline-db-updated-custos_manutencao", loadData);
+      window.removeEventListener("offline-db-updated-equipamentos", loadData);
+    };
+  }, [isOnline]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+        <PremiumLoader type="squares-sequential" text="Carregando Controle de Custos" subtext="Buscando lançamentos locais..." />
       </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+      <CustosClient isVisitante={isVisitante} initialCustos={custos} equipamentos={equipamentos} />
     </div>
   );
 }

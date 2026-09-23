@@ -28,6 +28,7 @@ import {
   X,
   Droplets,
   Wrench,
+  BadgeDollarSign,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from './premium-loader';
@@ -64,6 +65,7 @@ const navigation = [
   { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
   { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
   { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
+  { name: 'Controle de Custos',        path: '/custos',                 icon: BadgeDollarSign },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {

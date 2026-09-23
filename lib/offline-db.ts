@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao';
   action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal';
   payload: any;
   timestamp: number;
@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 24;
+  private dbVersion = 25;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -57,6 +57,9 @@ export class OfflineDB {
 
     // Programação Preventiva
     if (!db.objectStoreNames.contains('prev_prog_semanal')) db.createObjectStore('prev_prog_semanal', { keyPath: 'id' });
+
+    // Controle Financeiro de Manutenção
+    if (!db.objectStoreNames.contains('custos_manutencao')) db.createObjectStore('custos_manutencao', { keyPath: 'id' });
 
     // Documentos
     if (!db.objectStoreNames.contains('docs_tacografo')) db.createObjectStore('docs_tacografo', { keyPath: 'id' });
