@@ -167,6 +167,7 @@ export async function middleware(request: NextRequest) {
       else if (userRole === 'mecanico') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
       else if (userRole === 'supervisor_manutencao') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
       else if (userRole === 'motorista') userPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
+      else if (userRole === 'financeiro') userPerms = ['/dashboard', '/custos'];
       else userPerms = allTabs;
     }
   }

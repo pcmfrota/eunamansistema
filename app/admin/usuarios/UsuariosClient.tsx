@@ -53,6 +53,7 @@ const CARGO_LABEL: Record<string, string> = {
   admin: "Administrador",
   pcm: "PCM",
   gestao: "Gestão",
+  financeiro: "Financeiro",
   supervisor_manutencao: "Supervisor Manutenção",
   mecanico: "Mecânico",
   motorista: "Motorista",
@@ -316,6 +317,7 @@ export default function UsuariosClient({
     { name: 'Controle de Lavagens', path: '/lavagens' },
     { name: 'Captação de Água', path: '/captacao' },
     { name: 'Documentos da Frota', path: '/documentos' },
+    { name: 'Controle de Custos', path: '/custos' },
     { name: 'Gestão de Usuários', path: '/admin/usuarios' },
   ];
 
@@ -493,6 +495,7 @@ export default function UsuariosClient({
                       role === 'admin' ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30" :
                       role === 'pcm' ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30" :
                       role === 'gestao' ? "bg-green-100 text-green-600 dark:bg-green-900/30" :
+                      role === 'financeiro' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" :
                       role === 'supervisor_manutencao' ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30" :
                       role === 'mecanico' ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30" :
                       role === 'motorista' ? "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30" :

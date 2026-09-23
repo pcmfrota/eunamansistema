@@ -11,7 +11,7 @@ type Profile = {
   email: string
   full_name: string | null
   avatar_url: string | null
-  role: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' | 'supervisor_manutencao'
+  role: 'admin' | 'pcm' | 'gestao' | 'financeiro' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' | 'supervisor_manutencao'
   filial_id: string          // ID da filial do usuário (ex: 'MATRIZ', 'ACAILANDIA')
   filial_nome: string        // Nome exibido (ex: 'FILIAL AÇAILÂNDIA')
 }
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
 
       // 3. Determinação da Role (tabela de perfis do banco -> app_metadata do token -> user_metadata -> fallback)
-      let finalRole: 'admin' | 'pcm' | 'gestao' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' | 'supervisor_manutencao' =
+      let finalRole: 'admin' | 'pcm' | 'gestao' | 'financeiro' | 'visitante' | 'mecanico' | 'motorista' | 'afiador' | 'supervisor_manutencao' =
         (profileData?.role as any) || 
         (u.app_metadata?.role as any) || 
         (u.user_metadata?.role as any) || 
@@ -231,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         else if (finalRole === 'supervisor_manutencao') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/afiacao', '/checklist-mecanicos'];
         else if (finalRole === 'motorista') finalPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
         else if (finalRole === 'afiador') finalPerms = ['/dashboard', '/afiacao'];
+        else if (finalRole === 'financeiro') finalPerms = ['/dashboard', '/custos'];
         else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
       }
 
