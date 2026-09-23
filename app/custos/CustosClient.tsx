@@ -631,12 +631,14 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Evolução de Custos Mensais</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={evolucaoMensalTotal} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+                  <LineChart data={evolucaoMensalTotal} margin={{ left: 5, right: 20, top: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                     <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Line type="monotone" dataKey="total" name="Custo Total" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="total" name="Custo Total" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }}>
+                      <LabelList dataKey="total" position="top" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 9, fill: "#2563eb", fontWeight: 700 }} />
+                    </Line>
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -646,10 +648,10 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Placa e Fornecedor</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={custosPorPlacaEFornecedor.linhas} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+                  <BarChart data={custosPorPlacaEFornecedor.linhas} margin={{ left: 5, right: 10, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
                     <XAxis dataKey="placa" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     {custosPorPlacaEFornecedor.fornecedores.map((f, i) => (
