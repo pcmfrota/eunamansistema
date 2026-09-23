@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, LayoutGrid, ListTree,
+  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, LayoutGrid, ListTree, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -68,6 +68,7 @@ export default function CustosClient({
   const [filterMes, setFilterMes] = useState("");
   const [filterAno, setFilterAno] = useState("");
   const [filterTipo, setFilterTipo] = useState("");
+  const [filterFornecedor, setFilterFornecedor] = useState("");
   const [filterDataIni, setFilterDataIni] = useState("");
   const [filterDataFim, setFilterDataFim] = useState("");
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
@@ -103,6 +104,7 @@ export default function CustosClient({
         return false;
       if (filterPlaca && c.placa !== filterPlaca) return false;
       if (filterTipo && c.tipo_manutencao !== filterTipo) return false;
+      if (filterFornecedor && (c.fornecedor || "Sem fornecedor") !== filterFornecedor) return false;
       if (filterStatus.length && !filterStatus.includes(c.status)) return false;
       if (filterMes || filterAno) {
         const [y, m] = (c.data || "").split("-");
@@ -113,7 +115,32 @@ export default function CustosClient({
       if (filterDataFim && c.data > filterDataFim) return false;
       return true;
     });
-  }, [initialCustos, searchTerm, filterPlaca, filterTipo, filterStatus, filterMes, filterAno, filterDataIni, filterDataFim]);
+  }, [initialCustos, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus, filterMes, filterAno, filterDataIni, filterDataFim]);
+
+  // Filtros disparados por clique nos gráficos — clicar de novo no mesmo valor limpa o filtro
+  // (efeito toggle), dando aos gráficos uma função de "abrir o detalhe" além de só mostrar.
+  function toggleFiltroPlaca(placa: string) {
+    setFilterPlaca((atual) => (atual === placa ? "" : placa));
+  }
+  function toggleFiltroTipo(tipo: string) {
+    setFilterTipo((atual) => (atual === tipo ? "" : tipo));
+  }
+  function toggleFiltroFornecedor(fornecedor: string) {
+    setFilterFornecedor((atual) => (atual === fornecedor ? "" : fornecedor));
+  }
+  function toggleFiltroMesAno(mes: string, ano: string) {
+    const jaAtivo = filterMes === mes && filterAno === ano;
+    setFilterMes(jaAtivo ? "" : mes);
+    setFilterAno(jaAtivo ? "" : ano);
+  }
+  function limparFiltrosGraficos() {
+    setFilterPlaca("");
+    setFilterTipo("");
+    setFilterFornecedor("");
+    setFilterMes("");
+    setFilterAno("");
+  }
+  const temFiltroDeGrafico = !!(filterPlaca || filterTipo || filterFornecedor || filterMes || filterAno);
 
   const kpis = useMemo(() => {
     let totalGeral = 0, totalPago = 0, totalAgPagamento = 0, totalFaturado = 0;
@@ -136,13 +163,13 @@ export default function CustosClient({
   }, [filteredData]);
 
   const evolucaoMensal = useMemo(() => {
-    const porMes = new Map<string, { mes: string; pecas: number; maoObra: number }>();
+    const porMes = new Map<string, { mes: string; ano: string; mesNum: string; pecas: number; maoObra: number }>();
     filteredData.forEach((c) => {
       const chave = c.data?.slice(0, 7);
       if (!chave) return;
       if (!porMes.has(chave)) {
         const [y, m] = chave.split("-");
-        porMes.set(chave, { mes: `${MESES[Number(m) - 1]?.slice(0, 3) || m}/${y.slice(2)}`, pecas: 0, maoObra: 0 });
+        porMes.set(chave, { mes: `${MESES[Number(m) - 1]?.slice(0, 3) || m}/${y.slice(2)}`, ano: y, mesNum: m, pecas: 0, maoObra: 0 });
       }
       const item = porMes.get(chave)!;
       item.pecas += Number(c.pecas);
@@ -406,25 +433,41 @@ export default function CustosClient({
         />
       </div>
 
-      <div className="flex gap-2 p-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-xl w-fit">
-        <button
-          onClick={() => setViewTab("geral")}
-          className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
-            viewTab === "geral" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
-          )}
-        >
-          <LayoutGrid size={14} /> Visão Geral
-        </button>
-        <button
-          onClick={() => setViewTab("detalhamento")}
-          className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
-            viewTab === "detalhamento" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
-          )}
-        >
-          <ListTree size={14} /> Detalhamento Financeiro
-        </button>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex gap-2 p-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-xl w-fit">
+          <button
+            onClick={() => setViewTab("geral")}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
+              viewTab === "geral" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+            )}
+          >
+            <LayoutGrid size={14} /> Visão Geral
+          </button>
+          <button
+            onClick={() => setViewTab("detalhamento")}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
+              viewTab === "detalhamento" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+            )}
+          >
+            <ListTree size={14} /> Detalhamento Financeiro
+          </button>
+        </div>
+
+        {temFiltroDeGrafico && (
+          <button
+            onClick={limparFiltrosGraficos}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+          >
+            Filtro do gráfico ativo
+            {filterPlaca && <span className="font-mono">· {filterPlaca}</span>}
+            {filterTipo && <span>· {filterTipo}</span>}
+            {filterFornecedor && <span>· {filterFornecedor}</span>}
+            {(filterMes || filterAno) && <span>· {MESES[Number(filterMes) - 1]?.slice(0, 3) || filterMes}/{filterAno?.slice(2)}</span>}
+            <X size={12} />
+          </button>
+        )}
       </div>
 
       {viewTab === "geral" ? (
@@ -458,8 +501,22 @@ export default function CustosClient({
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="pecas" name="Peças" stackId="a" fill="#2563eb" radius={[0, 0, 0, 0]} maxBarSize={70} />
-                    <Bar dataKey="maoObra" name="Mão de Obra" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={70} />
+                    <Bar
+                      dataKey="pecas" name="Peças" stackId="a" radius={[0, 0, 0, 0]} maxBarSize={70}
+                      cursor="pointer" onClick={(d: any) => toggleFiltroMesAno(d.mesNum, d.ano)}
+                    >
+                      {evolucaoMensal.map((entry, i) => (
+                        <Cell key={i} fill="#2563eb" opacity={filterMes && (filterMes !== entry.mesNum || filterAno !== entry.ano) ? 0.3 : 1} />
+                      ))}
+                    </Bar>
+                    <Bar
+                      dataKey="maoObra" name="Mão de Obra" stackId="a" radius={[4, 4, 0, 0]} maxBarSize={70}
+                      cursor="pointer" onClick={(d: any) => toggleFiltroMesAno(d.mesNum, d.ano)}
+                    >
+                      {evolucaoMensal.map((entry, i) => (
+                        <Cell key={i} fill="#f59e0b" opacity={filterMes && (filterMes !== entry.mesNum || filterAno !== entry.ano) ? 0.3 : 1} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -479,8 +536,16 @@ export default function CustosClient({
                       paddingAngle={3}
                       label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
+                      cursor="pointer"
+                      onClick={(d: any) => toggleFiltroTipo(d.name)}
                     >
-                      {distribuicaoTipo.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                      {distribuicaoTipo.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={CHART_COLORS[i % CHART_COLORS.length]}
+                          opacity={filterTipo && filterTipo !== entry.name ? 0.35 : 1}
+                        />
+                      ))}
                     </Pie>
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -493,13 +558,16 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Top 10 Veículos por Custo</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topVeiculos} layout="vertical" margin={{ left: 0, right: 45, top: 5, bottom: 5 }}>
+                  <BarChart data={topVeiculos} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
-                    <XAxis type="number" hide />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={70} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
-                    <Bar dataKey="value" fill="#2563eb" radius={[0, 4, 4, 0]} barSize={14}>
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} cursor="pointer" onClick={(d: any) => toggleFiltroPlaca(d.name)}>
                       <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                      {topVeiculos.map((entry, i) => (
+                        <Cell key={i} fill="#2563eb" opacity={filterPlaca && filterPlaca !== entry.name ? 0.3 : 1} />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -510,13 +578,16 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Fornecedor</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={custosPorFornecedor} layout="vertical" margin={{ left: 0, right: 45, top: 5, bottom: 5 }}>
+                  <BarChart data={custosPorFornecedor} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
-                    <XAxis type="number" hide />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(22,163,74,0.06)" }} />
-                    <Bar dataKey="value" fill="#16a34a" radius={[0, 4, 4, 0]} barSize={14}>
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} cursor="pointer" onClick={(d: any) => toggleFiltroFornecedor(d.name)}>
                       <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                      {custosPorFornecedor.map((entry, i) => (
+                        <Cell key={i} fill="#16a34a" opacity={filterFornecedor && filterFornecedor !== entry.name ? 0.3 : 1} />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
