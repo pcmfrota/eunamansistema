@@ -397,6 +397,17 @@ export default function CustosClient({
             className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-emerald-500"
           />
         </div>
+        <MultiSelect
+          className="lg:col-span-2 xl:col-span-2"
+          placeholder="Todos os Status"
+          values={filterStatus}
+          onChange={setFilterStatus}
+          options={[
+            { value: "PAGO", label: "Pago", colorClass: STATUS_CHIP.PAGO },
+            { value: "AG_PAGAMENTO", label: "Ag. Pagamento", colorClass: STATUS_CHIP.AG_PAGAMENTO },
+            { value: "FATURADO", label: "Faturado", colorClass: STATUS_CHIP.FATURADO },
+          ]}
+        />
         <select value={filterPlaca} onChange={(e) => setFilterPlaca(e.target.value)} className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none">
           <option value="">Todas as Placas</option>
           {placasUnicas.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -420,17 +431,6 @@ export default function CustosClient({
           <span className="text-zinc-400 text-xs">–</span>
           <input type="date" value={filterDataFim} onChange={(e) => setFilterDataFim(e.target.value)} className="w-full px-2 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none" />
         </div>
-        <MultiSelect
-          className="lg:col-span-2 xl:col-span-2"
-          placeholder="Todos os Status"
-          values={filterStatus}
-          onChange={setFilterStatus}
-          options={[
-            { value: "PAGO", label: "Pago", colorClass: STATUS_CHIP.PAGO },
-            { value: "AG_PAGAMENTO", label: "Ag. Pagamento", colorClass: STATUS_CHIP.AG_PAGAMENTO },
-            { value: "FATURADO", label: "Faturado", colorClass: STATUS_CHIP.FATURADO },
-          ]}
-        />
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
