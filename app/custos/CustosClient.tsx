@@ -502,7 +502,7 @@ export default function CustosClient({
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar
-                      dataKey="pecas" name="Peças" stackId="a" radius={[0, 0, 0, 0]} maxBarSize={70}
+                      dataKey="pecas" name="Peças" radius={[4, 4, 0, 0]} maxBarSize={40}
                       cursor="pointer" onClick={(d: any) => toggleFiltroMesAno(d.mesNum, d.ano)}
                     >
                       {evolucaoMensal.map((entry, i) => (
@@ -510,7 +510,7 @@ export default function CustosClient({
                       ))}
                     </Bar>
                     <Bar
-                      dataKey="maoObra" name="Mão de Obra" stackId="a" radius={[4, 4, 0, 0]} maxBarSize={70}
+                      dataKey="maoObra" name="Mão de Obra" radius={[4, 4, 0, 0]} maxBarSize={40}
                       cursor="pointer" onClick={(d: any) => toggleFiltroMesAno(d.mesNum, d.ano)}
                     >
                       {evolucaoMensal.map((entry, i) => (
