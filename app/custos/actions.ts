@@ -220,10 +220,14 @@ export async function importarCustos(rows: any[]) {
       const descricao = String(getVal(row, ["descricao", "descrição", "descricao_servico", "servico", "serviço"]) || "").trim();
       if (!placa || !data || !descricao) return null;
 
+      // Cuidado: "AG" é substring de "PAGO" (P-AG-O), então checar "inclui AG" pra achar
+      // "Aguardando" também casava com "Pago" sozinho por engano. "PAGAMENTO" (presente em
+      // "Ag. Pagamento"/"Aguardando Pagamento" mas não em "Pago") é o que realmente distingue.
       const statusRaw = String(getVal(row, ["status"]) || "AG_PAGAMENTO").toUpperCase().trim();
       const status: StatusCusto =
-        statusRaw.includes("PAGO") && !statusRaw.includes("AG") ? "PAGO" :
-        statusRaw.includes("FATURA") ? "FATURADO" : "AG_PAGAMENTO";
+        statusRaw.includes("FATURA") ? "FATURADO" :
+        statusRaw.includes("PAGAMENTO") || statusRaw.includes("PEND") ? "AG_PAGAMENTO" :
+        statusRaw.includes("PAGO") ? "PAGO" : "AG_PAGAMENTO";
 
       const tipoRaw = String(getVal(row, ["tipo_manutencao", "tipo", "tipo de manutenção"]) || "CORRETIVA").toUpperCase().trim();
       const tipo_manutencao: TipoManutencaoCusto =

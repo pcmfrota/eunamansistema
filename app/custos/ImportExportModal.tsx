@@ -29,6 +29,8 @@ function normalizeKey(v: any): string {
 // (comportamento padrão do XLSX.utils.sheet_to_json), essa linha de título vira o "cabeçalho"
 // e nenhuma coluna real (Data, Placa...) é reconhecida. Por isso procura, nas primeiras linhas,
 // a que efetivamente parece um cabeçalho (tem "data" E "placa" reconhecíveis) antes de ler.
+// Retorna -1 quando a aba não tem uma linha de cabeçalho reconhecível (ex: aba "Resumo" com
+// tabela dinâmica/gráfico), pra essa aba poder ser pulada em vez de forçada como se fosse dado.
 function encontrarLinhaCabecalho(matrix: any[][]): number {
   const limite = Math.min(matrix.length, 10);
   for (let i = 0; i < limite; i++) {
@@ -37,7 +39,7 @@ function encontrarLinhaCabecalho(matrix: any[][]): number {
     const temPlaca = chaves.some((k) => k.includes("placa") || k.includes("veiculo"));
     if (temData && temPlaca) return i;
   }
-  return 0;
+  return -1;
 }
 
 type KPIs = { totalGeral: number; totalPago: number; totalAgPagamento: number; totalFaturado: number; custoMedioPorPlaca: number };
@@ -55,12 +57,17 @@ export default function ImportExportModal({
 }) {
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [fileName, setFileName] = useState("");
+  const [abasLidas, setAbasLidas] = useState<string[]>([]);
+  const [abasIgnoradas, setAbasIgnoradas] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
+  // Lê TODAS as abas do arquivo (ex: "Agosto", "Setembro"...) e junta os lançamentos de cada
+  // uma — planilhas de controle mensal costumam ter uma aba por mês. Abas sem colunas Data/Placa
+  // reconhecíveis (ex: uma aba "Resumo" com tabela dinâmica) são puladas, não travam a importação.
   async function handleFile(file: File | undefined | null) {
     if (!file) return;
     setFileName(file.name);
@@ -68,17 +75,39 @@ export default function ImportExportModal({
       const XLSX = await loadXLSX();
       const buf = await file.arrayBuffer();
       const workbook = XLSX.read(buf, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-      const matrix: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      const linhaCabecalho = encontrarLinhaCabecalho(matrix);
-      const json = XLSX.utils.sheet_to_json(sheet, { range: linhaCabecalho });
+      let todasAsLinhas: any[] = [];
+      const lidas: string[] = [];
+      const ignoradas: string[] = [];
 
-      if (json.length === 0) {
-        alert("Não foi possível identificar as colunas Data e Placa na planilha. Verifique se essas colunas existem.");
+      for (const nomeAba of workbook.SheetNames) {
+        const sheet = workbook.Sheets[nomeAba];
+        const matrix: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const linhaCabecalho = encontrarLinhaCabecalho(matrix);
+
+        if (linhaCabecalho === -1) {
+          ignoradas.push(nomeAba);
+          continue;
+        }
+
+        const linhas = XLSX.utils.sheet_to_json(sheet, { range: linhaCabecalho });
+        if (linhas.length === 0) {
+          ignoradas.push(nomeAba);
+          continue;
+        }
+
+        todasAsLinhas = todasAsLinhas.concat(linhas);
+        lidas.push(nomeAba);
+      }
+
+      if (todasAsLinhas.length === 0) {
+        alert("Não foi possível identificar as colunas Data e Placa em nenhuma aba da planilha.");
         return;
       }
-      setPreviewRows(json);
+
+      setPreviewRows(todasAsLinhas);
+      setAbasLidas(lidas);
+      setAbasIgnoradas(ignoradas);
     } catch (err: any) {
       alert("Erro ao ler o arquivo: " + (err.message || String(err)));
     }
@@ -96,6 +125,8 @@ export default function ImportExportModal({
       window.dispatchEvent(new CustomEvent("offline-db-updated-custos_manutencao"));
       setPreviewRows([]);
       setFileName("");
+      setAbasLidas([]);
+      setAbasIgnoradas([]);
       onClose();
     } catch (err: any) {
       alert("Erro na importação: " + (err.message || String(err)));
@@ -165,6 +196,16 @@ export default function ImportExportModal({
 
             {previewRows.length > 0 && (
               <div className="mt-4">
+                {abasLidas.length > 0 && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mb-1">
+                    ✓ Abas lidas: {abasLidas.join(", ")}
+                  </p>
+                )}
+                {abasIgnoradas.length > 0 && (
+                  <p className="text-[11px] text-zinc-400 mb-1">
+                    Abas ignoradas (sem Data/Placa): {abasIgnoradas.join(", ")}
+                  </p>
+                )}
                 <p className="text-xs font-semibold text-zinc-500 mb-2">Pré-visualização ({previewRows.length} linha(s) encontrada(s)):</p>
                 <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-auto max-h-40 text-[11px]">
                   <table className="w-full">
