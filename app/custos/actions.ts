@@ -74,6 +74,74 @@ async function getUsuarioAtual(supabase: any) {
   };
 }
 
+export type AcaoHistorico = "CRIACAO" | "EDICAO" | "EXCLUSAO";
+export type TabelaHistorico = "custos_manutencao" | "custos_fornecedores" | "custos_parcelas";
+
+export type HistoricoCusto = {
+  id: string;
+  acao: AcaoHistorico;
+  tabela_origem: TabelaHistorico;
+  registro_id: string | null;
+  descricao: string | null;
+  dados_antes: any;
+  dados_depois: any;
+  usuario_id: string | null;
+  usuario_nome: string | null;
+  filial_id: string;
+  created_at: string;
+};
+
+// Auditoria do módulo: quem criou/editou/excluiu o quê. Nunca lança erro — uma falha
+// ao registrar o histórico não pode impedir a ação real que o usuário pediu.
+async function registrarHistoricoCusto(supabase: any, params: {
+  acao: AcaoHistorico;
+  tabelaOrigem: TabelaHistorico;
+  registroId?: string | number | null;
+  descricao?: string | null;
+  dadosAntes?: any;
+  dadosDepois?: any;
+}) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    let nome = user?.email || "Sistema";
+    if (user) {
+      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      nome = profile?.full_name || user.email || "Usuário";
+    }
+    const { cookies } = await import("next/headers");
+    const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
+
+    await supabase.from("custos_historico").insert({
+      acao: params.acao,
+      tabela_origem: params.tabelaOrigem,
+      registro_id: params.registroId != null ? String(params.registroId) : null,
+      descricao: params.descricao || null,
+      dados_antes: params.dadosAntes ?? null,
+      dados_depois: params.dadosDepois ?? null,
+      usuario_id: user?.id || null,
+      usuario_nome: nome,
+      filial_id: filialId,
+    });
+  } catch (err) {
+    console.error("[Histórico de Custos] Falha ao registrar:", err);
+  }
+}
+
+export async function getCustosHistorico() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("custos_historico")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  if (error) {
+    console.error("Erro getCustosHistorico:", error);
+    return [];
+  }
+  return data as HistoricoCusto[];
+}
+
 export async function getCustos() {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -112,8 +180,19 @@ export async function getParcelas() {
 export async function atualizarStatusParcela(id: string, status: StatusParcela) {
   try {
     const supabase = createClient();
+    const { data: antes } = await supabase.from("custos_parcelas").select("*").eq("id", id).maybeSingle();
     const { error } = await supabase.from("custos_parcelas").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
+
+    await registrarHistoricoCusto(supabase, {
+      acao: "EDICAO",
+      tabelaOrigem: "custos_parcelas",
+      registroId: id,
+      descricao: antes ? `Parcela ${antes.numero} — ${status === "PAGO" ? "marcada como paga" : "marcada como pendente"}` : null,
+      dadosAntes: antes,
+      dadosDepois: antes ? { ...antes, status } : null,
+    });
+
     revalidatePath("/custos");
     return { success: true };
   } catch (error: any) {
@@ -124,8 +203,19 @@ export async function atualizarStatusParcela(id: string, status: StatusParcela) 
 export async function marcarCustoComoPago(id: string) {
   try {
     const supabase = createClient();
+    const { data: antes } = await supabase.from("custos_manutencao").select("*").eq("id", id).maybeSingle();
     const { error } = await supabase.from("custos_manutencao").update({ status: "PAGO", updated_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
+
+    await registrarHistoricoCusto(supabase, {
+      acao: "EDICAO",
+      tabelaOrigem: "custos_manutencao",
+      registroId: id,
+      descricao: antes ? `${antes.placa} — ${antes.descricao} — marcado como pago` : null,
+      dadosAntes: antes,
+      dadosDepois: antes ? { ...antes, status: "PAGO" } : null,
+    });
+
     revalidatePath("/custos");
     return { success: true };
   } catch (error: any) {
@@ -160,13 +250,29 @@ export async function upsertFornecedor(formData: FormData) {
     if (!payload.nome_fantasia) return { error: "Nome fantasia é obrigatório" };
 
     if (id) {
+      const { data: antes } = await supabase.from("custos_fornecedores").select("*").eq("id", id).maybeSingle();
       const { error } = await supabase.from("custos_fornecedores").update(payload).eq("id", id);
       if (error) throw error;
+      await registrarHistoricoCusto(supabase, {
+        acao: "EDICAO",
+        tabelaOrigem: "custos_fornecedores",
+        registroId: id,
+        descricao: payload.nome_fantasia,
+        dadosAntes: antes,
+        dadosDepois: payload,
+      });
     } else {
       const { cookies } = await import("next/headers");
       const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
-      const { error } = await supabase.from("custos_fornecedores").insert({ ...payload, filial_id: filialId });
+      const { data: inserted, error } = await supabase.from("custos_fornecedores").insert({ ...payload, filial_id: filialId }).select("id").single();
       if (error) throw error;
+      await registrarHistoricoCusto(supabase, {
+        acao: "CRIACAO",
+        tabelaOrigem: "custos_fornecedores",
+        registroId: inserted?.id,
+        descricao: payload.nome_fantasia,
+        dadosDepois: payload,
+      });
     }
 
     revalidatePath("/custos");
@@ -199,6 +305,13 @@ export async function deleteFornecedor(id: string) {
       registroId: id,
       descricao: row?.nome_fantasia || null,
       dados: row,
+    });
+    await registrarHistoricoCusto(supabase, {
+      acao: "EXCLUSAO",
+      tabelaOrigem: "custos_fornecedores",
+      registroId: id,
+      descricao: row?.nome_fantasia || null,
+      dadosAntes: row,
     });
 
     revalidatePath("/custos");
@@ -272,12 +385,21 @@ export async function upsertCusto(formData: FormData) {
       // toda vez que o usuário só editasse a descrição, por exemplo.
       const { data: existente } = await supabase
         .from("custos_manutencao")
-        .select("pecas, mao_obra, data, parcelas_total")
+        .select("*")
         .eq("id", id)
         .maybeSingle();
 
       const { error } = await supabase.from("custos_manutencao").update(payload).eq("id", id);
       if (error) throw error;
+
+      await registrarHistoricoCusto(supabase, {
+        acao: "EDICAO",
+        tabelaOrigem: "custos_manutencao",
+        registroId: id,
+        descricao: `${payload.placa} — ${payload.descricao} (R$ ${(pecas + maoObra).toFixed(2)})`,
+        dadosAntes: existente,
+        dadosDepois: payload,
+      });
 
       const eraParcelado = existente && Number(existente.parcelas_total) > 1;
       const mudouParaNaoParcelado = eraParcelado && (!parcelasTotal || parcelasTotal <= 1);
@@ -305,6 +427,14 @@ export async function upsertCusto(formData: FormData) {
       if (error) throw error;
       custoId = inserted.id;
       precisaGerarParcelas = !!(parcelasTotal && parcelasTotal > 1);
+
+      await registrarHistoricoCusto(supabase, {
+        acao: "CRIACAO",
+        tabelaOrigem: "custos_manutencao",
+        registroId: custoId,
+        descricao: `${payload.placa} — ${payload.descricao} (R$ ${(pecas + maoObra).toFixed(2)})`,
+        dadosDepois: payload,
+      });
     }
 
     if (precisaGerarParcelas && parcelasTotal && custoId) {
@@ -349,6 +479,13 @@ export async function deleteCusto(id: string) {
       descricao: row ? `${row.placa} — ${row.descricao} (R$ ${(Number(row.pecas) + Number(row.mao_obra)).toFixed(2)})` : null,
       dados: row,
     });
+    await registrarHistoricoCusto(supabase, {
+      acao: "EXCLUSAO",
+      tabelaOrigem: "custos_manutencao",
+      registroId: id,
+      descricao: row ? `${row.placa} — ${row.descricao} (R$ ${(Number(row.pecas) + Number(row.mao_obra)).toFixed(2)})` : null,
+      dadosAntes: row,
+    });
 
     revalidatePath("/custos");
     return { success: true };
@@ -382,6 +519,17 @@ export async function bulkDeleteCustos(ids: string[]) {
         descricao: `${r.placa} — ${r.descricao} (R$ ${(Number(r.pecas) + Number(r.mao_obra)).toFixed(2)})`,
         dados: r,
       }))
+    );
+    await Promise.all(
+      rows.map((r) =>
+        registrarHistoricoCusto(supabase, {
+          acao: "EXCLUSAO",
+          tabelaOrigem: "custos_manutencao",
+          registroId: r.id,
+          descricao: `${r.placa} — ${r.descricao} (R$ ${(Number(r.pecas) + Number(r.mao_obra)).toFixed(2)})`,
+          dadosAntes: r,
+        })
+      )
     );
 
     revalidatePath("/custos");
@@ -483,6 +631,15 @@ export async function importarCustos(rows: any[]) {
 
     const { error } = await supabase.from("custos_manutencao").insert(mapped);
     if (error) throw error;
+
+    // Um único registro resumido no histórico (não um por linha), pra não inundar a
+    // auditoria numa importação de planilha com centenas de lançamentos.
+    await registrarHistoricoCusto(supabase, {
+      acao: "CRIACAO",
+      tabelaOrigem: "custos_manutencao",
+      descricao: `Importação de planilha — ${mapped.length} lançamento(s) inserido(s)`,
+      dadosDepois: { quantidade: mapped.length },
+    });
 
     revalidatePath("/custos");
     return { success: true, count: mapped.length };

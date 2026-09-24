@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard,
+  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard, History, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -14,8 +14,8 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
 } from "recharts";
 import {
-  CustoManutencao, StatusCusto, Fornecedor, ParcelaCartao, StatusParcela,
-  deleteCusto, bulkDeleteCustos, deleteFornecedor, atualizarStatusParcela, marcarCustoComoPago,
+  CustoManutencao, StatusCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
+  deleteCusto, bulkDeleteCustos, deleteFornecedor, atualizarStatusParcela, marcarCustoComoPago, getCustosHistorico,
 } from "./actions";
 import CustoModal from "./CustoModal";
 import FornecedorModal from "./FornecedorModal";
@@ -90,11 +90,25 @@ export default function CustosClient({
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores" | "parcelamentos">("geral");
+  const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores" | "parcelamentos" | "historico">("geral");
   const [fornecedorModalOpen, setFornecedorModalOpen] = useState(false);
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
   const [buscaFornecedor, setBuscaFornecedor] = useState("");
   const [buscaParcelamento, setBuscaParcelamento] = useState("");
+  const [historico, setHistorico] = useState<HistoricoCusto[] | null>(null);
+  const [historicoCarregando, setHistoricoCarregando] = useState(false);
+  const [buscaHistorico, setBuscaHistorico] = useState("");
+  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string>("");
+  const [linhaExpandida, setLinhaExpandida] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (viewTab !== "historico" || historico !== null || historicoCarregando) return;
+    setHistoricoCarregando(true);
+    getCustosHistorico()
+      .then((data) => setHistorico(data))
+      .catch(() => setHistorico([]))
+      .finally(() => setHistoricoCarregando(false));
+  }, [viewTab, historico, historicoCarregando]);
 
   const placasUnicas = useMemo(
     () => Array.from(new Set(initialCustos.map((c) => c.placa))).filter(Boolean).sort(),
@@ -433,6 +447,30 @@ export default function CustosClient({
     }
   }
 
+  const ACAO_LABEL: Record<AcaoHistorico, string> = { CRIACAO: "Criação", EDICAO: "Edição", EXCLUSAO: "Exclusão" };
+  const ACAO_BADGE: Record<AcaoHistorico, string> = {
+    CRIACAO: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+    EDICAO: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    EXCLUSAO: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+  };
+  const TABELA_LABEL: Record<string, string> = {
+    custos_manutencao: "Lançamento",
+    custos_fornecedores: "Fornecedor",
+    custos_parcelas: "Parcela",
+  };
+
+  const historicoFiltrado = useMemo(() => {
+    let lista = historico || [];
+    if (filtroAcaoHistorico) lista = lista.filter((h) => h.acao === filtroAcaoHistorico);
+    const term = buscaHistorico.toLowerCase().trim();
+    if (term) {
+      lista = lista.filter(
+        (h) => h.descricao?.toLowerCase().includes(term) || h.usuario_nome?.toLowerCase().includes(term)
+      );
+    }
+    return lista;
+  }, [historico, filtroAcaoHistorico, buscaHistorico]);
+
   async function handleMarcarFaturadoPago(linha: LinhaParcelamento) {
     if (isVisitante) return;
     if (!confirm("Marcar este boleto faturado como pago?")) return;
@@ -643,6 +681,15 @@ export default function CustosClient({
           >
             <CreditCard size={14} /> Faturas & Parcelamentos
           </button>
+          <button
+            onClick={() => setViewTab("historico")}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
+              viewTab === "historico" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+            )}
+          >
+            <History size={14} /> Histórico
+          </button>
         </div>
 
         {temFiltroDeGrafico && (
@@ -795,6 +842,106 @@ export default function CustosClient({
               </tbody>
             </table>
           </div>
+        </div>
+      ) : viewTab === "historico" ? (
+        <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+              <input
+                value={buscaHistorico}
+                onChange={(e) => setBuscaHistorico(e.target.value)}
+                placeholder="Buscar por descrição ou usuário..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-emerald-500"
+              />
+            </div>
+            <select
+              value={filtroAcaoHistorico}
+              onChange={(e) => setFiltroAcaoHistorico(e.target.value)}
+              className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
+            >
+              <option value="">Todas as Ações</option>
+              <option value="CRIACAO">Criação</option>
+              <option value="EDICAO">Edição</option>
+              <option value="EXCLUSAO">Exclusão</option>
+            </select>
+          </div>
+
+          {historicoCarregando ? (
+            <div className="flex items-center justify-center py-16 text-zinc-400">
+              <Loader2 className="animate-spin" size={24} />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="text-[11px] uppercase">
+                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                    <th className={cn(cellBorder, "px-3 py-2")}>Data/Hora</th>
+                    <th className={cn(cellBorder, "px-3 py-2 text-center")}>Ação</th>
+                    <th className={cn(cellBorder, "px-3 py-2")}>Registro</th>
+                    <th className={cn(cellBorder, "px-3 py-2")}>Descrição</th>
+                    <th className={cn(cellBorder, "px-3 py-2")}>Usuário</th>
+                    <th className={cn(cellBorder, "px-3 py-2 text-center w-16")}>Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody className="text-zinc-700 dark:text-zinc-300 text-xs">
+                  {historicoFiltrado.map((h, idx) => (
+                    <Fragment key={h.id}>
+                      <tr className={idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : ""}>
+                        <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>
+                          {new Date(h.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className={cn(cellBorder, "px-3 py-2 text-center")}>
+                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap", ACAO_BADGE[h.acao])}>
+                            {ACAO_LABEL[h.acao]}
+                          </span>
+                        </td>
+                        <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{TABELA_LABEL[h.tabela_origem] || h.tabela_origem}</td>
+                        <td className={cn(cellBorder, "px-3 py-2")}>{h.descricao || "-"}</td>
+                        <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{h.usuario_nome || "Sistema"}</td>
+                        <td className={cn(cellBorder, "px-3 py-2 text-center")}>
+                          {(h.dados_antes || h.dados_depois) && (
+                            <button onClick={() => setLinhaExpandida(linhaExpandida === h.id ? null : h.id)} className="p-1 text-zinc-400 hover:text-emerald-600">
+                              {linhaExpandida === h.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {linhaExpandida === h.id && (
+                        <tr>
+                          <td colSpan={6} className={cn(cellBorder, "px-4 py-3 bg-zinc-50 dark:bg-zinc-900/60")}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {h.dados_antes && (
+                                <div>
+                                  <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Antes</p>
+                                  <pre className="text-[10px] whitespace-pre-wrap break-all bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 max-h-48 overflow-y-auto">
+                                    {JSON.stringify(h.dados_antes, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                              {h.dados_depois && (
+                                <div>
+                                  <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Depois</p>
+                                  <pre className="text-[10px] whitespace-pre-wrap break-all bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 max-h-48 overflow-y-auto">
+                                    {JSON.stringify(h.dados_depois, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                  {historicoFiltrado.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className={cn(cellBorder, "px-4 py-8 text-center text-zinc-500")}>Nenhum registro de histórico encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : viewTab === "geral" ? (
         <>
@@ -990,7 +1137,7 @@ export default function CustosClient({
         </>
       ) : null}
 
-      {viewTab !== "fornecedores" && viewTab !== "parcelamentos" && (
+      {viewTab !== "fornecedores" && viewTab !== "parcelamentos" && viewTab !== "historico" && (
       <>
       <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
