@@ -139,6 +139,79 @@ export async function gerarPDFCustos(dados: CustoManutencao[], kpis: KPIs, modo:
   }
 }
 
+// PDF "de apresentação": tira um retrato do dashboard como ele está na tela (KPIs + gráficos
+// coloridos), em vez de reconstruir uma tabela. Clona o elemento #custos-dashboard-capture
+// (já renderizado pelo Recharts) pra fora da tela, com um cabeçalho na frente, e fotografa
+// tudo de uma vez com html2canvas — assim os gráficos saem exatamente como o usuário está vendo.
+export async function gerarPDFApresentacaoCustos(periodo: string) {
+  const original = document.getElementById("custos-dashboard-capture");
+  if (!original) throw new Error("Não foi possível localizar o dashboard na tela. Abra a aba Visão Geral ou Detalhamento Financeiro.");
+
+  const hoje = new Date().toLocaleDateString("pt-BR");
+
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "-9999px";
+  container.style.width = `${original.offsetWidth}px`;
+  container.style.backgroundColor = "#ffffff";
+  container.style.padding = "16px";
+  container.style.boxSizing = "border-box";
+  container.style.fontFamily = "Arial, sans-serif";
+
+  const header = document.createElement("div");
+  header.style.cssText = "display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:16px;";
+  header.innerHTML = `
+    <div style="background-color:#005a2b; color:#fff; padding:8px 14px; font-weight:bold; border-radius:4px; font-size:18px; letter-spacing:1px;">EUNAMAN</div>
+    <div style="text-align:center; flex:1;">
+      <h2 style="margin:0; font-size:18px; text-transform:uppercase; letter-spacing:1px; font-weight:900; color:#000;">Apresentação — Controle Financeiro de Manutenção</h2>
+      <span style="font-size:11px; color:#555;">Período: ${periodo}</span>
+    </div>
+    <div style="font-size:10px; font-weight:bold; text-align:right; color:#000;">Gerado em:<br/>${hoje}</div>
+  `;
+
+  const clone = original.cloneNode(true) as HTMLElement;
+  clone.style.backgroundColor = "#ffffff";
+  container.appendChild(header);
+  container.appendChild(clone);
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff" });
+    document.body.removeChild(container);
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const pdf = new jsPDF("l", "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
+    heightLeft -= pdfHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+
+    const blob: Blob = pdf.output("blob");
+    await salvarOuCompartilharBlob(
+      blob,
+      `Apresentacao_Custos_${new Date().toISOString().slice(0, 10)}.pdf`,
+      "Apresentação — Controle de Custos",
+      "Dashboard visual de custos de manutenção da frota",
+      "download"
+    );
+  } catch (err) {
+    if (document.body.contains(container)) document.body.removeChild(container);
+    throw err;
+  }
+}
+
 // Impressão direta — abre o mesmo relatório numa aba nova (só o conteúdo do relatório, sem o
 // resto do app) e aciona window.print(). Mais simples e robusto que isolar via @media print
 // numa camada por cima da página atual.

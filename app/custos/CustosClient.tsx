@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard, History, ChevronDown, ChevronUp,
+  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard, History, ChevronDown, ChevronUp, Presentation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -20,7 +20,7 @@ import {
 import CustoModal from "./CustoModal";
 import FornecedorModal from "./FornecedorModal";
 import ImportExportModal from "./ImportExportModal";
-import { gerarPDFCustos, imprimirRelatorioCustos } from "./CustosPDF";
+import { gerarPDFCustos, imprimirRelatorioCustos, gerarPDFApresentacaoCustos } from "./CustosPDF";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -95,6 +95,7 @@ export default function CustosClient({
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isGerandoApresentacao, setIsGerandoApresentacao] = useState(false);
   const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores" | "parcelamentos" | "historico">("geral");
   const [fornecedorModalOpen, setFornecedorModalOpen] = useState(false);
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
@@ -547,6 +548,24 @@ export default function CustosClient({
     }
   }
 
+  async function handleGerarApresentacao() {
+    if (viewTab !== "geral" && viewTab !== "detalhamento") {
+      alert('Abra a aba "Visão Geral" ou "Detalhamento Financeiro" pra gerar a apresentação com os gráficos dela.');
+      return;
+    }
+    setIsGerandoApresentacao(true);
+    try {
+      const periodo = filterMes || filterAno
+        ? `${filterMes ? MESES[Number(filterMes) - 1] : "Todos os meses"}${filterAno ? "/" + filterAno : ""}`
+        : "Todo o período";
+      await gerarPDFApresentacaoCustos(periodo);
+    } catch (err: any) {
+      alert("Erro ao gerar apresentação: " + (err.message || String(err)));
+    } finally {
+      setIsGerandoApresentacao(false);
+    }
+  }
+
   const cellBorder = "border border-zinc-200 dark:border-zinc-800";
   const colCount = isVisitante ? 10 : 12;
 
@@ -580,6 +599,15 @@ export default function CustosClient({
             >
               {isPrinting ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
               Gerar PDF
+            </button>
+            <button
+              onClick={handleGerarApresentacao}
+              disabled={isGerandoApresentacao}
+              title="Baixa um PDF com os KPIs e gráficos da tela, prontos pra apresentação"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+            >
+              {isGerandoApresentacao ? <Loader2 size={16} className="animate-spin" /> : <Presentation size={16} />}
+              PDF Apresentação
             </button>
             <button
               onClick={() => imprimirRelatorioCustos(filteredData, kpis)}
@@ -949,7 +977,7 @@ export default function CustosClient({
           )}
         </div>
       ) : viewTab === "geral" ? (
-        <>
+        <div id="custos-dashboard-capture" className="flex flex-col gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               { label: "Total Geral no Período", valor: kpis.totalGeral, cor: "bg-zinc-600" },
@@ -1073,9 +1101,9 @@ export default function CustosClient({
               </div>
             </div>
           </div>
-        </>
+        </div>
       ) : viewTab === "detalhamento" ? (
-        <>
+        <div id="custos-dashboard-capture" className="flex flex-col gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { label: "Total Gasto", valor: kpis.totalGeral, icon: Wallet, cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400", tendencia: tendenciaGasto },
@@ -1139,7 +1167,7 @@ export default function CustosClient({
               </div>
             </div>
           </div>
-        </>
+        </div>
       ) : null}
 
       {viewTab !== "fornecedores" && viewTab !== "parcelamentos" && viewTab !== "historico" && (
