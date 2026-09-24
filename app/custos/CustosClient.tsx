@@ -73,10 +73,15 @@ export default function CustosClient({
 }) {
   const { isOnline } = useOffline();
 
+  // Visão Geral sempre começa filtrada no mês atual (o usuário pode trocar/limpar depois).
+  const hoje = new Date();
+  const mesAtual = String(hoje.getMonth() + 1).padStart(2, "0");
+  const anoAtual = String(hoje.getFullYear());
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPlaca, setFilterPlaca] = useState("");
-  const [filterMes, setFilterMes] = useState("");
-  const [filterAno, setFilterAno] = useState("");
+  const [filterMes, setFilterMes] = useState(mesAtual);
+  const [filterAno, setFilterAno] = useState(anoAtual);
   const [filterTipo, setFilterTipo] = useState("");
   const [filterFornecedor, setFilterFornecedor] = useState("");
   const [filterDataIni, setFilterDataIni] = useState("");
