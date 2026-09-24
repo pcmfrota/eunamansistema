@@ -7,13 +7,14 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { createClient } from "@/utils/supabase/client";
 import { localDb, serializeFormData } from "@/lib/offline-db";
-import { upsertCusto, CustoManutencao, StatusCusto, Fornecedor } from "./actions";
+import { upsertCusto, CustoManutencao, StatusCusto, FormaPagamentoCartao, Fornecedor } from "./actions";
 import { formatarMoeda } from "./CustosClient";
 
 const STATUS_OPTIONS: { value: StatusCusto; label: string; cls: string }[] = [
   { value: "PAGO", label: "Pago", cls: "bg-emerald-600 text-white border-emerald-600" },
   { value: "AG_PAGAMENTO", label: "Ag. Pagamento", cls: "bg-red-600 text-white border-red-600" },
   { value: "FATURADO", label: "Faturado", cls: "bg-blue-600 text-white border-blue-600" },
+  { value: "PAGO_CARTAO", label: "Pago via Cartão", cls: "bg-purple-600 text-white border-purple-600" },
 ];
 
 export default function CustoModal({
@@ -36,6 +37,9 @@ export default function CustoModal({
   const [pecas, setPecas] = useState(editingData?.pecas || 0);
   const [maoObra, setMaoObra] = useState(editingData?.mao_obra || 0);
   const [status, setStatus] = useState<StatusCusto>(editingData?.status || "AG_PAGAMENTO");
+  const [formaPagamentoCartao, setFormaPagamentoCartao] = useState<FormaPagamentoCartao>(editingData?.forma_pagamento_cartao || "AVISTA");
+  const [cartao, setCartao] = useState(editingData?.cartao || "");
+  const [parcelasTotal, setParcelasTotal] = useState(editingData?.parcelas_total || 2);
   const [loading, setLoading] = useState(false);
   const [anexoUrl, setAnexoUrl] = useState(editingData?.anexo_url || "");
   const formRef = useRef<HTMLFormElement>(null);
@@ -84,6 +88,9 @@ export default function CustoModal({
         pecas: parseFloat(formData.get("pecas") as string) || 0,
         mao_obra: parseFloat(formData.get("mao_obra") as string) || 0,
         status: formData.get("status"),
+        forma_pagamento_cartao: formData.get("forma_pagamento_cartao") || null,
+        cartao: formData.get("cartao") || null,
+        parcelas_total: formData.get("parcelas_total") ? parseInt(formData.get("parcelas_total") as string, 10) : null,
         observacoes: formData.get("observacoes"),
         anexo_url: anexo,
         filial_id: editingData?.filial_id || "MATRIZ",
@@ -114,6 +121,9 @@ export default function CustoModal({
         setPecas(0);
         setMaoObra(0);
         setStatus("AG_PAGAMENTO");
+        setFormaPagamentoCartao("AVISTA");
+        setCartao("");
+        setParcelasTotal(2);
         setAnexoUrl("");
       } else {
         onClose();
@@ -218,6 +228,53 @@ export default function CustoModal({
             </div>
             <input type="hidden" name="status" value={status} />
           </div>
+
+          {status === "PAGO_CARTAO" && (
+            <div className="p-3 rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/20 space-y-3">
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500 mb-1.5 block">Foi à vista ou parcelado?</label>
+                <div className="flex gap-2">
+                  {(["AVISTA", "PARCELADO"] as FormaPagamentoCartao[]).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setFormaPagamentoCartao(opt)}
+                      className={cn(
+                        "flex-1 px-3 py-2 rounded-lg text-sm font-bold border transition-all",
+                        formaPagamentoCartao === opt ? "bg-purple-600 text-white border-purple-600" : "bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800"
+                      )}
+                    >
+                      {opt === "AVISTA" ? "À Vista" : "Parcelado"}
+                    </button>
+                  ))}
+                </div>
+                <input type="hidden" name="forma_pagamento_cartao" value={formaPagamentoCartao} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-zinc-500">Qual Cartão?</label>
+                  <input name="cartao" value={cartao} onChange={(e) => setCartao(e.target.value)} className={inputCls} placeholder="Ex: Nubank Empresarial" />
+                </div>
+                {formaPagamentoCartao === "PARCELADO" && (
+                  <div>
+                    <label className="text-xs font-bold uppercase text-zinc-500">Em quantas parcelas?</label>
+                    <input
+                      type="number" name="parcelas_total" min={2} max={48} value={parcelasTotal}
+                      onChange={(e) => setParcelasTotal(parseInt(e.target.value, 10) || 2)}
+                      className={inputCls}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {formaPagamentoCartao === "PARCELADO" && parcelasTotal > 0 && (
+                <p className="text-xs text-purple-700 dark:text-purple-400 font-semibold">
+                  {parcelasTotal}x de {formatarMoeda(total / parcelasTotal)}
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-bold uppercase text-zinc-500">Comprovante (Nota Fiscal / O.S.)</label>

@@ -187,6 +187,9 @@ const syncTasks: Record<
 
   custos_fornecedores: (supabase) =>
     supabase.from("custos_fornecedores").select("*").order("nome_fantasia", { ascending: true }),
+
+  custos_parcelas: (supabase) =>
+    supabase.from("custos_parcelas").select("*").order("mes_vencimento", { ascending: true }),
 };
 
 /**

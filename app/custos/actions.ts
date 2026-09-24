@@ -4,8 +4,10 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarExclusao, registrarExclusoesEmLote } from "@/lib/audit-log";
 
-export type StatusCusto = "PAGO" | "AG_PAGAMENTO" | "FATURADO";
+export type StatusCusto = "PAGO" | "AG_PAGAMENTO" | "FATURADO" | "PAGO_CARTAO";
 export type TipoManutencaoCusto = "CORRETIVA" | "PREVENTIVA" | "PREDITIVA";
+export type FormaPagamentoCartao = "AVISTA" | "PARCELADO";
+export type StatusParcela = "PENDENTE" | "PAGO";
 
 export type CustoManutencao = {
   id: string;
@@ -17,6 +19,9 @@ export type CustoManutencao = {
   pecas: number;
   mao_obra: number;
   status: StatusCusto;
+  forma_pagamento_cartao: FormaPagamentoCartao | null;
+  cartao: string | null;
+  parcelas_total: number | null;
   observacoes: string | null;
   anexo_url: string | null;
   registrado_por: string | null;
@@ -24,6 +29,23 @@ export type CustoManutencao = {
   filial_id: string;
   created_at?: string;
   updated_at?: string;
+};
+
+export type ParcelaCartao = {
+  id: string;
+  custo_id: string;
+  numero: number;
+  valor: number;
+  mes_vencimento: string;
+  status: StatusParcela;
+  filial_id: string;
+  created_at?: string;
+  updated_at?: string;
+  // Vem do JOIN com custos_manutencao — não são colunas de custos_parcelas.
+  placa?: string;
+  fornecedor?: string | null;
+  cartao?: string | null;
+  descricao?: string;
 };
 
 export type Fornecedor = {
@@ -64,6 +86,51 @@ export async function getCustos() {
     return [];
   }
   return data as CustoManutencao[];
+}
+
+export async function getParcelas() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("custos_parcelas")
+    .select("*, custo:custos_manutencao(placa, fornecedor, cartao, descricao)")
+    .order("mes_vencimento", { ascending: true });
+
+  if (error) {
+    console.error("Erro getParcelas:", error);
+    return [];
+  }
+  return (data || []).map((p: any) => ({
+    ...p,
+    placa: p.custo?.placa,
+    fornecedor: p.custo?.fornecedor,
+    cartao: p.custo?.cartao,
+    descricao: p.custo?.descricao,
+    custo: undefined,
+  })) as ParcelaCartao[];
+}
+
+export async function atualizarStatusParcela(id: string, status: StatusParcela) {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase.from("custos_parcelas").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+    revalidatePath("/custos");
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || "Erro ao atualizar parcela" };
+  }
+}
+
+export async function marcarCustoComoPago(id: string) {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase.from("custos_manutencao").update({ status: "PAGO", updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+    revalidatePath("/custos");
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || "Erro ao atualizar lançamento" };
+  }
 }
 
 export async function getFornecedores() {
@@ -141,37 +208,115 @@ export async function deleteFornecedor(id: string) {
   }
 }
 
+// Gera as parcelas do cartão: valor dividido igualmente, com o resto (centavos)
+// jogado na última parcela pra fechar exatamente o valor total. Vencimento começa
+// no mês do lançamento e vai +1 mês a cada parcela.
+function gerarParcelas(dataBase: string, total: number, parcelasTotal: number) {
+  const centavosTotal = Math.round(total * 100);
+  const centavosParcela = Math.floor(centavosTotal / parcelasTotal);
+  const resto = centavosTotal - centavosParcela * parcelasTotal;
+
+  const [ano, mes, dia] = dataBase.split("-").map(Number);
+  const parcelas = [];
+  for (let i = 0; i < parcelasTotal; i++) {
+    const dataVencimento = new Date(Date.UTC(ano, (mes - 1) + i, dia));
+    const valorCentavos = centavosParcela + (i === parcelasTotal - 1 ? resto : 0);
+    parcelas.push({
+      numero: i + 1,
+      valor: valorCentavos / 100,
+      mes_vencimento: dataVencimento.toISOString().slice(0, 10),
+      status: "PENDENTE" as StatusParcela,
+    });
+  }
+  return parcelas;
+}
+
 export async function upsertCusto(formData: FormData) {
   try {
     const supabase = createClient();
 
     const id = formData.get("id") as string | null;
+    const status = formData.get("status") as string;
+    const formaPagamentoCartao = status === "PAGO_CARTAO" ? ((formData.get("forma_pagamento_cartao") as string) || null) : null;
+    const cartao = status === "PAGO_CARTAO" ? ((formData.get("cartao") as string)?.trim() || null) : null;
+    const parcelasTotal = status === "PAGO_CARTAO" && formaPagamentoCartao === "PARCELADO"
+      ? parseInt((formData.get("parcelas_total") as string) || "0", 10) || null
+      : null;
+
+    const data = formData.get("data") as string;
+    const pecas = parseFloat((formData.get("pecas") as string) || "0") || 0;
+    const maoObra = parseFloat((formData.get("mao_obra") as string) || "0") || 0;
+
     const payload = {
-      data: formData.get("data") as string,
+      data,
       placa: String(formData.get("placa") || "").toUpperCase().trim(),
       tipo_manutencao: formData.get("tipo_manutencao") as string,
       descricao: formData.get("descricao") as string,
       fornecedor: (formData.get("fornecedor") as string) || null,
-      pecas: parseFloat((formData.get("pecas") as string) || "0") || 0,
-      mao_obra: parseFloat((formData.get("mao_obra") as string) || "0") || 0,
-      status: formData.get("status") as string,
+      pecas,
+      mao_obra: maoObra,
+      status,
+      forma_pagamento_cartao: formaPagamentoCartao,
+      cartao,
+      parcelas_total: parcelasTotal,
       observacoes: (formData.get("observacoes") as string) || null,
       anexo_url: (formData.get("anexo_url") as string) || null,
     };
 
+    let custoId = id;
+    let precisaGerarParcelas = false;
+
     if (id) {
+      // Só reemite as parcelas se algo que afeta elas de fato mudou (valor, data ou nº de
+      // parcelas) — senão perderíamos o status (paga/pendente) de parcelas já conferidas
+      // toda vez que o usuário só editasse a descrição, por exemplo.
+      const { data: existente } = await supabase
+        .from("custos_manutencao")
+        .select("pecas, mao_obra, data, parcelas_total")
+        .eq("id", id)
+        .maybeSingle();
+
       const { error } = await supabase.from("custos_manutencao").update(payload).eq("id", id);
       if (error) throw error;
+
+      const eraParcelado = existente && Number(existente.parcelas_total) > 1;
+      const mudouParaNaoParcelado = eraParcelado && (!parcelasTotal || parcelasTotal <= 1);
+      const mudouValorOuData = existente && (
+        Number(existente.pecas) + Number(existente.mao_obra) !== pecas + maoObra ||
+        existente.data !== data ||
+        Number(existente.parcelas_total || 0) !== (parcelasTotal || 0)
+      );
+
+      if (mudouParaNaoParcelado) {
+        await supabase.from("custos_parcelas").delete().eq("custo_id", id);
+      } else if (parcelasTotal && parcelasTotal > 1 && (!eraParcelado || mudouValorOuData)) {
+        await supabase.from("custos_parcelas").delete().eq("custo_id", id);
+        precisaGerarParcelas = true;
+      }
     } else {
       const { cookies } = await import("next/headers");
       const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
       const usuario = await getUsuarioAtual(supabase);
-      const { error } = await supabase.from("custos_manutencao").insert({
+      const { data: inserted, error } = await supabase.from("custos_manutencao").insert({
         ...payload,
         filial_id: filialId,
         ...usuario,
-      });
+      }).select("id, filial_id").single();
       if (error) throw error;
+      custoId = inserted.id;
+      precisaGerarParcelas = !!(parcelasTotal && parcelasTotal > 1);
+    }
+
+    if (precisaGerarParcelas && parcelasTotal && custoId) {
+      const { cookies } = await import("next/headers");
+      const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
+      const parcelas = gerarParcelas(data, pecas + maoObra, parcelasTotal).map((p) => ({
+        ...p,
+        custo_id: custoId,
+        filial_id: filialId,
+      }));
+      const { error: errParcelas } = await supabase.from("custos_parcelas").insert(parcelas);
+      if (errParcelas) throw errParcelas;
     }
 
     revalidatePath("/custos");

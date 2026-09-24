@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2,
+  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -13,7 +13,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
 } from "recharts";
-import { CustoManutencao, StatusCusto, Fornecedor, deleteCusto, bulkDeleteCustos, deleteFornecedor } from "./actions";
+import {
+  CustoManutencao, StatusCusto, Fornecedor, ParcelaCartao, StatusParcela,
+  deleteCusto, bulkDeleteCustos, deleteFornecedor, atualizarStatusParcela, marcarCustoComoPago,
+} from "./actions";
 import CustoModal from "./CustoModal";
 import FornecedorModal from "./FornecedorModal";
 import ImportExportModal from "./ImportExportModal";
@@ -21,16 +24,18 @@ import { gerarPDFCustos, imprimirRelatorioCustos } from "./CustosPDF";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-export const STATUS_LABEL: Record<StatusCusto, string> = { PAGO: "Pago", AG_PAGAMENTO: "Ag. Pagamento", FATURADO: "Faturado" };
+export const STATUS_LABEL: Record<StatusCusto, string> = { PAGO: "Pago", AG_PAGAMENTO: "Ag. Pagamento", FATURADO: "Faturado", PAGO_CARTAO: "Pago (Cartão)" };
 const STATUS_BADGE: Record<StatusCusto, string> = {
   PAGO: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
   AG_PAGAMENTO: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
   FATURADO: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+  PAGO_CARTAO: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
 };
 const STATUS_CHIP: Record<StatusCusto, string> = {
   PAGO: "bg-emerald-600 text-white",
   AG_PAGAMENTO: "bg-red-600 text-white",
   FATURADO: "bg-blue-600 text-white",
+  PAGO_CARTAO: "bg-purple-600 text-white",
 };
 const CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0891b2", "#dc2626", "#64748b", "#db2777"];
 
@@ -57,11 +62,13 @@ export default function CustosClient({
   isVisitante,
   initialCustos,
   fornecedores,
+  parcelas,
   equipamentos,
 }: {
   isVisitante: boolean;
   initialCustos: CustoManutencao[];
   fornecedores: Fornecedor[];
+  parcelas: ParcelaCartao[];
   equipamentos: any[];
 }) {
   const { isOnline } = useOffline();
@@ -83,10 +90,11 @@ export default function CustosClient({
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores">("geral");
+  const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores" | "parcelamentos">("geral");
   const [fornecedorModalOpen, setFornecedorModalOpen] = useState(false);
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
   const [buscaFornecedor, setBuscaFornecedor] = useState("");
+  const [buscaParcelamento, setBuscaParcelamento] = useState("");
 
   const placasUnicas = useMemo(
     () => Array.from(new Set(initialCustos.map((c) => c.placa))).filter(Boolean).sort(),
@@ -357,6 +365,88 @@ export default function CustosClient({
     );
   }, [fornecedores, buscaFornecedor]);
 
+  // Une parcelas de cartão (uma linha por parcela) com boletos faturados (uma linha por
+  // lançamento) numa única lista de pendências futuras, igual à planilha pedida.
+  type LinhaParcelamento = {
+    id: string; tipo: "PARCELA" | "FATURADO"; fornecedor: string; cartao: string;
+    parcela: string; mes: string; valor: number; status: string; placa: string; descricao: string; custoId: string;
+  };
+
+  const parcelamentosData = useMemo<LinhaParcelamento[]>(() => {
+    const custosPorId = new Map(initialCustos.map((c) => [c.id, c]));
+
+    const linhasParcelas: LinhaParcelamento[] = parcelas.map((p) => {
+      const custo = custosPorId.get(p.custo_id);
+      return {
+        id: p.id,
+        tipo: "PARCELA",
+        fornecedor: custo?.fornecedor || "-",
+        cartao: custo?.cartao || "-",
+        parcela: `${p.numero}/${custo?.parcelas_total || "?"}`,
+        mes: p.mes_vencimento,
+        valor: Number(p.valor),
+        status: p.status,
+        placa: custo?.placa || "-",
+        descricao: custo?.descricao || "-",
+        custoId: p.custo_id,
+      };
+    });
+
+    const linhasFaturado: LinhaParcelamento[] = initialCustos
+      .filter((c) => c.status === "FATURADO")
+      .map((c) => ({
+        id: c.id,
+        tipo: "FATURADO",
+        fornecedor: c.fornecedor || "-",
+        cartao: "-",
+        parcela: "-",
+        mes: c.data,
+        valor: Number(c.pecas) + Number(c.mao_obra),
+        status: "FATURADO",
+        placa: c.placa,
+        descricao: c.descricao,
+        custoId: c.id,
+      }));
+
+    return [...linhasFaturado, ...linhasParcelas].sort((a, b) => (a.mes || "").localeCompare(b.mes || ""));
+  }, [initialCustos, parcelas]);
+
+  const parcelamentosFiltrados = useMemo(() => {
+    const term = buscaParcelamento.toLowerCase().trim();
+    if (!term) return parcelamentosData;
+    return parcelamentosData.filter(
+      (l) => l.fornecedor.toLowerCase().includes(term) || l.cartao.toLowerCase().includes(term) || l.placa.toLowerCase().includes(term)
+    );
+  }, [parcelamentosData, buscaParcelamento]);
+
+  async function toggleStatusParcela(linha: LinhaParcelamento) {
+    if (isVisitante) return;
+    const novoStatus: StatusParcela = linha.status === "PAGO" ? "PENDENTE" : "PAGO";
+    try {
+      const result = await atualizarStatusParcela(linha.id, novoStatus);
+      if (result?.error) throw new Error(result.error);
+      const atual = parcelas.find((p) => p.id === linha.id);
+      if (atual) await localDb.put("custos_parcelas", { ...atual, status: novoStatus });
+      window.dispatchEvent(new CustomEvent("offline-db-updated-custos_parcelas"));
+    } catch (err: any) {
+      alert("Erro ao atualizar parcela: " + (err.message || String(err)));
+    }
+  }
+
+  async function handleMarcarFaturadoPago(linha: LinhaParcelamento) {
+    if (isVisitante) return;
+    if (!confirm("Marcar este boleto faturado como pago?")) return;
+    try {
+      const result = await marcarCustoComoPago(linha.custoId);
+      if (result?.error) throw new Error(result.error);
+      const atual = initialCustos.find((c) => c.id === linha.custoId);
+      if (atual) await localDb.put("custos_manutencao", { ...atual, status: "PAGO" });
+      window.dispatchEvent(new CustomEvent("offline-db-updated-custos_manutencao"));
+    } catch (err: any) {
+      alert("Erro ao atualizar lançamento: " + (err.message || String(err)));
+    }
+  }
+
   async function handleDelete(id: string) {
     if (isVisitante) return;
     if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
@@ -487,6 +577,7 @@ export default function CustosClient({
             { value: "PAGO", label: "Pago", colorClass: STATUS_CHIP.PAGO },
             { value: "AG_PAGAMENTO", label: "Ag. Pagamento", colorClass: STATUS_CHIP.AG_PAGAMENTO },
             { value: "FATURADO", label: "Faturado", colorClass: STATUS_CHIP.FATURADO },
+            { value: "PAGO_CARTAO", label: "Pago (Cartão)", colorClass: STATUS_CHIP.PAGO_CARTAO },
           ]}
         />
         <select value={filterPlaca} onChange={(e) => setFilterPlaca(e.target.value)} className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none">
@@ -542,6 +633,15 @@ export default function CustosClient({
             )}
           >
             <Building2 size={14} /> Fornecedores
+          </button>
+          <button
+            onClick={() => setViewTab("parcelamentos")}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
+              viewTab === "parcelamentos" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+            )}
+          >
+            <CreditCard size={14} /> Faturas & Parcelamentos
           </button>
         </div>
 
@@ -607,6 +707,89 @@ export default function CustosClient({
                 {fornecedoresFiltrados.length === 0 && (
                   <tr>
                     <td colSpan={3} className={cn(cellBorder, "px-4 py-8 text-center text-zinc-500")}>Nenhum fornecedor cadastrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : viewTab === "parcelamentos" ? (
+        <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+              <input
+                value={buscaParcelamento}
+                onChange={(e) => setBuscaParcelamento(e.target.value)}
+                placeholder="Buscar fornecedor, cartão, placa..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-emerald-500"
+              />
+            </div>
+            <p className="text-xs text-zinc-500">Boletos faturados e parcelas de cartão, ordenados por vencimento.</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="text-[11px] uppercase">
+                <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                  <th className={cn(cellBorder, "px-3 py-2")}>Tipo</th>
+                  <th className={cn(cellBorder, "px-3 py-2")}>Vencimento</th>
+                  <th className={cn(cellBorder, "px-3 py-2")}>Placa</th>
+                  <th className={cn(cellBorder, "px-3 py-2")}>Fornecedor</th>
+                  <th className={cn(cellBorder, "px-3 py-2")}>Cartão</th>
+                  <th className={cn(cellBorder, "px-3 py-2 text-center")}>Parcela</th>
+                  <th className={cn(cellBorder, "px-3 py-2 text-right")}>Valor (R$)</th>
+                  <th className={cn(cellBorder, "px-3 py-2 text-center")}>Status</th>
+                  {!isVisitante && <th className={cn(cellBorder, "px-3 py-2 text-center")}>Ações</th>}
+                </tr>
+              </thead>
+              <tbody className="text-zinc-700 dark:text-zinc-300 text-xs">
+                {parcelamentosFiltrados.map((l, idx) => {
+                  const vencida = l.status !== "PAGO" && l.mes < new Date().toISOString().slice(0, 10);
+                  return (
+                    <tr key={l.id} className={cn(idx % 2 === 1 && "bg-zinc-50/70 dark:bg-zinc-900/40", vencida && "bg-red-50/60 dark:bg-red-950/10")}>
+                      <td className={cn(cellBorder, "px-3 py-2")}>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap",
+                          l.tipo === "PARCELA" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400"
+                        )}>
+                          {l.tipo === "PARCELA" ? "Cartão" : "Boleto"}
+                        </span>
+                      </td>
+                      <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{formatarDataCusto(l.mes)}</td>
+                      <td className={cn(cellBorder, "px-3 py-2 font-mono")}>{l.placa}</td>
+                      <td className={cn(cellBorder, "px-3 py-2")}>{l.fornecedor}</td>
+                      <td className={cn(cellBorder, "px-3 py-2")}>{l.cartao}</td>
+                      <td className={cn(cellBorder, "px-3 py-2 text-center font-semibold")}>{l.parcela}</td>
+                      <td className={cn(cellBorder, "px-3 py-2 text-right font-semibold")}>{formatarMoeda(l.valor)}</td>
+                      <td className={cn(cellBorder, "px-3 py-2 text-center")}>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap",
+                          l.status === "PAGO" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" :
+                          l.status === "FATURADO" ? STATUS_BADGE.FATURADO : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        )}>
+                          {l.status === "PAGO" ? "Pago" : l.status === "FATURADO" ? "Faturado" : "Pendente"}
+                        </span>
+                      </td>
+                      {!isVisitante && (
+                        <td className={cn(cellBorder, "px-3 py-2 text-center whitespace-nowrap")}>
+                          {l.tipo === "PARCELA" ? (
+                            <button onClick={() => toggleStatusParcela(l)} className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                              {l.status === "PAGO" ? "Marcar pendente" : "Marcar paga"}
+                            </button>
+                          ) : (
+                            <button onClick={() => handleMarcarFaturadoPago(l)} className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                              Marcar como pago
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+                {parcelamentosFiltrados.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className={cn(cellBorder, "px-4 py-8 text-center text-zinc-500")}>Nenhum boleto faturado ou parcela de cartão encontrado.</td>
                   </tr>
                 )}
               </tbody>
@@ -739,7 +922,7 @@ export default function CustosClient({
             </div>
           </div>
         </>
-      ) : (
+      ) : viewTab === "detalhamento" ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
@@ -805,9 +988,9 @@ export default function CustosClient({
             </div>
           </div>
         </>
-      )}
+      ) : null}
 
-      {viewTab !== "fornecedores" && (
+      {viewTab !== "fornecedores" && viewTab !== "parcelamentos" && (
       <>
       <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
