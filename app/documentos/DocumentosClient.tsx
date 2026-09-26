@@ -615,14 +615,8 @@ export default function DocumentosClient({
             {formatarData(item.data_vencimento)}
           </td>
           <td className={cn(cellBorder, "px-2 py-2", bg)}>
-            <div className="flex items-center justify-center gap-1.5">
+            <div className="flex items-center justify-center">
               {getStatusBadge(dias)}
-              {!isVisitante && (
-                <div className="flex gap-0.5">
-                  <button onClick={() => openModal(item, grupo.key)} className="p-0.5 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400"><Edit2 size={11} /></button>
-                  <button onClick={() => handleDelete(item.id, grupo.key)} className="p-0.5 text-zinc-400 hover:text-red-600 dark:hover:text-red-400"><Trash2 size={11} /></button>
-                </div>
-              )}
             </div>
           </td>
         </Fragment>
