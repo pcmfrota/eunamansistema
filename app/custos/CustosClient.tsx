@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   BadgeDollarSign, Plus, Search, Printer, FileUp, Trash2, Edit2, Eye, Loader2, FileText,
-  Wallet, Clock, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard, History, ChevronDown, ChevronUp, Presentation,
+  ArrowUp, ArrowDown, ArrowUpDown, LayoutGrid, ListTree, X, Building2, CreditCard, History, ChevronDown, ChevronUp, Presentation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -96,7 +96,7 @@ export default function CustosClient({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isGerandoApresentacao, setIsGerandoApresentacao] = useState(false);
-  const [viewTab, setViewTab] = useState<"geral" | "detalhamento" | "fornecedores" | "parcelamentos" | "historico">("geral");
+  const [viewTab, setViewTab] = useState<"dashboard" | "lancamentos" | "fornecedores" | "parcelamentos" | "historico">("dashboard");
   const [fornecedorModalOpen, setFornecedorModalOpen] = useState(false);
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
   const [buscaFornecedor, setBuscaFornecedor] = useState("");
@@ -587,8 +587,8 @@ export default function CustosClient({
   }
 
   async function handleGerarApresentacao() {
-    if (viewTab !== "geral" && viewTab !== "detalhamento") {
-      alert('Abra a aba "Visão Geral" ou "Detalhamento Financeiro" pra gerar a apresentação com os gráficos dela.');
+    if (viewTab !== "dashboard") {
+      alert('Abra a aba "Dashboard Manutenção" pra gerar a apresentação com os gráficos dela.');
       return;
     }
     setIsGerandoApresentacao(true);
@@ -717,22 +717,22 @@ export default function CustosClient({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-2 p-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-xl w-fit">
           <button
-            onClick={() => setViewTab("geral")}
+            onClick={() => setViewTab("dashboard")}
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
-              viewTab === "geral" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+              viewTab === "dashboard" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
             )}
           >
-            <LayoutGrid size={14} /> Visão Geral
+            <LayoutGrid size={14} /> Dashboard Manutenção
           </button>
           <button
-            onClick={() => setViewTab("detalhamento")}
+            onClick={() => setViewTab("lancamentos")}
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors",
-              viewTab === "detalhamento" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
+              viewTab === "lancamentos" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
             )}
           >
-            <ListTree size={14} /> Detalhamento Financeiro
+            <ListTree size={14} /> Financeiro Manutenção
           </button>
           <button
             onClick={() => setViewTab("fornecedores")}
@@ -1020,11 +1020,11 @@ export default function CustosClient({
             </div>
           )}
         </div>
-      ) : viewTab === "geral" ? (
+      ) : viewTab === "dashboard" ? (
         <div id="custos-dashboard-capture" className="flex flex-col gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {[
-              { label: "Total Geral no Período", valor: kpis.totalGeral, cor: "bg-zinc-600" },
+              { label: "Total Geral no Período", valor: kpis.totalGeral, cor: "bg-zinc-600", tendencia: tendenciaGasto },
               { label: "Total Pago", valor: kpis.totalPago, cor: "bg-emerald-600" },
               { label: "Aguardando Pagamento", valor: kpis.totalAgPagamento, cor: "bg-red-600" },
               { label: "Total Faturado", valor: kpis.totalFaturado, cor: "bg-blue-600" },
@@ -1035,7 +1035,15 @@ export default function CustosClient({
                 <div className={cn("w-1.5 rounded-full shrink-0", kpi.cor)} />
                 <div className="flex flex-col justify-between py-0.5">
                   <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{kpi.label}</p>
-                  <p className="text-2xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight mt-1">{formatarMoeda(kpi.valor)}</p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <p className="text-2xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight">{formatarMoeda(kpi.valor)}</p>
+                    {kpi.tendencia && (
+                      <span className={cn("flex items-center gap-0.5 text-[10px] font-bold", kpi.tendencia.subiu ? "text-red-500" : "text-emerald-500")}>
+                        {kpi.tendencia.subiu ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                        {Math.abs(kpi.tendencia.variacao).toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -1146,36 +1154,6 @@ export default function CustosClient({
               </div>
             </div>
           </div>
-        </div>
-      ) : viewTab === "detalhamento" ? (
-        <div id="custos-dashboard-capture" className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            {[
-              { label: "Total Gasto", valor: kpis.totalGeral, icon: Wallet, cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400", tendencia: tendenciaGasto },
-              { label: "Aguardando Pagamento", valor: kpis.totalAgPagamento, icon: Clock, cor: "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" },
-              { label: "Total Pago", valor: kpis.totalPago, icon: CheckCircle2, cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" },
-              { label: "Faturado", valor: kpis.totalFaturado, icon: FileText, cor: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" },
-              { label: "Pago via Cartão", valor: kpis.totalPagoCartao, icon: CreditCard, cor: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400" },
-            ].map((kpi) => (
-              <div key={kpi.label} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-                <div className={cn("p-2.5 rounded-xl shrink-0", kpi.cor)}>
-                  <kpi.icon size={20} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{kpi.label}</p>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-lg font-black text-zinc-800 dark:text-zinc-100 tracking-tight">{formatarMoeda(kpi.valor)}</p>
-                    {kpi.tendencia && (
-                      <span className={cn("flex items-center gap-0.5 text-[10px] font-bold", kpi.tendencia.subiu ? "text-red-500" : "text-emerald-500")}>
-                        {kpi.tendencia.subiu ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                        {Math.abs(kpi.tendencia.variacao).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
@@ -1216,7 +1194,7 @@ export default function CustosClient({
         </div>
       ) : null}
 
-      {viewTab !== "fornecedores" && viewTab !== "parcelamentos" && viewTab !== "historico" && (
+      {viewTab === "lancamentos" && (
       <>
       <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
