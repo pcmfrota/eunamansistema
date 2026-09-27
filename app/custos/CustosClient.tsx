@@ -465,6 +465,42 @@ export default function CustosClient({
     custos_parcelas: "Parcela",
   };
 
+  const CAMPO_LABEL: Record<string, string> = {
+    data: "Data", placa: "Placa", tipo_manutencao: "Tipo de Manutenção", descricao: "Descrição",
+    fornecedor: "Fornecedor", pecas: "Peças (R$)", mao_obra: "Mão de Obra (R$)", status: "Status",
+    forma_pagamento_cartao: "Forma de Pagamento", cartao: "Cartão", parcelas_total: "Nº de Parcelas",
+    observacoes: "Observações / PC", anexo_url: "Anexo", nome_fantasia: "Nome Fantasia",
+    razao_social: "Razão Social", numero: "Nº da Parcela", valor: "Valor (R$)", mes_vencimento: "Mês de Vencimento",
+    quantidade: "Quantidade",
+  };
+  const CAMPO_IGNORAR = new Set(["id", "filial_id", "custo_id", "registrado_por"]);
+
+  function formatarValorHistorico(campo: string, valor: any): string {
+    if (valor === null || valor === undefined || valor === "") return "-";
+    if (["pecas", "mao_obra", "valor"].includes(campo)) return formatarMoeda(Number(valor));
+    if (["data", "mes_vencimento"].includes(campo)) return formatarDataCusto(String(valor));
+    if (campo === "status") return STATUS_LABEL[valor as StatusCusto] || (valor === "PAGO" ? "Pago" : valor === "PENDENTE" ? "Pendente" : String(valor));
+    if (campo === "forma_pagamento_cartao") return valor === "AVISTA" ? "À Vista" : valor === "PARCELADO" ? "Parcelado" : String(valor);
+    if (typeof valor === "boolean") return valor ? "Sim" : "Não";
+    return String(valor);
+  }
+
+  function montarComparacaoHistorico(antes: any, depois: any) {
+    const chaves = Array.from(new Set([...(antes ? Object.keys(antes) : []), ...(depois ? Object.keys(depois) : [])]))
+      .filter((k) => !CAMPO_IGNORAR.has(k));
+    return chaves.map((campo) => {
+      const valorAntes = antes ? antes[campo] : undefined;
+      const valorDepois = depois ? depois[campo] : undefined;
+      return {
+        campo,
+        label: CAMPO_LABEL[campo] || campo.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        antes: formatarValorHistorico(campo, valorAntes),
+        depois: formatarValorHistorico(campo, valorDepois),
+        mudou: !!(antes && depois) && String(valorAntes) !== String(valorDepois),
+      };
+    });
+  }
+
   const historicoFiltrado = useMemo(() => {
     let lista = historico || [];
     if (filtroAcaoHistorico) lista = lista.filter((h) => h.acao === filtroAcaoHistorico);
@@ -943,23 +979,29 @@ export default function CustosClient({
                       {linhaExpandida === h.id && (
                         <tr>
                           <td colSpan={6} className={cn(cellBorder, "px-4 py-3 bg-zinc-50 dark:bg-zinc-900/60")}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {h.dados_antes && (
-                                <div>
-                                  <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Antes</p>
-                                  <pre className="text-[10px] whitespace-pre-wrap break-all bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 max-h-48 overflow-y-auto">
-                                    {JSON.stringify(h.dados_antes, null, 2)}
-                                  </pre>
-                                </div>
-                              )}
-                              {h.dados_depois && (
-                                <div>
-                                  <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Depois</p>
-                                  <pre className="text-[10px] whitespace-pre-wrap break-all bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 max-h-48 overflow-y-auto">
-                                    {JSON.stringify(h.dados_depois, null, 2)}
-                                  </pre>
-                                </div>
-                              )}
+                            <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                              <table className="w-full text-left border-collapse bg-white dark:bg-zinc-950">
+                                <thead className="text-[10px] uppercase sticky top-0">
+                                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                                    <th className={cn(cellBorder, "px-2 py-1.5")}>Campo</th>
+                                    {h.dados_antes && <th className={cn(cellBorder, "px-2 py-1.5")}>Antes</th>}
+                                    {h.dados_depois && <th className={cn(cellBorder, "px-2 py-1.5")}>Depois</th>}
+                                  </tr>
+                                </thead>
+                                <tbody className="text-[11px]">
+                                  {montarComparacaoHistorico(h.dados_antes, h.dados_depois).map((linha) => (
+                                    <tr key={linha.campo} className={linha.mudou ? "bg-amber-50 dark:bg-amber-900/10" : ""}>
+                                      <td className={cn(cellBorder, "px-2 py-1.5 font-semibold text-zinc-600 dark:text-zinc-300 whitespace-nowrap")}>{linha.label}</td>
+                                      {h.dados_antes && (
+                                        <td className={cn(cellBorder, "px-2 py-1.5 text-zinc-500 dark:text-zinc-400")}>{linha.antes}</td>
+                                      )}
+                                      {h.dados_depois && (
+                                        <td className={cn(cellBorder, "px-2 py-1.5 font-medium text-zinc-800 dark:text-zinc-100")}>{linha.depois}</td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
                             </div>
                           </td>
                         </tr>
