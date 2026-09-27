@@ -428,7 +428,7 @@ export default function CustosClient({
         custoId: c.id,
       }));
 
-    return [...linhasFaturado, ...linhasParcelas].sort((a, b) => (a.mes || "").localeCompare(b.mes || ""));
+    return [...linhasFaturado, ...linhasParcelas].sort((a, b) => (b.mes || "").localeCompare(a.mes || ""));
   }, [initialCustos, parcelas]);
 
   const parcelamentosFiltrados = useMemo(() => {
