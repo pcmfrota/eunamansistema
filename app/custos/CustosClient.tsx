@@ -221,7 +221,7 @@ export default function CustosClient({
   const temFiltroDeGrafico = !!(filterPlaca || filterTipo || filterFornecedor || filterMes || filterAno);
 
   const kpis = useMemo(() => {
-    let totalGeral = 0, totalPago = 0, totalAgPagamento = 0, totalFaturado = 0;
+    let totalGeral = 0, totalPago = 0, totalAgPagamento = 0, totalFaturado = 0, totalPagoCartao = 0;
     const placas = new Set<string>();
     filteredData.forEach((c) => {
       const total = Number(c.pecas) + Number(c.mao_obra);
@@ -230,12 +230,14 @@ export default function CustosClient({
       if (c.status === "PAGO") totalPago += total;
       else if (c.status === "AG_PAGAMENTO") totalAgPagamento += total;
       else if (c.status === "FATURADO") totalFaturado += total;
+      else if (c.status === "PAGO_CARTAO") totalPagoCartao += total;
     });
     return {
       totalGeral,
       totalPago,
       totalAgPagamento,
       totalFaturado,
+      totalPagoCartao,
       custoMedioPorPlaca: placas.size ? totalGeral / placas.size : 0,
     };
   }, [filteredData]);
@@ -1020,12 +1022,13 @@ export default function CustosClient({
         </div>
       ) : viewTab === "geral" ? (
         <div id="custos-dashboard-capture" className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {[
               { label: "Total Geral no Período", valor: kpis.totalGeral, cor: "bg-zinc-600" },
               { label: "Total Pago", valor: kpis.totalPago, cor: "bg-emerald-600" },
               { label: "Aguardando Pagamento", valor: kpis.totalAgPagamento, cor: "bg-red-600" },
               { label: "Total Faturado", valor: kpis.totalFaturado, cor: "bg-blue-600" },
+              { label: "Pago via Cartão", valor: kpis.totalPagoCartao, cor: "bg-indigo-600" },
               { label: "Custo Médio por Placa", valor: kpis.custoMedioPorPlaca, cor: "bg-purple-600" },
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex items-stretch gap-3 shadow-sm">
@@ -1146,12 +1149,13 @@ export default function CustosClient({
         </div>
       ) : viewTab === "detalhamento" ? (
         <div id="custos-dashboard-capture" className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               { label: "Total Gasto", valor: kpis.totalGeral, icon: Wallet, cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400", tendencia: tendenciaGasto },
               { label: "Aguardando Pagamento", valor: kpis.totalAgPagamento, icon: Clock, cor: "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" },
               { label: "Total Pago", valor: kpis.totalPago, icon: CheckCircle2, cor: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" },
               { label: "Faturado", valor: kpis.totalFaturado, icon: FileText, cor: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" },
+              { label: "Pago via Cartão", valor: kpis.totalPagoCartao, icon: CreditCard, cor: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400" },
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
                 <div className={cn("p-2.5 rounded-xl shrink-0", kpi.cor)}>
