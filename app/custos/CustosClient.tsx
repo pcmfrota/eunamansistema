@@ -788,7 +788,7 @@ export default function CustosClient({
   }
 
   const cellBorder = "border border-zinc-200 dark:border-zinc-800";
-  const colCount = isVisitante ? 10 : 12;
+  const colCount = (isVisitante ? 10 : 12) - (areaAtiva === "MANUTENCAO" ? 0 : 1);
 
   return (
     <div className="p-3 md:p-6 flex flex-col gap-4 max-w-[1600px] mx-auto w-full">
@@ -1569,11 +1569,11 @@ export default function CustosClient({
                 {[
                   { coluna: "data", label: "Data", align: "" },
                   { coluna: "placa", label: "Placa", align: "" },
-                  { coluna: "tipo", label: "Tipo", align: "" },
+                  { coluna: "tipo", label: areaAtiva === "MANUTENCAO" ? "Tipo" : "Categoria", align: "" },
                   { coluna: "descricao", label: "Descrição", align: "" },
                   { coluna: "fornecedor", label: "Fornecedor", align: "" },
                   { coluna: "pecas", label: areaAtiva === "MANUTENCAO" ? "Peças (R$)" : "Valor (R$)", align: "text-right" },
-                  { coluna: "mao_obra", label: "Mão de Obra (R$)", align: "text-right" },
+                  ...(areaAtiva === "MANUTENCAO" ? [{ coluna: "mao_obra", label: "Mão de Obra (R$)", align: "text-right" }] : []),
                   { coluna: "total", label: "Total (R$)", align: "text-right" },
                   { coluna: "status", label: "Status", align: "text-center" },
                   { coluna: "observacoes", label: "Observações / PC", align: "" },
@@ -1613,7 +1613,9 @@ export default function CustosClient({
                     <td className={cn(cellBorder, "px-3 py-2")}>{c.descricao}</td>
                     <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{c.fornecedor || "-"}</td>
                     <td className={cn(cellBorder, "px-3 py-2 text-right whitespace-nowrap")}>{formatarMoeda(Number(c.pecas))}</td>
-                    <td className={cn(cellBorder, "px-3 py-2 text-right whitespace-nowrap")}>{formatarMoeda(Number(c.mao_obra))}</td>
+                    {areaAtiva === "MANUTENCAO" && (
+                      <td className={cn(cellBorder, "px-3 py-2 text-right whitespace-nowrap")}>{formatarMoeda(Number(c.mao_obra))}</td>
+                    )}
                     <td className={cn(cellBorder, "px-3 py-2 text-right font-bold whitespace-nowrap")}>{formatarMoeda(total)}</td>
                     <td className={cn(cellBorder, "px-3 py-2 text-center")}><StatusBadge status={c.status} /></td>
                     <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{c.observacoes || "-"}</td>
@@ -1640,7 +1642,9 @@ export default function CustosClient({
                 <tr className="bg-zinc-100 dark:bg-zinc-800 font-bold text-xs">
                   <td className={cn(cellBorder, "px-3 py-2")} colSpan={isVisitante ? 5 : 6}>TOTAIS</td>
                   <td className={cn(cellBorder, "px-3 py-2 text-right")}>{formatarMoeda(somaRodape.pecas)}</td>
-                  <td className={cn(cellBorder, "px-3 py-2 text-right")}>{formatarMoeda(somaRodape.maoObra)}</td>
+                  {areaAtiva === "MANUTENCAO" && (
+                    <td className={cn(cellBorder, "px-3 py-2 text-right")}>{formatarMoeda(somaRodape.maoObra)}</td>
+                  )}
                   <td className={cn(cellBorder, "px-3 py-2 text-right")}>{formatarMoeda(somaRodape.total)}</td>
                   <td className={cn(cellBorder, "px-3 py-2")} colSpan={isVisitante ? 2 : 3} />
                 </tr>

@@ -155,7 +155,7 @@ export default function ImportExportModal({
       Descrição: c.descricao,
       Fornecedor: c.fornecedor || "",
       [isManutencao ? "Peças (R$)" : "Valor (R$)"]: c.pecas,
-      "Mão de Obra (R$)": c.mao_obra,
+      ...(isManutencao ? { "Mão de Obra (R$)": c.mao_obra } : {}),
       "Total (R$)": Number(c.pecas) + Number(c.mao_obra),
       Status: c.status,
       "Observações / PC": c.observacoes || "",
