@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X, Eye, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
@@ -42,6 +42,7 @@ export default function CustoModal({
   const [parcelasTotal, setParcelasTotal] = useState(editingData?.parcelas_total || 2);
   const [loading, setLoading] = useState(false);
   const [anexoUrl, setAnexoUrl] = useState(editingData?.anexo_url || "");
+  const [previewAberto, setPreviewAberto] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!isOpen) return null;
@@ -280,9 +281,24 @@ export default function CustoModal({
             <label className="text-xs font-bold uppercase text-zinc-500">Comprovante (Nota Fiscal / O.S.)</label>
             <input type="file" name="arquivo_comprovante" accept="image/*,application/pdf" className={inputCls} />
             {anexoUrl && (
-              <p className="text-xs text-blue-600 mt-1">
-                Anexo atual: <a href={anexoUrl} target="_blank" rel="noreferrer" className="underline">Visualizar</a>
-              </p>
+              anexoUrl.toLowerCase().endsWith(".pdf") ? (
+                <a href={anexoUrl} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 text-xs text-blue-600 hover:underline w-fit">
+                  <FileText size={28} className="text-red-500 shrink-0" />
+                  Visualizar PDF anexado
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPreviewAberto(true)}
+                  className="group relative mt-2 w-20 h-20 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+                  title="Clique para ampliar"
+                >
+                  <img src={anexoUrl} alt="Comprovante anexado" className="w-full h-full object-cover" />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                    <Eye size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </span>
+                </button>
+              )
             )}
           </div>
 
@@ -309,6 +325,26 @@ export default function CustoModal({
           </div>
         </form>
       </div>
+
+      {previewAberto && anexoUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85"
+          onClick={() => setPreviewAberto(false)}
+        >
+          <button
+            onClick={() => setPreviewAberto(false)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white p-2"
+          >
+            <X size={28} />
+          </button>
+          <img
+            src={anexoUrl}
+            alt="Comprovante anexado"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
