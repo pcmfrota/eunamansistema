@@ -286,6 +286,76 @@ export default function CustosClient({
     return Array.from(porFornecedor.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
   }, [filteredData]);
 
+  const pecasVsMaoObra = useMemo(() => {
+    let pecas = 0, maoObra = 0;
+    filteredData.forEach((c) => { pecas += Number(c.pecas); maoObra += Number(c.mao_obra); });
+    return [
+      { name: "Peças", value: pecas },
+      { name: "Mão de Obra", value: maoObra },
+    ];
+  }, [filteredData]);
+
+  const distribuicaoFormaPagamento = useMemo(() => {
+    let pago = 0, agPagamento = 0, faturado = 0, cartaoAvista = 0, cartaoParcelado = 0;
+    filteredData.forEach((c) => {
+      const total = Number(c.pecas) + Number(c.mao_obra);
+      if (c.status === "PAGO") pago += total;
+      else if (c.status === "AG_PAGAMENTO") agPagamento += total;
+      else if (c.status === "FATURADO") faturado += total;
+      else if (c.status === "PAGO_CARTAO") {
+        if (c.forma_pagamento_cartao === "PARCELADO") cartaoParcelado += total;
+        else cartaoAvista += total;
+      }
+    });
+    return [
+      { name: "Pago", value: pago },
+      { name: "Ag. Pagamento", value: agPagamento },
+      { name: "Faturado (Boleto)", value: faturado },
+      { name: "Cartão à Vista", value: cartaoAvista },
+      { name: "Cartão Parcelado", value: cartaoParcelado },
+    ];
+  }, [filteredData]);
+
+  const gastoPorCartao = useMemo(() => {
+    const porCartao = new Map<string, number>();
+    filteredData.forEach((c) => {
+      if (c.status !== "PAGO_CARTAO" || !c.cartao) return;
+      const total = Number(c.pecas) + Number(c.mao_obra);
+      porCartao.set(c.cartao, (porCartao.get(c.cartao) || 0) + total);
+    });
+    return Array.from(porCartao.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+  }, [filteredData]);
+
+  const topFornecedoresPorQtd = useMemo(() => {
+    const porFornecedor = new Map<string, number>();
+    filteredData.forEach((c) => {
+      const nome = c.fornecedor || "Sem fornecedor";
+      porFornecedor.set(nome, (porFornecedor.get(nome) || 0) + 1);
+    });
+    return Array.from(porFornecedor.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+  }, [filteredData]);
+
+  // Parcelas de cartão por mês de vencimento — projeção de fluxo de caixa futuro. De propósito
+  // NÃO usa filteredData (que respeita o filtro de Mês/Ano do topo, sempre no mês atual por
+  // padrão): a maior parte das parcelas futuras tem a *compra* registrada em meses anteriores,
+  // então filtrar por mês da compra escondería quase tudo. Mesmo padrão já usado na aba
+  // "Faturas & Parcelamentos", que também lê direto de `parcelas` sem o filtro de mês/ano.
+  const parcelasPorMesVencimento = useMemo(() => {
+    const porMes = new Map<string, { mes: string; pendente: number; pago: number }>();
+    parcelas.forEach((p) => {
+      const chave = p.mes_vencimento?.slice(0, 7);
+      if (!chave) return;
+      if (!porMes.has(chave)) {
+        const [y, m] = chave.split("-");
+        porMes.set(chave, { mes: `${MESES[Number(m) - 1]?.slice(0, 3) || m}/${y.slice(2)}`, pendente: 0, pago: 0 });
+      }
+      const item = porMes.get(chave)!;
+      if (p.status === "PAGO") item.pago += Number(p.valor);
+      else item.pendente += Number(p.valor);
+    });
+    return Array.from(porMes.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+  }, [parcelas]);
+
   // Série única de evolução mensal (só o total, sem separar peças/mão de obra) — usada no
   // gráfico de linha do Detalhamento Financeiro, e também pra calcular a variação vs. o mês
   // anterior mostrada como tendência no card "Total Gasto".
@@ -1189,6 +1259,121 @@ export default function CustosClient({
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Análises Detalhadas</h3>
+            <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Peças vs Mão de Obra</h3>
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pecasVsMaoObra}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={3}
+                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      <Cell fill="#2563eb" />
+                      <Cell fill="#f59e0b" />
+                    </Pie>
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Distribuição por Forma de Pagamento</h3>
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={distribuicaoFormaPagamento} layout="vertical" margin={{ left: 0, right: 70, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
+                      <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                      {distribuicaoFormaPagamento.map((entry, i) => (
+                        <Cell key={i} fill={["#16a34a", "#dc2626", "#2563eb", "#8b5cf6", "#4f46e5"][i % 5]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Gasto por Cartão</h3>
+              <div className="h-[220px] w-full">
+                {gastoPorCartao.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-zinc-400">Nenhum pagamento via cartão neste período.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={gastoPorCartao} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                      <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
+                      <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(79,70,229,0.06)" }} />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#4f46e5">
+                        <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Top Fornecedores por Nº de Lançamentos</h3>
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topFornecedoresPorQtd} layout="vertical" margin={{ left: 0, right: 30, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
+                    <Tooltip formatter={(v: number) => `${v} lançamento(s)`} cursor={{ fill: "rgba(8,145,178,0.06)" }} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#0891b2">
+                      <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#52525b" }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Parcelas de Cartão por Mês de Vencimento</h3>
+            <p className="text-[10px] text-zinc-400 mb-2">Projeção de todas as parcelas em aberto/pagas, independente do filtro de período acima.</p>
+            <div className="h-[240px] w-full">
+              {parcelasPorMesVencimento.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-zinc-400">Nenhuma compra parcelada no cartão cadastrada.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={parcelasPorMesVencimento} margin={{ left: 5, right: 10, top: 20, bottom: 5 }} barCategoryGap="30%">
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="pendente" name="Pendente" stackId="parcela" fill="#dc2626" maxBarSize={40} />
+                    <Bar dataKey="pago" name="Paga" stackId="parcela" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
