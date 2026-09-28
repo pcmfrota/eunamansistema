@@ -34,6 +34,11 @@ export default function FornecedorModal({
         id: editingData?.id || `fornecedor_${Date.now()}`,
         nome_fantasia: String(formData.get("nome_fantasia") || "").trim(),
         razao_social: (formData.get("razao_social") as string)?.trim() || null,
+        cnpj: (formData.get("cnpj") as string)?.trim() || null,
+        telefone: (formData.get("telefone") as string)?.trim() || null,
+        email: (formData.get("email") as string)?.trim() || null,
+        endereco: (formData.get("endereco") as string)?.trim() || null,
+        contato: (formData.get("contato") as string)?.trim() || null,
         filial_id: editingData?.filial_id || "MATRIZ",
       };
 
@@ -63,7 +68,7 @@ export default function FornecedorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-md shadow-2xl">
+      <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-md shadow-2xl max-h-[85vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
             {editingData?.id ? "Editar Fornecedor" : "Novo Fornecedor"}
@@ -81,6 +86,28 @@ export default function FornecedorModal({
           <div>
             <label className="text-xs font-bold uppercase text-zinc-500">Razão Social</label>
             <input name="razao_social" defaultValue={editingData?.razao_social || ""} className={inputCls} placeholder="Ex: Malut Comércio de Pneus LTDA" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold uppercase text-zinc-500">CNPJ/CPF</label>
+              <input name="cnpj" defaultValue={editingData?.cnpj || ""} className={inputCls} placeholder="Opcional" />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-zinc-500">Telefone</label>
+              <input name="telefone" defaultValue={editingData?.telefone || ""} className={inputCls} placeholder="Opcional" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase text-zinc-500">E-mail</label>
+            <input type="email" name="email" defaultValue={editingData?.email || ""} className={inputCls} placeholder="Opcional" />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase text-zinc-500">Endereço</label>
+            <input name="endereco" defaultValue={editingData?.endereco || ""} className={inputCls} placeholder="Opcional" />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase text-zinc-500">Contato</label>
+            <input name="contato" defaultValue={editingData?.contato || ""} className={inputCls} placeholder="Nome da pessoa de contato (opcional)" />
           </div>
 
           <div className="pt-4 flex justify-end gap-3">

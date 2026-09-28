@@ -72,6 +72,12 @@ export default function CustoModal({
     .sort((a, b) => a.label.localeCompare(b.label));
 
   async function salvar(formData: FormData, manterAberto: boolean) {
+    // SearchableSelect usa um input hidden por baixo, que o HTML5 "required" ignora — por
+    // isso a validação de fornecedor obrigatório é feita aqui, não via reportValidity().
+    if (!String(formData.get("fornecedor") || "").trim()) {
+      alert("Selecione um fornecedor.");
+      return;
+    }
     setLoading(true);
     try {
       let anexo = anexoUrl;
@@ -241,7 +247,7 @@ export default function CustoModal({
             )}
 
             <div className={isManutencao ? "" : "sm:col-span-2"}>
-              <label className="text-xs font-bold uppercase text-zinc-500">Fornecedor / Oficina</label>
+              <label className="text-xs font-bold uppercase text-zinc-500">Fornecedor / Oficina <span className="text-red-500">*</span></label>
               <SearchableSelect name="fornecedor" options={fornecedoresOptions} value={fornecedor} onChange={setFornecedor} placeholder="Selecione o fornecedor..." />
             </div>
           </div>

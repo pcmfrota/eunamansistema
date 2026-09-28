@@ -57,6 +57,11 @@ export type Fornecedor = {
   id: string;
   nome_fantasia: string;
   razao_social: string | null;
+  cnpj: string | null;
+  telefone: string | null;
+  email: string | null;
+  endereco: string | null;
+  contato: string | null;
   filial_id: string;
   created_at?: string;
   updated_at?: string;
@@ -250,6 +255,11 @@ export async function upsertFornecedor(formData: FormData) {
     const payload = {
       nome_fantasia: String(formData.get("nome_fantasia") || "").trim(),
       razao_social: (formData.get("razao_social") as string)?.trim() || null,
+      cnpj: (formData.get("cnpj") as string)?.trim() || null,
+      telefone: (formData.get("telefone") as string)?.trim() || null,
+      email: (formData.get("email") as string)?.trim() || null,
+      endereco: (formData.get("endereco") as string)?.trim() || null,
+      contato: (formData.get("contato") as string)?.trim() || null,
     };
 
     if (!payload.nome_fantasia) return { error: "Nome fantasia é obrigatório" };
