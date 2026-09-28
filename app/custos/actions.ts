@@ -349,6 +349,23 @@ function gerarParcelas(dataBase: string, total: number, parcelasTotal: number) {
   return parcelas;
 }
 
+// Gera os boletos de um lançamento Faturado: valor dividido igualmente (mesmo critério de
+// resto da função acima), mas o vencimento de cada um é informado manualmente pelo usuário
+// em vez de calculado — boletos não seguem necessariamente um ciclo mensal regular.
+function gerarBoletos(total: number, datas: string[]) {
+  const n = datas.length;
+  const centavosTotal = Math.round(total * 100);
+  const centavosParcela = Math.floor(centavosTotal / n);
+  const resto = centavosTotal - centavosParcela * n;
+
+  return datas.map((mes_vencimento, i) => ({
+    numero: i + 1,
+    valor: (centavosParcela + (i === n - 1 ? resto : 0)) / 100,
+    mes_vencimento,
+    status: "PENDENTE" as StatusParcela,
+  }));
+}
+
 export async function upsertCusto(formData: FormData) {
   try {
     const supabase = createClient();
@@ -357,9 +374,20 @@ export async function upsertCusto(formData: FormData) {
     const status = formData.get("status") as string;
     const formaPagamentoCartao = status === "PAGO_CARTAO" ? ((formData.get("forma_pagamento_cartao") as string) || null) : null;
     const cartao = status === "PAGO_CARTAO" ? ((formData.get("cartao") as string)?.trim() || null) : null;
-    const parcelasTotal = status === "PAGO_CARTAO" && formaPagamentoCartao === "PARCELADO"
-      ? parseInt((formData.get("parcelas_total") as string) || "0", 10) || null
+
+    const quantidadeBoletos = status === "FATURADO"
+      ? parseInt((formData.get("quantidade_boletos") as string) || "0", 10) || null
       : null;
+    const boletoDatas = status === "FATURADO" && quantidadeBoletos && quantidadeBoletos > 1
+      ? (formData.getAll("boleto_data") as string[]).filter(Boolean)
+      : [];
+
+    const parcelasTotal =
+      status === "PAGO_CARTAO" && formaPagamentoCartao === "PARCELADO"
+        ? parseInt((formData.get("parcelas_total") as string) || "0", 10) || null
+        : status === "FATURADO"
+        ? quantidadeBoletos
+        : null;
 
     const data = formData.get("data") as string;
     const pecas = parseFloat((formData.get("pecas") as string) || "0") || 0;
@@ -391,14 +419,25 @@ export async function upsertCusto(formData: FormData) {
     let precisaGerarParcelas = false;
 
     if (id) {
-      // Só reemite as parcelas se algo que afeta elas de fato mudou (valor, data ou nº de
-      // parcelas) — senão perderíamos o status (paga/pendente) de parcelas já conferidas
-      // toda vez que o usuário só editasse a descrição, por exemplo.
+      // Só reemite as parcelas/boletos se algo que afeta eles de fato mudou (valor, data,
+      // nº de parcelas ou — no caso de boletos — algum vencimento individual) — senão
+      // perderíamos o status (pago/pendente) já conferido toda vez que o usuário só
+      // editasse a descrição, por exemplo.
       const { data: existente } = await supabase
         .from("custos_manutencao")
         .select("*")
         .eq("id", id)
         .maybeSingle();
+
+      let datasExistentes: string[] = [];
+      if (status === "FATURADO" && Number(existente?.parcelas_total) > 1) {
+        const { data: parcelasExistentes } = await supabase
+          .from("custos_parcelas")
+          .select("mes_vencimento")
+          .eq("custo_id", id)
+          .order("numero", { ascending: true });
+        datasExistentes = (parcelasExistentes || []).map((p: any) => p.mes_vencimento);
+      }
 
       const { error } = await supabase.from("custos_manutencao").update(payload).eq("id", id);
       if (error) throw error;
@@ -414,10 +453,14 @@ export async function upsertCusto(formData: FormData) {
 
       const eraParcelado = existente && Number(existente.parcelas_total) > 1;
       const mudouParaNaoParcelado = eraParcelado && (!parcelasTotal || parcelasTotal <= 1);
+      const datasBoletoMudaram = status === "FATURADO" && (
+        datasExistentes.length !== boletoDatas.length || datasExistentes.some((d, i) => d !== boletoDatas[i])
+      );
       const mudouValorOuData = existente && (
         Number(existente.pecas) + Number(existente.mao_obra) !== pecas + maoObra ||
         existente.data !== data ||
-        Number(existente.parcelas_total || 0) !== (parcelasTotal || 0)
+        Number(existente.parcelas_total || 0) !== (parcelasTotal || 0) ||
+        datasBoletoMudaram
       );
 
       if (mudouParaNaoParcelado) {
@@ -451,7 +494,10 @@ export async function upsertCusto(formData: FormData) {
     if (precisaGerarParcelas && parcelasTotal && custoId) {
       const { cookies } = await import("next/headers");
       const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
-      const parcelas = gerarParcelas(data, pecas + maoObra, parcelasTotal).map((p) => ({
+      const geradas = status === "FATURADO"
+        ? gerarBoletos(pecas + maoObra, boletoDatas)
+        : gerarParcelas(data, pecas + maoObra, parcelasTotal);
+      const parcelas = geradas.map((p) => ({
         ...p,
         custo_id: custoId,
         filial_id: filialId,

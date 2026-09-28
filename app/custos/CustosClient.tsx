@@ -548,7 +548,7 @@ export default function CustosClient({
   // Une parcelas de cartão (uma linha por parcela) com boletos faturados (uma linha por
   // lançamento) numa única lista de pendências futuras, igual à planilha pedida.
   type LinhaParcelamento = {
-    id: string; tipo: "PARCELA" | "FATURADO"; fornecedor: string; cartao: string;
+    id: string; tipo: "PARCELA" | "BOLETO" | "FATURADO"; fornecedor: string; cartao: string;
     parcela: string; mes: string; valor: number; status: string; statusCusto: StatusCusto;
     tipoManutencao: TipoManutencaoCusto; categoria: string | null; placa: string; descricao: string; custoId: string;
   };
@@ -560,16 +560,17 @@ export default function CustosClient({
       .filter((p) => custosPorId.get(p.custo_id)?.area === areaAtiva)
       .map((p) => {
       const custo = custosPorId.get(p.custo_id);
+      const ehBoleto = custo?.status === "FATURADO";
       return {
         id: p.id,
-        tipo: "PARCELA",
+        tipo: ehBoleto ? "BOLETO" : "PARCELA",
         fornecedor: custo?.fornecedor || "-",
-        cartao: custo?.cartao || "-",
+        cartao: ehBoleto ? "-" : (custo?.cartao || "-"),
         parcela: `${p.numero}/${custo?.parcelas_total || "?"}`,
         mes: p.mes_vencimento,
         valor: Number(p.valor),
         status: p.status,
-        statusCusto: "PAGO_CARTAO",
+        statusCusto: custo?.status || "PAGO_CARTAO",
         tipoManutencao: custo?.tipo_manutencao || "CORRETIVA",
         categoria: custo?.categoria || null,
         placa: custo?.placa || "-",
@@ -578,8 +579,10 @@ export default function CustosClient({
       };
     });
 
+    // Boletos únicos (sem parcelamento manual) continuam como 1 linha por lançamento; quando
+    // há mais de 1 boleto, o lançamento já foi explodido em linhasParcelas acima.
     const linhasFaturado: LinhaParcelamento[] = initialCustos
-      .filter((c) => c.status === "FATURADO" && c.area === areaAtiva)
+      .filter((c) => c.status === "FATURADO" && c.area === areaAtiva && !(Number(c.parcelas_total) > 1))
       .map((c) => ({
         id: c.id,
         tipo: "FATURADO",
@@ -1093,7 +1096,7 @@ export default function CustosClient({
                       </td>
                       {!isVisitante && (
                         <td className={cn(cellBorder, "px-3 py-2 text-center whitespace-nowrap")}>
-                          {l.tipo === "PARCELA" ? (
+                          {l.tipo !== "FATURADO" ? (
                             <button onClick={() => toggleStatusParcela(l)} className="text-[11px] font-semibold text-emerald-600 hover:underline">
                               {l.status === "PAGO" ? "Marcar pendente" : "Marcar paga"}
                             </button>
@@ -1668,6 +1671,7 @@ export default function CustosClient({
           equipamentos={equipamentos}
           fornecedores={fornecedores}
           isOnline={isOnline}
+          parcelasExistentes={editingData ? parcelas.filter((p) => p.custo_id === editingData.id) : []}
         />
       )}
 

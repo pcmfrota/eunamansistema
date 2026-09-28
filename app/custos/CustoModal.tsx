@@ -7,7 +7,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { createClient } from "@/utils/supabase/client";
 import { localDb, serializeFormData } from "@/lib/offline-db";
-import { upsertCusto, CustoManutencao, StatusCusto, FormaPagamentoCartao, Fornecedor, AreaCusto } from "./actions";
+import { upsertCusto, CustoManutencao, StatusCusto, FormaPagamentoCartao, Fornecedor, AreaCusto, ParcelaCartao } from "./actions";
 import { formatarMoeda } from "./CustosClient";
 import { AREA_LABEL, CATEGORIAS_POR_AREA } from "./config";
 
@@ -26,6 +26,7 @@ export default function CustoModal({
   equipamentos,
   fornecedores,
   isOnline,
+  parcelasExistentes = [],
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -34,6 +35,7 @@ export default function CustoModal({
   equipamentos: any[];
   fornecedores: Fornecedor[];
   isOnline: boolean;
+  parcelasExistentes?: ParcelaCartao[];
 }) {
   const isManutencao = area === "MANUTENCAO";
   const categoriasArea = CATEGORIAS_POR_AREA[area];
@@ -46,6 +48,11 @@ export default function CustoModal({
   const [formaPagamentoCartao, setFormaPagamentoCartao] = useState<FormaPagamentoCartao>(editingData?.forma_pagamento_cartao || "AVISTA");
   const [cartao, setCartao] = useState(editingData?.cartao || "");
   const [parcelasTotal, setParcelasTotal] = useState(editingData?.parcelas_total || 2);
+  const boletosOrdenados = [...parcelasExistentes].sort((a, b) => a.numero - b.numero);
+  const [quantidadeBoletos, setQuantidadeBoletos] = useState(
+    editingData?.status === "FATURADO" && editingData?.parcelas_total ? editingData.parcelas_total : 1
+  );
+  const [boletoDatas, setBoletoDatas] = useState<string[]>(boletosOrdenados.map((p) => p.mes_vencimento));
   const [categoria, setCategoria] = useState(editingData?.categoria || categoriasArea[0]?.value || "");
   const [categoriaOutros, setCategoriaOutros] = useState(editingData?.categoria_outros || "");
   const [loading, setLoading] = useState(false);
@@ -99,7 +106,9 @@ export default function CustoModal({
         status: formData.get("status"),
         forma_pagamento_cartao: formData.get("forma_pagamento_cartao") || null,
         cartao: formData.get("cartao") || null,
-        parcelas_total: formData.get("parcelas_total") ? parseInt(formData.get("parcelas_total") as string, 10) : null,
+        parcelas_total: status === "FATURADO"
+          ? (formData.get("quantidade_boletos") ? parseInt(formData.get("quantidade_boletos") as string, 10) : null)
+          : (formData.get("parcelas_total") ? parseInt(formData.get("parcelas_total") as string, 10) : null),
         observacoes: formData.get("observacoes"),
         anexo_url: anexo,
         filial_id: editingData?.filial_id || "MATRIZ",
@@ -136,6 +145,8 @@ export default function CustoModal({
         setFormaPagamentoCartao("AVISTA");
         setCartao("");
         setParcelasTotal(2);
+        setQuantidadeBoletos(1);
+        setBoletoDatas([]);
         setCategoria(categoriasArea[0]?.value || "");
         setCategoriaOutros("");
         setAnexoUrl("");
@@ -331,6 +342,47 @@ export default function CustoModal({
                 <p className="text-xs text-purple-700 dark:text-purple-400 font-semibold">
                   {parcelasTotal}x de {formatarMoeda(total / parcelasTotal)}
                 </p>
+              )}
+            </div>
+          )}
+
+          {status === "FATURADO" && (
+            <div className="p-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 space-y-3">
+              <div className="max-w-xs">
+                <label className="text-xs font-bold uppercase text-zinc-500">Quantos boletos?</label>
+                <input
+                  type="number" name="quantidade_boletos" min={1} max={48} value={quantidadeBoletos}
+                  onChange={(e) => {
+                    const n = Math.max(1, parseInt(e.target.value, 10) || 1);
+                    setQuantidadeBoletos(n);
+                    setBoletoDatas((atual) => Array.from({ length: n }, (_, i) => atual[i] || ""));
+                  }}
+                  className={inputCls}
+                />
+              </div>
+
+              {quantidadeBoletos > 1 && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {Array.from({ length: quantidadeBoletos }).map((_, i) => (
+                      <div key={i}>
+                        <label className="text-[10px] font-bold uppercase text-zinc-500">Boleto {i + 1} — Vencimento</label>
+                        <input
+                          type="date" required name="boleto_data" value={boletoDatas[i] || ""}
+                          onChange={(e) => setBoletoDatas((atual) => {
+                            const novo = [...atual];
+                            novo[i] = e.target.value;
+                            return novo;
+                          })}
+                          className={inputCls}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-blue-700 dark:text-blue-400 font-semibold">
+                    {quantidadeBoletos}x de {formatarMoeda(total / quantidadeBoletos)}
+                  </p>
+                </>
               )}
             </div>
           )}
