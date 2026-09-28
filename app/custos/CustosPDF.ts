@@ -16,8 +16,13 @@ function montarHtmlRelatorio(dados: CustoManutencao[], kpis: KPIs): string {
     ? `${formatarDataCusto(ordenados[0].data)} a ${formatarDataCusto(ordenados[ordenados.length - 1].data)}`
     : "-";
 
-  const areaRelatorio = dados[0]?.area ?? "MANUTENCAO";
-  const isManutencao = areaRelatorio === "MANUTENCAO";
+  // dados pode vir da visão consolidada (várias áreas misturadas) — nunca decide título/colunas
+  // pela primeira linha só, senão um relatório que começa com uma linha de Manutenção mas tem
+  // Operação/Administrativo misturado mostraria as colunas erradas pro resto da tabela.
+  const areasDistintas = new Set(dados.map((c) => c.area));
+  const consolidadoNoRelatorio = areasDistintas.size > 1;
+  const mostrarMaoObra = dados.some((c) => c.area === "MANUTENCAO");
+  const tituloArea = consolidadoNoRelatorio ? "Todas as Áreas" : AREA_LABEL[dados[0]?.area ?? "MANUTENCAO"];
 
   const linhas = dados.map((c) => {
     const total = Number(c.pecas) + Number(c.mao_obra);
@@ -32,7 +37,7 @@ function montarHtmlRelatorio(dados: CustoManutencao[], kpis: KPIs): string {
         <td>${c.descricao}</td>
         <td>${c.fornecedor || "-"}</td>
         <td style="text-align:right;">${formatarMoeda(Number(c.pecas))}</td>
-        ${isManutencao ? `<td style="text-align:right;">${formatarMoeda(Number(c.mao_obra))}</td>` : ""}
+        ${mostrarMaoObra ? `<td style="text-align:right;">${formatarMoeda(Number(c.mao_obra))}</td>` : ""}
         <td style="text-align:right; font-weight:bold;">${formatarMoeda(total)}</td>
         <td>${STATUS_LABEL[c.status]}</td>
         <td>${c.observacoes || "-"}</td>
@@ -50,7 +55,7 @@ function montarHtmlRelatorio(dados: CustoManutencao[], kpis: KPIs): string {
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:12px;">
         <div style="background-color:#005a2b; color:#fff; padding:6px 12px; font-weight:bold; border-radius:4px; font-size:16px; letter-spacing:1px;">EUNAMAN</div>
         <div style="text-align:center; flex:1;">
-          <h2 style="margin:0; font-size:16px; text-transform:uppercase; letter-spacing:1px; font-weight:900;">Relatório Financeiro — ${AREA_LABEL[areaRelatorio]}</h2>
+          <h2 style="margin:0; font-size:16px; text-transform:uppercase; letter-spacing:1px; font-weight:900;">Relatório Financeiro — ${tituloArea}</h2>
           <span style="font-size:9px; color:#555;">Período: ${periodo} — ${dados.length} lançamento(s)</span>
         </div>
         <div style="font-size:9px; font-weight:bold; text-align:right;">Gerado em:<br/>${hoje}</div>
@@ -68,8 +73,8 @@ function montarHtmlRelatorio(dados: CustoManutencao[], kpis: KPIs): string {
       <table style="width:100%; border-collapse:collapse; font-size:9px;" border="1" cellpadding="5">
         <thead style="background-color:#e0e0e0; font-weight:bold;">
           <tr>
-            <th>DATA</th><th>PLACA</th><th>${isManutencao ? "TIPO" : "CATEGORIA"}</th><th>DESCRIÇÃO</th><th>FORNECEDOR</th>
-            <th>${isManutencao ? "PEÇAS (R$)" : "VALOR (R$)"}</th>${isManutencao ? "<th>MÃO DE OBRA (R$)</th>" : ""}<th>TOTAL (R$)</th><th>STATUS</th><th>OBS. / PC</th>
+            <th>DATA</th><th>PLACA</th><th>${consolidadoNoRelatorio ? "TIPO/CATEGORIA" : mostrarMaoObra ? "TIPO" : "CATEGORIA"}</th><th>DESCRIÇÃO</th><th>FORNECEDOR</th>
+            <th>${mostrarMaoObra ? "PEÇAS (R$)" : "VALOR (R$)"}</th>${mostrarMaoObra ? "<th>MÃO DE OBRA (R$)</th>" : ""}<th>TOTAL (R$)</th><th>STATUS</th><th>OBS. / PC</th>
           </tr>
         </thead>
         <tbody>${linhas}</tbody>
@@ -77,7 +82,7 @@ function montarHtmlRelatorio(dados: CustoManutencao[], kpis: KPIs): string {
           <tr style="background-color:#f0f0f0; font-weight:bold;">
             <td colspan="5" style="text-align:right;">TOTAIS:</td>
             <td style="text-align:right;">${formatarMoeda(somaPecas)}</td>
-            ${isManutencao ? `<td style="text-align:right;">${formatarMoeda(somaMaoObra)}</td>` : ""}
+            ${mostrarMaoObra ? `<td style="text-align:right;">${formatarMoeda(somaMaoObra)}</td>` : ""}
             <td style="text-align:right;">${formatarMoeda(somaPecas + somaMaoObra)}</td>
             <td colspan="2"></td>
           </tr>
@@ -150,7 +155,7 @@ export async function gerarPDFCustos(dados: CustoManutencao[], kpis: KPIs, modo:
 // coloridos), em vez de reconstruir uma tabela. Clona o elemento #custos-dashboard-capture
 // (já renderizado pelo Recharts) pra fora da tela, com um cabeçalho na frente, e fotografa
 // tudo de uma vez com html2canvas — assim os gráficos saem exatamente como o usuário está vendo.
-export async function gerarPDFApresentacaoCustos(periodo: string) {
+export async function gerarPDFApresentacaoCustos(periodo: string, areaLabel: string = "Manutenção") {
   const original = document.getElementById("custos-dashboard-capture");
   if (!original) throw new Error("Não foi possível localizar o dashboard na tela. Abra a aba Visão Geral ou Detalhamento Financeiro.");
 
@@ -171,7 +176,7 @@ export async function gerarPDFApresentacaoCustos(periodo: string) {
   header.innerHTML = `
     <div style="background-color:#005a2b; color:#fff; padding:8px 14px; font-weight:bold; border-radius:4px; font-size:18px; letter-spacing:1px;">EUNAMAN</div>
     <div style="text-align:center; flex:1;">
-      <h2 style="margin:0; font-size:18px; text-transform:uppercase; letter-spacing:1px; font-weight:900; color:#000;">Apresentação — Controle Financeiro de Manutenção</h2>
+      <h2 style="margin:0; font-size:18px; text-transform:uppercase; letter-spacing:1px; font-weight:900; color:#000;">Apresentação — Controle Financeiro — ${areaLabel}</h2>
       <span style="font-size:11px; color:#555;">Período: ${periodo}</span>
     </div>
     <div style="font-size:10px; font-weight:bold; text-align:right; color:#000;">Gerado em:<br/>${hoje}</div>
