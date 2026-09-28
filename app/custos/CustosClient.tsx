@@ -14,7 +14,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
 } from "recharts";
 import {
-  CustoManutencao, StatusCusto, TipoManutencaoCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
+  CustoManutencao, StatusCusto, TipoManutencaoCusto, AreaCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
   deleteCusto, bulkDeleteCustos, deleteFornecedor, atualizarStatusParcela, marcarCustoComoPago, getCustosHistorico,
 } from "./actions";
 import CustoModal from "./CustoModal";
@@ -38,6 +38,45 @@ const STATUS_CHIP: Record<StatusCusto, string> = {
   PAGO_CARTAO: "bg-purple-600 text-white",
 };
 const CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0891b2", "#dc2626", "#64748b", "#db2777"];
+
+export const AREAS: { value: AreaCusto; label: string }[] = [
+  { value: "MANUTENCAO", label: "Manutenção" },
+  { value: "OPERACAO", label: "Operação" },
+  { value: "ADMINISTRATIVO", label: "Administrativo" },
+  { value: "OFICINA_BASE", label: "Oficina (Base)" },
+  { value: "SEGURANCA", label: "Segurança" },
+];
+export const AREA_LABEL: Record<AreaCusto, string> = Object.fromEntries(AREAS.map((a) => [a.value, a.label])) as Record<AreaCusto, string>;
+
+// Categorias específicas de cada área não-Manutenção (Manutenção usa seu próprio campo
+// tipo_manutencao — Corretiva/Preventiva/Preditiva — que já existia antes dessa separação).
+export const CATEGORIAS_POR_AREA: Record<AreaCusto, { value: string; label: string }[]> = {
+  MANUTENCAO: [],
+  OPERACAO: [
+    { value: "MATERIAL", label: "Material" },
+    { value: "SERVICOS", label: "Serviços" },
+    { value: "MAO_DE_OBRA", label: "Mão de Obra" },
+    { value: "OUTROS", label: "Outros" },
+  ],
+  ADMINISTRATIVO: [
+    { value: "MATERIAL_ESCRITORIO", label: "Material de Escritório" },
+    { value: "SERVICOS", label: "Serviços" },
+    { value: "INFORMATICA", label: "Informática" },
+    { value: "OUTROS", label: "Outros" },
+  ],
+  OFICINA_BASE: [
+    { value: "SERVICOS", label: "Serviços" },
+    { value: "MANUTENCAO", label: "Manutenção" },
+    { value: "OUTROS", label: "Outros" },
+  ],
+  SEGURANCA: [
+    { value: "EPIS", label: "EPIs" },
+    { value: "INFORMATICA", label: "Informática" },
+    { value: "SERVICOS_GRAFICOS", label: "Serviços Gráficos" },
+    { value: "SERVICOS", label: "Serviços" },
+    { value: "OUTROS", label: "Outros" },
+  ],
+};
 
 // Mesma ordem que o array retornado por `distribuicaoFormaPagamento` (Pago, Ag. Pagamento,
 // Faturado, Cartão à Vista, Cartão Parcelado) — usado pra mapear a barra clicada de volta
@@ -106,6 +145,7 @@ export default function CustosClient({
   const [isPrinting, setIsPrinting] = useState(false);
   const [isGerandoApresentacao, setIsGerandoApresentacao] = useState(false);
   const [viewTab, setViewTab] = useState<"dashboard" | "lancamentos" | "fornecedores" | "parcelamentos" | "historico">("dashboard");
+  const [areaAtiva, setAreaAtiva] = useState<AreaCusto>("MANUTENCAO");
   const [fornecedorModalOpen, setFornecedorModalOpen] = useState(false);
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null);
   const [buscaFornecedor, setBuscaFornecedor] = useState("");
@@ -125,18 +165,20 @@ export default function CustosClient({
       .finally(() => setHistoricoCarregando(false));
   }, [viewTab, historico, historicoCarregando]);
 
+  const custosDaArea = useMemo(() => initialCustos.filter((c) => c.area === areaAtiva), [initialCustos, areaAtiva]);
+
   const placasUnicas = useMemo(
-    () => Array.from(new Set(initialCustos.map((c) => c.placa))).filter(Boolean).sort(),
-    [initialCustos]
+    () => Array.from(new Set(custosDaArea.map((c) => c.placa))).filter((p): p is string => !!p).sort(),
+    [custosDaArea]
   );
   const anosUnicos = useMemo(
-    () => Array.from(new Set(initialCustos.map((c) => c.data?.slice(0, 4)))).filter(Boolean).sort().reverse(),
-    [initialCustos]
+    () => Array.from(new Set(custosDaArea.map((c) => c.data?.slice(0, 4)))).filter((a): a is string => !!a).sort().reverse(),
+    [custosDaArea]
   );
 
   const filteredData = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
-    return initialCustos.filter((c) => {
+    return custosDaArea.filter((c) => {
       if (
         term &&
         !(
@@ -148,7 +190,13 @@ export default function CustosClient({
       )
         return false;
       if (filterPlaca && c.placa !== filterPlaca) return false;
-      if (filterTipo && c.tipo_manutencao !== filterTipo) return false;
+      // Fora de Manutenção, "Tipo" filtra pela categoria própria da área (Material/Serviços/
+      // EPIs/etc.) em vez de tipo_manutencao (Corretiva/Preventiva/Preditiva), que só existe
+      // de verdade pra Manutenção.
+      if (filterTipo) {
+        const campoTipo = areaAtiva === "MANUTENCAO" ? c.tipo_manutencao : c.categoria;
+        if (campoTipo !== filterTipo) return false;
+      }
       if (filterFornecedor && (c.fornecedor || "Sem fornecedor") !== filterFornecedor) return false;
       if (filterStatus.length && !filterStatus.includes(c.status)) return false;
       if (filterFormaCartao && c.forma_pagamento_cartao !== filterFormaCartao) return false;
@@ -165,7 +213,7 @@ export default function CustosClient({
       return true;
     });
   }, [
-    initialCustos, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus,
+    custosDaArea, areaAtiva, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus,
     filterFormaCartao, filterCartao, filterTipoCusto, filterMes, filterAno, filterDataIni, filterDataFim,
   ]);
 
@@ -185,7 +233,7 @@ export default function CustosClient({
       switch (sortColuna) {
         case "data": return c.data || "";
         case "placa": return c.placa || "";
-        case "tipo": return c.tipo_manutencao || "";
+        case "tipo": return (areaAtiva === "MANUTENCAO" ? c.tipo_manutencao : c.categoria) || "";
         case "descricao": return c.descricao || "";
         case "fornecedor": return c.fornecedor || "";
         case "pecas": return Number(c.pecas);
@@ -204,7 +252,7 @@ export default function CustosClient({
       return sortDirecao === "asc" ? cmp : -cmp;
     });
     return copia;
-  }, [filteredData, sortColuna, sortDirecao]);
+  }, [filteredData, sortColuna, sortDirecao, areaAtiva]);
 
   function IconeOrdenacao({ coluna }: { coluna: string }) {
     if (sortColuna !== coluna) return <ArrowUpDown size={11} className="opacity-30" />;
@@ -272,13 +320,28 @@ export default function CustosClient({
     filterFormaCartao || filterCartao || filterTipoCusto
   );
 
+  // Troca de área: os filtros disparados por gráfico (placa/tipo/fornecedor/status/cartão) são
+  // específicos de cada área, então não fazem sentido carregados de uma área pra outra.
+  function handleTrocarArea(novaArea: AreaCusto) {
+    setAreaAtiva(novaArea);
+    setFilterPlaca("");
+    setFilterTipo("");
+    setFilterFornecedor("");
+    setFilterStatus([]);
+    setFilterFormaCartao("");
+    setFilterCartao("");
+    setFilterTipoCusto("");
+    setTabelaDashboardVisivel(false);
+    setSelectedIds([]);
+  }
+
   const kpis = useMemo(() => {
     let totalGeral = 0, totalPago = 0, totalAgPagamento = 0, totalFaturado = 0, totalPagoCartao = 0;
     const placas = new Set<string>();
     filteredData.forEach((c) => {
       const total = Number(c.pecas) + Number(c.mao_obra);
       totalGeral += total;
-      placas.add(c.placa);
+      if (c.placa) placas.add(c.placa);
       if (c.status === "PAGO") totalPago += total;
       else if (c.status === "AG_PAGAMENTO") totalAgPagamento += total;
       else if (c.status === "FATURADO") totalFaturado += total;
@@ -310,20 +373,29 @@ export default function CustosClient({
     return Array.from(porMes.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
   }, [filteredData]);
 
+  // Fora de Manutenção, agrupa pela categoria própria da área (Material/Serviços/EPIs/etc.)
+  // em vez de tipo_manutencao, que só existe de verdade pra Manutenção.
   const distribuicaoTipo = useMemo(() => {
+    const categoriasLabel = new Map(CATEGORIAS_POR_AREA[areaAtiva].map((c) => [c.value, c.label]));
     const porTipo = new Map<string, number>();
     filteredData.forEach((c) => {
+      const chave = areaAtiva === "MANUTENCAO" ? c.tipo_manutencao : (c.categoria || "SEM_CATEGORIA");
       const total = Number(c.pecas) + Number(c.mao_obra);
-      porTipo.set(c.tipo_manutencao, (porTipo.get(c.tipo_manutencao) || 0) + total);
+      porTipo.set(chave, (porTipo.get(chave) || 0) + total);
     });
-    return Array.from(porTipo.entries()).map(([name, value]) => ({ name, value }));
-  }, [filteredData]);
+    return Array.from(porTipo.entries()).map(([chave, value]) => ({
+      chave,
+      name: areaAtiva === "MANUTENCAO" ? chave : (categoriasLabel.get(chave) || "Sem categoria"),
+      value,
+    }));
+  }, [filteredData, areaAtiva]);
 
   const topVeiculos = useMemo(() => {
     const porPlaca = new Map<string, number>();
     filteredData.forEach((c) => {
+      const nome = c.placa || "Sem placa";
       const total = Number(c.pecas) + Number(c.mao_obra);
-      porPlaca.set(c.placa, (porPlaca.get(c.placa) || 0) + total);
+      porPlaca.set(nome, (porPlaca.get(nome) || 0) + total);
     });
     return Array.from(porPlaca.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
   }, [filteredData]);
@@ -453,8 +525,9 @@ export default function CustosClient({
     filteredData.forEach((c) => {
       const total = Number(c.pecas) + Number(c.mao_obra);
       const fornecedor = agrupar(c.fornecedor || "Sem fornecedor");
-      if (!porPlaca.has(c.placa)) porPlaca.set(c.placa, {});
-      const registro = porPlaca.get(c.placa)!;
+      const placa = c.placa || "Sem placa";
+      if (!porPlaca.has(placa)) porPlaca.set(placa, {});
+      const registro = porPlaca.get(placa)!;
       registro[fornecedor] = (registro[fornecedor] || 0) + total;
     });
 
@@ -514,13 +587,15 @@ export default function CustosClient({
   type LinhaParcelamento = {
     id: string; tipo: "PARCELA" | "FATURADO"; fornecedor: string; cartao: string;
     parcela: string; mes: string; valor: number; status: string; statusCusto: StatusCusto;
-    tipoManutencao: TipoManutencaoCusto; placa: string; descricao: string; custoId: string;
+    tipoManutencao: TipoManutencaoCusto; categoria: string | null; placa: string; descricao: string; custoId: string;
   };
 
   const parcelamentosData = useMemo<LinhaParcelamento[]>(() => {
     const custosPorId = new Map(initialCustos.map((c) => [c.id, c]));
 
-    const linhasParcelas: LinhaParcelamento[] = parcelas.map((p) => {
+    const linhasParcelas: LinhaParcelamento[] = parcelas
+      .filter((p) => custosPorId.get(p.custo_id)?.area === areaAtiva)
+      .map((p) => {
       const custo = custosPorId.get(p.custo_id);
       return {
         id: p.id,
@@ -533,6 +608,7 @@ export default function CustosClient({
         status: p.status,
         statusCusto: "PAGO_CARTAO",
         tipoManutencao: custo?.tipo_manutencao || "CORRETIVA",
+        categoria: custo?.categoria || null,
         placa: custo?.placa || "-",
         descricao: custo?.descricao || "-",
         custoId: p.custo_id,
@@ -540,7 +616,7 @@ export default function CustosClient({
     });
 
     const linhasFaturado: LinhaParcelamento[] = initialCustos
-      .filter((c) => c.status === "FATURADO")
+      .filter((c) => c.status === "FATURADO" && c.area === areaAtiva)
       .map((c) => ({
         id: c.id,
         tipo: "FATURADO",
@@ -552,13 +628,14 @@ export default function CustosClient({
         status: "FATURADO",
         statusCusto: "FATURADO",
         tipoManutencao: c.tipo_manutencao,
-        placa: c.placa,
+        categoria: c.categoria || null,
+        placa: c.placa || "-",
         descricao: c.descricao,
         custoId: c.id,
       }));
 
     return [...linhasFaturado, ...linhasParcelas].sort((a, b) => (b.mes || "").localeCompare(a.mes || ""));
-  }, [initialCustos, parcelas]);
+  }, [initialCustos, parcelas, areaAtiva]);
 
   // Respeita os filtros globais do topo (placa/tipo/fornecedor/status/busca) igual às outras
   // abas — só NÃO aplica o filtro de Mês/Ano (que vem preenchido no mês atual por padrão),
@@ -568,14 +645,17 @@ export default function CustosClient({
     const termoTopo = searchTerm.toLowerCase().trim();
     return parcelamentosData.filter((l) => {
       if (filterPlaca && l.placa !== filterPlaca) return false;
-      if (filterTipo && l.tipoManutencao !== filterTipo) return false;
+      if (filterTipo) {
+        const campoTipo = areaAtiva === "MANUTENCAO" ? l.tipoManutencao : l.categoria;
+        if (campoTipo !== filterTipo) return false;
+      }
       if (filterFornecedor && l.fornecedor !== filterFornecedor) return false;
       if (filterStatus.length && !filterStatus.includes(l.statusCusto)) return false;
       if (term && !(l.fornecedor.toLowerCase().includes(term) || l.cartao.toLowerCase().includes(term) || l.placa.toLowerCase().includes(term))) return false;
       if (termoTopo && !(l.fornecedor.toLowerCase().includes(termoTopo) || l.placa.toLowerCase().includes(termoTopo) || l.cartao.toLowerCase().includes(termoTopo))) return false;
       return true;
     });
-  }, [parcelamentosData, buscaParcelamento, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus]);
+  }, [parcelamentosData, buscaParcelamento, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus, areaAtiva]);
 
   async function toggleStatusParcela(linha: LinhaParcelamento) {
     if (isVisitante) return;
@@ -609,7 +689,7 @@ export default function CustosClient({
     forma_pagamento_cartao: "Forma de Pagamento", cartao: "Cartão", parcelas_total: "Nº de Parcelas",
     observacoes: "Observações / PC", anexo_url: "Anexo", nome_fantasia: "Nome Fantasia",
     razao_social: "Razão Social", numero: "Nº da Parcela", valor: "Valor (R$)", mes_vencimento: "Mês de Vencimento",
-    quantidade: "Quantidade",
+    quantidade: "Quantidade", area: "Área", categoria: "Categoria", categoria_outros: "Categoria (Outros)",
   };
   const CAMPO_IGNORAR = new Set(["id", "filial_id", "custo_id", "registrado_por"]);
 
@@ -619,6 +699,7 @@ export default function CustosClient({
     if (["data", "mes_vencimento"].includes(campo)) return formatarDataCusto(String(valor));
     if (campo === "status") return STATUS_LABEL[valor as StatusCusto] || (valor === "PAGO" ? "Pago" : valor === "PENDENTE" ? "Pendente" : String(valor));
     if (campo === "forma_pagamento_cartao") return valor === "AVISTA" ? "À Vista" : valor === "PARCELADO" ? "Parcelado" : String(valor);
+    if (campo === "area") return AREA_LABEL[valor as AreaCusto] || String(valor);
     if (typeof valor === "boolean") return valor ? "Sim" : "Não";
     return String(valor);
   }
@@ -724,7 +805,7 @@ export default function CustosClient({
 
   async function handleGerarApresentacao() {
     if (viewTab !== "dashboard") {
-      alert('Abra a aba "Dashboard Manutenção" pra gerar a apresentação com os gráficos dela.');
+      alert(`Abra a aba "Dashboard ${AREA_LABEL[areaAtiva]}" pra gerar a apresentação com os gráficos dela.`);
       return;
     }
     setIsGerandoApresentacao(true);
@@ -745,6 +826,17 @@ export default function CustosClient({
 
   return (
     <div className="p-3 md:p-6 flex flex-col gap-4 max-w-[1600px] mx-auto w-full">
+      <div className="flex items-center gap-3 bg-white dark:bg-zinc-950 px-4 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Área</span>
+        <select
+          value={areaAtiva}
+          onChange={(e) => handleTrocarArea(e.target.value as AreaCusto)}
+          className="px-3 py-1.5 text-sm font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-lg outline-none cursor-pointer"
+        >
+          {AREAS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+        </select>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-zinc-950 p-4 md:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/30">
@@ -752,9 +844,9 @@ export default function CustosClient({
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              CONTROLE FINANCEIRO — MANUTENÇÃO
+              CONTROLE FINANCEIRO — {AREA_LABEL[areaAtiva].toUpperCase()}
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Gestão de custos, faturamento e status de pagamento da frota</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Gestão de custos, faturamento e status de pagamento — {AREA_LABEL[areaAtiva]}</p>
           </div>
         </div>
 
@@ -838,10 +930,16 @@ export default function CustosClient({
           {anosUnicos.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
         <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none">
-          <option value="">Todos os Tipos</option>
-          <option value="CORRETIVA">Corretiva</option>
-          <option value="PREVENTIVA">Preventiva</option>
-          <option value="PREDITIVA">Preditiva</option>
+          <option value="">{areaAtiva === "MANUTENCAO" ? "Todos os Tipos" : "Todas as Categorias"}</option>
+          {areaAtiva === "MANUTENCAO" ? (
+            <>
+              <option value="CORRETIVA">Corretiva</option>
+              <option value="PREVENTIVA">Preventiva</option>
+              <option value="PREDITIVA">Preditiva</option>
+            </>
+          ) : (
+            CATEGORIAS_POR_AREA[areaAtiva].map((c) => <option key={c.value} value={c.value}>{c.label}</option>)
+          )}
         </select>
         <div className="flex items-center gap-1.5 lg:col-span-2 xl:col-span-1">
           <input type="date" value={filterDataIni} onChange={(e) => setFilterDataIni(e.target.value)} className="w-full px-2 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none" />
@@ -859,7 +957,7 @@ export default function CustosClient({
               viewTab === "dashboard" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
             )}
           >
-            <LayoutGrid size={14} /> Dashboard Manutenção
+            <LayoutGrid size={14} /> Dashboard {AREA_LABEL[areaAtiva]}
           </button>
           <button
             onClick={() => setViewTab("lancamentos")}
@@ -868,7 +966,7 @@ export default function CustosClient({
               viewTab === "lancamentos" ? "bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm" : "text-zinc-500"
             )}
           >
-            <ListTree size={14} /> Financeiro Manutenção
+            <ListTree size={14} /> Financeiro {AREA_LABEL[areaAtiva]}
           </button>
           <button
             onClick={() => setViewTab("fornecedores")}
@@ -906,7 +1004,7 @@ export default function CustosClient({
           >
             Filtro do gráfico ativo
             {filterPlaca && <span className="font-mono">· {filterPlaca}</span>}
-            {filterTipo && <span>· {filterTipo}</span>}
+            {filterTipo && <span>· {areaAtiva === "MANUTENCAO" ? filterTipo : (CATEGORIAS_POR_AREA[areaAtiva].find((c) => c.value === filterTipo)?.label || filterTipo)}</span>}
             {filterFornecedor && <span>· {filterFornecedor}</span>}
             {filterCartao && <span>· {filterCartao}</span>}
             {filterTipoCusto && <span>· {filterTipoCusto === "PECAS" ? "Peças" : "Mão de Obra"}</span>}
@@ -1091,6 +1189,7 @@ export default function CustosClient({
                     <th className={cn(cellBorder, "px-3 py-2")}>Data/Hora</th>
                     <th className={cn(cellBorder, "px-3 py-2 text-center")}>Ação</th>
                     <th className={cn(cellBorder, "px-3 py-2")}>Registro</th>
+                    <th className={cn(cellBorder, "px-3 py-2")}>Área</th>
                     <th className={cn(cellBorder, "px-3 py-2")}>Descrição</th>
                     <th className={cn(cellBorder, "px-3 py-2")}>Usuário</th>
                     <th className={cn(cellBorder, "px-3 py-2 text-center w-16")}>Detalhes</th>
@@ -1109,6 +1208,9 @@ export default function CustosClient({
                           </span>
                         </td>
                         <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{TABELA_LABEL[h.tabela_origem] || h.tabela_origem}</td>
+                        <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>
+                          {AREA_LABEL[(h.dados_depois?.area || h.dados_antes?.area) as AreaCusto] || "-"}
+                        </td>
                         <td className={cn(cellBorder, "px-3 py-2")}>{h.descricao || "-"}</td>
                         <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{h.usuario_nome || "Sistema"}</td>
                         <td className={cn(cellBorder, "px-3 py-2 text-center")}>
@@ -1121,7 +1223,7 @@ export default function CustosClient({
                       </tr>
                       {linhaExpandida === h.id && (
                         <tr>
-                          <td colSpan={6} className={cn(cellBorder, "px-4 py-3 bg-zinc-50 dark:bg-zinc-900/60")}>
+                          <td colSpan={7} className={cn(cellBorder, "px-4 py-3 bg-zinc-50 dark:bg-zinc-900/60")}>
                             <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
                               <table className="w-full text-left border-collapse bg-white dark:bg-zinc-950">
                                 <thead className="text-[10px] uppercase sticky top-0">
@@ -1153,7 +1255,7 @@ export default function CustosClient({
                   ))}
                   {historicoFiltrado.length === 0 && (
                     <tr>
-                      <td colSpan={6} className={cn(cellBorder, "px-4 py-8 text-center text-zinc-500")}>Nenhum registro de histórico encontrado.</td>
+                      <td colSpan={7} className={cn(cellBorder, "px-4 py-8 text-center text-zinc-500")}>Nenhum registro de histórico encontrado.</td>
                     </tr>
                   )}
                 </tbody>
@@ -1224,7 +1326,9 @@ export default function CustosClient({
             </div>
 
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Distribuição por Tipo de Manutenção</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
+                {areaAtiva === "MANUTENCAO" ? "Distribuição por Tipo de Manutenção" : "Distribuição por Categoria"}
+              </h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -1238,13 +1342,13 @@ export default function CustosClient({
                       label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
                       cursor="pointer"
-                      onClick={(d: any) => toggleFiltroTipo(d.name)}
+                      onClick={(d: any) => toggleFiltroTipo(d.chave)}
                     >
                       {distribuicaoTipo.map((entry, i) => (
                         <Cell
                           key={i}
                           fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          opacity={filterTipo && filterTipo !== entry.name ? 0.35 : 1}
+                          opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1}
                         />
                       ))}
                     </Pie>
@@ -1492,7 +1596,7 @@ export default function CustosClient({
                   { coluna: "tipo", label: "Tipo", align: "" },
                   { coluna: "descricao", label: "Descrição", align: "" },
                   { coluna: "fornecedor", label: "Fornecedor", align: "" },
-                  { coluna: "pecas", label: "Peças (R$)", align: "text-right" },
+                  { coluna: "pecas", label: areaAtiva === "MANUTENCAO" ? "Peças (R$)" : "Valor (R$)", align: "text-right" },
                   { coluna: "mao_obra", label: "Mão de Obra (R$)", align: "text-right" },
                   { coluna: "total", label: "Total (R$)", align: "text-right" },
                   { coluna: "status", label: "Status", align: "text-center" },
@@ -1524,8 +1628,12 @@ export default function CustosClient({
                       </td>
                     )}
                     <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{formatarDataCusto(c.data)}</td>
-                    <td className={cn(cellBorder, "px-3 py-2 font-mono font-bold whitespace-nowrap")}>{c.placa}</td>
-                    <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{c.tipo_manutencao}</td>
+                    <td className={cn(cellBorder, "px-3 py-2 font-mono font-bold whitespace-nowrap")}>{c.placa || "-"}</td>
+                    <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>
+                      {areaAtiva === "MANUTENCAO"
+                        ? c.tipo_manutencao
+                        : (CATEGORIAS_POR_AREA[areaAtiva].find((cat) => cat.value === c.categoria)?.label || c.categoria_outros || "-")}
+                    </td>
                     <td className={cn(cellBorder, "px-3 py-2")}>{c.descricao}</td>
                     <td className={cn(cellBorder, "px-3 py-2 whitespace-nowrap")}>{c.fornecedor || "-"}</td>
                     <td className={cn(cellBorder, "px-3 py-2 text-right whitespace-nowrap")}>{formatarMoeda(Number(c.pecas))}</td>
@@ -1583,6 +1691,7 @@ export default function CustosClient({
           isOpen={modalOpen}
           onClose={() => { setModalOpen(false); setEditingData(null); }}
           editingData={editingData}
+          area={editingData?.area || areaAtiva}
           equipamentos={equipamentos}
           fornecedores={fornecedores}
           isOnline={isOnline}
@@ -1604,6 +1713,7 @@ export default function CustosClient({
           onClose={() => setImportExportOpen(false)}
           filteredData={filteredData}
           kpis={kpis}
+          area={areaAtiva}
         />
       )}
     </div>

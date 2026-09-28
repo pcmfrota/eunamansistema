@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import { CustoManutencao } from "./actions";
-import { formatarMoeda, formatarDataCusto, STATUS_LABEL } from "./CustosClient";
+import { formatarMoeda, formatarDataCusto, STATUS_LABEL, CATEGORIAS_POR_AREA } from "./CustosClient";
 
 type KPIs = { totalGeral: number; totalPago: number; totalAgPagamento: number; totalFaturado: number; custoMedioPorPlaca: number };
 
@@ -17,11 +17,14 @@ function montarHtmlRelatorio(dados: CustoManutencao[], kpis: KPIs): string {
 
   const linhas = dados.map((c) => {
     const total = Number(c.pecas) + Number(c.mao_obra);
+    const tipoOuCategoria = c.area === "MANUTENCAO"
+      ? c.tipo_manutencao
+      : (CATEGORIAS_POR_AREA[c.area]?.find((cat) => cat.value === c.categoria)?.label || c.categoria_outros || "-");
     return `
       <tr>
         <td>${formatarDataCusto(c.data)}</td>
-        <td><b>${c.placa}</b></td>
-        <td>${c.tipo_manutencao}</td>
+        <td><b>${c.placa || "-"}</b></td>
+        <td>${tipoOuCategoria}</td>
         <td>${c.descricao}</td>
         <td>${c.fornecedor || "-"}</td>
         <td style="text-align:right;">${formatarMoeda(Number(c.pecas))}</td>

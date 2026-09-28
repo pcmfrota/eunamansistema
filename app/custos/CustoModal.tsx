@@ -7,8 +7,8 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { createClient } from "@/utils/supabase/client";
 import { localDb, serializeFormData } from "@/lib/offline-db";
-import { upsertCusto, CustoManutencao, StatusCusto, FormaPagamentoCartao, Fornecedor } from "./actions";
-import { formatarMoeda } from "./CustosClient";
+import { upsertCusto, CustoManutencao, StatusCusto, FormaPagamentoCartao, Fornecedor, AreaCusto } from "./actions";
+import { formatarMoeda, AREA_LABEL, CATEGORIAS_POR_AREA } from "./CustosClient";
 
 const STATUS_OPTIONS: { value: StatusCusto; label: string; cls: string }[] = [
   { value: "PAGO", label: "Pago", cls: "bg-emerald-600 text-white border-emerald-600" },
@@ -21,6 +21,7 @@ export default function CustoModal({
   isOpen,
   onClose,
   editingData,
+  area,
   equipamentos,
   fornecedores,
   isOnline,
@@ -28,10 +29,14 @@ export default function CustoModal({
   isOpen: boolean;
   onClose: () => void;
   editingData: CustoManutencao | null;
+  area: AreaCusto;
   equipamentos: any[];
   fornecedores: Fornecedor[];
   isOnline: boolean;
 }) {
+  const isManutencao = area === "MANUTENCAO";
+  const categoriasArea = CATEGORIAS_POR_AREA[area];
+
   const [placa, setPlaca] = useState(editingData?.placa || "");
   const [fornecedor, setFornecedor] = useState(editingData?.fornecedor || "");
   const [pecas, setPecas] = useState(editingData?.pecas || 0);
@@ -40,6 +45,8 @@ export default function CustoModal({
   const [formaPagamentoCartao, setFormaPagamentoCartao] = useState<FormaPagamentoCartao>(editingData?.forma_pagamento_cartao || "AVISTA");
   const [cartao, setCartao] = useState(editingData?.cartao || "");
   const [parcelasTotal, setParcelasTotal] = useState(editingData?.parcelas_total || 2);
+  const [categoria, setCategoria] = useState(editingData?.categoria || categoriasArea[0]?.value || "");
+  const [categoriaOutros, setCategoriaOutros] = useState(editingData?.categoria_outros || "");
   const [loading, setLoading] = useState(false);
   const [anexoUrl, setAnexoUrl] = useState(editingData?.anexo_url || "");
   const [previewAberto, setPreviewAberto] = useState(false);
@@ -95,6 +102,9 @@ export default function CustoModal({
         observacoes: formData.get("observacoes"),
         anexo_url: anexo,
         filial_id: editingData?.filial_id || "MATRIZ",
+        area,
+        categoria: formData.get("categoria") || null,
+        categoria_outros: formData.get("categoria_outros") || null,
       };
 
       if (isOnline) {
@@ -125,6 +135,8 @@ export default function CustoModal({
         setFormaPagamentoCartao("AVISTA");
         setCartao("");
         setParcelasTotal(2);
+        setCategoria(categoriasArea[0]?.value || "");
+        setCategoriaOutros("");
         setAnexoUrl("");
       } else {
         onClose();
@@ -145,7 +157,7 @@ export default function CustoModal({
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-              {editingData?.id ? "Editar Lançamento" : "Novo Lançamento de Manutenção"}
+              {editingData?.id ? "Editar Lançamento" : `Novo Lançamento — ${AREA_LABEL[area]}`}
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5">Insira os dados do serviço, custos e status financeiro</p>
           </div>
@@ -162,32 +174,69 @@ export default function CustoModal({
           }}
           className="space-y-4"
         >
+          <input type="hidden" name="area" value={area} />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold uppercase text-zinc-500">Data</label>
               <input type="date" name="data" required defaultValue={editingData?.data || new Date().toISOString().slice(0, 10)} className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-bold uppercase text-zinc-500">Placa</label>
+              <label className="text-xs font-bold uppercase text-zinc-500">
+                Placa {!isManutencao && <span className="normal-case font-normal text-zinc-400">(opcional)</span>}
+              </label>
               <SearchableSelect name="placa" options={placasOptions} value={placa} onChange={setPlaca} placeholder="Selecione a placa..." />
             </div>
-            <div>
-              <label className="text-xs font-bold uppercase text-zinc-500">Tipo de Manutenção</label>
-              <select name="tipo_manutencao" required defaultValue={editingData?.tipo_manutencao || "CORRETIVA"} className={inputCls}>
-                <option value="CORRETIVA">Corretiva</option>
-                <option value="PREVENTIVA">Preventiva</option>
-                <option value="PREDITIVA">Preditiva</option>
-              </select>
-            </div>
-            <div>
+
+            {isManutencao ? (
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500">Tipo de Manutenção</label>
+                <select name="tipo_manutencao" required defaultValue={editingData?.tipo_manutencao || "CORRETIVA"} className={inputCls}>
+                  <option value="CORRETIVA">Corretiva</option>
+                  <option value="PREVENTIVA">Preventiva</option>
+                  <option value="PREDITIVA">Preditiva</option>
+                </select>
+              </div>
+            ) : (
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold uppercase text-zinc-500 mb-1.5 block">Categoria</label>
+                <div className="flex flex-wrap gap-2">
+                  {categoriasArea.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setCategoria(c.value)}
+                      className={cn(
+                        "px-3 py-2 rounded-lg text-sm font-bold border transition-all",
+                        categoria === c.value ? "bg-emerald-600 text-white border-emerald-600" : "bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800"
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                <input type="hidden" name="categoria" value={categoria} />
+                {categoria === "OUTROS" && (
+                  <input
+                    value={categoriaOutros}
+                    onChange={(e) => setCategoriaOutros(e.target.value)}
+                    name="categoria_outros"
+                    className={cn(inputCls, "mt-2")}
+                    placeholder="Qual categoria?"
+                  />
+                )}
+              </div>
+            )}
+
+            <div className={isManutencao ? "" : "sm:col-span-2"}>
               <label className="text-xs font-bold uppercase text-zinc-500">Fornecedor / Oficina</label>
               <SearchableSelect name="fornecedor" options={fornecedoresOptions} value={fornecedor} onChange={setFornecedor} placeholder="Selecione o fornecedor..." />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase text-zinc-500">Descrição do Serviço</label>
-            <textarea name="descricao" required defaultValue={editingData?.descricao || ""} rows={2} className={inputCls} placeholder="Ex: RECAPAGEM DE PNEUS" />
+            <label className="text-xs font-bold uppercase text-zinc-500">{isManutencao ? "Descrição do Serviço" : "Descrição"}</label>
+            <textarea name="descricao" required defaultValue={editingData?.descricao || ""} rows={2} className={inputCls} placeholder={isManutencao ? "Ex: RECAPAGEM DE PNEUS" : "Ex: COMPRA DE MATERIAL DE ESCRITÓRIO"} />
           </div>
 
           <div>
@@ -195,20 +244,28 @@ export default function CustoModal({
             <input name="observacoes" defaultValue={editingData?.observacoes || ""} className={inputCls} placeholder="Ex: PC 010673" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="text-xs font-bold uppercase text-zinc-500">Peças (R$)</label>
+          {isManutencao ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500">Peças (R$)</label>
+                <CurrencyInput name="pecas" value={pecas} onValueChange={setPecas} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500">Mão de Obra (R$)</label>
+                <CurrencyInput name="mao_obra" value={maoObra} onValueChange={setMaoObra} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-500">Total (R$)</label>
+                <input readOnly value={formatarMoeda(total)} className={cn(inputCls, "bg-zinc-100 dark:bg-zinc-800 font-bold cursor-not-allowed")} />
+              </div>
+            </div>
+          ) : (
+            <div className="sm:max-w-xs">
+              <label className="text-xs font-bold uppercase text-zinc-500">Valor (R$)</label>
               <CurrencyInput name="pecas" value={pecas} onValueChange={setPecas} className={inputCls} />
+              <input type="hidden" name="mao_obra" value={0} />
             </div>
-            <div>
-              <label className="text-xs font-bold uppercase text-zinc-500">Mão de Obra (R$)</label>
-              <CurrencyInput name="mao_obra" value={maoObra} onValueChange={setMaoObra} className={inputCls} />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase text-zinc-500">Total (R$)</label>
-              <input readOnly value={formatarMoeda(total)} className={cn(inputCls, "bg-zinc-100 dark:bg-zinc-800 font-bold cursor-not-allowed")} />
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="text-xs font-bold uppercase text-zinc-500 mb-1.5 block">Status</label>

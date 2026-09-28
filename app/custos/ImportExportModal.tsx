@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import { X, UploadCloud, Download, FileText, Printer, Loader2 } from "lucide-react";
-import { importarCustos, CustoManutencao } from "./actions";
+import { importarCustos, CustoManutencao, AreaCusto } from "./actions";
 import { gerarPDFCustos, imprimirRelatorioCustos } from "./CustosPDF";
+import { AREA_LABEL, CATEGORIAS_POR_AREA } from "./CustosClient";
 
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -49,11 +50,13 @@ export default function ImportExportModal({
   onClose,
   filteredData,
   kpis,
+  area,
 }: {
   isOpen: boolean;
   onClose: () => void;
   filteredData: CustoManutencao[];
   kpis: KPIs;
+  area: AreaCusto;
 }) {
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [fileName, setFileName] = useState("");
@@ -117,7 +120,7 @@ export default function ImportExportModal({
     if (previewRows.length === 0) return;
     setIsImporting(true);
     try {
-      const result = await importarCustos(previewRows);
+      const result = await importarCustos(previewRows, area);
       if (result?.error) throw new Error(result.error);
       alert(`Importação concluída! ${result.count} lançamento(s) inserido(s).`);
       const { syncTables } = await import("@/lib/offline-sync");
@@ -136,13 +139,16 @@ export default function ImportExportModal({
   }
 
   function linhasExportacao() {
+    const isManutencao = area === "MANUTENCAO";
     return filteredData.map((c) => ({
       Data: c.data,
-      Placa: c.placa,
-      "Tipo de Manutenção": c.tipo_manutencao,
+      Placa: c.placa || "",
+      [isManutencao ? "Tipo de Manutenção" : "Categoria"]: isManutencao
+        ? c.tipo_manutencao
+        : (CATEGORIAS_POR_AREA[area].find((cat) => cat.value === c.categoria)?.label || c.categoria_outros || ""),
       Descrição: c.descricao,
       Fornecedor: c.fornecedor || "",
-      "Peças (R$)": c.pecas,
+      [isManutencao ? "Peças (R$)" : "Valor (R$)"]: c.pecas,
       "Mão de Obra (R$)": c.mao_obra,
       "Total (R$)": Number(c.pecas) + Number(c.mao_obra),
       Status: c.status,
@@ -155,7 +161,7 @@ export default function ImportExportModal({
     const ws = XLSX.utils.json_to_sheet(linhasExportacao());
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Custos");
-    XLSX.writeFile(wb, `controle_custos_manutencao.${formato}`);
+    XLSX.writeFile(wb, `controle_custos_${area.toLowerCase()}.${formato}`);
   }
 
   async function handleExportPdf() {
@@ -188,6 +194,7 @@ export default function ImportExportModal({
               className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl p-8 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors"
             >
               <UploadCloud size={28} className="text-zinc-400" />
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Importando para: {AREA_LABEL[area]}</p>
               <p className="text-sm text-zinc-500 text-center">{fileName || "Clique para selecionar um arquivo Excel ou CSV"}</p>
               <p className="text-[11px] text-zinc-400 text-center">
                 Reconhece automaticamente as colunas Data, Placa, Tipo, Descrição, Fornecedor, Peças, Mão de Obra, Status e Observações/PC

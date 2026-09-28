@@ -8,11 +8,12 @@ export type StatusCusto = "PAGO" | "AG_PAGAMENTO" | "FATURADO" | "PAGO_CARTAO";
 export type TipoManutencaoCusto = "CORRETIVA" | "PREVENTIVA" | "PREDITIVA";
 export type FormaPagamentoCartao = "AVISTA" | "PARCELADO";
 export type StatusParcela = "PENDENTE" | "PAGO";
+export type AreaCusto = "MANUTENCAO" | "OPERACAO" | "ADMINISTRATIVO" | "OFICINA_BASE" | "SEGURANCA";
 
 export type CustoManutencao = {
   id: string;
   data: string;
-  placa: string;
+  placa: string | null;
   tipo_manutencao: TipoManutencaoCusto;
   descricao: string;
   fornecedor: string | null;
@@ -27,6 +28,9 @@ export type CustoManutencao = {
   registrado_por: string | null;
   registrado_por_nome: string | null;
   filial_id: string;
+  area: AreaCusto;
+  categoria: string | null;
+  categoria_outros: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -211,7 +215,7 @@ export async function marcarCustoComoPago(id: string) {
       acao: "EDICAO",
       tabelaOrigem: "custos_manutencao",
       registroId: id,
-      descricao: antes ? `${antes.placa} — ${antes.descricao} — marcado como pago` : null,
+      descricao: antes ? `${antes.placa ? antes.placa + " — " : ""}${antes.descricao} — marcado como pago` : null,
       dadosAntes: antes,
       dadosDepois: antes ? { ...antes, status: "PAGO" } : null,
     });
@@ -360,10 +364,13 @@ export async function upsertCusto(formData: FormData) {
     const pecas = parseFloat((formData.get("pecas") as string) || "0") || 0;
     const maoObra = parseFloat((formData.get("mao_obra") as string) || "0") || 0;
 
+    const area = (formData.get("area") as string) || "MANUTENCAO";
+    const categoria = (formData.get("categoria") as string) || null;
+
     const payload = {
       data,
-      placa: String(formData.get("placa") || "").toUpperCase().trim(),
-      tipo_manutencao: formData.get("tipo_manutencao") as string,
+      placa: String(formData.get("placa") || "").toUpperCase().trim() || null,
+      tipo_manutencao: (formData.get("tipo_manutencao") as string) || "CORRETIVA",
       descricao: formData.get("descricao") as string,
       fornecedor: (formData.get("fornecedor") as string) || null,
       pecas,
@@ -374,6 +381,9 @@ export async function upsertCusto(formData: FormData) {
       parcelas_total: parcelasTotal,
       observacoes: (formData.get("observacoes") as string) || null,
       anexo_url: (formData.get("anexo_url") as string) || null,
+      area,
+      categoria,
+      categoria_outros: categoria === "OUTROS" ? ((formData.get("categoria_outros") as string)?.trim() || null) : null,
     };
 
     let custoId = id;
@@ -396,7 +406,7 @@ export async function upsertCusto(formData: FormData) {
         acao: "EDICAO",
         tabelaOrigem: "custos_manutencao",
         registroId: id,
-        descricao: `${payload.placa} — ${payload.descricao} (R$ ${(pecas + maoObra).toFixed(2)})`,
+        descricao: `${payload.placa ? payload.placa + " — " : ""}${payload.descricao} (R$ ${(pecas + maoObra).toFixed(2)})`,
         dadosAntes: existente,
         dadosDepois: payload,
       });
@@ -432,7 +442,7 @@ export async function upsertCusto(formData: FormData) {
         acao: "CRIACAO",
         tabelaOrigem: "custos_manutencao",
         registroId: custoId,
-        descricao: `${payload.placa} — ${payload.descricao} (R$ ${(pecas + maoObra).toFixed(2)})`,
+        descricao: `${payload.placa ? payload.placa + " — " : ""}${payload.descricao} (R$ ${(pecas + maoObra).toFixed(2)})`,
         dadosDepois: payload,
       });
     }
@@ -476,14 +486,14 @@ export async function deleteCusto(id: string) {
       modulo: "Controle de Custos",
       tabelaOrigem: "custos_manutencao",
       registroId: id,
-      descricao: row ? `${row.placa} — ${row.descricao} (R$ ${(Number(row.pecas) + Number(row.mao_obra)).toFixed(2)})` : null,
+      descricao: row ? `${row.placa ? row.placa + " — " : ""}${row.descricao} (R$ ${(Number(row.pecas) + Number(row.mao_obra)).toFixed(2)})` : null,
       dados: row,
     });
     await registrarHistoricoCusto(supabase, {
       acao: "EXCLUSAO",
       tabelaOrigem: "custos_manutencao",
       registroId: id,
-      descricao: row ? `${row.placa} — ${row.descricao} (R$ ${(Number(row.pecas) + Number(row.mao_obra)).toFixed(2)})` : null,
+      descricao: row ? `${row.placa ? row.placa + " — " : ""}${row.descricao} (R$ ${(Number(row.pecas) + Number(row.mao_obra)).toFixed(2)})` : null,
       dadosAntes: row,
     });
 
@@ -516,7 +526,7 @@ export async function bulkDeleteCustos(ids: string[]) {
       "custos_manutencao",
       rows.map((r) => ({
         registroId: r.id,
-        descricao: `${r.placa} — ${r.descricao} (R$ ${(Number(r.pecas) + Number(r.mao_obra)).toFixed(2)})`,
+        descricao: `${r.placa ? r.placa + " — " : ""}${r.descricao} (R$ ${(Number(r.pecas) + Number(r.mao_obra)).toFixed(2)})`,
         dados: r,
       }))
     );
@@ -526,7 +536,7 @@ export async function bulkDeleteCustos(ids: string[]) {
           acao: "EXCLUSAO",
           tabelaOrigem: "custos_manutencao",
           registroId: r.id,
-          descricao: `${r.placa} — ${r.descricao} (R$ ${(Number(r.pecas) + Number(r.mao_obra)).toFixed(2)})`,
+          descricao: `${r.placa ? r.placa + " — " : ""}${r.descricao} (R$ ${(Number(r.pecas) + Number(r.mao_obra)).toFixed(2)})`,
           dadosAntes: r,
         })
       )
@@ -543,7 +553,7 @@ export async function bulkDeleteCustos(ids: string[]) {
 // importarDocumentos, aqui NÃO apaga lançamentos existentes da mesma placa antes de importar:
 // cada placa acumula um histórico de vários custos ao longo do tempo, então "substituir por
 // placa" destruiria lançamentos antigos que não têm nada a ver com o arquivo importado agora.
-export async function importarCustos(rows: any[]) {
+export async function importarCustos(rows: any[], area: AreaCusto = "MANUTENCAO") {
   try {
     const supabase = createClient();
     const { cookies } = await import("next/headers");
@@ -621,6 +631,7 @@ export async function importarCustos(rows: any[]) {
         status,
         observacoes: (getVal(row, ["observacoes", "observações", "pc", "pedido de compra"]) as string) || null,
         filial_id: filialId,
+        area,
         ...usuario,
       };
     }).filter(Boolean);
