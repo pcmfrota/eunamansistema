@@ -39,6 +39,11 @@ const STATUS_CHIP: Record<StatusCusto, string> = {
 };
 const CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0891b2", "#dc2626", "#64748b", "#db2777"];
 
+// Mesma ordem que o array retornado por `distribuicaoFormaPagamento` (Pago, Ag. Pagamento,
+// Faturado, Cartão à Vista, Cartão Parcelado) — usado pra mapear a barra clicada de volta
+// pra categoria de filtro correta.
+const CATEGORIAS_FORMA_PAGAMENTO = ["PAGO", "AG_PAGAMENTO", "FATURADO", "CARTAO_AVISTA", "CARTAO_PARCELADO"] as const;
+
 function StatusBadge({ status }: { status: StatusCusto }) {
   return (
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap", STATUS_BADGE[status])}>
@@ -87,6 +92,10 @@ export default function CustosClient({
   const [filterDataIni, setFilterDataIni] = useState("");
   const [filterDataFim, setFilterDataFim] = useState("");
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [filterFormaCartao, setFilterFormaCartao] = useState<"" | "AVISTA" | "PARCELADO">("");
+  const [filterCartao, setFilterCartao] = useState("");
+  const [filterTipoCusto, setFilterTipoCusto] = useState<"" | "PECAS" | "MAO_OBRA">("");
+  const [tabelaDashboardVisivel, setTabelaDashboardVisivel] = useState(false);
   const [sortColuna, setSortColuna] = useState("data");
   const [sortDirecao, setSortDirecao] = useState<"asc" | "desc">("asc");
 
@@ -142,6 +151,10 @@ export default function CustosClient({
       if (filterTipo && c.tipo_manutencao !== filterTipo) return false;
       if (filterFornecedor && (c.fornecedor || "Sem fornecedor") !== filterFornecedor) return false;
       if (filterStatus.length && !filterStatus.includes(c.status)) return false;
+      if (filterFormaCartao && c.forma_pagamento_cartao !== filterFormaCartao) return false;
+      if (filterCartao && c.cartao !== filterCartao) return false;
+      if (filterTipoCusto === "PECAS" && !(Number(c.pecas) > 0)) return false;
+      if (filterTipoCusto === "MAO_OBRA" && !(Number(c.mao_obra) > 0)) return false;
       if (filterMes || filterAno) {
         const [y, m] = (c.data || "").split("-");
         if (filterAno && y !== filterAno) return false;
@@ -151,7 +164,10 @@ export default function CustosClient({
       if (filterDataFim && c.data > filterDataFim) return false;
       return true;
     });
-  }, [initialCustos, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus, filterMes, filterAno, filterDataIni, filterDataFim]);
+  }, [
+    initialCustos, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus,
+    filterFormaCartao, filterCartao, filterTipoCusto, filterMes, filterAno, filterDataIni, filterDataFim,
+  ]);
 
   // Ordenação da tabela por coluna, igual planilha — clicar alterna crescente/decrescente;
   // clicar numa coluna diferente troca a coluna e volta pra crescente.
@@ -197,19 +213,47 @@ export default function CustosClient({
 
   // Filtros disparados por clique nos gráficos — clicar de novo no mesmo valor limpa o filtro
   // (efeito toggle), dando aos gráficos uma função de "abrir o detalhe" além de só mostrar.
+  // Cada toggle também revela a tabela de lançamentos embaixo do dashboard (o "dashboard
+  // oculto" pedido) — ela só aparece depois de um clique num gráfico, nunca sozinha só por
+  // causa do filtro padrão de mês/ano (que já vem preenchido no mês atual).
   function toggleFiltroPlaca(placa: string) {
     setFilterPlaca((atual) => (atual === placa ? "" : placa));
+    setTabelaDashboardVisivel(true);
   }
   function toggleFiltroTipo(tipo: string) {
     setFilterTipo((atual) => (atual === tipo ? "" : tipo));
+    setTabelaDashboardVisivel(true);
   }
   function toggleFiltroFornecedor(fornecedor: string) {
     setFilterFornecedor((atual) => (atual === fornecedor ? "" : fornecedor));
+    setTabelaDashboardVisivel(true);
   }
   function toggleFiltroMesAno(mes: string, ano: string) {
     const jaAtivo = filterMes === mes && filterAno === ano;
     setFilterMes(jaAtivo ? "" : mes);
     setFilterAno(jaAtivo ? "" : ano);
+    setTabelaDashboardVisivel(true);
+  }
+  function toggleFiltroTipoCusto(tipo: "PECAS" | "MAO_OBRA") {
+    setFilterTipoCusto((atual) => (atual === tipo ? "" : tipo));
+    setTabelaDashboardVisivel(true);
+  }
+  function toggleFiltroFormaPagamento(categoria: "PAGO" | "AG_PAGAMENTO" | "FATURADO" | "CARTAO_AVISTA" | "CARTAO_PARCELADO") {
+    if (categoria === "CARTAO_AVISTA" || categoria === "CARTAO_PARCELADO") {
+      const forma = categoria === "CARTAO_AVISTA" ? "AVISTA" : "PARCELADO";
+      const jaAtivo = filterStatus.length === 1 && filterStatus[0] === "PAGO_CARTAO" && filterFormaCartao === forma;
+      setFilterStatus(jaAtivo ? [] : ["PAGO_CARTAO"]);
+      setFilterFormaCartao(jaAtivo ? "" : forma);
+    } else {
+      const jaAtivo = filterStatus.length === 1 && filterStatus[0] === categoria && !filterFormaCartao;
+      setFilterStatus(jaAtivo ? [] : [categoria]);
+      setFilterFormaCartao("");
+    }
+    setTabelaDashboardVisivel(true);
+  }
+  function toggleFiltroCartao(cartao: string) {
+    setFilterCartao((atual) => (atual === cartao ? "" : cartao));
+    setTabelaDashboardVisivel(true);
   }
   function limparFiltrosGraficos() {
     setFilterPlaca("");
@@ -217,8 +261,16 @@ export default function CustosClient({
     setFilterFornecedor("");
     setFilterMes("");
     setFilterAno("");
+    setFilterStatus([]);
+    setFilterFormaCartao("");
+    setFilterCartao("");
+    setFilterTipoCusto("");
+    setTabelaDashboardVisivel(false);
   }
-  const temFiltroDeGrafico = !!(filterPlaca || filterTipo || filterFornecedor || filterMes || filterAno);
+  const temFiltroDeGrafico = !!(
+    filterPlaca || filterTipo || filterFornecedor || filterMes || filterAno ||
+    filterFormaCartao || filterCartao || filterTipoCusto
+  );
 
   const kpis = useMemo(() => {
     let totalGeral = 0, totalPago = 0, totalAgPagamento = 0, totalFaturado = 0, totalPagoCartao = 0;
@@ -842,6 +894,11 @@ export default function CustosClient({
             {filterPlaca && <span className="font-mono">· {filterPlaca}</span>}
             {filterTipo && <span>· {filterTipo}</span>}
             {filterFornecedor && <span>· {filterFornecedor}</span>}
+            {filterCartao && <span>· {filterCartao}</span>}
+            {filterTipoCusto && <span>· {filterTipoCusto === "PECAS" ? "Peças" : "Mão de Obra"}</span>}
+            {filterStatus.length === 1 && (
+              <span>· {filterFormaCartao ? `Cartão ${filterFormaCartao === "AVISTA" ? "à Vista" : "Parcelado"}` : STATUS_LABEL[filterStatus[0] as StatusCusto]}</span>
+            )}
             {(filterMes || filterAno) && <span>· {MESES[Number(filterMes) - 1]?.slice(0, 3) || filterMes}/{filterAno?.slice(2)}</span>}
             <X size={12} />
           </button>
@@ -1283,9 +1340,11 @@ export default function CustosClient({
                       paddingAngle={3}
                       label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
+                      cursor="pointer"
+                      onClick={(d: any) => toggleFiltroTipoCusto(d.name === "Peças" ? "PECAS" : "MAO_OBRA")}
                     >
-                      <Cell fill="#2563eb" />
-                      <Cell fill="#f59e0b" />
+                      <Cell fill="#2563eb" opacity={filterTipoCusto && filterTipoCusto !== "PECAS" ? 0.3 : 1} />
+                      <Cell fill="#f59e0b" opacity={filterTipoCusto && filterTipoCusto !== "MAO_OBRA" ? 0.3 : 1} />
                     </Pie>
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -1303,11 +1362,19 @@ export default function CustosClient({
                     <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
                     <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
+                    <Bar
+                      dataKey="value" radius={[0, 4, 4, 0]} barSize={14} cursor="pointer"
+                      onClick={(d: any) => toggleFiltroFormaPagamento(CATEGORIAS_FORMA_PAGAMENTO[distribuicaoFormaPagamento.findIndex((x) => x.name === d.name)])}
+                    >
                       <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
-                      {distribuicaoFormaPagamento.map((entry, i) => (
-                        <Cell key={i} fill={["#16a34a", "#dc2626", "#2563eb", "#8b5cf6", "#4f46e5"][i % 5]} />
-                      ))}
+                      {distribuicaoFormaPagamento.map((entry, i) => {
+                        const categoria = CATEGORIAS_FORMA_PAGAMENTO[i];
+                        const ativa = categoria === "CARTAO_AVISTA" || categoria === "CARTAO_PARCELADO"
+                          ? filterStatus[0] === "PAGO_CARTAO" && filterFormaCartao === (categoria === "CARTAO_AVISTA" ? "AVISTA" : "PARCELADO")
+                          : filterStatus.length === 1 && filterStatus[0] === categoria && !filterFormaCartao;
+                        const algumaAtiva = filterStatus.length === 1;
+                        return <Cell key={i} fill={["#16a34a", "#dc2626", "#2563eb", "#8b5cf6", "#4f46e5"][i % 5]} opacity={algumaAtiva && !ativa ? 0.3 : 1} />;
+                      })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -1328,8 +1395,11 @@ export default function CustosClient({
                       <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
                       <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
                       <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(79,70,229,0.06)" }} />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#4f46e5">
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#4f46e5" cursor="pointer" onClick={(d: any) => toggleFiltroCartao(d.name)}>
                         <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                        {gastoPorCartao.map((entry, i) => (
+                          <Cell key={i} fill="#4f46e5" opacity={filterCartao && filterCartao !== entry.name ? 0.3 : 1} />
+                        ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -1346,8 +1416,11 @@ export default function CustosClient({
                     <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
                     <Tooltip formatter={(v: number) => `${v} lançamento(s)`} cursor={{ fill: "rgba(8,145,178,0.06)" }} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#0891b2">
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#0891b2" cursor="pointer" onClick={(d: any) => toggleFiltroFornecedor(d.name)}>
                       <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: "#52525b" }} />
+                      {topFornecedoresPorQtd.map((entry, i) => (
+                        <Cell key={i} fill="#0891b2" opacity={filterFornecedor && filterFornecedor !== entry.name ? 0.3 : 1} />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -1379,8 +1452,16 @@ export default function CustosClient({
         </div>
       ) : null}
 
-      {viewTab === "lancamentos" && (
+      {(viewTab === "lancamentos" || (viewTab === "dashboard" && tabelaDashboardVisivel)) && (
       <>
+      {viewTab === "dashboard" && (
+        <div className="flex items-center justify-between gap-3 -mb-1">
+          <p className="text-xs font-semibold text-zinc-500">Lançamentos filtrados pelo gráfico ({filteredData.length})</p>
+          <button onClick={limparFiltrosGraficos} className="flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-red-500">
+            <X size={12} /> Fechar lista
+          </button>
+        </div>
+      )}
       <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
