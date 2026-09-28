@@ -8,7 +8,8 @@ import { CurrencyInput } from "@/components/CurrencyInput";
 import { createClient } from "@/utils/supabase/client";
 import { localDb, serializeFormData } from "@/lib/offline-db";
 import { upsertCusto, CustoManutencao, StatusCusto, FormaPagamentoCartao, Fornecedor, AreaCusto } from "./actions";
-import { formatarMoeda, AREA_LABEL, CATEGORIAS_POR_AREA } from "./CustosClient";
+import { formatarMoeda } from "./CustosClient";
+import { AREA_LABEL, CATEGORIAS_POR_AREA } from "./config";
 
 const STATUS_OPTIONS: { value: StatusCusto; label: string; cls: string }[] = [
   { value: "PAGO", label: "Pago", cls: "bg-emerald-600 text-white border-emerald-600" },

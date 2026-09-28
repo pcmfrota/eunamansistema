@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarExclusao, registrarExclusoesEmLote } from "@/lib/audit-log";
+import { CATEGORIAS_POR_AREA } from "./config";
 
 export type StatusCusto = "PAGO" | "AG_PAGAMENTO" | "FATURADO" | "PAGO_CARTAO";
 export type TipoManutencaoCusto = "CORRETIVA" | "PREVENTIVA" | "PREDITIVA";
@@ -601,11 +602,17 @@ export async function importarCustos(rows: any[], area: AreaCusto = "MANUTENCAO"
       return isNaN(num) ? 0 : num;
     };
 
+    const isManutencao = area === "MANUTENCAO";
+    const categoriasValidas = CATEGORIAS_POR_AREA[area];
+    const normalizarLabel = (v: string) => normalizarChave(v);
+
     const mapped = rows.map((row) => {
       const placa = String(getVal(row, ["placa", "veiculo", "veículo"]) || "").toUpperCase().trim();
       const data = parseData(getVal(row, ["data", "data_lancamento"]));
-      const descricao = String(getVal(row, ["descricao", "descrição", "descricao_servico", "servico", "serviço"]) || "").trim();
-      if (!placa || !data || !descricao) return null;
+      const descricao = String(getVal(row, ["descricao", "descrição", "descricao_servico", "servico", "serviço", "item"]) || "").trim();
+      // Placa só é obrigatória em Manutenção — as outras áreas nem sempre têm um veículo
+      // associado ao custo (material de escritório, EPI, etc.).
+      if (!data || !descricao || (isManutencao && !placa)) return null;
 
       // Cuidado: "AG" é substring de "PAGO" (P-AG-O), então checar "inclui AG" pra achar
       // "Aguardando" também casava com "Pago" sozinho por engano. "PAGAMENTO" (presente em
@@ -616,17 +623,41 @@ export async function importarCustos(rows: any[], area: AreaCusto = "MANUTENCAO"
         statusRaw.includes("PAGAMENTO") || statusRaw.includes("PEND") ? "AG_PAGAMENTO" :
         statusRaw.includes("PAGO") ? "PAGO" : "AG_PAGAMENTO";
 
-      const tipoRaw = String(getVal(row, ["tipo_manutencao", "tipo", "tipo de manutenção"]) || "CORRETIVA").toUpperCase().trim();
-      const tipo_manutencao: TipoManutencaoCusto =
-        tipoRaw.startsWith("PREV") ? "PREVENTIVA" : tipoRaw.startsWith("PREDIT") ? "PREDITIVA" : "CORRETIVA";
+      let tipo_manutencao: TipoManutencaoCusto = "CORRETIVA";
+      let categoria: string | null = null;
+      let categoria_outros: string | null = null;
+
+      if (isManutencao) {
+        const tipoRaw = String(getVal(row, ["tipo_manutencao", "tipo", "tipo de manutenção"]) || "CORRETIVA").toUpperCase().trim();
+        tipo_manutencao = tipoRaw.startsWith("PREV") ? "PREVENTIVA" : tipoRaw.startsWith("PREDIT") ? "PREDITIVA" : "CORRETIVA";
+      } else {
+        // Aceita tanto o valor bruto (MATERIAL_ESCRITORIO) quanto o rótulo (Material de
+        // Escritório) na planilha. Não reconhecendo nenhuma categoria válida da área, cai em
+        // "Outros" com o texto original preservado, em vez de rejeitar a linha inteira.
+        const categoriaRaw = String(getVal(row, ["categoria", "tipo", "tipo de custo"]) || "").trim();
+        const categoriaNorm = normalizarLabel(categoriaRaw);
+        const encontrada = categoriasValidas.find(
+          (c) => normalizarLabel(c.value) === categoriaNorm || normalizarLabel(c.label) === categoriaNorm
+        );
+        if (encontrada) {
+          categoria = encontrada.value;
+        } else if (categoriaRaw) {
+          categoria = "OUTROS";
+          categoria_outros = categoriaRaw;
+        } else {
+          categoria = categoriasValidas[0]?.value || null;
+        }
+      }
 
       return {
         data,
-        placa,
+        placa: placa || null,
         tipo_manutencao,
+        categoria,
+        categoria_outros,
         descricao,
         fornecedor: (getVal(row, ["fornecedor", "oficina"]) as string) || null,
-        pecas: parseMoeda(getVal(row, ["pecas", "peças", "peças (r$)"])),
+        pecas: parseMoeda(getVal(row, ["pecas", "peças", "peças (r$)", "valor", "valor (r$)", "total"])),
         mao_obra: parseMoeda(getVal(row, ["mao_obra", "mão de obra", "mão de obra (r$)"])),
         status,
         observacoes: (getVal(row, ["observacoes", "observações", "pc", "pedido de compra"]) as string) || null,
@@ -637,7 +668,11 @@ export async function importarCustos(rows: any[], area: AreaCusto = "MANUTENCAO"
     }).filter(Boolean);
 
     if (mapped.length === 0) {
-      return { error: "Nenhum registro válido encontrado para importação (verifique as colunas Data, Placa e Descrição)." };
+      return {
+        error: isManutencao
+          ? "Nenhum registro válido encontrado para importação (verifique as colunas Data, Placa e Descrição)."
+          : "Nenhum registro válido encontrado para importação (verifique as colunas Data e Descrição).",
+      };
     }
 
     const { error } = await supabase.from("custos_manutencao").insert(mapped);

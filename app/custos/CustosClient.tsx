@@ -21,6 +21,7 @@ import CustoModal from "./CustoModal";
 import FornecedorModal from "./FornecedorModal";
 import ImportExportModal from "./ImportExportModal";
 import { gerarPDFCustos, imprimirRelatorioCustos, gerarPDFApresentacaoCustos } from "./CustosPDF";
+import { AREAS, AREA_LABEL, CATEGORIAS_POR_AREA } from "./config";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -38,45 +39,6 @@ const STATUS_CHIP: Record<StatusCusto, string> = {
   PAGO_CARTAO: "bg-purple-600 text-white",
 };
 const CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0891b2", "#dc2626", "#64748b", "#db2777"];
-
-export const AREAS: { value: AreaCusto; label: string }[] = [
-  { value: "MANUTENCAO", label: "Manutenção" },
-  { value: "OPERACAO", label: "Operação" },
-  { value: "ADMINISTRATIVO", label: "Administrativo" },
-  { value: "OFICINA_BASE", label: "Oficina (Base)" },
-  { value: "SEGURANCA", label: "Segurança" },
-];
-export const AREA_LABEL: Record<AreaCusto, string> = Object.fromEntries(AREAS.map((a) => [a.value, a.label])) as Record<AreaCusto, string>;
-
-// Categorias específicas de cada área não-Manutenção (Manutenção usa seu próprio campo
-// tipo_manutencao — Corretiva/Preventiva/Preditiva — que já existia antes dessa separação).
-export const CATEGORIAS_POR_AREA: Record<AreaCusto, { value: string; label: string }[]> = {
-  MANUTENCAO: [],
-  OPERACAO: [
-    { value: "MATERIAL", label: "Material" },
-    { value: "SERVICOS", label: "Serviços" },
-    { value: "MAO_DE_OBRA", label: "Mão de Obra" },
-    { value: "OUTROS", label: "Outros" },
-  ],
-  ADMINISTRATIVO: [
-    { value: "MATERIAL_ESCRITORIO", label: "Material de Escritório" },
-    { value: "SERVICOS", label: "Serviços" },
-    { value: "INFORMATICA", label: "Informática" },
-    { value: "OUTROS", label: "Outros" },
-  ],
-  OFICINA_BASE: [
-    { value: "SERVICOS", label: "Serviços" },
-    { value: "MANUTENCAO", label: "Manutenção" },
-    { value: "OUTROS", label: "Outros" },
-  ],
-  SEGURANCA: [
-    { value: "EPIS", label: "EPIs" },
-    { value: "INFORMATICA", label: "Informática" },
-    { value: "SERVICOS_GRAFICOS", label: "Serviços Gráficos" },
-    { value: "SERVICOS", label: "Serviços" },
-    { value: "OUTROS", label: "Outros" },
-  ],
-};
 
 // Mesma ordem que o array retornado por `distribuicaoFormaPagamento` (Pago, Ag. Pagamento,
 // Faturado, Cartão à Vista, Cartão Parcelado) — usado pra mapear a barra clicada de volta
@@ -354,6 +316,7 @@ export default function CustosClient({
       totalFaturado,
       totalPagoCartao,
       custoMedioPorPlaca: placas.size ? totalGeral / placas.size : 0,
+      custoMedioPorLancamento: filteredData.length ? totalGeral / filteredData.length : 0,
     };
   }, [filteredData]);
 
@@ -1272,7 +1235,9 @@ export default function CustosClient({
               { label: "Aguardando Pagamento", valor: kpis.totalAgPagamento, cor: "bg-red-600" },
               { label: "Total Faturado", valor: kpis.totalFaturado, cor: "bg-blue-600" },
               { label: "Pago via Cartão", valor: kpis.totalPagoCartao, cor: "bg-indigo-600" },
-              { label: "Custo Médio por Placa", valor: kpis.custoMedioPorPlaca, cor: "bg-purple-600" },
+              areaAtiva === "MANUTENCAO"
+                ? { label: "Custo Médio por Placa", valor: kpis.custoMedioPorPlaca, cor: "bg-purple-600" }
+                : { label: "Custo Médio por Lançamento", valor: kpis.custoMedioPorLancamento, cor: "bg-purple-600" },
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex items-stretch gap-3 shadow-sm">
                 <div className={cn("w-1.5 rounded-full shrink-0", kpi.cor)} />
@@ -1293,6 +1258,7 @@ export default function CustosClient({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {areaAtiva === "MANUTENCAO" && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Evolução Mensal — Peças vs Mão de Obra</h3>
               <div className="h-[220px] w-full">
@@ -1324,6 +1290,7 @@ export default function CustosClient({
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
 
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
@@ -1359,6 +1326,7 @@ export default function CustosClient({
               </div>
             </div>
 
+            {areaAtiva === "MANUTENCAO" && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Top 10 Veículos por Custo</h3>
               <div className="h-[260px] w-full">
@@ -1378,6 +1346,7 @@ export default function CustosClient({
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
 
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Fornecedor</h3>
@@ -1401,7 +1370,7 @@ export default function CustosClient({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <div className={cn("bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm", areaAtiva !== "MANUTENCAO" && "lg:col-span-2")}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Evolução de Custos Mensais</h3>
               <div className="h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1418,6 +1387,7 @@ export default function CustosClient({
               </div>
             </div>
 
+            {areaAtiva === "MANUTENCAO" && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Placa e Fornecedor</h3>
               <div className="h-[260px] w-full">
@@ -1435,6 +1405,7 @@ export default function CustosClient({
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3 pt-2">
@@ -1444,6 +1415,7 @@ export default function CustosClient({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {areaAtiva === "MANUTENCAO" && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Peças vs Mão de Obra</h3>
               <div className="h-[220px] w-full">
@@ -1470,8 +1442,9 @@ export default function CustosClient({
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
 
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <div className={cn("bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm", areaAtiva !== "MANUTENCAO" && "lg:col-span-2")}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Distribuição por Forma de Pagamento</h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">

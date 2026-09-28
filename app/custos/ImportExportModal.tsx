@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { X, UploadCloud, Download, FileText, Printer, Loader2 } from "lucide-react";
 import { importarCustos, CustoManutencao, AreaCusto } from "./actions";
 import { gerarPDFCustos, imprimirRelatorioCustos } from "./CustosPDF";
-import { AREA_LABEL, CATEGORIAS_POR_AREA } from "./CustosClient";
+import { AREA_LABEL, CATEGORIAS_POR_AREA } from "./config";
 
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -29,16 +29,18 @@ function normalizeKey(v: any): string {
 // da linha de cabeçalho de verdade — se a gente sempre tratar a linha 1 como cabeçalho
 // (comportamento padrão do XLSX.utils.sheet_to_json), essa linha de título vira o "cabeçalho"
 // e nenhuma coluna real (Data, Placa...) é reconhecida. Por isso procura, nas primeiras linhas,
-// a que efetivamente parece um cabeçalho (tem "data" E "placa" reconhecíveis) antes de ler.
+// a que efetivamente parece um cabeçalho antes de ler. Em Manutenção exige Data + Placa; nas
+// outras áreas a placa é opcional, então exige Data + Descrição no lugar.
 // Retorna -1 quando a aba não tem uma linha de cabeçalho reconhecível (ex: aba "Resumo" com
 // tabela dinâmica/gráfico), pra essa aba poder ser pulada em vez de forçada como se fosse dado.
-function encontrarLinhaCabecalho(matrix: any[][]): number {
+function encontrarLinhaCabecalho(matrix: any[][], area: AreaCusto): number {
   const limite = Math.min(matrix.length, 10);
   for (let i = 0; i < limite; i++) {
     const chaves = (matrix[i] || []).map(normalizeKey);
     const temData = chaves.some((k) => k.includes("data"));
     const temPlaca = chaves.some((k) => k.includes("placa") || k.includes("veiculo"));
-    if (temData && temPlaca) return i;
+    const temDescricao = chaves.some((k) => k.includes("descricao") || k.includes("servico") || k.includes("item"));
+    if (temData && (area === "MANUTENCAO" ? temPlaca : (temPlaca || temDescricao))) return i;
   }
   return -1;
 }
@@ -86,7 +88,7 @@ export default function ImportExportModal({
       for (const nomeAba of workbook.SheetNames) {
         const sheet = workbook.Sheets[nomeAba];
         const matrix: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        const linhaCabecalho = encontrarLinhaCabecalho(matrix);
+        const linhaCabecalho = encontrarLinhaCabecalho(matrix, area);
 
         if (linhaCabecalho === -1) {
           ignoradas.push(nomeAba);
@@ -104,7 +106,11 @@ export default function ImportExportModal({
       }
 
       if (todasAsLinhas.length === 0) {
-        alert("Não foi possível identificar as colunas Data e Placa em nenhuma aba da planilha.");
+        alert(
+          area === "MANUTENCAO"
+            ? "Não foi possível identificar as colunas Data e Placa em nenhuma aba da planilha."
+            : "Não foi possível identificar as colunas Data e Descrição em nenhuma aba da planilha."
+        );
         return;
       }
 
@@ -197,7 +203,9 @@ export default function ImportExportModal({
               <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Importando para: {AREA_LABEL[area]}</p>
               <p className="text-sm text-zinc-500 text-center">{fileName || "Clique para selecionar um arquivo Excel ou CSV"}</p>
               <p className="text-[11px] text-zinc-400 text-center">
-                Reconhece automaticamente as colunas Data, Placa, Tipo, Descrição, Fornecedor, Peças, Mão de Obra, Status e Observações/PC
+                {area === "MANUTENCAO"
+                  ? "Reconhece automaticamente as colunas Data, Placa, Tipo, Descrição, Fornecedor, Peças, Mão de Obra, Status e Observações/PC"
+                  : "Reconhece automaticamente as colunas Data, Descrição, Categoria, Fornecedor, Valor, Status e Observações/PC (Placa é opcional)"}
               </p>
             </div>
 

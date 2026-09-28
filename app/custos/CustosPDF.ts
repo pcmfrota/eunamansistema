@@ -2,7 +2,8 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import { CustoManutencao } from "./actions";
-import { formatarMoeda, formatarDataCusto, STATUS_LABEL, CATEGORIAS_POR_AREA } from "./CustosClient";
+import { formatarMoeda, formatarDataCusto, STATUS_LABEL } from "./CustosClient";
+import { CATEGORIAS_POR_AREA } from "./config";
 
 type KPIs = { totalGeral: number; totalPago: number; totalAgPagamento: number; totalFaturado: number; custoMedioPorPlaca: number };
 
