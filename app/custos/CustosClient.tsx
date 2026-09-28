@@ -14,7 +14,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
 } from "recharts";
 import {
-  CustoManutencao, StatusCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
+  CustoManutencao, StatusCusto, TipoManutencaoCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
   deleteCusto, bulkDeleteCustos, deleteFornecedor, atualizarStatusParcela, marcarCustoComoPago, getCustosHistorico,
 } from "./actions";
 import CustoModal from "./CustoModal";
@@ -513,7 +513,8 @@ export default function CustosClient({
   // lançamento) numa única lista de pendências futuras, igual à planilha pedida.
   type LinhaParcelamento = {
     id: string; tipo: "PARCELA" | "FATURADO"; fornecedor: string; cartao: string;
-    parcela: string; mes: string; valor: number; status: string; placa: string; descricao: string; custoId: string;
+    parcela: string; mes: string; valor: number; status: string; statusCusto: StatusCusto;
+    tipoManutencao: TipoManutencaoCusto; placa: string; descricao: string; custoId: string;
   };
 
   const parcelamentosData = useMemo<LinhaParcelamento[]>(() => {
@@ -530,6 +531,8 @@ export default function CustosClient({
         mes: p.mes_vencimento,
         valor: Number(p.valor),
         status: p.status,
+        statusCusto: "PAGO_CARTAO",
+        tipoManutencao: custo?.tipo_manutencao || "CORRETIVA",
         placa: custo?.placa || "-",
         descricao: custo?.descricao || "-",
         custoId: p.custo_id,
@@ -547,6 +550,8 @@ export default function CustosClient({
         mes: c.data,
         valor: Number(c.pecas) + Number(c.mao_obra),
         status: "FATURADO",
+        statusCusto: "FATURADO",
+        tipoManutencao: c.tipo_manutencao,
         placa: c.placa,
         descricao: c.descricao,
         custoId: c.id,
@@ -555,13 +560,22 @@ export default function CustosClient({
     return [...linhasFaturado, ...linhasParcelas].sort((a, b) => (b.mes || "").localeCompare(a.mes || ""));
   }, [initialCustos, parcelas]);
 
+  // Respeita os filtros globais do topo (placa/tipo/fornecedor/status/busca) igual às outras
+  // abas — só NÃO aplica o filtro de Mês/Ano (que vem preenchido no mês atual por padrão),
+  // porque essa aba existe justamente pra mostrar parcelas futuras que caem fora do mês atual.
   const parcelamentosFiltrados = useMemo(() => {
     const term = buscaParcelamento.toLowerCase().trim();
-    if (!term) return parcelamentosData;
-    return parcelamentosData.filter(
-      (l) => l.fornecedor.toLowerCase().includes(term) || l.cartao.toLowerCase().includes(term) || l.placa.toLowerCase().includes(term)
-    );
-  }, [parcelamentosData, buscaParcelamento]);
+    const termoTopo = searchTerm.toLowerCase().trim();
+    return parcelamentosData.filter((l) => {
+      if (filterPlaca && l.placa !== filterPlaca) return false;
+      if (filterTipo && l.tipoManutencao !== filterTipo) return false;
+      if (filterFornecedor && l.fornecedor !== filterFornecedor) return false;
+      if (filterStatus.length && !filterStatus.includes(l.statusCusto)) return false;
+      if (term && !(l.fornecedor.toLowerCase().includes(term) || l.cartao.toLowerCase().includes(term) || l.placa.toLowerCase().includes(term))) return false;
+      if (termoTopo && !(l.fornecedor.toLowerCase().includes(termoTopo) || l.placa.toLowerCase().includes(termoTopo) || l.cartao.toLowerCase().includes(termoTopo))) return false;
+      return true;
+    });
+  }, [parcelamentosData, buscaParcelamento, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus]);
 
   async function toggleStatusParcela(linha: LinhaParcelamento) {
     if (isVisitante) return;
@@ -970,7 +984,7 @@ export default function CustosClient({
                 className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-emerald-500"
               />
             </div>
-            <p className="text-xs text-zinc-500">Boletos faturados e parcelas de cartão, ordenados por vencimento.</p>
+            <p className="text-xs text-zinc-500">Boletos faturados e parcelas de cartão, ordenados por vencimento. Respeita os filtros de placa/tipo/fornecedor/status do topo — o filtro de Mês/Ano não se aplica aqui, pra não esconder parcelas futuras.</p>
           </div>
 
           <div className="overflow-x-auto">
