@@ -61,16 +61,22 @@ function StatusBadge({ status }: { status: StatusCusto }) {
 // Célula custom do Treemap "Custos por Natureza Financeira" — o conteúdo padrão do Recharts
 // não escreve o nome/valor dentro do retângulo, então desenha isso à mão (só quando a célula
 // é grande o bastante pro texto caber sem vazar).
-function TreemapCelula({ x, y, width, height, name, fill }: any) {
-  if (width < 4 || height < 4) return null;
-  const mostrarTexto = width > 55 && height > 28;
+function TreemapCelula(props: any) {
+  const { x, y, width, height, fill } = props;
+  // O Recharts chama esse content renderer também pro nó-raiz implícito do treemap (que não
+  // tem name/size/fill de verdade) — sem essa defesa, "width"/"height" vêm undefined,
+  // "undefined < 4" dá falso (não entra no guard) e o acesso a "name.length" quebra a tela
+  // inteira com "Cannot read properties of undefined".
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 4 || height < 4) return null;
+  const rotulo = typeof props.name === "string" ? props.name : "";
   const maxChars = Math.max(4, Math.floor(width / 6.5));
+  const mostrarTexto = width > 55 && height > 28 && rotulo.length > 0;
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} style={{ fill, stroke: "#fff", strokeWidth: 2 }} />
+      <rect x={x} y={y} width={width} height={height} style={{ fill: fill || "#94a3b8", stroke: "#fff", strokeWidth: 2 }} />
       {mostrarTexto && (
         <text x={x + 6} y={y + 16} fill="#fff" fontSize={10} fontWeight={700}>
-          {name.length > maxChars ? `${name.slice(0, maxChars - 1)}…` : name}
+          {rotulo.length > maxChars ? `${rotulo.slice(0, maxChars - 1)}…` : rotulo}
         </text>
       )}
     </g>
