@@ -475,12 +475,47 @@ export default function CustosClient({
     return Array.from(porMes.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
   }, [parcelas]);
 
+  // Mesmos filtros de filteredData, exceto Mês/Ano e período de datas — usado só na Evolução
+  // Mensal, que por ser um gráfico de mês a mês não pode ser limitado a um único mês (senão vira
+  // uma linha com 1 ponto só). Continua respeitando os outros filtros (placa, fornecedor, status
+  // etc.), inclusive os de clique-para-filtrar dos demais gráficos.
+  const filteredDataSemPeriodo = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    return custosDaArea.filter((c) => {
+      if (
+        term &&
+        !(
+          c.placa?.toLowerCase().includes(term) ||
+          c.fornecedor?.toLowerCase().includes(term) ||
+          c.observacoes?.toLowerCase().includes(term) ||
+          c.descricao?.toLowerCase().includes(term)
+        )
+      )
+        return false;
+      if (filterPlaca && c.placa !== filterPlaca) return false;
+      if (filterTipo) {
+        const campoTipo = ehConsolidado ? c.area : areaAtiva === "MANUTENCAO" ? c.tipo_manutencao : c.categoria;
+        if (campoTipo !== filterTipo) return false;
+      }
+      if (filterFornecedor && (c.fornecedor || "Sem fornecedor") !== filterFornecedor) return false;
+      if (filterStatus.length && !filterStatus.includes(c.status)) return false;
+      if (filterFormaCartao && c.forma_pagamento_cartao !== filterFormaCartao) return false;
+      if (filterCartao && c.cartao !== filterCartao) return false;
+      if (filterTipoCusto === "PECAS" && !(Number(c.pecas) > 0)) return false;
+      if (filterTipoCusto === "MAO_OBRA" && !(Number(c.mao_obra) > 0)) return false;
+      return true;
+    });
+  }, [
+    custosDaArea, areaAtiva, ehConsolidado, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus,
+    filterFormaCartao, filterCartao, filterTipoCusto,
+  ]);
+
   // Série única de evolução mensal (só o total, sem separar peças/mão de obra) — usada no
   // gráfico de linha do Detalhamento Financeiro, e também pra calcular a variação vs. o mês
   // anterior mostrada como tendência no card "Total Gasto".
   const evolucaoMensalTotal = useMemo(() => {
     const porMes = new Map<string, number>();
-    filteredData.forEach((c) => {
+    filteredDataSemPeriodo.forEach((c) => {
       const chave = c.data?.slice(0, 7);
       if (!chave) return;
       const total = Number(c.pecas) + Number(c.mao_obra);
@@ -492,7 +527,7 @@ export default function CustosClient({
         const [y, m] = chave.split("-");
         return { mes: `${MESES[Number(m) - 1]?.slice(0, 3) || m}/${y.slice(2)}`, total };
       });
-  }, [filteredData]);
+  }, [filteredDataSemPeriodo]);
 
   const tendenciaGasto = useMemo(() => {
     if (evolucaoMensalTotal.length < 2) return null;
@@ -1578,31 +1613,29 @@ export default function CustosClient({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {gastoPorCartao.length > 0 && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Gasto por Cartão</h3>
               <div className="h-[220px] w-full">
-                {gastoPorCartao.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-xs text-zinc-400">Nenhum pagamento via cartão neste período.</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={gastoPorCartao} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
-                      <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
-                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
-                      <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(79,70,229,0.06)" }} />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#4f46e5" cursor="pointer" onClick={(d: any) => toggleFiltroCartao(d.name)}>
-                        <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
-                        {gastoPorCartao.map((entry, i) => (
-                          <Cell key={i} fill="#4f46e5" opacity={filterCartao && filterCartao !== entry.name ? 0.3 : 1} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={gastoPorCartao} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={100} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(79,70,229,0.06)" }} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill="#4f46e5" cursor="pointer" onClick={(d: any) => toggleFiltroCartao(d.name)}>
+                      <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                      {gastoPorCartao.map((entry, i) => (
+                        <Cell key={i} fill="#4f46e5" opacity={filterCartao && filterCartao !== entry.name ? 0.3 : 1} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
+            )}
 
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <div className={cn("bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm", gastoPorCartao.length === 0 && "lg:col-span-2")}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Top Fornecedores por Nº de Lançamentos</h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1623,30 +1656,28 @@ export default function CustosClient({
             </div>
           </div>
 
+          {parcelasPorMesVencimento.length > 0 && (
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
             <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Parcelas de Cartão por Mês de Vencimento</h3>
             <p className="text-[10px] text-zinc-400 mb-2">Projeção de todas as parcelas em aberto/pagas, independente do filtro de período acima.</p>
             <div className="h-[240px] w-full">
-              {parcelasPorMesVencimento.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-xs text-zinc-400">Nenhuma compra parcelada no cartão cadastrada.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={parcelasPorMesVencimento} margin={{ left: 5, right: 10, top: 20, bottom: 5 }} barCategoryGap="30%">
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="pendente" name="Pendente" stackId="parcela" fill="#dc2626" maxBarSize={40} />
-                    <Bar dataKey="pago" name="Paga" stackId="parcela" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={parcelasPorMesVencimento} margin={{ left: 5, right: 10, top: 20, bottom: 5 }} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="pendente" name="Pendente" stackId="parcela" fill="#dc2626" maxBarSize={40} />
+                  <Bar dataKey="pago" name="Paga" stackId="parcela" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+            <div className={cn("bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm", comparativoAnual.anos.length < 2 && "lg:col-span-2")}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Pontualidade de Pagamentos</h3>
               <p className="text-[10px] text-zinc-400 mb-1">Boletos e parcelas de cartão com vencimento — mesma base da aba Faturas & Parcelamentos.</p>
               <div className="relative h-[170px] w-full">
@@ -1679,27 +1710,25 @@ export default function CustosClient({
               </div>
             </div>
 
+            {comparativoAnual.anos.length >= 2 && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Comparativo Mensal entre Anos</h3>
               <div className="h-[220px] w-full">
-                {comparativoAnual.anos.length < 2 ? (
-                  <div className="h-full flex items-center justify-center text-xs text-zinc-400 text-center px-4">Precisa de dados de mais de um ano pra comparar.</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparativoAnual.linhas} margin={{ left: 5, right: 10, top: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      {comparativoAnual.anos.map((ano, i) => (
-                        <Bar key={ano} dataKey={ano} name={ano} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={comparativoAnual.linhas} margin={{ left: 5, right: 10, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {comparativoAnual.anos.map((ano, i) => (
+                      <Bar key={ano} dataKey={ano} name={ano} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
+            )}
           </div>
 
           {ehConsolidado && custosPorNatureza.length > 0 && (
