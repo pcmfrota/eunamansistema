@@ -11,7 +11,7 @@ import { localDb } from "@/lib/offline-db";
 import { MultiSelect } from "@/components/MultiSelect";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
+  Cell, Legend, LineChart, Line, LabelList,
   RadialBarChart, RadialBar, PolarAngleAxis,
 } from "recharts";
 import {
@@ -1412,48 +1412,26 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
                 {ehConsolidado ? "Custos por Área" : areaAtiva === "MANUTENCAO" ? "Distribuição por Tipo de Manutenção" : "Distribuição por Categoria"}
               </h3>
-              <div className="h-[220px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  {ehConsolidado ? (
-                    <BarChart data={custosPorArea} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
-                      <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
-                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={90} />
-                      <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} cursor="pointer" onClick={(d: any) => toggleFiltroTipo(d.chave)}>
-                        <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
-                        {custosPorArea.map((entry, i) => (
-                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  ) : (
-                    <PieChart>
-                      <Pie
-                        data={distribuicaoTipo}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={55}
-                        outerRadius={85}
-                        paddingAngle={3}
-                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                        labelLine={false}
-                        cursor="pointer"
-                        onClick={(d: any) => toggleFiltroTipo(d.chave)}
-                      >
-                        {distribuicaoTipo.map((entry, i) => (
-                          <Cell
-                            key={i}
-                            fill={CHART_COLORS[i % CHART_COLORS.length]}
-                            opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                    </PieChart>
-                  )}
-                </ResponsiveContainer>
+              <div className="h-[240px] w-full">
+                {(() => {
+                  const dadosGrafico = ehConsolidado ? custosPorArea : distribuicaoTipo;
+                  return (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dadosGrafico} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                        <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                        <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
+                        <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
+                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} cursor="pointer" onClick={(d: any) => toggleFiltroTipo(d.chave)}>
+                          <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                          {dadosGrafico.map((entry, i) => (
+                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1551,25 +1529,20 @@ export default function CustosClient({
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Peças vs Mão de Obra</h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pecasVsMaoObra}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={55}
-                      outerRadius={85}
-                      paddingAngle={3}
-                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
-                      cursor="pointer"
+                  <BarChart data={pecasVsMaoObra} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={90} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                    <Bar
+                      dataKey="value" radius={[0, 4, 4, 0]} barSize={24} cursor="pointer"
                       onClick={(d: any) => toggleFiltroTipoCusto(d.name === "Peças" ? "PECAS" : "MAO_OBRA")}
                     >
+                      <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
                       <Cell fill="#2563eb" opacity={filterTipoCusto && filterTipoCusto !== "PECAS" ? 0.3 : 1} />
                       <Cell fill="#f59e0b" opacity={filterTipoCusto && filterTipoCusto !== "MAO_OBRA" ? 0.3 : 1} />
-                    </Pie>
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </PieChart>
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
