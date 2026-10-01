@@ -12,7 +12,7 @@ import { MultiSelect } from "@/components/MultiSelect";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
-  RadialBarChart, RadialBar, PolarAngleAxis, Treemap,
+  RadialBarChart, RadialBar, PolarAngleAxis,
 } from "recharts";
 import {
   CustoManutencao, StatusCusto, TipoManutencaoCusto, AreaCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
@@ -55,31 +55,6 @@ function StatusBadge({ status }: { status: StatusCusto }) {
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap", STATUS_BADGE[status])}>
       {STATUS_LABEL[status]}
     </span>
-  );
-}
-
-// Célula custom do Treemap "Custos por Natureza Financeira" — o conteúdo padrão do Recharts
-// não escreve o nome/valor dentro do retângulo, então desenha isso à mão (só quando a célula
-// é grande o bastante pro texto caber sem vazar).
-function TreemapCelula(props: any) {
-  const { x, y, width, height, fill } = props;
-  // O Recharts chama esse content renderer também pro nó-raiz implícito do treemap (que não
-  // tem name/size/fill de verdade) — sem essa defesa, "width"/"height" vêm undefined,
-  // "undefined < 4" dá falso (não entra no guard) e o acesso a "name.length" quebra a tela
-  // inteira com "Cannot read properties of undefined".
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 4 || height < 4) return null;
-  const rotulo = typeof props.name === "string" ? props.name : "";
-  const maxChars = Math.max(4, Math.floor(width / 6.5));
-  const mostrarTexto = width > 55 && height > 28 && rotulo.length > 0;
-  return (
-    <g>
-      <rect x={x} y={y} width={width} height={height} style={{ fill: fill || "#94a3b8", stroke: "#fff", strokeWidth: 2 }} />
-      {mostrarTexto && (
-        <text x={x + 6} y={y + 16} fill="#fff" fontSize={10} fontWeight={700}>
-          {rotulo.length > maxChars ? `${rotulo.slice(0, maxChars - 1)}…` : rotulo}
-        </text>
-      )}
-    </g>
   );
 }
 
@@ -405,7 +380,9 @@ export default function CustosClient({
       const total = Number(c.pecas) + Number(c.mao_obra);
       porArea.set(c.area, (porArea.get(c.area) || 0) + total);
     });
-    return Array.from(porArea.entries()).map(([area, value]) => ({ chave: area, name: AREA_LABEL[area], value }));
+    return Array.from(porArea.entries())
+      .map(([area, value]) => ({ chave: area, name: AREA_LABEL[area], value }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredData, ehConsolidado]);
 
   const topVeiculos = useMemo(() => {
@@ -1437,30 +1414,45 @@ export default function CustosClient({
               </h3>
               <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={ehConsolidado ? custosPorArea : distribuicaoTipo}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={55}
-                      outerRadius={85}
-                      paddingAngle={3}
-                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
-                      cursor="pointer"
-                      onClick={(d: any) => toggleFiltroTipo(d.chave)}
-                    >
-                      {(ehConsolidado ? custosPorArea : distribuicaoTipo).map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </PieChart>
+                  {ehConsolidado ? (
+                    <BarChart data={custosPorArea} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                      <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={90} />
+                      <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} cursor="pointer" onClick={(d: any) => toggleFiltroTipo(d.chave)}>
+                        <LabelList dataKey="value" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                        {custosPorArea.map((entry, i) => (
+                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  ) : (
+                    <PieChart>
+                      <Pie
+                        data={distribuicaoTipo}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={55}
+                        outerRadius={85}
+                        paddingAngle={3}
+                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                        labelLine={false}
+                        cursor="pointer"
+                        onClick={(d: any) => toggleFiltroTipo(d.chave)}
+                      >
+                        {distribuicaoTipo.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill={CHART_COLORS[i % CHART_COLORS.length]}
+                            opacity={filterTipo && filterTipo !== entry.chave ? 0.35 : 1}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
@@ -1740,11 +1732,20 @@ export default function CustosClient({
           {ehConsolidado && custosPorNatureza.length > 0 && (
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Natureza Financeira (Todas as Áreas)</h3>
-              <div className="h-[280px] w-full">
+              <div className="w-full" style={{ height: Math.max(220, custosPorNatureza.length * 34) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <Treemap data={custosPorNatureza} dataKey="size" nameKey="name" stroke="#fff" content={<TreemapCelula />}>
-                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
-                  </Treemap>
+                  <BarChart data={custosPorNatureza} layout="vertical" margin={{ left: 0, right: 70, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                    <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={200} />
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
+                    <Bar dataKey="size" radius={[0, 4, 4, 0]} barSize={16}>
+                      <LabelList dataKey="size" position="right" formatter={(v: number) => formatarMoeda(v)} style={{ fontSize: 10, fill: "#52525b" }} />
+                      {custosPorNatureza.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill || CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
