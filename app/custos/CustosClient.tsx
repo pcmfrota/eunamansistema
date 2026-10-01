@@ -12,6 +12,7 @@ import { MultiSelect } from "@/components/MultiSelect";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, LabelList,
+  RadialBarChart, RadialBar, PolarAngleAxis, Treemap,
 } from "recharts";
 import {
   CustoManutencao, StatusCusto, TipoManutencaoCusto, AreaCusto, Fornecedor, ParcelaCartao, StatusParcela, HistoricoCusto, AcaoHistorico,
@@ -54,6 +55,25 @@ function StatusBadge({ status }: { status: StatusCusto }) {
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap", STATUS_BADGE[status])}>
       {STATUS_LABEL[status]}
     </span>
+  );
+}
+
+// Célula custom do Treemap "Custos por Natureza Financeira" — o conteúdo padrão do Recharts
+// não escreve o nome/valor dentro do retângulo, então desenha isso à mão (só quando a célula
+// é grande o bastante pro texto caber sem vazar).
+function TreemapCelula({ x, y, width, height, name, fill }: any) {
+  if (width < 4 || height < 4) return null;
+  const mostrarTexto = width > 55 && height > 28;
+  const maxChars = Math.max(4, Math.floor(width / 6.5));
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} style={{ fill, stroke: "#fff", strokeWidth: 2 }} />
+      {mostrarTexto && (
+        <text x={x + 6} y={y + 16} fill="#fff" fontSize={10} fontWeight={700}>
+          {name.length > maxChars ? `${name.slice(0, maxChars - 1)}…` : name}
+        </text>
+      )}
+    </g>
   );
 }
 
@@ -654,6 +674,60 @@ export default function CustosClient({
       return true;
     });
   }, [parcelamentosData, buscaParcelamento, searchTerm, filterPlaca, filterTipo, filterFornecedor, filterStatus, areaAtiva]);
+
+  // Pontualidade: usa os mesmos boletos/parcelas da aba Faturas & Parcelamentos (únicas linhas
+  // com um vencimento de verdade pra comparar) — por isso ignora o filtro de Mês/Ano do topo
+  // igual à própria aba, senão "atrasado" sumiria assim que o mês mudasse.
+  const pontualidadePagamentos = useMemo(() => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    let emDia = 0, atrasado = 0;
+    parcelamentosFiltrados.forEach((l) => {
+      if (l.status === "PAGO") emDia++;
+      else if (l.mes < hoje) atrasado++;
+      else emDia++;
+    });
+    const total = emDia + atrasado;
+    return { emDia, atrasado, total, percentual: total ? Math.round((emDia / total) * 100) : 100 };
+  }, [parcelamentosFiltrados]);
+
+  // Comparativo entre anos — de propósito usa custosDaArea (só a área, sem o resto dos
+  // filtros) em vez de filteredData, senão o filtro de Mês/Ano do topo reduziria a
+  // comparação a um único mês de um único ano.
+  const comparativoAnual = useMemo(() => {
+    const anos = Array.from(new Set(custosDaArea.map((c) => c.data?.slice(0, 4)).filter(Boolean))).sort() as string[];
+    const porMes = new Map<string, Record<string, number>>();
+    custosDaArea.forEach((c) => {
+      const [ano, mes] = (c.data || "").split("-");
+      if (!ano || !mes) return;
+      if (!porMes.has(mes)) porMes.set(mes, {});
+      const registro = porMes.get(mes)!;
+      const total = Number(c.pecas) + Number(c.mao_obra);
+      registro[ano] = (registro[ano] || 0) + total;
+    });
+    const linhas = MESES.map((nome, i) => {
+      const chave = String(i + 1).padStart(2, "0");
+      return { mes: nome.slice(0, 3), ...(porMes.get(chave) || {}) };
+    });
+    return { anos, linhas };
+  }, [custosDaArea]);
+
+  // Natureza financeira (treemap): categoria/tipo de TODAS as áreas misturadas — só existe
+  // de verdade no Consolidado, já que em uma área só isso é o mesmo que a Distribuição acima.
+  const custosPorNatureza = useMemo(() => {
+    if (!ehConsolidado) return [];
+    const porNatureza = new Map<string, number>();
+    filteredData.forEach((c) => {
+      const nome = c.area === "MANUTENCAO"
+        ? `Manutenção — ${c.tipo_manutencao}`
+        : `${AREA_LABEL[c.area]} — ${CATEGORIAS_POR_AREA[c.area].find((cat) => cat.value === c.categoria)?.label || "Outros"}`;
+      const total = Number(c.pecas) + Number(c.mao_obra);
+      porNatureza.set(nome, (porNatureza.get(nome) || 0) + total);
+    });
+    return Array.from(porNatureza.entries())
+      .map(([name, size], i) => ({ name, size, fill: CHART_COLORS[i % CHART_COLORS.length] }))
+      .sort((a, b) => b.size - a.size)
+      .slice(0, 12);
+  }, [filteredData, ehConsolidado]);
 
   async function toggleStatusParcela(linha: LinhaParcelamento) {
     if (isVisitante) return;
@@ -1286,9 +1360,10 @@ export default function CustosClient({
         </div>
       ) : viewTab === "dashboard" ? (
         <div id="custos-dashboard-capture" className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3">
             {[
               { label: "Total Geral no Período", valor: kpis.totalGeral, cor: "bg-zinc-600", tendencia: tendenciaGasto },
+              { label: "Qtd. de Lançamentos", valor: filteredData.length, cor: "bg-slate-500", qtd: true },
               { label: "Total Pago", valor: kpis.totalPago, cor: "bg-emerald-600" },
               { label: "Aguardando Pagamento", valor: kpis.totalAgPagamento, cor: "bg-red-600" },
               { label: "Total Faturado", valor: kpis.totalFaturado, cor: "bg-blue-600" },
@@ -1302,7 +1377,7 @@ export default function CustosClient({
                 <div className="flex flex-col justify-between py-0.5">
                   <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{kpi.label}</p>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <p className="text-2xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight">{formatarMoeda(kpi.valor)}</p>
+                    <p className="text-2xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight">{kpi.qtd ? kpi.valor : formatarMoeda(kpi.valor)}</p>
                     {kpi.tendencia && (
                       <span className={cn("flex items-center gap-0.5 text-[10px] font-bold", kpi.tendencia.subiu ? "text-red-500" : "text-emerald-500")}>
                         {kpi.tendencia.subiu ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
@@ -1598,6 +1673,76 @@ export default function CustosClient({
               )}
             </div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Pontualidade de Pagamentos</h3>
+              <p className="text-[10px] text-zinc-400 mb-1">Boletos e parcelas de cartão com vencimento — mesma base da aba Faturas & Parcelamentos.</p>
+              <div className="relative h-[170px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart
+                    data={[{ name: "Pontualidade", value: pontualidadePagamentos.percentual }]}
+                    innerRadius="72%" outerRadius="100%" startAngle={180} endAngle={0} barSize={18}
+                  >
+                    <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                    <RadialBar
+                      dataKey="value"
+                      cornerRadius={10}
+                      background
+                      fill={pontualidadePagamentos.percentual >= 80 ? "#16a34a" : pontualidadePagamentos.percentual >= 50 ? "#f59e0b" : "#dc2626"}
+                    />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pt-6 pointer-events-none">
+                  <span className="text-3xl font-black text-zinc-800 dark:text-zinc-100">{pontualidadePagamentos.percentual}%</span>
+                  <span className="text-[10px] text-zinc-500 uppercase font-bold">Em dia</span>
+                </div>
+              </div>
+              <div className="flex justify-center gap-4 text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" /> {pontualidadePagamentos.emDia} em dia
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-red-600 dark:text-red-400">
+                  <span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> {pontualidadePagamentos.atrasado} atrasado(s)
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Comparativo Mensal entre Anos</h3>
+              <div className="h-[220px] w-full">
+                {comparativoAnual.anos.length < 2 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-zinc-400 text-center px-4">Precisa de dados de mais de um ano pra comparar.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={comparativoAnual.linhas} margin={{ left: 5, right: 10, top: 5, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={58} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      {comparativoAnual.anos.map((ano, i) => (
+                        <Bar key={ano} dataKey={ano} name={ano} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {ehConsolidado && custosPorNatureza.length > 0 && (
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">Custos por Natureza Financeira (Todas as Áreas)</h3>
+              <div className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <Treemap data={custosPorNatureza} dataKey="size" nameKey="name" stroke="#fff" content={<TreemapCelula />}>
+                    <Tooltip formatter={(v: number) => formatarMoeda(v)} />
+                  </Treemap>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 
