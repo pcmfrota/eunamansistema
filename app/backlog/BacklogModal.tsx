@@ -94,11 +94,12 @@ export default function BacklogModal({
   useEffect(() => {
     if (editData) {
       setForm(editData)
-    } else if (!form.data_evidencia) {
+    } else {
       // Garantir data atual se for novo e estiver vazio
-      setForm(prev => ({ ...prev, data_evidencia: getCurrentLocalDatetime() }))
+      setForm(prev => (prev.data_evidencia ? prev : { ...prev, data_evidencia: getCurrentLocalDatetime() }))
     }
-  }, [editData, setForm, form.data_evidencia])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData, setForm])
 
   // Auto-preencher data de conclusão ao encerrar
   useEffect(() => {
@@ -345,11 +346,11 @@ export default function BacklogModal({
                               className={cn(inputCls, "flex-1 font-mono")}
                               type="datetime-local"
                               value={formatToDatetimeLocal(form.data_evidencia)}
-                              onChange={e => setForm({...form, data_evidencia: e.target.value})}
+                              onChange={e => setForm(prev => ({...prev, data_evidencia: e.target.value}))}
                            />
                            <button
                               type="button"
-                              onClick={() => setForm({...form, data_evidencia: getCurrentLocalDatetime()})}
+                              onClick={() => setForm(prev => ({...prev, data_evidencia: getCurrentLocalDatetime()}))}
                               className="px-3 py-3 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-zinc-600 dark:text-zinc-300 hover:text-indigo-600 rounded-xl text-xs font-black uppercase tracking-wider border border-zinc-200 dark:border-zinc-700 transition-colors shrink-0"
                               title="Inserir data e hora atual"
                            >
