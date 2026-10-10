@@ -181,9 +181,17 @@ export async function getEquipamentosParaAbastecimento(): Promise<{ id: string; 
 export async function getMaquinasPorModulo(moduloId: string | null): Promise<MaquinaSuzano[]> {
   if (!moduloId) return [];
   const supabase = createClient();
+
+  // Gruas (GRU-xxxx) não pertencem a um módulo de Carregamento específico — aparecem nos
+  // 4 (Carregamento I/II/III/Terceiro), por isso ficam com modulo_id nulo no cadastro.
+  const { data: modulo } = await supabase.from("insumos_modulos").select("codigo").eq("id", moduloId).maybeSingle();
+  const ehCarregamento = modulo?.codigo?.startsWith("CARREG_");
+
   const { data } = await supabase
     .from("insumos_maquinas_suzano").select("*")
-    .eq("modulo_id", moduloId).eq("ativo", true).order("codigo");
+    .eq("ativo", true)
+    .or(ehCarregamento ? `modulo_id.eq.${moduloId},tipo.eq.GRU` : `modulo_id.eq.${moduloId}`)
+    .order("codigo");
   return data || [];
 }
 
