@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Fuel, Search, Truck, Clock, Droplets } from "lucide-react";
+import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Comboio, Modulo, Material, Impedimento, FichaCompleta,
@@ -9,6 +9,7 @@ import {
 } from "./actions";
 import FichaAbastecimentoWizard from "./FichaAbastecimentoWizard";
 import RecargaModal from "./RecargaModal";
+import FichasLista from "./FichasLista";
 
 export default function InsumosClient({
   initialComboios, modulos, materiais, impedimentos, equipamentos, error,
@@ -26,6 +27,7 @@ export default function InsumosClient({
   const [carregandoId, setCarregandoId] = useState<string | null>(null);
   const [erroAbrir, setErroAbrir] = useState<string | null>(null);
   const [comboioRecarga, setComboioRecarga] = useState<Comboio | null>(null);
+  const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS">("LANCAR");
 
   const comboiosFiltrados = useMemo(() => {
     const termo = busca.toLowerCase().trim();
@@ -77,9 +79,20 @@ export default function InsumosClient({
         <div>
           <h1 className="text-xl font-black text-zinc-900 dark:text-zinc-50">Controle de Insumos</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Selecione o comboio pra abrir ou continuar a Ficha de Abastecimento.
+            {abaPrincipal === "LANCAR" ? "Selecione o comboio pra abrir ou continuar a Ficha de Abastecimento." : "Fichas de Abastecimento e Recarga já lançadas."}
           </p>
         </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={() => setAbaPrincipal("LANCAR")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", abaPrincipal === "LANCAR" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+          <LayoutGrid size={13} /> Novo Lançamento
+        </button>
+        <button onClick={() => setAbaPrincipal("FICHAS")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", abaPrincipal === "FICHAS" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+          <ListChecks size={13} /> Fichas Lançadas
+        </button>
       </div>
 
       {error && (
@@ -87,6 +100,11 @@ export default function InsumosClient({
           Erro ao carregar comboios: {error}
         </div>
       )}
+
+      {abaPrincipal === "FICHAS" ? (
+        <FichasLista comboios={comboios} modulos={modulos} materiais={materiais} impedimentos={impedimentos} />
+      ) : (
+      <>
       {erroAbrir && (
         <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-sm text-red-700 dark:text-red-400">
           {erroAbrir}
@@ -164,6 +182,8 @@ export default function InsumosClient({
           materiais={materiais}
           onClose={() => setComboioRecarga(null)}
         />
+      )}
+      </>
       )}
     </div>
   );

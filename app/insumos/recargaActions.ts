@@ -193,3 +193,59 @@ export async function registrarEntradaSkid(
   revalidatePath("/insumos");
   return { success: true };
 }
+
+// ─── Lista e detalhe ────────────────────────────────────────────────────────
+
+export type FichaRecargaResumo = {
+  id: string; numero_sequencial: number; data: string; placa: string;
+  origem_tipo: OrigemRecarga; origem_label: string; status: string; aplicado: boolean;
+};
+
+export async function getFichasRecarga(filtro: { dataInicio?: string; dataFim?: string; equipamentoId?: string } = {}): Promise<FichaRecargaResumo[]> {
+  const supabase = createClient();
+  let query = supabase
+    .from("insumos_fichas_recarga")
+    .select("id, numero_sequencial, data, status, origem_tipo, origem_deposito, origem_outro_texto, aplicado_em_ficha_id, equipamentos!insumos_fichas_recarga_equipamento_id_fkey(placa), origem_skid:equipamentos!insumos_fichas_recarga_origem_skid_id_fkey(placa)")
+    .order("data", { ascending: false }).order("numero_sequencial", { ascending: false }).limit(200);
+
+  if (filtro.dataInicio) query = query.gte("data", filtro.dataInicio);
+  if (filtro.dataFim) query = query.lte("data", filtro.dataFim);
+  if (filtro.equipamentoId) query = query.eq("equipamento_id", filtro.equipamentoId);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  return data.map((f: any) => {
+    const origemLabel = f.origem_tipo === "SKID" ? (f.origem_skid?.placa || "Skid")
+      : f.origem_tipo === "ALMOXARIFADO" ? (f.origem_deposito || "Almoxarifado")
+      : f.origem_tipo === "FORNECEDOR" ? "Fornecedor" : (f.origem_outro_texto || "Outro");
+    return {
+      id: f.id, numero_sequencial: f.numero_sequencial, data: f.data,
+      placa: f.equipamentos?.placa || "-", origem_tipo: f.origem_tipo, origem_label: origemLabel,
+      status: f.status, aplicado: !!f.aplicado_em_ficha_id,
+    };
+  });
+}
+
+export type RecargaCompleta = {
+  recarga: RecargaInput & { id: string; numero_sequencial: number; status: string; aplicado_em_ficha_id: string | null; criado_por_nome: string | null };
+  itensDetalhados: { material_id: string; material_nome: string; unidade: string; quantidade: number; req_nf: string | null; tanque_diesel: number | null }[];
+};
+
+export async function getRecarga(recargaId: string): Promise<{ recarga?: RecargaCompleta; error?: string }> {
+  const supabase = createClient();
+  const { data: recarga } = await supabase.from("insumos_fichas_recarga").select("*").eq("id", recargaId).maybeSingle();
+  if (!recarga) return { error: "Recarga não encontrada." };
+
+  const { data: itens } = await supabase.from("insumos_recarga_itens").select("material_id, quantidade, req_nf, tanque_diesel, insumos_materiais(material, unidade)").eq("recarga_id", recargaId);
+
+  return {
+    recarga: {
+      recarga: { ...recarga, itens: [] },
+      itensDetalhados: (itens || []).map((i: any) => ({
+        material_id: i.material_id, material_nome: i.insumos_materiais?.material || "-", unidade: i.insumos_materiais?.unidade || "",
+        quantidade: Number(i.quantidade), req_nf: i.req_nf, tanque_diesel: i.tanque_diesel,
+      })),
+    },
+  };
+}

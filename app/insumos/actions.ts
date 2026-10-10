@@ -324,11 +324,10 @@ export async function atualizarFichaInsumo(
   patch: Partial<Pick<FichaInsumo, "acumulado_registradora_inicial" | "quantidade_inicial" | "entrou" | "acumulado_registradora_final">>
 ): Promise<{ success?: true; error?: string }> {
   const supabase = createClient();
+  const ajusteDeSaldo = "quantidade_inicial" in patch || "acumulado_registradora_inicial" in patch;
 
-  if (("quantidade_inicial" in patch || "acumulado_registradora_inicial" in patch)) {
-    const usuario = await getUsuarioAtual(supabase);
-    if (!usuario.isAdmin) return { error: "Só o administrador pode ajustar o saldo inicial." };
-  }
+  const usuario = await getUsuarioAtual(supabase);
+  if (ajusteDeSaldo && !usuario.isAdmin) return { error: "Só o administrador pode ajustar o saldo inicial." };
 
   const { data: atual } = await supabase.from("insumos_ficha_insumos").select("*").eq("ficha_id", fichaId).eq("insumo_tipo", insumoTipo).maybeSingle();
   if (!atual) return { error: "Insumo não encontrado na ficha." };
@@ -340,8 +339,105 @@ export async function atualizarFichaInsumo(
     .update({ ...patch, restou, updated_at: new Date().toISOString() })
     .eq("id", atual.id);
   if (error) return { error: error.message };
+
+  if (ajusteDeSaldo) {
+    await supabase.from("insumos_ficha_historico").insert({
+      tipo_ficha: "ABASTECIMENTO", ficha_id: fichaId, acao: "AJUSTE_SALDO_INICIAL",
+      dados_antes: { insumo_tipo: insumoTipo, quantidade_inicial: atual.quantidade_inicial, acumulado_registradora_inicial: atual.acumulado_registradora_inicial },
+      dados_depois: { insumo_tipo: insumoTipo, ...patch },
+      usuario_id: usuario.id, usuario_nome: usuario.nome,
+    });
+  }
+
   revalidatePath("/insumos");
   return { success: true };
+}
+
+// ─── Lista, detalhe, histórico e reabertura ─────────────────────────────────
+
+export type FiltroFichas = {
+  dataInicio?: string; dataFim?: string; moduloId?: string; equipamentoId?: string; turno?: string; status?: StatusFicha;
+};
+
+export type FichaAbastecimentoResumo = {
+  id: string; numero_sequencial: number; data: string; turno: string; status: StatusFicha;
+  placa: string; modulo_nome: string | null; motorista_nome: string | null; dieselSaido: number;
+};
+
+export async function getFichasAbastecimento(filtro: FiltroFichas = {}): Promise<FichaAbastecimentoResumo[]> {
+  const supabase = createClient();
+  let query = supabase
+    .from("insumos_fichas_abastecimento")
+    .select("id, numero_sequencial, data, turno, status, motorista_nome, equipamentos(placa), insumos_modulos(nome)")
+    .order("data", { ascending: false }).order("numero_sequencial", { ascending: false }).limit(200);
+
+  if (filtro.dataInicio) query = query.gte("data", filtro.dataInicio);
+  if (filtro.dataFim) query = query.lte("data", filtro.dataFim);
+  if (filtro.moduloId) query = query.eq("modulo_id", filtro.moduloId);
+  if (filtro.equipamentoId) query = query.eq("equipamento_id", filtro.equipamentoId);
+  if (filtro.turno) query = query.eq("turno", filtro.turno);
+  if (filtro.status) query = query.eq("status", filtro.status);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  const ids = data.map((f: any) => f.id);
+  const { data: insumosDiesel } = ids.length
+    ? await supabase.from("insumos_ficha_insumos").select("ficha_id, saiu").in("ficha_id", ids).in("insumo_tipo", ["DIESEL_T1", "DIESEL_T2"])
+    : { data: [] as any[] };
+  const dieselPorFicha = new Map<string, number>();
+  (insumosDiesel || []).forEach((i: any) => dieselPorFicha.set(i.ficha_id, (dieselPorFicha.get(i.ficha_id) || 0) + Number(i.saiu || 0)));
+
+  return data.map((f: any) => ({
+    id: f.id, numero_sequencial: f.numero_sequencial, data: f.data, turno: f.turno, status: f.status,
+    placa: f.equipamentos?.placa || "-", modulo_nome: f.insumos_modulos?.nome || null,
+    motorista_nome: f.motorista_nome, dieselSaido: dieselPorFicha.get(f.id) || 0,
+  }));
+}
+
+export type HistoricoEntry = { id: string; acao: string; dados_antes: any; dados_depois: any; usuario_nome: string | null; created_at: string };
+
+export async function getHistoricoFicha(tipoFicha: "ABASTECIMENTO" | "RECARGA", fichaId: string): Promise<HistoricoEntry[]> {
+  const supabase = createClient();
+  const { data } = await supabase.from("insumos_ficha_historico").select("*")
+    .eq("tipo_ficha", tipoFicha).eq("ficha_id", fichaId).order("created_at", { ascending: false });
+  return data || [];
+}
+
+// Reabertura: só admin, e sempre registrada no histórico. Não recalcula a cadeia de saldo
+// de fichas posteriores desse comboio — se já existir uma ficha mais nova finalizada, o
+// administrador precisa revisar manualmente o saldo herdado dela depois de reabrir esta.
+export async function reabrirFicha(fichaId: string): Promise<{ success?: true; aviso?: string; error?: string }> {
+  const supabase = createClient();
+  const usuario = await getUsuarioAtual(supabase);
+  if (!usuario.isAdmin) return { error: "Só o administrador pode reabrir uma ficha finalizada." };
+
+  const { data: ficha } = await supabase.from("insumos_fichas_abastecimento").select("equipamento_id, data, status").eq("id", fichaId).maybeSingle();
+  if (!ficha) return { error: "Ficha não encontrada." };
+  if (ficha.status === "RASCUNHO") return { error: "Essa ficha já está em rascunho." };
+
+  const { data: rascunhoExistente } = await supabase.from("insumos_fichas_abastecimento").select("id")
+    .eq("equipamento_id", ficha.equipamento_id).eq("status", "RASCUNHO").maybeSingle();
+  if (rascunhoExistente) return { error: "Esse comboio já tem outra ficha em rascunho. Finalize-a antes de reabrir esta." };
+
+  const { data: maisRecente } = await supabase.from("insumos_fichas_abastecimento").select("id")
+    .eq("equipamento_id", ficha.equipamento_id).neq("id", fichaId).gt("data", ficha.data)
+    .order("data", { ascending: false }).limit(1).maybeSingle();
+
+  const { error } = await supabase.from("insumos_fichas_abastecimento").update({ status: "RASCUNHO" }).eq("id", fichaId);
+  if (error) return { error: error.message };
+
+  await supabase.from("insumos_ficha_historico").insert({
+    tipo_ficha: "ABASTECIMENTO", ficha_id: fichaId, acao: "REABERTURA",
+    dados_antes: { status: ficha.status }, dados_depois: { status: "RASCUNHO" },
+    usuario_id: usuario.id, usuario_nome: usuario.nome,
+  });
+
+  revalidatePath("/insumos");
+  return {
+    success: true,
+    aviso: maisRecente ? "Existe uma ficha mais recente desse comboio já finalizada — revise o saldo inicial dela manualmente depois de salvar esta." : undefined,
+  };
 }
 
 // ─── Linhas de abastecimento por equipamento ───────────────────────────────
