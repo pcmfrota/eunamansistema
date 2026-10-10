@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarAtualizacaoHorimetro, inferUnidadeHorimetro } from "@/lib/horimetro-log";
 import { InsumoTipo, INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import { aplicarRecargasPendentes } from "./recargaActions";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export type Comboio = {
 export type Modulo = { id: string; codigo: string; nome: string; centro: string | null; deposito: string | null; controle: string | null };
 export type Material = { id: string; codigo: number | null; ni: string; referencia: string; material: string; unidade: string; aplicacao: string };
 export type Impedimento = { id: string; codigo: string | null; descricao: string };
+export type MaquinaSuzano = { id: string; codigo: string; modulo_id: string | null; frente: "HV" | "FW" | null; tipo: string | null; origem: "CADASTRO" | "MOTORISTA"; foto_url: string | null };
 
 export type FichaInsumo = {
   id: string;
@@ -174,6 +176,42 @@ export async function getEquipamentosParaAbastecimento(): Promise<{ id: string; 
   return data || [];
 }
 
+// ─── Cadastro de Máquinas Suzano ────────────────────────────────────────────
+
+export async function getMaquinasPorModulo(moduloId: string | null): Promise<MaquinaSuzano[]> {
+  if (!moduloId) return [];
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("insumos_maquinas_suzano").select("*")
+    .eq("modulo_id", moduloId).eq("ativo", true).order("codigo");
+  return data || [];
+}
+
+// Cadastro em campo: o motorista procura a máquina, não encontra na lista do módulo, e
+// cadastra na hora — só que precisa de uma foto da placa/equipamento pra confirmar depois
+// que o lançamento foi certo (combinado explicitamente com o usuário).
+export async function criarMaquinaAdHoc(
+  codigo: string, moduloId: string | null, fotoUrl: string
+): Promise<{ maquina?: MaquinaSuzano; error?: string }> {
+  if (!codigo.trim()) return { error: "Informe o código/placa da máquina." };
+  if (!fotoUrl) return { error: "A foto da placa/equipamento é obrigatória pra cadastrar uma máquina nova." };
+
+  const supabase = createClient();
+  const usuario = await getUsuarioAtual(supabase);
+
+  const { data, error } = await supabase
+    .from("insumos_maquinas_suzano")
+    .insert({
+      codigo: codigo.trim().toUpperCase(), modulo_id: moduloId, origem: "MOTORISTA",
+      foto_url: fotoUrl, criado_por: usuario.id, criado_por_nome: usuario.nome,
+    })
+    .select("*").single();
+
+  if (error) return { error: error.code === "23505" ? "Já existe uma máquina cadastrada com esse código." : error.message };
+  revalidatePath("/insumos");
+  return { maquina: data };
+}
+
 // ─── Abrir/criar ficha ──────────────────────────────────────────────────────
 
 async function buscarFichaCompleta(supabase: any, fichaId: string): Promise<FichaCompleta | null> {
@@ -233,6 +271,10 @@ export async function abrirOuCriarFicha(equipamentoId: string): Promise<{ ficha?
     entrou: 0, saiu: 0, restou: insumosAnteriores[tipo]?.restou ?? 0,
   }));
   await supabase.from("insumos_ficha_insumos").insert(linhasInsumos);
+
+  // Aplica recargas que chegaram pro comboio sem ter ficha aberta na hora (ficaram
+  // "pendentes" esperando a próxima ficha — ver app/insumos/recargaActions.ts).
+  await aplicarRecargasPendentes(supabase, equipamentoId, novaFicha.id);
 
   const ficha = await buscarFichaCompleta(supabase, novaFicha.id);
   revalidatePath("/insumos");

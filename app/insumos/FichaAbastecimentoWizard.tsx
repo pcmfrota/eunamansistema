@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
+import { createClient } from "@/utils/supabase/client";
 import {
-  FichaCompleta, Comboio, Modulo, Material, Impedimento,
+  FichaCompleta, Comboio, Modulo, Material, Impedimento, MaquinaSuzano,
   LinhaAbastecimento, FechamentoPayload,
   atualizarCabecalhoFicha, atualizarFichaInsumo, salvarLinhaAbastecimento, excluirLinhaAbastecimento,
-  finalizarFicha, getFicha,
+  finalizarFicha, getFicha, getMaquinasPorModulo, criarMaquinaAdHoc,
 } from "./actions";
 import { InsumoTipo, INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import RecargaModal from "./RecargaModal";
+
+const ADICIONAR_MAQUINA = "__ADICIONAR__";
 
 const ETAPAS = [
   "Turno e Data", "Motorista/Lubrificador", "Módulo e Horímetro",
@@ -267,14 +271,11 @@ export default function FichaAbastecimentoWizard({
         )}
 
         {etapa === 5 && (
-          <AbastecimentosEtapa
-            ficha={ficha} equipamentos={equipamentos} temTanque2={temTanque2}
-            onMudou={refetchFicha}
-          />
+          <AbastecimentosEtapa ficha={ficha} temTanque2={temTanque2} onMudou={refetchFicha} />
         )}
 
         {etapa === 6 && (
-          <EntradasEtapa ficha={ficha} temTanque2={temTanque2} onAjustado={refetchFicha} />
+          <EntradasEtapa ficha={ficha} comboio={comboio} modulos={modulos} materiais={materiais} temTanque2={temTanque2} onAjustado={refetchFicha} />
         )}
 
         {etapa === 7 && (
@@ -416,11 +417,22 @@ function linhaVazia(fichaId: string): Partial<LinhaAbastecimento> {
 }
 
 function AbastecimentosEtapa({
-  ficha, equipamentos, temTanque2, onMudou,
-}: { ficha: FichaCompleta; equipamentos: { id: string; placa: string; tipo: string }[]; temTanque2: boolean; onMudou: () => void }) {
+  ficha, temTanque2, onMudou,
+}: { ficha: FichaCompleta; temTanque2: boolean; onMudou: () => void }) {
   const [novaLinha, setNovaLinha] = useState<Partial<LinhaAbastecimento> | null>(null);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [erroLinha, setErroLinha] = useState<string | null>(null);
+  const [maquinas, setMaquinas] = useState<MaquinaSuzano[]>([]);
+
+  useEffect(() => {
+    let ativo = true;
+    getMaquinasPorModulo(ficha.ficha.modulo_id).then((m) => { if (ativo) setMaquinas(m); });
+    return () => { ativo = false; };
+  }, [ficha.ficha.modulo_id]);
+
+  function adicionarMaquinaLocal(m: MaquinaSuzano) {
+    setMaquinas((prev) => [...prev, m].sort((a, b) => a.codigo.localeCompare(b.codigo)));
+  }
 
   async function salvar(linha: Partial<LinhaAbastecimento>, chaveLocal: string) {
     setSalvandoId(chaveLocal);
@@ -448,18 +460,23 @@ function AbastecimentosEtapa({
 
   return (
     <div className="space-y-3">
+      {!ficha.ficha.modulo_id && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+          Selecione o módulo na Etapa 3 pra ver a lista de máquinas do Cadastro Suzano.
+        </div>
+      )}
       {erroLinha && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
           {erroLinha}
         </div>
       )}
       {ficha.linhas.map((linha) => (
-        <LinhaCard key={linha.id} linha={linha} equipamentos={equipamentos} temTanque2={temTanque2}
-          salvando={salvandoId === linha.id} onSalvar={(l) => salvar(l, linha.id)} onExcluir={() => excluir(linha.id)} />
+        <LinhaCard key={linha.id} linha={linha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
+          salvando={salvandoId === linha.id} onSalvar={(l) => salvar(l, linha.id)} onExcluir={() => excluir(linha.id)} onMaquinaCriada={adicionarMaquinaLocal} />
       ))}
       {novaLinha ? (
-        <LinhaCard linha={novaLinha} equipamentos={equipamentos} temTanque2={temTanque2}
-          salvando={salvandoId === "nova"} onSalvar={(l) => salvar(l, "nova")} onExcluir={() => setNovaLinha(null)} novaLinhaLabel />
+        <LinhaCard linha={novaLinha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
+          salvando={salvandoId === "nova"} onSalvar={(l) => salvar(l, "nova")} onExcluir={() => setNovaLinha(null)} novaLinhaLabel onMaquinaCriada={adicionarMaquinaLocal} />
       ) : (
         <button onClick={() => setNovaLinha(linhaVazia(ficha.ficha.id))}
           className="w-full py-3 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 text-sm font-bold flex items-center justify-center gap-2 hover:border-amber-400 hover:text-amber-600">
@@ -471,18 +488,52 @@ function AbastecimentosEtapa({
 }
 
 function LinhaCard({
-  linha, equipamentos, temTanque2, salvando, onSalvar, onExcluir, novaLinhaLabel,
+  linha, maquinas, moduloId, temTanque2, salvando, onSalvar, onExcluir, novaLinhaLabel, onMaquinaCriada,
 }: {
   linha: Partial<LinhaAbastecimento>;
-  equipamentos: { id: string; placa: string; tipo: string }[];
+  maquinas: MaquinaSuzano[];
+  moduloId: string | null;
   temTanque2: boolean;
   salvando: boolean;
   onSalvar: (l: Partial<LinhaAbastecimento>) => void;
   onExcluir: () => void;
   novaLinhaLabel?: boolean;
+  onMaquinaCriada: (m: MaquinaSuzano) => void;
 }) {
   const [draft, setDraft] = useState<Partial<LinhaAbastecimento>>(linha);
   const campo = (k: keyof LinhaAbastecimento, v: any) => setDraft((p) => ({ ...p, [k]: v }));
+
+  const [modoNovaMaquina, setModoNovaMaquina] = useState(false);
+  const [novoCodigo, setNovoCodigo] = useState("");
+  const [novaFoto, setNovaFoto] = useState<File | null>(null);
+  const [enviandoMaquina, setEnviandoMaquina] = useState(false);
+  const [erroMaquina, setErroMaquina] = useState<string | null>(null);
+
+  async function salvarMaquinaNova() {
+    if (!novoCodigo.trim()) { setErroMaquina("Informe o código/placa da máquina."); return; }
+    if (!novaFoto) { setErroMaquina("Tire uma foto da placa/equipamento — é obrigatório pra confirmar o lançamento."); return; }
+    setEnviandoMaquina(true);
+    setErroMaquina(null);
+    try {
+      const supabase = createClient();
+      const ext = novaFoto.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("insumos-fotos-maquinas").upload(fileName, novaFoto);
+      if (uploadError) throw new Error("Erro ao enviar foto: " + uploadError.message);
+      const { data: { publicUrl } } = supabase.storage.from("insumos-fotos-maquinas").getPublicUrl(fileName);
+      const result = await criarMaquinaAdHoc(novoCodigo, moduloId, publicUrl);
+      if (result.error || !result.maquina) { setErroMaquina(result.error || "Erro ao cadastrar a máquina."); return; }
+      onMaquinaCriada(result.maquina);
+      campo("equipamento_texto", result.maquina.codigo);
+      setModoNovaMaquina(false);
+      setNovoCodigo("");
+      setNovaFoto(null);
+    } catch (e: any) {
+      setErroMaquina(e.message || "Erro ao cadastrar a máquina.");
+    } finally {
+      setEnviandoMaquina(false);
+    }
+  }
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3">
@@ -498,16 +549,38 @@ function LinhaCard({
         </div>
       </div>
       <div>
-        <label className={labelCls}>Equipamento</label>
-        <input list="equipamentos-datalist" className={inputCls} value={draft.equipamento_texto || ""}
-          onChange={(e) => {
-            const texto = e.target.value;
-            const match = equipamentos.find((eq) => eq.placa === texto);
-            setDraft((p) => ({ ...p, equipamento_texto: texto, equipamento_id: match?.id || null }));
-          }} placeholder="Ex: HV-550 ou texto livre" />
-        <datalist id="equipamentos-datalist">
-          {equipamentos.map((eq) => <option key={eq.id} value={eq.placa}>{eq.tipo}</option>)}
-        </datalist>
+        <label className={labelCls}>Equipamento (Cadastro Suzano)</label>
+        {!modoNovaMaquina ? (
+          <select className={inputCls} value={draft.equipamento_texto || ""}
+            onChange={(e) => {
+              if (e.target.value === ADICIONAR_MAQUINA) { setModoNovaMaquina(true); return; }
+              campo("equipamento_texto", e.target.value);
+            }}>
+            <option value="">Selecione...</option>
+            {maquinas.map((m) => (
+              <option key={m.id} value={m.codigo}>{m.codigo}{m.origem === "MOTORISTA" ? " (cadastrada em campo)" : ""}</option>
+            ))}
+            <option value={ADICIONAR_MAQUINA}>+ Adicionar máquina não listada...</option>
+          </select>
+        ) : (
+          <div className="border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-xl p-3 space-y-2 bg-amber-50/50 dark:bg-amber-900/10">
+            <input className={inputCls} placeholder="Código/placa da máquina" value={novoCodigo} onChange={(e) => setNovoCodigo(e.target.value)} />
+            <label className="flex items-center justify-center gap-2 py-3 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 cursor-pointer bg-white dark:bg-zinc-900">
+              <Camera size={15} /> {novaFoto ? novaFoto.name : "Tirar foto da placa/equipamento *"}
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setNovaFoto(e.target.files?.[0] || null)} />
+            </label>
+            {erroMaquina && <div className="text-[11px] text-red-600">{erroMaquina}</div>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => { setModoNovaMaquina(false); setErroMaquina(null); }} className="text-xs font-bold text-zinc-500">
+                Cancelar
+              </button>
+              <button type="button" disabled={enviandoMaquina} onClick={salvarMaquinaNova}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 rounded-lg disabled:opacity-50">
+                {enviandoMaquina ? "Enviando..." : "Salvar Máquina"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -578,22 +651,41 @@ function LinhaCard({
 
 // ─── Etapa 6 — Entradas no turno ────────────────────────────────────────────
 
-function EntradasEtapa({ ficha, temTanque2, onAjustado }: { ficha: FichaCompleta; temTanque2: boolean; onAjustado: () => void }) {
+function EntradasEtapa({
+  ficha, comboio, modulos, materiais, temTanque2, onAjustado,
+}: { ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; materiais: Material[]; temTanque2: boolean; onAjustado: () => void }) {
   const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
+  const [mostrarRecarga, setMostrarRecarga] = useState(false);
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
-      <p className="text-xs text-zinc-500">Quanto cada insumo recebeu de reabastecimento/recarga neste turno.</p>
-      {tipos.map((tipo) => {
-        const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
-        return (
-          <div key={tipo} className="flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</span>
-            <input type="number" step="0.1" defaultValue={insumo?.entrou ?? 0} className="w-28 px-2 py-1.5 text-right text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950"
-              onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, tipo, { entrou: Number(e.target.value || 0) }); onAjustado(); }} />
-          </div>
-        );
-      })}
+    <div className="space-y-3">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+        <p className="text-xs text-zinc-500">
+          Quanto cada insumo recebeu de reabastecimento/recarga neste turno. Lançamentos de "+ Registrar Recarga"
+          somam aqui automaticamente.
+        </p>
+        {tipos.map((tipo) => {
+          const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
+          return (
+            <div key={tipo} className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</span>
+              <input type="number" step="0.1" defaultValue={insumo?.entrou ?? 0} className="w-28 px-2 py-1.5 text-right text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950"
+                onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, tipo, { entrou: Number(e.target.value || 0) }); onAjustado(); }} />
+            </div>
+          );
+        })}
+      </div>
+      <button onClick={() => setMostrarRecarga(true)}
+        className="w-full py-3 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/10">
+        <Droplets size={16} /> + Registrar Recarga
+      </button>
+      {mostrarRecarga && (
+        <RecargaModal
+          comboio={comboio} modulos={modulos} materiais={materiais}
+          onClose={() => setMostrarRecarga(false)}
+          onConcluida={onAjustado}
+        />
+      )}
     </div>
   );
 }

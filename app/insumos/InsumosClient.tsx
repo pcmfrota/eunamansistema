@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Fuel, Search, Truck, Clock } from "lucide-react";
+import { Fuel, Search, Truck, Clock, Droplets } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Comboio, Modulo, Material, Impedimento, FichaCompleta,
   abrirOuCriarFicha,
 } from "./actions";
 import FichaAbastecimentoWizard from "./FichaAbastecimentoWizard";
+import RecargaModal from "./RecargaModal";
 
 export default function InsumosClient({
   initialComboios, modulos, materiais, impedimentos, equipamentos, error,
@@ -24,6 +25,7 @@ export default function InsumosClient({
   const [fichaAtiva, setFichaAtiva] = useState<FichaCompleta | null>(null);
   const [carregandoId, setCarregandoId] = useState<string | null>(null);
   const [erroAbrir, setErroAbrir] = useState<string | null>(null);
+  const [comboioRecarga, setComboioRecarga] = useState<Comboio | null>(null);
 
   const comboiosFiltrados = useMemo(() => {
     const termo = busca.toLowerCase().trim();
@@ -103,50 +105,65 @@ export default function InsumosClient({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {comboiosFiltrados.map((comboio) => (
-          <button
+          <div
             key={comboio.id}
-            onClick={() => abrirComboio(comboio)}
-            disabled={carregandoId !== null}
-            className="text-left bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 hover:border-amber-400 dark:hover:border-amber-600 rounded-2xl p-5 shadow-sm transition-colors disabled:opacity-60"
+            className="bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 hover:border-amber-400 dark:hover:border-amber-600 rounded-2xl p-5 shadow-sm transition-colors"
           >
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
-                <Truck size={20} className="text-zinc-500 dark:text-zinc-400" />
+            <button onClick={() => abrirComboio(comboio)} disabled={carregandoId !== null} className="text-left w-full disabled:opacity-60">
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+                  <Truck size={20} className="text-zinc-500 dark:text-zinc-400" />
+                </div>
+                {comboio.temRascunho ? (
+                  <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider">
+                    <Clock size={11} /> Em andamento
+                  </span>
+                ) : (
+                  <span className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+                    Disponível
+                  </span>
+                )}
               </div>
-              {comboio.temRascunho ? (
-                <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider">
-                  <Clock size={11} /> Em andamento
-                </span>
-              ) : (
-                <span className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider">
-                  Disponível
-                </span>
+              <div className="text-xl font-black text-zinc-900 dark:text-zinc-50 font-mono tracking-wide">
+                {formatarPlaca(comboio.placa)}
+              </div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{comboio.modelo || "—"}</div>
+              {comboio.modulo && (
+                <div className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 uppercase font-bold tracking-wider">{comboio.modulo}</div>
               )}
-            </div>
-            <div className="text-xl font-black text-zinc-900 dark:text-zinc-50 font-mono tracking-wide">
-              {formatarPlaca(comboio.placa)}
-            </div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{comboio.modelo || "—"}</div>
-            {comboio.modulo && (
-              <div className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 uppercase font-bold tracking-wider">{comboio.modulo}</div>
-            )}
-            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-baseline justify-between">
-              <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider">Diesel atual</span>
-              <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
-                {comboio.saldoDieselAtual.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L
-              </span>
-            </div>
-            {comboio.temRascunho && comboio.rascunhoLubrificador && (
-              <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold truncate">
-                Iniciada por {comboio.rascunhoLubrificador}
+              <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-baseline justify-between">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider">Diesel atual</span>
+                <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
+                  {comboio.saldoDieselAtual.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L
+                </span>
               </div>
-            )}
-          </button>
+              {comboio.temRascunho && comboio.rascunhoLubrificador && (
+                <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold truncate">
+                  Iniciada por {comboio.rascunhoLubrificador}
+                </div>
+              )}
+            </button>
+            <button
+              onClick={() => setComboioRecarga(comboio)}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 text-[11px] font-black uppercase tracking-wider hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+            >
+              <Droplets size={13} /> Nova Recarga
+            </button>
+          </div>
         ))}
       </div>
 
       {comboiosFiltrados.length === 0 && (
         <div className="text-center py-16 text-sm text-zinc-400">Nenhum comboio encontrado.</div>
+      )}
+
+      {comboioRecarga && (
+        <RecargaModal
+          comboio={comboioRecarga}
+          modulos={modulos}
+          materiais={materiais}
+          onClose={() => setComboioRecarga(null)}
+        />
       )}
     </div>
   );
