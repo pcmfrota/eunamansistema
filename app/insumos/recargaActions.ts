@@ -249,3 +249,64 @@ export async function getRecarga(recargaId: string): Promise<{ recarga?: Recarga
     },
   };
 }
+
+// ─── Estoque & Auditoria (skid) ─────────────────────────────────────────────
+
+export type AuditoriaSkidItem = {
+  material_id: string; material_nome: string; ni: string; unidade: string;
+  saldoAtual: number; entradaPeriodo: number; saidaPeriodo: number;
+  saidaPorComboio: { placa: string; quantidade: number }[];
+  ultimaMedicao: { data: string; litros_calculados: number | null; diferenca: number } | null;
+};
+
+export async function getAuditoriaSkid(equipamentoId: string, dataInicio: string, dataFim: string): Promise<AuditoriaSkidItem[]> {
+  const supabase = createClient();
+  const { data: materiais } = await supabase.from("insumos_materiais").select("id, material, ni, unidade").eq("ativo", true).order("codigo");
+  const { data: movimentos } = await supabase.from("insumos_skid_movimentos").select("material_id, tipo, quantidade, data, origem_recarga_id").eq("equipamento_id", equipamentoId);
+  const { data: medicoes } = await supabase.from("insumos_skid_regua_medicoes").select("material_id, data, litros_calculados").eq("equipamento_id", equipamentoId).order("data", { ascending: false });
+
+  const recargaIds = Array.from(new Set((movimentos || []).map((m: any) => m.origem_recarga_id).filter(Boolean)));
+  const placaPorRecarga = new Map<string, string>();
+  if (recargaIds.length) {
+    const { data: recargas } = await supabase.from("insumos_fichas_recarga").select("id, equipamentos!insumos_fichas_recarga_equipamento_id_fkey(placa)").in("id", recargaIds);
+    (recargas || []).forEach((r: any) => placaPorRecarga.set(r.id, r.equipamentos?.placa || "-"));
+  }
+
+  return (materiais || []).map((m: any) => {
+    const movsMaterial = (movimentos || []).filter((mv: any) => mv.material_id === m.id);
+    const saldoAtual = movsMaterial.reduce((s: number, mv: any) => s + (mv.tipo === "ENTRADA" ? Number(mv.quantidade) : -Number(mv.quantidade)), 0);
+    const noPeriodo = movsMaterial.filter((mv: any) => mv.data >= dataInicio && mv.data <= dataFim);
+    const entradaPeriodo = noPeriodo.filter((mv: any) => mv.tipo === "ENTRADA").reduce((s: number, mv: any) => s + Number(mv.quantidade), 0);
+    const saidasNoPeriodo = noPeriodo.filter((mv: any) => mv.tipo === "SAIDA");
+    const saidaPeriodo = saidasNoPeriodo.reduce((s: number, mv: any) => s + Number(mv.quantidade), 0);
+
+    const porComboio = new Map<string, number>();
+    saidasNoPeriodo.forEach((mv: any) => {
+      const placa = placaPorRecarga.get(mv.origem_recarga_id) || "-";
+      porComboio.set(placa, (porComboio.get(placa) || 0) + Number(mv.quantidade));
+    });
+
+    const medicao = (medicoes || []).find((med: any) => med.material_id === m.id);
+
+    return {
+      material_id: m.id, material_nome: m.material, ni: m.ni, unidade: m.unidade,
+      saldoAtual, entradaPeriodo, saidaPeriodo,
+      saidaPorComboio: Array.from(porComboio.entries()).map(([placa, quantidade]) => ({ placa, quantidade })),
+      ultimaMedicao: medicao ? { data: medicao.data, litros_calculados: medicao.litros_calculados, diferenca: Number(medicao.litros_calculados || 0) - saldoAtual } : null,
+    };
+  });
+}
+
+export async function registrarMedicaoSkid(
+  equipamentoId: string, materialId: string, data: string, reguaCm: number | null, litrosCalculados: number | null, observacao: string | null
+): Promise<{ success?: true; error?: string }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from("insumos_skid_regua_medicoes").insert({
+    equipamento_id: equipamentoId, material_id: materialId, data, regua_cm: reguaCm, litros_calculados: litrosCalculados,
+    observacao, criado_por: user?.id || null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/insumos");
+  return { success: true };
+}

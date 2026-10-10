@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks } from "lucide-react";
+import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Comboio, Modulo, Material, Impedimento, FichaCompleta,
@@ -10,6 +10,7 @@ import {
 import FichaAbastecimentoWizard from "./FichaAbastecimentoWizard";
 import RecargaModal from "./RecargaModal";
 import FichasLista from "./FichasLista";
+import EstoqueAuditoria from "./EstoqueAuditoria";
 
 export default function InsumosClient({
   initialComboios, modulos, materiais, impedimentos, equipamentos, error,
@@ -27,7 +28,7 @@ export default function InsumosClient({
   const [carregandoId, setCarregandoId] = useState<string | null>(null);
   const [erroAbrir, setErroAbrir] = useState<string | null>(null);
   const [comboioRecarga, setComboioRecarga] = useState<Comboio | null>(null);
-  const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS">("LANCAR");
+  const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS" | "ESTOQUE">("LANCAR");
 
   const comboiosFiltrados = useMemo(() => {
     const termo = busca.toLowerCase().trim();
@@ -93,6 +94,10 @@ export default function InsumosClient({
           className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", abaPrincipal === "FICHAS" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
           <ListChecks size={13} /> Fichas Lançadas
         </button>
+        <button onClick={() => setAbaPrincipal("ESTOQUE")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", abaPrincipal === "ESTOQUE" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+          <Warehouse size={13} /> Estoque & Auditoria
+        </button>
       </div>
 
       {error && (
@@ -103,6 +108,8 @@ export default function InsumosClient({
 
       {abaPrincipal === "FICHAS" ? (
         <FichasLista comboios={comboios} modulos={modulos} materiais={materiais} impedimentos={impedimentos} />
+      ) : abaPrincipal === "ESTOQUE" ? (
+        <EstoqueAuditoria comboios={comboios} materiais={materiais} />
       ) : (
       <>
       {erroAbrir && (

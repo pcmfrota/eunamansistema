@@ -580,3 +580,45 @@ export async function finalizarFicha(
   revalidatePath("/insumos");
   return { success: true, alertas: alertas.length ? alertas : undefined };
 }
+
+// ─── Estoque & Auditoria (comboio) ──────────────────────────────────────────
+
+export type AuditoriaInsumoComboio = { insumo_tipo: InsumoTipo; entrada: number; saida: number; saldoAtual: number };
+
+export async function getAuditoriaComboio(equipamentoId: string, dataInicio: string, dataFim: string): Promise<AuditoriaInsumoComboio[]> {
+  const supabase = createClient();
+
+  const { data: fichasPeriodo } = await supabase
+    .from("insumos_fichas_abastecimento").select("id")
+    .eq("equipamento_id", equipamentoId).eq("status", "FINALIZADA")
+    .gte("data", dataInicio).lte("data", dataFim);
+  const idsPeriodo = (fichasPeriodo || []).map((f: any) => f.id);
+
+  const movimentoPorTipo = new Map<string, { entrada: number; saida: number }>();
+  if (idsPeriodo.length) {
+    const { data: insumosPeriodo } = await supabase.from("insumos_ficha_insumos").select("insumo_tipo, entrou, saiu").in("ficha_id", idsPeriodo);
+    (insumosPeriodo || []).forEach((i: any) => {
+      const atual = movimentoPorTipo.get(i.insumo_tipo) || { entrada: 0, saida: 0 };
+      atual.entrada += Number(i.entrou || 0);
+      atual.saida += Number(i.saiu || 0);
+      movimentoPorTipo.set(i.insumo_tipo, atual);
+    });
+  }
+
+  const { data: ultimaFicha } = await supabase
+    .from("insumos_fichas_abastecimento").select("id")
+    .eq("equipamento_id", equipamentoId).eq("status", "FINALIZADA")
+    .order("data", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const saldoPorTipo = new Map<string, number>();
+  if (ultimaFicha) {
+    const { data: insumosAtuais } = await supabase.from("insumos_ficha_insumos").select("insumo_tipo, restou").eq("ficha_id", ultimaFicha.id);
+    (insumosAtuais || []).forEach((i: any) => saldoPorTipo.set(i.insumo_tipo, Number(i.restou || 0)));
+  }
+
+  return INSUMO_TIPOS.map((tipo) => ({
+    insumo_tipo: tipo,
+    entrada: movimentoPorTipo.get(tipo)?.entrada || 0,
+    saida: movimentoPorTipo.get(tipo)?.saida || 0,
+    saldoAtual: saldoPorTipo.get(tipo) || 0,
+  }));
+}
