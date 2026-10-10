@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos';
   action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal';
   payload: any;
   timestamp: number;
@@ -13,7 +13,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 27;
+  private dbVersion = 28;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -94,6 +94,14 @@ export class OfflineDB {
     // (não confundir com 'user_profile', que guarda só o perfil do usuário logado)
     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('role_permissions')) db.createObjectStore('role_permissions', { keyPath: 'role' });
+
+    // Controle de Insumos (fichas de abastecimento/recarga dos comboios)
+    if (!db.objectStoreNames.contains('insumos_fichas_abastecimento')) db.createObjectStore('insumos_fichas_abastecimento', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_abastecimento_linhas')) db.createObjectStore('insumos_abastecimento_linhas', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_fichas_recarga')) db.createObjectStore('insumos_fichas_recarga', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_recarga_itens')) db.createObjectStore('insumos_recarga_itens', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_materiais')) db.createObjectStore('insumos_materiais', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_modulos')) db.createObjectStore('insumos_modulos', { keyPath: 'id' });
   }
 
   async open(requiredStore?: string): Promise<IDBDatabase> {

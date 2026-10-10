@@ -318,6 +318,7 @@ export default function UsuariosClient({
     { name: 'Captação de Água', path: '/captacao' },
     { name: 'Documentos da Frota', path: '/documentos' },
     { name: 'Controle de Custos', path: '/custos' },
+    { name: 'Controle de Insumos', path: '/insumos' },
     { name: 'Gestão de Usuários', path: '/admin/usuarios' },
   ];
 

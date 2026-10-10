@@ -29,6 +29,7 @@ import {
   Droplets,
   Wrench,
   BadgeDollarSign,
+  Fuel,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from './premium-loader';
@@ -66,6 +67,7 @@ const navigation = [
   { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
   { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
   { name: 'Controle de Custos',        path: '/custos',                 icon: BadgeDollarSign },
+  { name: 'Controle de Insumos',       path: '/insumos',                icon: Fuel },
 ];
 
 function getFilteredNavigation(permissions: string[], role?: string) {
