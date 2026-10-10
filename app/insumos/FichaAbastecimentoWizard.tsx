@@ -1,0 +1,640 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { SignaturePad } from "@/components/SignaturePad";
+import {
+  FichaCompleta, Comboio, Modulo, Material, Impedimento,
+  LinhaAbastecimento, FechamentoPayload,
+  atualizarCabecalhoFicha, atualizarFichaInsumo, salvarLinhaAbastecimento, excluirLinhaAbastecimento,
+  finalizarFicha, getFicha,
+} from "./actions";
+import { InsumoTipo, INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+
+const ETAPAS = [
+  "Turno e Data", "Motorista/Lubrificador", "Módulo e Horímetro",
+  "Conferência de Saldo", "Abastecimentos", "Entradas no Turno", "Fechamento",
+];
+
+function formatarPlaca(placa: string) {
+  const m = placa.match(/^([A-Z]{3})(\d[A-Z0-9]{3})$/);
+  return m ? `${m[1]} ${m[2]}` : placa;
+}
+
+function formatarNumero(v: number) {
+  return v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+}
+
+const inputCls = "w-full px-3 py-2.5 text-sm border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-amber-500";
+const labelCls = "text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1.5";
+
+export default function FichaAbastecimentoWizard({
+  fichaInicial, comboio, modulos, materiais, impedimentos, equipamentos, onVoltar, onAtualizarFicha,
+}: {
+  fichaInicial: FichaCompleta;
+  comboio: Comboio;
+  modulos: Modulo[];
+  materiais: Material[];
+  impedimentos: Impedimento[];
+  equipamentos: { id: string; placa: string; tipo: string }[];
+  onVoltar: () => void;
+  onAtualizarFicha: (f: FichaCompleta) => void;
+}) {
+  const [ficha, setFicha] = useState(fichaInicial);
+  const [etapa, setEtapa] = useState(1);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [alertasFinalizacao, setAlertasFinalizacao] = useState<string[] | null>(null);
+
+  const temTanque2 = comboio.numero_tanques_diesel >= 2;
+
+  const [cab, setCab] = useState({
+    turno: ficha.ficha.turno,
+    data: ficha.ficha.data,
+    motorista_nome: ficha.ficha.motorista_nome || "",
+    motorista_matricula: ficha.ficha.motorista_matricula || "",
+    lubrificador_nome: ficha.ficha.lubrificador_nome || "",
+    lubrificador_matricula: ficha.ficha.lubrificador_matricula || "",
+    modulo_id: ficha.ficha.modulo_id || "",
+    km_horimetro_inicial: ficha.ficha.km_horimetro_inicial?.toString() ?? "",
+    regua_tanque1_inicial_cm: ficha.ficha.regua_tanque1_inicial_cm?.toString() ?? "",
+    regua_tanque1_inicial_lts: ficha.ficha.regua_tanque1_inicial_lts?.toString() ?? "",
+    regua_tanque2_inicial_cm: ficha.ficha.regua_tanque2_inicial_cm?.toString() ?? "",
+    regua_tanque2_inicial_lts: ficha.ficha.regua_tanque2_inicial_lts?.toString() ?? "",
+    observacoes: ficha.ficha.observacoes || "",
+  });
+
+  const [fechamento, setFechamento] = useState({
+    km_horimetro_final: ficha.ficha.km_horimetro_final?.toString() ?? "",
+    regua_tanque1_final_cm: ficha.ficha.regua_tanque1_final_cm?.toString() ?? "",
+    regua_tanque1_final_lts: ficha.ficha.regua_tanque1_final_lts?.toString() ?? "",
+    regua_tanque2_final_cm: ficha.ficha.regua_tanque2_final_cm?.toString() ?? "",
+    regua_tanque2_final_lts: ficha.ficha.regua_tanque2_final_lts?.toString() ?? "",
+    codigo_impedimento_id: ficha.ficha.codigo_impedimento_id || "",
+    observacoes_fechamento: "",
+  });
+
+  const insumoPorTipo = useMemo(() => {
+    const map: Record<string, typeof ficha.insumos[number]> = {};
+    ficha.insumos.forEach((i) => { map[i.insumo_tipo] = i; });
+    return map;
+  }, [ficha.insumos]);
+
+  async function refetchFicha() {
+    const r = await getFicha(ficha.ficha.id);
+    if (r.ficha) { setFicha(r.ficha); onAtualizarFicha(r.ficha); }
+  }
+
+  async function salvarCabecalho() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const payload: any = {
+        turno: cab.turno, data: cab.data,
+        motorista_nome: cab.motorista_nome || null, motorista_matricula: cab.motorista_matricula || null,
+        lubrificador_nome: cab.lubrificador_nome || null, lubrificador_matricula: cab.lubrificador_matricula || null,
+        modulo_id: cab.modulo_id || null,
+        km_horimetro_inicial: cab.km_horimetro_inicial ? Number(cab.km_horimetro_inicial) : null,
+        regua_tanque1_inicial_cm: cab.regua_tanque1_inicial_cm ? Number(cab.regua_tanque1_inicial_cm) : null,
+        regua_tanque1_inicial_lts: cab.regua_tanque1_inicial_lts ? Number(cab.regua_tanque1_inicial_lts) : null,
+        regua_tanque2_inicial_cm: cab.regua_tanque2_inicial_cm ? Number(cab.regua_tanque2_inicial_cm) : null,
+        regua_tanque2_inicial_lts: cab.regua_tanque2_inicial_lts ? Number(cab.regua_tanque2_inicial_lts) : null,
+        observacoes: cab.observacoes || null,
+      };
+      const result = await atualizarCabecalhoFicha(ficha.ficha.id, payload);
+      if (result.error) { setErro(result.error); return false; }
+      setFicha((prev) => ({ ...prev, ficha: { ...prev.ficha, ...payload } }));
+      return true;
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function avancar() {
+    if (etapa <= 3) {
+      const ok = await salvarCabecalho();
+      if (!ok) return;
+    }
+    setEtapa((e) => Math.min(7, e + 1));
+  }
+
+  function voltarEtapa() {
+    setEtapa((e) => Math.max(1, e - 1));
+  }
+
+  async function handleFinalizar() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const payload: FechamentoPayload = {
+        km_horimetro_final: fechamento.km_horimetro_final ? Number(fechamento.km_horimetro_final) : null,
+        regua_tanque1_final_cm: fechamento.regua_tanque1_final_cm ? Number(fechamento.regua_tanque1_final_cm) : null,
+        regua_tanque1_final_lts: fechamento.regua_tanque1_final_lts ? Number(fechamento.regua_tanque1_final_lts) : null,
+        regua_tanque2_final_cm: fechamento.regua_tanque2_final_cm ? Number(fechamento.regua_tanque2_final_cm) : null,
+        regua_tanque2_final_lts: fechamento.regua_tanque2_final_lts ? Number(fechamento.regua_tanque2_final_lts) : null,
+        codigo_impedimento_id: fechamento.codigo_impedimento_id || null,
+        observacoes: fechamento.observacoes_fechamento || null,
+      };
+      const result = await finalizarFicha(ficha.ficha.id, payload);
+      if (result.error) { setErro(result.error); return; }
+      if (result.alertas?.length) { setAlertasFinalizacao(result.alertas); return; }
+      onVoltar();
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-3">
+        <button onClick={onVoltar} className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500">
+          <ChevronLeft size={18} />
+        </button>
+        <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+          <Fuel size={18} className="text-amber-500 dark:text-amber-400" />
+        </div>
+        <div className="flex-1">
+          <div className="text-sm font-black text-zinc-900 dark:text-zinc-50 font-mono">{formatarPlaca(comboio.placa)}</div>
+          <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+            Ficha Nº {ficha.ficha.numero_sequencial} — {comboio.modelo}
+          </div>
+        </div>
+        <div className="hidden md:flex items-center gap-1.5">
+          {ETAPAS.map((label, i) => (
+            <div key={label} className={cn("h-1.5 w-8 rounded-full", i + 1 <= etapa ? "bg-amber-500" : "bg-zinc-200 dark:bg-zinc-800")} title={label} />
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
+        <div className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+          Etapa {etapa} de 7 — {ETAPAS[etapa - 1]}
+        </div>
+
+        {erro && (
+          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-xl p-3 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
+            <AlertTriangle size={14} className="shrink-0" /> {erro}
+          </div>
+        )}
+
+        {etapa === 1 && (
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
+            <div>
+              <label className={labelCls}>Turno</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["1", "2", "3"] as const).map((t) => (
+                  <button key={t} onClick={() => setCab((p) => ({ ...p, turno: t }))}
+                    className={cn("py-2.5 rounded-xl text-sm font-bold border-2", cab.turno === t ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" : "border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+                    {t}º Turno
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Data</label>
+              <input type="date" className={inputCls} value={cab.data} onChange={(e) => setCab((p) => ({ ...p, data: e.target.value }))} />
+            </div>
+          </div>
+        )}
+
+        {etapa === 2 && (
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Motorista</label>
+                <input className={inputCls} value={cab.motorista_nome} onChange={(e) => setCab((p) => ({ ...p, motorista_nome: e.target.value }))} placeholder="Nome" />
+              </div>
+              <div>
+                <label className={labelCls}>Matrícula</label>
+                <input className={inputCls} value={cab.motorista_matricula} onChange={(e) => setCab((p) => ({ ...p, motorista_matricula: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Lubrificador (opcional)</label>
+                <input className={inputCls} value={cab.lubrificador_nome} onChange={(e) => setCab((p) => ({ ...p, lubrificador_nome: e.target.value }))} placeholder="Nome" />
+              </div>
+              <div>
+                <label className={labelCls}>Matrícula</label>
+                <input className={inputCls} value={cab.lubrificador_matricula} onChange={(e) => setCab((p) => ({ ...p, lubrificador_matricula: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {etapa === 3 && (
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
+            <div>
+              <label className={labelCls}>Módulo</label>
+              <select className={inputCls} value={cab.modulo_id} onChange={(e) => setCab((p) => ({ ...p, modulo_id: e.target.value }))}>
+                <option value="">Selecione...</option>
+                {modulos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Horímetro Inicial do Comboio</label>
+              <input type="number" step="0.1" className={inputCls} value={cab.km_horimetro_inicial} onChange={(e) => setCab((p) => ({ ...p, km_horimetro_inicial: e.target.value }))} />
+            </div>
+            <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-2">Régua Inicial (opcional)</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Tanque 1 — CM</label>
+                <input type="number" className={inputCls} value={cab.regua_tanque1_inicial_cm} onChange={(e) => setCab((p) => ({ ...p, regua_tanque1_inicial_cm: e.target.value }))} />
+              </div>
+              <div>
+                <label className={labelCls}>Tanque 1 — LTS</label>
+                <input type="number" className={inputCls} value={cab.regua_tanque1_inicial_lts} onChange={(e) => setCab((p) => ({ ...p, regua_tanque1_inicial_lts: e.target.value }))} />
+              </div>
+            </div>
+            {temTanque2 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Tanque 2 — CM</label>
+                  <input type="number" className={inputCls} value={cab.regua_tanque2_inicial_cm} onChange={(e) => setCab((p) => ({ ...p, regua_tanque2_inicial_cm: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Tanque 2 — LTS</label>
+                  <input type="number" className={inputCls} value={cab.regua_tanque2_inicial_lts} onChange={(e) => setCab((p) => ({ ...p, regua_tanque2_inicial_lts: e.target.value }))} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {etapa === 4 && (
+          <ConferenciaSaldo ficha={ficha} temTanque2={temTanque2} onAjustado={refetchFicha} />
+        )}
+
+        {etapa === 5 && (
+          <AbastecimentosEtapa
+            ficha={ficha} equipamentos={equipamentos} temTanque2={temTanque2}
+            onMudou={refetchFicha}
+          />
+        )}
+
+        {etapa === 6 && (
+          <EntradasEtapa ficha={ficha} temTanque2={temTanque2} onAjustado={refetchFicha} />
+        )}
+
+        {etapa === 7 && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div>
+                <label className={labelCls}>Registradora Final — Diesel Tanque 1°</label>
+                <input type="number" step="0.1" className={inputCls}
+                  defaultValue={insumoPorTipo.DIESEL_T1?.acumulado_registradora_final ?? ""}
+                  onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, "DIESEL_T1", { acumulado_registradora_final: e.target.value ? Number(e.target.value) : undefined }); refetchFicha(); }}
+                />
+              </div>
+              {temTanque2 && (
+                <div>
+                  <label className={labelCls}>Registradora Final — Diesel Tanque 2°</label>
+                  <input type="number" step="0.1" className={inputCls}
+                    defaultValue={insumoPorTipo.DIESEL_T2?.acumulado_registradora_final ?? ""}
+                    onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, "DIESEL_T2", { acumulado_registradora_final: e.target.value ? Number(e.target.value) : undefined }); refetchFicha(); }}
+                  />
+                </div>
+              )}
+              <div>
+                <label className={labelCls}>Horímetro Final do Comboio</label>
+                <input type="number" step="0.1" className={inputCls} value={fechamento.km_horimetro_final} onChange={(e) => setFechamento((p) => ({ ...p, km_horimetro_final: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Régua Final T1 — CM</label>
+                  <input type="number" className={inputCls} value={fechamento.regua_tanque1_final_cm} onChange={(e) => setFechamento((p) => ({ ...p, regua_tanque1_final_cm: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Régua Final T1 — LTS</label>
+                  <input type="number" className={inputCls} value={fechamento.regua_tanque1_final_lts} onChange={(e) => setFechamento((p) => ({ ...p, regua_tanque1_final_lts: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Código de Impedimento (opcional)</label>
+                <select className={inputCls} value={fechamento.codigo_impedimento_id} onChange={(e) => setFechamento((p) => ({ ...p, codigo_impedimento_id: e.target.value }))}>
+                  <option value="">Nenhum</option>
+                  {impedimentos.map((i) => <option key={i.id} value={i.id}>{i.codigo ? `${i.codigo} — ` : ""}{i.descricao}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Observações</label>
+                <textarea className={cn(inputCls, "min-h-[80px] resize-none")} value={fechamento.observacoes_fechamento} onChange={(e) => setFechamento((p) => ({ ...p, observacoes_fechamento: e.target.value }))} />
+              </div>
+            </div>
+
+            <ResumoCalculado ficha={ficha} temTanque2={temTanque2} />
+
+            {alertasFinalizacao && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-black text-xs uppercase tracking-wider">
+                  <AlertTriangle size={14} /> Divergências encontradas
+                </div>
+                {alertasFinalizacao.map((a, i) => <div key={i} className="text-xs text-amber-700 dark:text-amber-400">{a}</div>)}
+                <button onClick={handleFinalizar} disabled={salvando} className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 disabled:opacity-50">
+                  Finalizar mesmo assim
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-between pt-2 pb-8">
+          <button onClick={voltarEtapa} disabled={etapa === 1 || salvando}
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-xl disabled:opacity-40">
+            <ChevronLeft size={16} /> Anterior
+          </button>
+          {etapa < 7 ? (
+            <button onClick={avancar} disabled={salvando}
+              className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl disabled:opacity-50">
+              Próximo <ChevronRight size={16} />
+            </button>
+          ) : (
+            !alertasFinalizacao && (
+              <button onClick={handleFinalizar} disabled={salvando}
+                className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50">
+                <CheckCircle2 size={16} /> Finalizar Ficha
+              </button>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Etapa 4 — Conferência de Saldo ─────────────────────────────────────────
+
+function ConferenciaSaldo({ ficha, temTanque2, onAjustado }: { ficha: FichaCompleta; temTanque2: boolean; onAjustado: () => void }) {
+  const [editando, setEditando] = useState<InsumoTipo | null>(null);
+  const [valor, setValor] = useState("");
+  const [erroAdmin, setErroAdmin] = useState<string | null>(null);
+
+  const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
+
+  async function salvarAjuste(tipo: InsumoTipo) {
+    const result = await atualizarFichaInsumo(ficha.ficha.id, tipo, { quantidade_inicial: Number(valor) });
+    if (result.error) { setErroAdmin(result.error); return; }
+    setEditando(null);
+    onAjustado();
+  }
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+      <p className="text-xs text-zinc-500">Saldo herdado da última ficha finalizada deste comboio. Confira antes de continuar.</p>
+      {erroAdmin && <div className="text-xs text-red-600">{erroAdmin}</div>}
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {tipos.map((tipo) => {
+          const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
+          return (
+            <div key={tipo} className="flex items-center justify-between py-2.5 text-sm">
+              <span className="text-zinc-600 dark:text-zinc-300 font-semibold">{INSUMO_LABEL[tipo]}</span>
+              {editando === tipo ? (
+                <div className="flex items-center gap-2">
+                  <input type="number" autoFocus value={valor} onChange={(e) => setValor(e.target.value)} className="w-24 px-2 py-1 text-right border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 text-sm" />
+                  <button onClick={() => salvarAjuste(tipo)} className="text-emerald-600 text-xs font-bold">Salvar</button>
+                  <button onClick={() => setEditando(null)} className="text-zinc-400 text-xs">Cancelar</button>
+                </div>
+              ) : (
+                <button onClick={() => { setEditando(tipo); setValor(String(insumo?.quantidade_inicial ?? 0)); setErroAdmin(null); }} className="font-bold text-zinc-900 dark:text-zinc-50 hover:underline">
+                  {formatarNumero(Number(insumo?.quantidade_inicial || 0))}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-zinc-400">Clique no valor pra ajustar (só administrador — fica registrado no histórico).</p>
+    </div>
+  );
+}
+
+// ─── Etapa 5 — Abastecimentos ───────────────────────────────────────────────
+
+function linhaVazia(fichaId: string): Partial<LinhaAbastecimento> {
+  return { ficha_id: fichaId, tanque_diesel: 1, preventiva: false };
+}
+
+function AbastecimentosEtapa({
+  ficha, equipamentos, temTanque2, onMudou,
+}: { ficha: FichaCompleta; equipamentos: { id: string; placa: string; tipo: string }[]; temTanque2: boolean; onMudou: () => void }) {
+  const [novaLinha, setNovaLinha] = useState<Partial<LinhaAbastecimento> | null>(null);
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [erroLinha, setErroLinha] = useState<string | null>(null);
+
+  async function salvar(linha: Partial<LinhaAbastecimento>, chaveLocal: string) {
+    setSalvandoId(chaveLocal);
+    setErroLinha(null);
+    try {
+      const result = await salvarLinhaAbastecimento(ficha.ficha.id, linha);
+      if (result.error) { setErroLinha(result.error); return; }
+      if (result.warning) setErroLinha(result.warning);
+      setNovaLinha(null);
+      onMudou();
+    } finally {
+      setSalvandoId(null);
+    }
+  }
+
+  async function excluir(linhaId: string) {
+    setSalvandoId(linhaId);
+    try {
+      await excluirLinhaAbastecimento(linhaId, ficha.ficha.id);
+      onMudou();
+    } finally {
+      setSalvandoId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {erroLinha && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+          {erroLinha}
+        </div>
+      )}
+      {ficha.linhas.map((linha) => (
+        <LinhaCard key={linha.id} linha={linha} equipamentos={equipamentos} temTanque2={temTanque2}
+          salvando={salvandoId === linha.id} onSalvar={(l) => salvar(l, linha.id)} onExcluir={() => excluir(linha.id)} />
+      ))}
+      {novaLinha ? (
+        <LinhaCard linha={novaLinha} equipamentos={equipamentos} temTanque2={temTanque2}
+          salvando={salvandoId === "nova"} onSalvar={(l) => salvar(l, "nova")} onExcluir={() => setNovaLinha(null)} novaLinhaLabel />
+      ) : (
+        <button onClick={() => setNovaLinha(linhaVazia(ficha.ficha.id))}
+          className="w-full py-3 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 text-sm font-bold flex items-center justify-center gap-2 hover:border-amber-400 hover:text-amber-600">
+          <Plus size={16} /> Adicionar Abastecimento
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LinhaCard({
+  linha, equipamentos, temTanque2, salvando, onSalvar, onExcluir, novaLinhaLabel,
+}: {
+  linha: Partial<LinhaAbastecimento>;
+  equipamentos: { id: string; placa: string; tipo: string }[];
+  temTanque2: boolean;
+  salvando: boolean;
+  onSalvar: (l: Partial<LinhaAbastecimento>) => void;
+  onExcluir: () => void;
+  novaLinhaLabel?: boolean;
+}) {
+  const [draft, setDraft] = useState<Partial<LinhaAbastecimento>>(linha);
+  const campo = (k: keyof LinhaAbastecimento, v: any) => setDraft((p) => ({ ...p, [k]: v }));
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3">
+      {novaLinhaLabel && <div className="text-[10px] font-black text-amber-600 uppercase tracking-wider">Novo abastecimento</div>}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Hora Inicial</label>
+          <input type="time" className={inputCls} value={draft.hora_inicial || ""} onChange={(e) => campo("hora_inicial", e.target.value)} />
+        </div>
+        <div>
+          <label className={labelCls}>Hora Final</label>
+          <input type="time" className={inputCls} value={draft.hora_final || ""} onChange={(e) => campo("hora_final", e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Equipamento</label>
+        <input list="equipamentos-datalist" className={inputCls} value={draft.equipamento_texto || ""}
+          onChange={(e) => {
+            const texto = e.target.value;
+            const match = equipamentos.find((eq) => eq.placa === texto);
+            setDraft((p) => ({ ...p, equipamento_texto: texto, equipamento_id: match?.id || null }));
+          }} placeholder="Ex: HV-550 ou texto livre" />
+        <datalist id="equipamentos-datalist">
+          {equipamentos.map((eq) => <option key={eq.id} value={eq.placa}>{eq.tipo}</option>)}
+        </datalist>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Horímetro</label>
+          <input type="number" step="0.1" className={inputCls} value={draft.horimetro ?? ""} onChange={(e) => campo("horimetro", e.target.value ? Number(e.target.value) : null)} />
+        </div>
+        <label className="flex items-center gap-2 mt-6 text-xs font-bold text-zinc-600 dark:text-zinc-300">
+          <input type="checkbox" checked={!!draft.preventiva} onChange={(e) => campo("preventiva", e.target.checked)} className="w-4 h-4" />
+          Preventiva?
+        </label>
+      </div>
+
+      <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">Diesel</div>
+      <div className={cn("grid gap-3", temTanque2 ? "grid-cols-3" : "grid-cols-2")}>
+        <div>
+          <label className={labelCls}>Registradora</label>
+          <input type="number" step="0.1" className={inputCls} value={draft.diesel_registradora ?? ""} onChange={(e) => campo("diesel_registradora", e.target.value ? Number(e.target.value) : null)} />
+        </div>
+        <div>
+          <label className={labelCls}>Litros</label>
+          <input type="number" step="0.1" className={inputCls} value={draft.diesel_litros ?? ""} onChange={(e) => campo("diesel_litros", e.target.value ? Number(e.target.value) : null)} />
+        </div>
+        {temTanque2 && (
+          <div>
+            <label className={labelCls}>Tanque</label>
+            <select className={inputCls} value={draft.tanque_diesel || 1} onChange={(e) => campo("tanque_diesel", Number(e.target.value) as 1 | 2)}>
+              <option value={1}>1°</option>
+              <option value={2}>2°</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">Lubrificantes</div>
+      <div className="grid grid-cols-3 gap-2">
+        {([
+          ["motor", "Motor"], ["corrente", "Corrente"], ["graxa", "Graxa"],
+          ["transmissao", "85W140"], ["fluido_radiador", "Fluido"], ["hidraulico", "Hidráulico"],
+          ["diferencial", "85W140LS"], ["arla", "Arla"],
+        ] as [keyof LinhaAbastecimento, string][]).map(([campoNome, label]) => (
+          <div key={campoNome}>
+            <label className="text-[9px] font-bold text-zinc-400 block mb-1">{label}</label>
+            <input type="number" step="0.1" className="w-full px-2 py-1.5 text-xs border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900"
+              value={(draft[campoNome] as number) ?? ""} onChange={(e) => campo(campoNome, e.target.value ? Number(e.target.value) : null)} />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <div>
+          <label className={labelCls}>Matrícula do Operador</label>
+          <input className={inputCls} value={draft.matricula_operador || ""} onChange={(e) => campo("matricula_operador", e.target.value)} />
+        </div>
+      </div>
+      <SignaturePad value={draft.assinatura_operador_url || ""} onChange={(v) => campo("assinatura_operador_url", v)} label="Assinatura do Operador" />
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button onClick={onExcluir} className="px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg flex items-center gap-1">
+          <Trash2 size={13} /> {novaLinhaLabel ? "Cancelar" : "Excluir"}
+        </button>
+        <button disabled={salvando} onClick={() => onSalvar(draft)} className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50">
+          {salvando ? "Salvando..." : "Salvar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Etapa 6 — Entradas no turno ────────────────────────────────────────────
+
+function EntradasEtapa({ ficha, temTanque2, onAjustado }: { ficha: FichaCompleta; temTanque2: boolean; onAjustado: () => void }) {
+  const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+      <p className="text-xs text-zinc-500">Quanto cada insumo recebeu de reabastecimento/recarga neste turno.</p>
+      {tipos.map((tipo) => {
+        const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
+        return (
+          <div key={tipo} className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</span>
+            <input type="number" step="0.1" defaultValue={insumo?.entrou ?? 0} className="w-28 px-2 py-1.5 text-right text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950"
+              onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, tipo, { entrou: Number(e.target.value || 0) }); onAjustado(); }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Resumo calculado (Etapa 7) ─────────────────────────────────────────────
+
+function ResumoCalculado({ ficha, temTanque2 }: { ficha: FichaCompleta; temTanque2: boolean }) {
+  const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
+      <div className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">Resumo Calculado</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-zinc-400 uppercase text-[10px] font-black">
+              <th className="text-left pb-2">Insumo</th>
+              <th className="text-right pb-2">Inicial</th>
+              <th className="text-right pb-2">Entrou</th>
+              <th className="text-right pb-2">Saiu</th>
+              <th className="text-right pb-2">Restou</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {tipos.map((tipo) => {
+              const i = ficha.insumos.find((x) => x.insumo_tipo === tipo);
+              const negativo = Number(i?.restou || 0) < 0;
+              return (
+                <tr key={tipo}>
+                  <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</td>
+                  <td className="py-2 text-right">{formatarNumero(Number(i?.quantidade_inicial || 0))}</td>
+                  <td className="py-2 text-right text-emerald-600">{formatarNumero(Number(i?.entrou || 0))}</td>
+                  <td className="py-2 text-right text-red-500">{formatarNumero(Number(i?.saiu || 0))}</td>
+                  <td className={cn("py-2 text-right font-black", negativo ? "text-red-600" : "text-zinc-900 dark:text-zinc-50")}>
+                    {formatarNumero(Number(i?.restou || 0))}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
