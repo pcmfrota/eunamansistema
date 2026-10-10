@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Droplets } from "lucide-react";
+import { FileText, Droplets, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Comboio, Modulo, Material, Impedimento,
   FichaAbastecimentoResumo, FiltroFichas, getFichasAbastecimento, getFicha, FichaCompleta,
+  atualizarStatusBaixa,
 } from "./actions";
-import { FichaRecargaResumo, getFichasRecarga, getRecarga, RecargaCompleta } from "./recargaActions";
+import { FichaRecargaResumo, getFichasRecarga, getRecarga, RecargaCompleta, OrigemRecarga } from "./recargaActions";
+import { getLinhasBaixaDiesel, getLinhasRecargaExport } from "./exportActions";
 import FichaAbastecimentoDetalhe from "./FichaAbastecimentoDetalhe";
 import RecargaDetalhe from "./RecargaDetalhe";
 
@@ -30,8 +32,10 @@ export default function FichasLista({
   const [filtroModulo, setFiltroModulo] = useState("");
   const [filtroComboio, setFiltroComboio] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
+  const [filtroOrigem, setFiltroOrigem] = useState<OrigemRecarga | "">("");
   const [filtroDataIni, setFiltroDataIni] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
+  const [exportando, setExportando] = useState(false);
 
   const [fichaDetalhe, setFichaDetalhe] = useState<FichaCompleta | null>(null);
   const [recargaDetalhe, setRecargaDetalhe] = useState<RecargaCompleta | null>(null);
@@ -46,14 +50,14 @@ export default function FichasLista({
         };
         setFichas(await getFichasAbastecimento(filtro));
       } else {
-        setRecargas(await getFichasRecarga({ equipamentoId: filtroComboio || undefined, dataInicio: filtroDataIni || undefined, dataFim: filtroDataFim || undefined }));
+        setRecargas(await getFichasRecarga({ equipamentoId: filtroComboio || undefined, dataInicio: filtroDataIni || undefined, dataFim: filtroDataFim || undefined, origemTipo: filtroOrigem || undefined }));
       }
     } finally {
       setCarregando(false);
     }
   }
 
-  useEffect(() => { carregar(); }, [subTab, filtroModulo, filtroComboio, filtroStatus, filtroDataIni, filtroDataFim]);
+  useEffect(() => { carregar(); }, [subTab, filtroModulo, filtroComboio, filtroStatus, filtroOrigem, filtroDataIni, filtroDataFim]);
 
   async function abrirFicha(id: string) {
     const r = await getFicha(id);
@@ -62,6 +66,56 @@ export default function FichasLista({
   async function abrirRecarga(id: string) {
     const r = await getRecarga(id);
     if (r.recarga) setRecargaDetalhe(r.recarga);
+  }
+
+  async function toggleStatusBaixa(e: React.MouseEvent, ficha: FichaAbastecimentoResumo) {
+    e.stopPropagation();
+    const novoStatus = ficha.status_baixa === "BAIXADO" ? "PENDENTE" : "BAIXADO";
+    await atualizarStatusBaixa(ficha.id, novoStatus);
+    carregar();
+  }
+
+  async function exportarBaixaDiesel() {
+    if (!filtroDataIni || !filtroDataFim) { alert("Selecione o período (data início/fim) antes de exportar."); return; }
+    setExportando(true);
+    try {
+      const linhas = await getLinhasBaixaDiesel(filtroDataIni, filtroDataFim);
+      if (!linhas.length) { alert("Nenhum lançamento encontrado no período."); return; }
+      const XLSX = await import("xlsx");
+      const planilha = linhas.map((l) => ({
+        DATA: l.data, "MÁQUINA": l.maquina, "HORÍMETRO": l.horimetro ?? "", "CÓD": l.cod ?? "",
+        NI: l.ni, "REFERÊNCIA": l.referencia, QUANTIDADE: l.quantidade, UN: l.unidade, "APLICAÇÃO": l.aplicacao,
+        MOVIMENTO: l.movimento, CONTROLE: l.controle || "", "MÓDULO": l.modulo || "", CENTRO: l.centro || "",
+        DEP: l.dep || "", COMBOIO: l.comboio || "", "STATUS BAIXA": l.statusBaixa,
+      }));
+      const ws = XLSX.utils.json_to_sheet(planilha);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Baixa Diesel e Lubrificantes");
+      XLSX.writeFile(wb, `baixa_diesel_lubrificantes_${filtroDataIni}_a_${filtroDataFim}.xlsx`);
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function exportarRecargas() {
+    if (!filtroDataIni || !filtroDataFim) { alert("Selecione o período (data início/fim) antes de exportar."); return; }
+    setExportando(true);
+    try {
+      const linhas = await getLinhasRecargaExport(filtroDataIni, filtroDataFim);
+      if (!linhas.length) { alert("Nenhuma recarga encontrada no período."); return; }
+      const XLSX = await import("xlsx");
+      const planilha = linhas.map((l) => ({
+        "Nº FICHA": l.numeroFicha, DATA: l.data, TURNO: l.turno || "", ORIGEM: l.origem, "COMBOIO DESTINO": l.comboioDestino,
+        "MÓDULO": l.modulo || "", ITEM: l.item, NI: l.ni, QUANTIDADE: l.quantidade, UNIDADE: l.unidade,
+        "REQ/NF": l.reqNf || "", "LOCAL DA RECARGA": l.localRecarga || "", "RESPONSÁVEL ESTOQUE": l.responsavelEstoque || "", "MATRÍCULA": l.matricula || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(planilha);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Recargas e Transferências");
+      XLSX.writeFile(wb, `recargas_transferencias_${filtroDataIni}_a_${filtroDataFim}.xlsx`);
+    } finally {
+      setExportando(false);
+    }
   }
 
   if (fichaDetalhe) {
@@ -87,14 +141,23 @@ export default function FichasLista({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <button onClick={() => setSubTab("ABASTECIMENTO")}
-          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", subTab === "ABASTECIMENTO" ? "bg-amber-600 text-white" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
-          <FileText size={13} /> Abastecimento
-        </button>
-        <button onClick={() => setSubTab("RECARGA")}
-          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", subTab === "RECARGA" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
-          <Droplets size={13} /> Recarga
+      <div className="flex gap-2 flex-wrap justify-between">
+        <div className="flex gap-2">
+          <button onClick={() => setSubTab("ABASTECIMENTO")}
+            className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", subTab === "ABASTECIMENTO" ? "bg-amber-600 text-white" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+            <FileText size={13} /> Abastecimento
+          </button>
+          <button onClick={() => setSubTab("RECARGA")}
+            className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", subTab === "RECARGA" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+            <Droplets size={13} /> Recarga
+          </button>
+        </div>
+        <button
+          onClick={subTab === "ABASTECIMENTO" ? exportarBaixaDiesel : exportarRecargas}
+          disabled={exportando}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          <FileSpreadsheet size={13} /> {exportando ? "Exportando..." : subTab === "ABASTECIMENTO" ? "Exportar Baixa Diesel" : "Exportar Recargas"}
         </button>
       </div>
 
@@ -106,7 +169,7 @@ export default function FichasLista({
           <option value="">Todos os comboios</option>
           {comboios.map((c) => <option key={c.id} value={c.id}>{c.placa}</option>)}
         </select>
-        {subTab === "ABASTECIMENTO" && (
+        {subTab === "ABASTECIMENTO" ? (
           <>
             <select className={inputCls} value={filtroModulo} onChange={(e) => setFiltroModulo(e.target.value)}>
               <option value="">Todos os módulos</option>
@@ -119,6 +182,14 @@ export default function FichasLista({
               <option value="VALIDADA">Validada</option>
             </select>
           </>
+        ) : (
+          <select className={inputCls} value={filtroOrigem} onChange={(e) => setFiltroOrigem(e.target.value as OrigemRecarga | "")}>
+            <option value="">Todas as origens</option>
+            <option value="SKID">Skid</option>
+            <option value="ALMOXARIFADO">Almoxarifado</option>
+            <option value="FORNECEDOR">Fornecedor</option>
+            <option value="OUTRO">Outro</option>
+          </select>
         )}
       </div>
 
@@ -131,7 +202,7 @@ export default function FichasLista({
               <tr className="text-zinc-400 uppercase text-[10px] font-black border-b border-zinc-100 dark:border-zinc-800">
                 <th className="text-left p-3">Nº</th><th className="text-left p-3">Data</th><th className="text-left p-3">Turno</th>
                 <th className="text-left p-3">Comboio</th><th className="text-left p-3">Módulo</th><th className="text-left p-3">Motorista</th>
-                <th className="text-right p-3">Diesel Saído</th><th className="text-left p-3">Status</th>
+                <th className="text-right p-3">Diesel Saído</th><th className="text-left p-3">Status</th><th className="text-left p-3">Baixa SAP</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -145,9 +216,15 @@ export default function FichasLista({
                   <td className="p-3">{f.motorista_nome || "-"}</td>
                   <td className="p-3 text-right font-bold">{f.dieselSaido.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} L</td>
                   <td className="p-3"><span className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", STATUS_BADGE[f.status])}>{f.status}</span></td>
+                  <td className="p-3">
+                    <button onClick={(e) => toggleStatusBaixa(e, f)}
+                      className={cn("px-2 py-1 rounded-full text-[10px] font-black uppercase", f.status_baixa === "BAIXADO" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400")}>
+                      {f.status_baixa}
+                    </button>
+                  </td>
                 </tr>
               ))}
-              {fichas.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-zinc-400">Nenhuma ficha encontrada.</td></tr>}
+              {fichas.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-zinc-400">Nenhuma ficha encontrada.</td></tr>}
             </tbody>
           </table>
         ) : (

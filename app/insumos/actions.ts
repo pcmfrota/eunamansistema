@@ -90,6 +90,7 @@ export type FichaAbastecimento = {
   codigo_impedimento_id: string | null;
   observacoes: string | null;
   status: StatusFicha;
+  status_baixa: "PENDENTE" | "BAIXADO";
   criado_por_nome: string | null;
 };
 
@@ -360,7 +361,7 @@ export type FiltroFichas = {
 };
 
 export type FichaAbastecimentoResumo = {
-  id: string; numero_sequencial: number; data: string; turno: string; status: StatusFicha;
+  id: string; numero_sequencial: number; data: string; turno: string; status: StatusFicha; status_baixa: "PENDENTE" | "BAIXADO";
   placa: string; modulo_nome: string | null; motorista_nome: string | null; dieselSaido: number;
 };
 
@@ -368,7 +369,7 @@ export async function getFichasAbastecimento(filtro: FiltroFichas = {}): Promise
   const supabase = createClient();
   let query = supabase
     .from("insumos_fichas_abastecimento")
-    .select("id, numero_sequencial, data, turno, status, motorista_nome, equipamentos(placa), insumos_modulos(nome)")
+    .select("id, numero_sequencial, data, turno, status, status_baixa, motorista_nome, equipamentos(placa), insumos_modulos(nome)")
     .order("data", { ascending: false }).order("numero_sequencial", { ascending: false }).limit(200);
 
   if (filtro.dataInicio) query = query.gte("data", filtro.dataInicio);
@@ -389,7 +390,7 @@ export async function getFichasAbastecimento(filtro: FiltroFichas = {}): Promise
   (insumosDiesel || []).forEach((i: any) => dieselPorFicha.set(i.ficha_id, (dieselPorFicha.get(i.ficha_id) || 0) + Number(i.saiu || 0)));
 
   return data.map((f: any) => ({
-    id: f.id, numero_sequencial: f.numero_sequencial, data: f.data, turno: f.turno, status: f.status,
+    id: f.id, numero_sequencial: f.numero_sequencial, data: f.data, turno: f.turno, status: f.status, status_baixa: f.status_baixa,
     placa: f.equipamentos?.placa || "-", modulo_nome: f.insumos_modulos?.nome || null,
     motorista_nome: f.motorista_nome, dieselSaido: dieselPorFicha.get(f.id) || 0,
   }));
@@ -621,4 +622,14 @@ export async function getAuditoriaComboio(equipamentoId: string, dataInicio: str
     saida: movimentoPorTipo.get(tipo)?.saida || 0,
     saldoAtual: saldoPorTipo.get(tipo) || 0,
   }));
+}
+
+// Controla o que já foi lançado manualmente no SAP da Suzano, a partir da planilha
+// "Baixa de Diesel e Lubrificantes" exportada (ver app/insumos/exportActions.ts).
+export async function atualizarStatusBaixa(fichaId: string, status: "PENDENTE" | "BAIXADO"): Promise<{ success?: true; error?: string }> {
+  const supabase = createClient();
+  const { error } = await supabase.from("insumos_fichas_abastecimento").update({ status_baixa: status }).eq("id", fichaId);
+  if (error) return { error: error.message };
+  revalidatePath("/insumos");
+  return { success: true };
 }

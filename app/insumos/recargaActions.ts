@@ -201,7 +201,7 @@ export type FichaRecargaResumo = {
   origem_tipo: OrigemRecarga; origem_label: string; status: string; aplicado: boolean;
 };
 
-export async function getFichasRecarga(filtro: { dataInicio?: string; dataFim?: string; equipamentoId?: string } = {}): Promise<FichaRecargaResumo[]> {
+export async function getFichasRecarga(filtro: { dataInicio?: string; dataFim?: string; equipamentoId?: string; origemTipo?: OrigemRecarga } = {}): Promise<FichaRecargaResumo[]> {
   const supabase = createClient();
   let query = supabase
     .from("insumos_fichas_recarga")
@@ -211,6 +211,7 @@ export async function getFichasRecarga(filtro: { dataInicio?: string; dataFim?: 
   if (filtro.dataInicio) query = query.gte("data", filtro.dataInicio);
   if (filtro.dataFim) query = query.lte("data", filtro.dataFim);
   if (filtro.equipamentoId) query = query.eq("equipamento_id", filtro.equipamentoId);
+  if (filtro.origemTipo) query = query.eq("origem_tipo", filtro.origemTipo);
 
   const { data, error } = await query;
   if (error || !data) return [];
