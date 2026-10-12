@@ -47,3 +47,13 @@ export function labelMaterialInsumo(
   if (tipo === "DIESEL_T2") return `${nome} (Tanque 2°)`;
   return nome;
 }
+
+// Unidade do material cadastrado pra essa linha (L, KG, UN...), mesma lógica de
+// resolução por aplicação usada em labelMaterialInsumo.
+export function unidadeMaterialInsumo(
+  tipo: InsumoTipo,
+  materiais: { unidade: string; aplicacao: string; ativo?: boolean }[]
+): string {
+  const material = materiais.find((m) => m.aplicacao === APLICACAO_POR_INSUMO[tipo] && m.ativo !== false);
+  return material?.unidade || "";
+}

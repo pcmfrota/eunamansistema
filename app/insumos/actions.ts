@@ -651,6 +651,27 @@ export async function getAuditoriaComboio(equipamentoId: string, dataInicio: str
   }));
 }
 
+// Estoque atual do comboio (sem recorte de período) — usado no card do Painel,
+// pra responder "quanto tem de cada insumo agora" sem precisar abrir a Auditoria.
+export type EstoqueAtualItem = { insumo_tipo: InsumoTipo; saldoAtual: number };
+
+export async function getEstoqueAtualComboio(equipamentoId: string): Promise<EstoqueAtualItem[]> {
+  const supabase = createClient();
+
+  const { data: ultimaFicha } = await supabase
+    .from("insumos_fichas_abastecimento").select("id")
+    .eq("equipamento_id", equipamentoId).eq("status", "FINALIZADA")
+    .order("data", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+  const saldoPorTipo = new Map<string, number>();
+  if (ultimaFicha) {
+    const { data: insumosAtuais } = await supabase.from("insumos_ficha_insumos").select("insumo_tipo, restou").eq("ficha_id", ultimaFicha.id);
+    (insumosAtuais || []).forEach((i: any) => saldoPorTipo.set(i.insumo_tipo, Number(i.restou || 0)));
+  }
+
+  return INSUMO_TIPOS.map((tipo) => ({ insumo_tipo: tipo, saldoAtual: saldoPorTipo.get(tipo) || 0 }));
+}
+
 // Controla o que já foi lançado manualmente no SAP da Suzano, a partir da planilha
 // "Baixa de Diesel e Lubrificantes" exportada (ver app/insumos/exportActions.ts).
 export async function atualizarStatusBaixa(fichaId: string, status: "PENDENTE" | "BAIXADO"): Promise<{ success?: true; error?: string }> {

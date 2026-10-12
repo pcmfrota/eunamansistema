@@ -1,18 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse, BarChart3, Database } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse, BarChart3, Database, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  Comboio, Modulo, Material, Impedimento, Colaborador, FichaCompleta,
-  abrirOuCriarFicha,
+  Comboio, Modulo, Material, Impedimento, Colaborador, FichaCompleta, EstoqueAtualItem,
+  abrirOuCriarFicha, getEstoqueAtualComboio,
 } from "./actions";
+import { labelMaterialInsumo, unidadeMaterialInsumo } from "./config";
 import FichaAbastecimentoWizard from "./FichaAbastecimentoWizard";
 import RecargaModal from "./RecargaModal";
 import FichasLista from "./FichasLista";
 import EstoqueAuditoria from "./EstoqueAuditoria";
 import GraficosPainel from "./GraficosPainel";
 import Cadastros from "./Cadastros";
+
+function formatarPlaca(placa: string) {
+  const m = placa.match(/^([A-Z]{3})(\d[A-Z0-9]{3})$/);
+  return m ? `${m[1]} ${m[2]}` : placa;
+}
 
 export default function InsumosClient({
   initialComboios, modulos, materiais, impedimentos, colaboradores, equipamentos, error,
@@ -31,6 +37,8 @@ export default function InsumosClient({
   const [carregandoId, setCarregandoId] = useState<string | null>(null);
   const [erroAbrir, setErroAbrir] = useState<string | null>(null);
   const [comboioRecarga, setComboioRecarga] = useState<Comboio | null>(null);
+  const [comboioMenu, setComboioMenu] = useState<Comboio | null>(null);
+  const [comboioEstoque, setComboioEstoque] = useState<Comboio | null>(null);
   const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS" | "ESTOQUE" | "PAINEL" | "CADASTROS">("LANCAR");
 
   const comboiosFiltrados = useMemo(() => {
@@ -52,11 +60,6 @@ export default function InsumosClient({
     } finally {
       setCarregandoId(null);
     }
-  }
-
-  function formatarPlaca(placa: string) {
-    const m = placa.match(/^([A-Z]{3})(\d[A-Z0-9]{3})$/);
-    return m ? `${m[1]} ${m[2]}` : placa;
   }
 
   if (fichaAtiva) {
@@ -150,7 +153,7 @@ export default function InsumosClient({
             key={comboio.id}
             className="bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 hover:border-amber-400 dark:hover:border-amber-600 rounded-2xl p-5 shadow-sm transition-colors"
           >
-            <button onClick={() => abrirComboio(comboio)} disabled={carregandoId !== null} className="text-left w-full disabled:opacity-60">
+            <button onClick={() => setComboioMenu(comboio)} disabled={carregandoId !== null} className="text-left w-full disabled:opacity-60">
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
                   <Truck size={20} className="text-zinc-500 dark:text-zinc-400" />
@@ -184,12 +187,6 @@ export default function InsumosClient({
                 </div>
               )}
             </button>
-            <button
-              onClick={() => setComboioRecarga(comboio)}
-              className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 text-[11px] font-black uppercase tracking-wider hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-            >
-              <Droplets size={13} /> Nova Recarga
-            </button>
           </div>
         ))}
       </div>
@@ -207,8 +204,158 @@ export default function InsumosClient({
           onClose={() => setComboioRecarga(null)}
         />
       )}
+
+      {comboioMenu && (
+        <ComboioMenuModal
+          comboio={comboioMenu}
+          carregando={carregandoId === comboioMenu.id}
+          onClose={() => setComboioMenu(null)}
+          onLancamentos={() => { const c = comboioMenu; setComboioMenu(null); abrirComboio(c); }}
+          onRecarga={() => { const c = comboioMenu; setComboioMenu(null); setComboioRecarga(c); }}
+          onEstoque={() => { const c = comboioMenu; setComboioMenu(null); setComboioEstoque(c); }}
+        />
+      )}
+
+      {comboioEstoque && (
+        <EstoqueAtualModal
+          comboio={comboioEstoque}
+          materiais={materiais}
+          onClose={() => setComboioEstoque(null)}
+        />
+      )}
       </>
       )}
+    </div>
+  );
+}
+
+function ComboioMenuModal({
+  comboio, carregando, onClose, onLancamentos, onRecarga, onEstoque,
+}: {
+  comboio: Comboio;
+  carregando: boolean;
+  onClose: () => void;
+  onLancamentos: () => void;
+  onRecarga: () => void;
+  onEstoque: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-sm shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+              <Truck size={18} className="text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-zinc-900 dark:text-zinc-50 font-mono">{formatarPlaca(comboio.placa)}</h2>
+              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider truncate max-w-[200px]">{comboio.modelo || "—"}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-3 space-y-2">
+          <button
+            onClick={onLancamentos}
+            disabled={carregando}
+            className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-amber-50 dark:hover:bg-amber-900/10 hover:border-amber-300 dark:hover:border-amber-800 transition-colors disabled:opacity-60 text-left"
+          >
+            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg shrink-0">
+              <ListChecks size={16} className="text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">
+                {carregando ? "Abrindo..." : "Lançamentos"}
+              </div>
+              <div className="text-[11px] text-zinc-400">Ficha de Abastecimento</div>
+            </div>
+          </button>
+          <button
+            onClick={onRecarga}
+            className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors text-left"
+          >
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg shrink-0">
+              <Droplets size={16} className="text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">Recarga de Insumos</div>
+              <div className="text-[11px] text-zinc-400">Registrar recarga do comboio</div>
+            </div>
+          </button>
+          <button
+            onClick={onEstoque}
+            className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 hover:border-emerald-300 dark:hover:border-emerald-800 transition-colors text-left"
+          >
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg shrink-0">
+              <Warehouse size={16} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">Ver Estoque Atual</div>
+              <div className="text-[11px] text-zinc-400">Saldo de cada insumo agora</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EstoqueAtualModal({ comboio, materiais, onClose }: { comboio: Comboio; materiais: Material[]; onClose: () => void }) {
+  const [itens, setItens] = useState<EstoqueAtualItem[] | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    getEstoqueAtualComboio(comboio.id).then((r) => { if (ativo) setItens(r); });
+    return () => { ativo = false; };
+  }, [comboio.id]);
+
+  const temTanque2 = comboio.numero_tanques_diesel >= 2;
+  const itensVisiveis = (itens || []).filter((i) => i.insumo_tipo !== "DIESEL_T2" || temTanque2);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-sm shadow-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-950">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+              <Warehouse size={18} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-zinc-900 dark:text-zinc-50">Estoque Atual</h2>
+              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">{comboio.placa}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-4">
+          {!itens ? (
+            <div className="text-center text-xs text-zinc-400 py-8">Carregando...</div>
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {itensVisiveis.map((i) => (
+                <div key={i.insumo_tipo} className="flex items-center justify-between py-2.5">
+                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                    {labelMaterialInsumo(i.insumo_tipo, materiais, temTanque2)}
+                  </span>
+                  <span className="text-sm font-black text-zinc-900 dark:text-zinc-50">
+                    {i.saldoAtual.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} {unidadeMaterialInsumo(i.insumo_tipo, materiais)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
