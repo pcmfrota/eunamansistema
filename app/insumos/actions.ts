@@ -3,7 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarAtualizacaoHorimetro, inferUnidadeHorimetro } from "@/lib/horimetro-log";
-import { InsumoTipo, INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import { InsumoTipo, INSUMO_TIPOS, labelMaterialInsumo } from "./config";
 import { aplicarRecargasPendentes } from "./recargaActions";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
@@ -578,18 +578,20 @@ export async function finalizarFicha(
   if (updError) return { error: updError.message };
 
   const { data: insumos } = await supabase.from("insumos_ficha_insumos").select("*").eq("ficha_id", fichaId);
+  const { data: materiaisAtivos } = await supabase.from("insumos_materiais").select("material, aplicacao").eq("ativo", true);
   const alertas: string[] = [];
 
   for (const insumo of insumos || []) {
+    const nomeInsumo = labelMaterialInsumo(insumo.insumo_tipo as InsumoTipo, materiaisAtivos || [], true);
     if (Number(insumo.restou) < 0) {
-      return { error: `"${INSUMO_LABEL[insumo.insumo_tipo as InsumoTipo]}" ficaria com saldo negativo (${insumo.restou}). Confira os lançamentos antes de finalizar.` };
+      return { error: `"${nomeInsumo}" ficaria com saldo negativo (${insumo.restou}). Confira os lançamentos antes de finalizar.` };
     }
     if ((insumo.insumo_tipo === "DIESEL_T1" || insumo.insumo_tipo === "DIESEL_T2") && insumo.acumulado_registradora_final != null && insumo.acumulado_registradora_inicial != null) {
       const porRegistradora = Number(insumo.acumulado_registradora_final) - Number(insumo.acumulado_registradora_inicial);
       const diff = Math.abs(porRegistradora - Number(insumo.saiu));
       const tolerancia = Math.max(porRegistradora, Number(insumo.saiu)) * 0.01;
       if (diff > tolerancia && diff > 0.01) {
-        alertas.push(`${INSUMO_LABEL[insumo.insumo_tipo as InsumoTipo]}: saída pela registradora (${porRegistradora.toFixed(1)} L) diverge da soma dos lançamentos (${Number(insumo.saiu).toFixed(1)} L).`);
+        alertas.push(`${nomeInsumo}: saída pela registradora (${porRegistradora.toFixed(1)} L) diverge da soma dos lançamentos (${Number(insumo.saiu).toFixed(1)} L).`);
       }
     }
   }

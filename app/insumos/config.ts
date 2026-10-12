@@ -10,6 +10,8 @@ export const INSUMO_TIPOS: InsumoTipo[] = [
   "DIESEL_T1", "DIESEL_T2", "CORRENTE", "GRAXA", "TRANSMISSAO", "FLUIDO", "HIDRAULICO_MOTOR", "DIFERENCIAL", "ARLA",
 ];
 
+// Rótulo genérico (fallback), usado só quando ainda não existe nenhum material cadastrado
+// pra essa aplicação — assim que houver um, labelMaterialInsumo() usa o nome de verdade.
 export const INSUMO_LABEL: Record<InsumoTipo, string> = {
   DIESEL_T1: "Diesel Tanque 1°",
   DIESEL_T2: "Diesel Tanque 2°",
@@ -21,3 +23,27 @@ export const INSUMO_LABEL: Record<InsumoTipo, string> = {
   DIFERENCIAL: "85W140 LS / Diferencial",
   ARLA: "Arla",
 };
+
+// Aplicação (cadastro de Materiais) correspondente a cada linha fixa da ficha — usada pra
+// buscar o nome de verdade do material em vez do rótulo genérico acima.
+export const APLICACAO_POR_INSUMO: Record<InsumoTipo, string> = {
+  DIESEL_T1: "DIESEL", DIESEL_T2: "DIESEL", CORRENTE: "CORRENTE", GRAXA: "GRAXA",
+  TRANSMISSAO: "TRANSMISSAO", FLUIDO: "FLUIDO", HIDRAULICO_MOTOR: "HIDRAULICO_MOTOR",
+  DIFERENCIAL: "DIFERENCIAL", ARLA: "ADITIVO",
+};
+
+// Nome exibido em toda a aba pra cada linha de insumo — sempre o nome do material cadastrado
+// (o mesmo nome que aparece em Cadastros > Materiais e na Ficha de Recarga), nunca um rótulo
+// inventado só pra essa tela. Só cai no rótulo genérico se a aplicação ainda não tiver
+// nenhum material ativo cadastrado.
+export function labelMaterialInsumo(
+  tipo: InsumoTipo,
+  materiais: { material: string; aplicacao: string; ativo?: boolean }[],
+  temTanque2: boolean = false
+): string {
+  const material = materiais.find((m) => m.aplicacao === APLICACAO_POR_INSUMO[tipo] && m.ativo !== false);
+  const nome = material?.material || INSUMO_LABEL[tipo];
+  if (tipo === "DIESEL_T1") return temTanque2 ? `${nome} (Tanque 1°)` : nome;
+  if (tipo === "DIESEL_T2") return `${nome} (Tanque 2°)`;
+  return nome;
+}

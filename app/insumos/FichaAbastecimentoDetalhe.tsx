@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Printer, FileDown, History, RotateCcw, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
-import { FichaCompleta, Comboio, Modulo, Impedimento, HistoricoEntry, getHistoricoFicha, reabrirFicha } from "./actions";
-import { INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import { FichaCompleta, Comboio, Modulo, Impedimento, Material, HistoricoEntry, getHistoricoFicha, reabrirFicha } from "./actions";
+import { INSUMO_TIPOS, labelMaterialInsumo } from "./config";
 import { gerarPDFFichaAbastecimento, imprimirFichaAbastecimento } from "./InsumosPDF";
 
 function formatarNumero(v: number | null | undefined) {
@@ -28,9 +28,9 @@ const ACAO_LABEL: Record<string, string> = {
 };
 
 export default function FichaAbastecimentoDetalhe({
-  ficha, comboio, modulos, impedimentos, onVoltar,
+  ficha, comboio, modulos, impedimentos, materiais, onVoltar,
 }: {
-  ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; impedimentos: Impedimento[]; onVoltar: () => void;
+  ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; impedimentos: Impedimento[]; materiais: Material[]; onVoltar: () => void;
 }) {
   const { isAdmin } = useAuth();
   const [historico, setHistorico] = useState<HistoricoEntry[]>([]);
@@ -75,10 +75,10 @@ export default function FichaAbastecimentoDetalhe({
         <button onClick={() => setMostrarHistorico((v) => !v)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-xl">
           <History size={14} /> Histórico
         </button>
-        <button onClick={() => imprimirFichaAbastecimento(ficha, comboio, modulos, impedimentos)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+        <button onClick={() => imprimirFichaAbastecimento(ficha, comboio, modulos, impedimentos, materiais)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-xl">
           <Printer size={14} /> Imprimir
         </button>
-        <button onClick={() => gerarPDFFichaAbastecimento(ficha, comboio, modulos, impedimentos)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl">
+        <button onClick={() => gerarPDFFichaAbastecimento(ficha, comboio, modulos, impedimentos, materiais)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl">
           <FileDown size={14} /> PDF
         </button>
         {isAdmin && ficha.ficha.status !== "RASCUNHO" && (
@@ -137,7 +137,7 @@ export default function FichaAbastecimentoDetalhe({
                   const i = ficha.insumos.find((x) => x.insumo_tipo === tipo);
                   return (
                     <tr key={tipo}>
-                      <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</td>
+                      <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{labelMaterialInsumo(tipo, materiais, temTanque2)}</td>
                       <td className="py-2 text-right">{formatarNumero(i?.quantidade_inicial)}</td>
                       <td className="py-2 text-right text-emerald-600">{formatarNumero(i?.entrou)}</td>
                       <td className="py-2 text-right text-red-500">{formatarNumero(i?.saiu)}</td>

@@ -12,7 +12,7 @@ import {
   atualizarCabecalhoFicha, atualizarFichaInsumo, salvarLinhaAbastecimento, excluirLinhaAbastecimento,
   finalizarFicha, getFicha, getMaquinasPorModulo, criarMaquinaAdHoc, criarColaborador,
 } from "./actions";
-import { InsumoTipo, INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import { InsumoTipo, INSUMO_TIPOS, labelMaterialInsumo } from "./config";
 import RecargaModal from "./RecargaModal";
 
 const ADICIONAR_MAQUINA = "__ADICIONAR__";
@@ -313,13 +313,13 @@ export default function FichaAbastecimentoWizard({
         )}
 
         {etapa === 4 && (
-          <ConferenciaSaldo ficha={ficha} temTanque2={temTanque2} onAjustado={refetchFicha} />
+          <ConferenciaSaldo ficha={ficha} materiais={materiais} temTanque2={temTanque2} onAjustado={refetchFicha} />
         )}
 
         {/* Sempre montado (só escondido via CSS) pra não perder o rascunho em andamento se o
             usuário navegar pra outra etapa sem salvar o abastecimento que estava digitando. */}
         <div className={etapa === 5 ? "" : "hidden"}>
-          <AbastecimentosEtapa ficha={ficha} temTanque2={temTanque2} onMudou={refetchFicha} />
+          <AbastecimentosEtapa ficha={ficha} materiais={materiais} temTanque2={temTanque2} onMudou={refetchFicha} />
         </div>
 
         {etapa === 6 && (
@@ -372,13 +372,13 @@ export default function FichaAbastecimentoWizard({
               </div>
             </div>
 
-            <ResumoCalculado ficha={ficha} temTanque2={temTanque2} />
+            <ResumoCalculado ficha={ficha} materiais={materiais} temTanque2={temTanque2} />
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
               <div className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">
                 Abastecimentos Realizados ({ficha.linhas.length})
               </div>
-              <TabelaAbastecimentos linhas={ficha.linhas} temTanque2={temTanque2} />
+              <TabelaAbastecimentos linhas={ficha.linhas} materiais={materiais} temTanque2={temTanque2} />
             </div>
 
             <label className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl cursor-pointer">
@@ -451,7 +451,7 @@ export default function FichaAbastecimentoWizard({
 
 // ─── Etapa 4 — Conferência de Saldo ─────────────────────────────────────────
 
-function ConferenciaSaldo({ ficha, temTanque2, onAjustado }: { ficha: FichaCompleta; temTanque2: boolean; onAjustado: () => void }) {
+function ConferenciaSaldo({ ficha, materiais, temTanque2, onAjustado }: { ficha: FichaCompleta; materiais: Material[]; temTanque2: boolean; onAjustado: () => void }) {
   const [editando, setEditando] = useState<InsumoTipo | null>(null);
   const [valor, setValor] = useState("");
   const [erroAdmin, setErroAdmin] = useState<string | null>(null);
@@ -474,7 +474,7 @@ function ConferenciaSaldo({ ficha, temTanque2, onAjustado }: { ficha: FichaCompl
           const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
           return (
             <div key={tipo} className="flex items-center justify-between py-2.5 text-sm">
-              <span className="text-zinc-600 dark:text-zinc-300 font-semibold">{INSUMO_LABEL[tipo]}</span>
+              <span className="text-zinc-600 dark:text-zinc-300 font-semibold">{labelMaterialInsumo(tipo, materiais, temTanque2)}</span>
               {editando === tipo ? (
                 <div className="flex items-center gap-2">
                   <input type="number" autoFocus value={valor} onChange={(e) => setValor(e.target.value)} className="w-24 px-2 py-1 text-right border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 text-sm" />
@@ -505,12 +505,28 @@ function numOuTraco(v: number | null | undefined) {
   return v ? formatarNumero(Number(v)) : "-";
 }
 
+// Motor e Hidráulico são pontos de consumo diferentes na máquina mas usam o mesmo material/NI
+// (mesmo insumo_tipo HIDRAULICO_MOTOR) — por isso ganham um sufixo pra não ficar com dois
+// campos com o nome idêntico no formulário.
+const INSUMO_POR_CAMPO_LINHA: Record<string, InsumoTipo> = {
+  motor: "HIDRAULICO_MOTOR", corrente: "CORRENTE", graxa: "GRAXA", transmissao: "TRANSMISSAO",
+  fluido_radiador: "FLUIDO", hidraulico: "HIDRAULICO_MOTOR", diferencial: "DIFERENCIAL", arla: "ARLA",
+};
+const SUFIXO_CAMPO_LINHA: Record<string, string> = { motor: "Motor", hidraulico: "Hidráulico" };
+
+function labelCampoLinha(campo: string, materiais: Material[]): string {
+  const base = labelMaterialInsumo(INSUMO_POR_CAMPO_LINHA[campo], materiais);
+  const sufixo = SUFIXO_CAMPO_LINHA[campo];
+  return sufixo ? `${base} (${sufixo})` : base;
+}
+
 // Tabela em formato de grade, igual ao bloco "Consumo Detalhado por Equipamento" da ficha de
 // papel — usada tanto na Etapa 5 (com editar/excluir) quanto no fechamento da Etapa 7 (só leitura).
 function TabelaAbastecimentos({
-  linhas, temTanque2, onEditar, onExcluir,
+  linhas, materiais, temTanque2, onEditar, onExcluir,
 }: {
   linhas: LinhaAbastecimento[];
+  materiais: Material[];
   temTanque2: boolean;
   onEditar?: (id: string) => void;
   onExcluir?: (id: string) => void;
@@ -533,15 +549,15 @@ function TabelaAbastecimentos({
             <th className="text-left p-2">Equipamento</th>
             <th className="text-right p-2">Horím.</th>
             <th className="text-center p-2">Prev?</th>
-            <th className="text-right p-2">Diesel{temTanque2 ? " (Tq)" : ""} (L)</th>
-            <th className="text-right p-2">Motor</th>
-            <th className="text-right p-2">Corrente</th>
-            <th className="text-right p-2">Graxa</th>
-            <th className="text-right p-2">85W140</th>
-            <th className="text-right p-2">Fluido</th>
-            <th className="text-right p-2">Hidr.</th>
-            <th className="text-right p-2">85W140LS</th>
-            <th className="text-right p-2">Arla</th>
+            <th className="text-right p-2">{labelMaterialInsumo("DIESEL_T1", materiais)}{temTanque2 ? " (Tq)" : ""} (L)</th>
+            <th className="text-right p-2">{labelCampoLinha("motor", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("corrente", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("graxa", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("transmissao", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("fluido_radiador", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("hidraulico", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("diferencial", materiais)}</th>
+            <th className="text-right p-2">{labelCampoLinha("arla", materiais)}</th>
             <th className="text-left p-2">Matrícula</th>
             {temAcoes && <th className="text-right p-2">Ações</th>}
           </tr>
@@ -589,8 +605,8 @@ function TabelaAbastecimentos({
 }
 
 function AbastecimentosEtapa({
-  ficha, temTanque2, onMudou,
-}: { ficha: FichaCompleta; temTanque2: boolean; onMudou: () => void }) {
+  ficha, materiais, temTanque2, onMudou,
+}: { ficha: FichaCompleta; materiais: Material[]; temTanque2: boolean; onMudou: () => void }) {
   const [novaLinha, setNovaLinha] = useState<Partial<LinhaAbastecimento> | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
@@ -654,7 +670,7 @@ function AbastecimentosEtapa({
       )}
 
       <TabelaAbastecimentos
-        linhas={ficha.linhas} temTanque2={temTanque2}
+        linhas={ficha.linhas} materiais={materiais} temTanque2={temTanque2}
         onEditar={(id) => { setEditandoId(id); setNovaLinha(null); }}
         onExcluir={excluir}
       />
@@ -663,14 +679,14 @@ function AbastecimentosEtapa({
         const linhaEditando = ficha.linhas.find((l) => l.id === editandoId);
         if (!linhaEditando) return null;
         return (
-          <LinhaCard linha={linhaEditando} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
+          <LinhaCard linha={linhaEditando} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} materiais={materiais} temTanque2={temTanque2}
             salvando={salvandoId === editandoId} onSalvar={(l) => salvar(l, editandoId)} onExcluir={() => excluir(editandoId)}
             onFechar={() => setEditandoId(null)} onMaquinaCriada={adicionarMaquinaLocal} />
         );
       })()}
 
       {novaLinha ? (
-        <LinhaCard linha={novaLinha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
+        <LinhaCard linha={novaLinha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} materiais={materiais} temTanque2={temTanque2}
           salvando={salvandoId === "nova"} onSalvar={(l) => salvar(l, "nova")} onExcluir={() => setNovaLinha(null)}
           onFechar={() => setNovaLinha(null)} novaLinhaLabel onMaquinaCriada={adicionarMaquinaLocal} />
       ) : (
@@ -684,11 +700,12 @@ function AbastecimentosEtapa({
 }
 
 function LinhaCard({
-  linha, maquinas, moduloId, temTanque2, salvando, onSalvar, onExcluir, onFechar, novaLinhaLabel, onMaquinaCriada,
+  linha, maquinas, moduloId, materiais, temTanque2, salvando, onSalvar, onExcluir, onFechar, novaLinhaLabel, onMaquinaCriada,
 }: {
   linha: Partial<LinhaAbastecimento>;
   maquinas: MaquinaSuzano[];
   moduloId: string | null;
+  materiais: Material[];
   temTanque2: boolean;
   salvando: boolean;
   onSalvar: (l: Partial<LinhaAbastecimento>) => void;
@@ -797,7 +814,7 @@ function LinhaCard({
         </label>
       </div>
 
-      <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">Diesel</div>
+      <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">{labelMaterialInsumo("DIESEL_T1", materiais)}</div>
       <div className={cn("grid gap-3", temTanque2 ? "grid-cols-3" : "grid-cols-2")}>
         <div>
           <label className={labelCls}>Registradora</label>
@@ -820,13 +837,9 @@ function LinhaCard({
 
       <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">Lubrificantes</div>
       <div className="grid grid-cols-3 gap-2">
-        {([
-          ["motor", "Motor"], ["corrente", "Corrente"], ["graxa", "Graxa"],
-          ["transmissao", "85W140"], ["fluido_radiador", "Fluido"], ["hidraulico", "Hidráulico"],
-          ["diferencial", "85W140LS"], ["arla", "Arla"],
-        ] as [keyof LinhaAbastecimento, string][]).map(([campoNome, label]) => (
+        {(["motor", "corrente", "graxa", "transmissao", "fluido_radiador", "hidraulico", "diferencial", "arla"] as (keyof LinhaAbastecimento)[]).map((campoNome) => (
           <div key={campoNome}>
-            <label className="text-[9px] font-bold text-zinc-400 block mb-1">{label}</label>
+            <label className="text-[9px] font-bold text-zinc-400 block mb-1">{labelCampoLinha(campoNome, materiais)}</label>
             <input type="number" step="0.1" className="w-full px-2 py-1.5 text-xs border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900"
               value={(draft[campoNome] as number) ?? ""} onChange={(e) => campo(campoNome, e.target.value ? Number(e.target.value) : null)} />
           </div>
@@ -872,7 +885,7 @@ function EntradasEtapa({
           const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
           return (
             <div key={tipo} className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</span>
+              <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{labelMaterialInsumo(tipo, materiais, temTanque2)}</span>
               <input type="number" step="0.1" defaultValue={insumo?.entrou ?? 0} className="w-28 px-2 py-1.5 text-right text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950"
                 onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, tipo, { entrou: Number(e.target.value || 0) }); onAjustado(); }} />
             </div>
@@ -896,7 +909,7 @@ function EntradasEtapa({
 
 // ─── Resumo calculado (Etapa 7) ─────────────────────────────────────────────
 
-function ResumoCalculado({ ficha, temTanque2 }: { ficha: FichaCompleta; temTanque2: boolean }) {
+function ResumoCalculado({ ficha, materiais, temTanque2 }: { ficha: FichaCompleta; materiais: Material[]; temTanque2: boolean }) {
   const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
@@ -918,7 +931,7 @@ function ResumoCalculado({ ficha, temTanque2 }: { ficha: FichaCompleta; temTanqu
               const negativo = Number(i?.restou || 0) < 0;
               return (
                 <tr key={tipo}>
-                  <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[tipo]}</td>
+                  <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{labelMaterialInsumo(tipo, materiais, temTanque2)}</td>
                   <td className="py-2 text-right">{formatarNumero(Number(i?.quantidade_inicial || 0))}</td>
                   <td className="py-2 text-right text-emerald-600">{formatarNumero(Number(i?.entrou || 0))}</td>
                   <td className="py-2 text-right text-red-500">{formatarNumero(Number(i?.saiu || 0))}</td>

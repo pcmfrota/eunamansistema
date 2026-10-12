@@ -5,7 +5,7 @@ import { Warehouse, Truck, Plus, Camera, Ruler } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
 import { Comboio, Material, getAuditoriaComboio, AuditoriaInsumoComboio } from "./actions";
-import { INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import { labelMaterialInsumo } from "./config";
 import { getSkidsDisponiveis, getAuditoriaSkid, registrarEntradaSkid, registrarMedicaoSkid, Skid, AuditoriaSkidItem } from "./recargaActions";
 
 const inputCls = "px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-amber-500";
@@ -50,6 +50,8 @@ export default function EstoqueAuditoria({ comboios, materiais }: { comboios: Co
 
   useEffect(() => { carregar(); }, [tipo, comboioId, skidId, dataInicio, dataFim]);
 
+  const temTanque2 = (comboios.find((c) => c.id === comboioId)?.numero_tanques_diesel || 1) >= 2;
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -92,7 +94,7 @@ export default function EstoqueAuditoria({ comboios, materiais }: { comboios: Co
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {auditoriaComboio.map((a) => (
                 <tr key={a.insumo_tipo}>
-                  <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{INSUMO_LABEL[a.insumo_tipo]}</td>
+                  <td className="py-2 font-semibold text-zinc-600 dark:text-zinc-300">{labelMaterialInsumo(a.insumo_tipo, materiais, temTanque2)}</td>
                   <td className="py-2 text-right text-emerald-600">{formatarNum(a.entrada)}</td>
                   <td className="py-2 text-right text-red-500">{formatarNum(a.saida)}</td>
                   <td className="py-2 text-right font-black">{formatarNum(a.saldoAtual)}</td>

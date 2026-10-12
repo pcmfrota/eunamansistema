@@ -8,7 +8,8 @@ import {
   getConsumoDieselPorDia, getConsumoPorEquipamento, getConsumoPorInsumo, getConsumoPorCategoriaVeiculo,
   PontoDia, PontoEquipamento, PontoInsumo, PontoCategoria,
 } from "./graficosActions";
-import { INSUMO_LABEL } from "./config";
+import { labelMaterialInsumo } from "./config";
+import { Material } from "./actions";
 
 const CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0891b2", "#dc2626", "#64748b", "#db2777"];
 const inputCls = "px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-amber-500";
@@ -27,7 +28,7 @@ function formatarDiaCurto(dia: string) {
   return `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
 }
 
-export default function GraficosPainel() {
+export default function GraficosPainel({ materiais }: { materiais: Material[] }) {
   const [dataInicio, setDataInicio] = useState(primeiroDiaDoMes());
   const [dataFim, setDataFim] = useState(hoje());
   const [porDia, setPorDia] = useState<PontoDia[]>([]);
@@ -105,8 +106,8 @@ export default function GraficosPainel() {
                 <BarChart data={porInsumo} layout="vertical" margin={{ left: 0, right: 65, top: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
                   <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax * 1.2]} />
-                  <YAxis dataKey="insumo_tipo" type="category" tickFormatter={(t) => INSUMO_LABEL[t as keyof typeof INSUMO_LABEL] || t} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
-                  <Tooltip formatter={(v: number) => v.toLocaleString("pt-BR")} labelFormatter={(t) => INSUMO_LABEL[t as keyof typeof INSUMO_LABEL] || t} />
+                  <YAxis dataKey="insumo_tipo" type="category" tickFormatter={(t) => labelMaterialInsumo(t, materiais)} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
+                  <Tooltip formatter={(v: number) => v.toLocaleString("pt-BR")} labelFormatter={(t) => labelMaterialInsumo(t, materiais)} />
                   <Bar dataKey="quantidade" radius={[0, 4, 4, 0]} barSize={14}>
                     <LabelList dataKey="quantidade" position="right" formatter={(v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} style={{ fontSize: 9, fill: "#52525b" }} />
                     {porInsumo.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}

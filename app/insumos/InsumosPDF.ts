@@ -1,8 +1,8 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
-import { FichaCompleta, Comboio, Modulo, Impedimento } from "./actions";
-import { INSUMO_TIPOS, INSUMO_LABEL } from "./config";
+import { FichaCompleta, Comboio, Modulo, Impedimento, Material } from "./actions";
+import { INSUMO_TIPOS, labelMaterialInsumo } from "./config";
 import { RecargaCompleta } from "./recargaActions";
 
 function formatarNumero(v: number | null | undefined) {
@@ -18,7 +18,7 @@ function formatarData(d: string) {
 // ─── Ficha de Abastecimento ─────────────────────────────────────────────────
 
 function montarHtmlFichaAbastecimento(
-  ficha: FichaCompleta, comboio: Comboio, modulos: Modulo[], impedimentos: Impedimento[]
+  ficha: FichaCompleta, comboio: Comboio, modulos: Modulo[], impedimentos: Impedimento[], materiais: Material[]
 ): string {
   const hoje = new Date().toLocaleDateString("pt-BR");
   const modulo = modulos.find((m) => m.id === ficha.ficha.modulo_id);
@@ -31,7 +31,7 @@ function montarHtmlFichaAbastecimento(
     const ehDiesel = tipo === "DIESEL_T1" || tipo === "DIESEL_T2";
     return `
       <tr>
-        <td>${INSUMO_LABEL[tipo]}</td>
+        <td>${labelMaterialInsumo(tipo, materiais, temTanque2)}</td>
         <td style="text-align:right;">${ehDiesel ? formatarNumero(i?.acumulado_registradora_inicial) : "-"}</td>
         <td style="text-align:right;">${formatarNumero(i?.quantidade_inicial)}</td>
         <td style="text-align:right;">${formatarNumero(i?.entrou)}</td>
@@ -102,8 +102,11 @@ function montarHtmlFichaAbastecimento(
       <table style="width:100%; border-collapse:collapse; font-size:8px;" border="1" cellpadding="3">
         <thead style="background-color:#e0e0e0; font-weight:bold;">
           <tr>
-            <th>Hr. Ini</th><th>Hr. Fim</th><th>Equipamento</th><th>Horím.</th><th>Diesel (L)</th><th>Prev?</th>
-            <th>Motor</th><th>Corrente</th><th>Graxa</th><th>85W140</th><th>Fluido</th><th>Hidr.</th><th>85W140LS</th><th>Arla</th><th>Matrícula</th>
+            <th>Hr. Ini</th><th>Hr. Fim</th><th>Equipamento</th><th>Horím.</th><th>${labelMaterialInsumo("DIESEL_T1", materiais)} (L)</th><th>Prev?</th>
+            <th>${labelMaterialInsumo("HIDRAULICO_MOTOR", materiais)} (Motor)</th><th>${labelMaterialInsumo("CORRENTE", materiais)}</th>
+            <th>${labelMaterialInsumo("GRAXA", materiais)}</th><th>${labelMaterialInsumo("TRANSMISSAO", materiais)}</th>
+            <th>${labelMaterialInsumo("FLUIDO", materiais)}</th><th>${labelMaterialInsumo("HIDRAULICO_MOTOR", materiais)} (Hidr.)</th>
+            <th>${labelMaterialInsumo("DIFERENCIAL", materiais)}</th><th>${labelMaterialInsumo("ARLA", materiais)}</th><th>Matrícula</th>
           </tr>
         </thead>
         <tbody>${linhasEquipamento || `<tr><td colspan="15" style="text-align:center; color:#888;">Nenhum lançamento</td></tr>`}</tbody>
@@ -163,16 +166,16 @@ async function fotografarEGerarPdf(html: string, nomeArquivo: string, titulo: st
 }
 
 export async function gerarPDFFichaAbastecimento(
-  ficha: FichaCompleta, comboio: Comboio, modulos: Modulo[], impedimentos: Impedimento[], modo: "download" | "share" = "download"
+  ficha: FichaCompleta, comboio: Comboio, modulos: Modulo[], impedimentos: Impedimento[], materiais: Material[], modo: "download" | "share" = "download"
 ) {
-  const html = montarHtmlFichaAbastecimento(ficha, comboio, modulos, impedimentos);
+  const html = montarHtmlFichaAbastecimento(ficha, comboio, modulos, impedimentos, materiais);
   await fotografarEGerarPdf(html, `Ficha_Abastecimento_${comboio.placa}_${ficha.ficha.data}.pdf`, "Ficha de Abastecimento", `Comboio ${comboio.placa}`, modo);
 }
 
-export function imprimirFichaAbastecimento(ficha: FichaCompleta, comboio: Comboio, modulos: Modulo[], impedimentos: Impedimento[]) {
+export function imprimirFichaAbastecimento(ficha: FichaCompleta, comboio: Comboio, modulos: Modulo[], impedimentos: Impedimento[], materiais: Material[]) {
   const janela = window.open("", "_blank");
   if (!janela) { alert("Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups."); return; }
-  janela.document.write(`<html><head><title>Ficha de Abastecimento</title><style>body{margin:0;padding:20px;}@media print{body{padding:0;}}</style></head><body>${montarHtmlFichaAbastecimento(ficha, comboio, modulos, impedimentos)}</body></html>`);
+  janela.document.write(`<html><head><title>Ficha de Abastecimento</title><style>body{margin:0;padding:20px;}@media print{body{padding:0;}}</style></head><body>${montarHtmlFichaAbastecimento(ficha, comboio, modulos, impedimentos, materiais)}</body></html>`);
   janela.document.close();
   janela.onload = () => { janela.focus(); janela.print(); };
 }

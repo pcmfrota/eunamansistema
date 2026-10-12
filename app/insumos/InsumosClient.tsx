@@ -123,7 +123,7 @@ export default function InsumosClient({
       ) : abaPrincipal === "ESTOQUE" ? (
         <EstoqueAuditoria comboios={comboios} materiais={materiais} />
       ) : abaPrincipal === "PAINEL" ? (
-        <GraficosPainel />
+        <GraficosPainel materiais={materiais} />
       ) : abaPrincipal === "CADASTROS" ? (
         <Cadastros />
       ) : (

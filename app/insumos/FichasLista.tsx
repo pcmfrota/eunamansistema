@@ -122,7 +122,7 @@ export default function FichasLista({
     const comboio = comboios.find((c) => c.id === fichaDetalhe.ficha.equipamento_id)!;
     return (
       <FichaAbastecimentoDetalhe
-        ficha={fichaDetalhe} comboio={comboio} modulos={modulos} impedimentos={impedimentos}
+        ficha={fichaDetalhe} comboio={comboio} modulos={modulos} impedimentos={impedimentos} materiais={materiais}
         onVoltar={() => { setFichaDetalhe(null); carregar(); }}
       />
     );
