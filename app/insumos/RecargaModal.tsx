@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Droplets, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
@@ -53,6 +53,64 @@ export default function RecargaModal({
   const [concluido, setConcluido] = useState(false);
 
   const temTanque2 = comboio.numero_tanques_diesel >= 2;
+
+  // Segunda camada de segurança contra travamento (mesmo padrão do wizard de abastecimento):
+  // salva o formulário em andamento a cada mudança e restaura se o app fechar/crashar antes
+  // de "Finalizar Recarga".
+  const draftKeyRecarga = `insumos_draft_recarga_${comboio.id}`;
+  const draftRecargaRestauradoRef = useRef(false);
+  const draftRecargaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    localDb.get<{ id: string; draftData: any }>("aux_config", draftKeyRecarga).then((d) => {
+      if (ativo && d?.draftData) {
+        const v = d.draftData;
+        if (v.origemTipo) setOrigemTipo(v.origemTipo);
+        if (v.skidId) setSkidId(v.skidId);
+        if (v.origemDeposito) setOrigemDeposito(v.origemDeposito);
+        if (v.origemOutroTexto) setOrigemOutroTexto(v.origemOutroTexto);
+        if (v.moduloId) setModuloId(v.moduloId);
+        if (v.turno) setTurno(v.turno);
+        if (v.data) setData(v.data);
+        if (v.hora) setHora(v.hora);
+        if (v.motoristaNome) setMotoristaNome(v.motoristaNome);
+        if (v.motoristaMatricula) setMotoristaMatricula(v.motoristaMatricula);
+        if (v.observacao) setObservacao(v.observacao);
+        if (v.localRecarga) setLocalRecarga(v.localRecarga);
+        if (v.responsavelNome) setResponsavelNome(v.responsavelNome);
+        if (v.responsavelMatricula) setResponsavelMatricula(v.responsavelMatricula);
+        if (v.assinatura) setAssinatura(v.assinatura);
+        if (v.itens) setItens(v.itens);
+      }
+      draftRecargaRestauradoRef.current = true;
+    });
+    return () => { ativo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKeyRecarga]);
+
+  useEffect(() => {
+    if (!draftRecargaRestauradoRef.current) return;
+    if (draftRecargaTimerRef.current) clearTimeout(draftRecargaTimerRef.current);
+    const draftData = {
+      origemTipo, skidId, origemDeposito, origemOutroTexto, moduloId, turno, data, hora,
+      motoristaNome, motoristaMatricula, observacao, localRecarga, responsavelNome, responsavelMatricula,
+      assinatura, itens,
+    };
+    draftRecargaTimerRef.current = setTimeout(() => {
+      localDb.put("aux_config", { id: draftKeyRecarga, draftData }).catch(() => {});
+    }, 500);
+    return () => { if (draftRecargaTimerRef.current) clearTimeout(draftRecargaTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    origemTipo, skidId, origemDeposito, origemOutroTexto, moduloId, turno, data, hora,
+    motoristaNome, motoristaMatricula, observacao, localRecarga, responsavelNome, responsavelMatricula,
+    assinatura, itens,
+  ]);
+
+  async function limparDraftRecarga() {
+    try { await localDb.delete("aux_config", draftKeyRecarga); } catch {}
+  }
 
   useEffect(() => {
     if (origemTipo !== "SKID") return;
@@ -163,6 +221,7 @@ export default function RecargaModal({
     try {
       if (!isOnline) {
         await registrarRecargaOffline(input);
+        await limparDraftRecarga();
         setConcluido(true);
         onConcluida?.();
         return;
@@ -170,10 +229,12 @@ export default function RecargaModal({
       try {
         const result = await criarRecargaFinalizada(input);
         if (result.error) { setErro(result.error); return; }
+        await limparDraftRecarga();
         setConcluido(true);
         onConcluida?.();
       } catch {
         await registrarRecargaOffline(input);
+        await limparDraftRecarga();
         setConcluido(true);
         onConcluida?.();
       }

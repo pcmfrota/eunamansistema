@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
@@ -110,6 +110,40 @@ export default function FichaAbastecimentoWizard({
     observacoes_fechamento: "",
   });
 
+  // Segunda camada de segurança: se o app travar/fechar no meio do preenchimento (antes de
+  // clicar em "Próximo"/"Finalizar", que já salvam de verdade), o que foi digitado no
+  // cabeçalho e no fechamento não pode sumir. Grava um rascunho local (debounced) a cada
+  // mudança e restaura ao reabrir a mesma ficha, no mesmo molde do draftKey do app/os/NovoModal.tsx.
+  const draftKeyFicha = `insumos_draft_ficha_${ficha.ficha.id}`;
+  const draftRestauradoRef = useRef(false);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    localDb.get<{ id: string; draftData: { cab?: any; fechamento?: any } }>("aux_config", draftKeyFicha).then((draft) => {
+      if (!ativo) return;
+      if (draft?.draftData?.cab) setCab((p) => ({ ...p, ...draft.draftData!.cab }));
+      if (draft?.draftData?.fechamento) setFechamento((p) => ({ ...p, ...draft.draftData!.fechamento }));
+      draftRestauradoRef.current = true;
+    });
+    return () => { ativo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ficha.ficha.id]);
+
+  useEffect(() => {
+    if (!draftRestauradoRef.current) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      localDb.put("aux_config", { id: draftKeyFicha, draftData: { cab, fechamento } }).catch(() => {});
+    }, 500);
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cab, fechamento]);
+
+  async function limparDraftFicha() {
+    try { await localDb.delete("aux_config", draftKeyFicha); } catch {}
+  }
+
   const insumoPorTipo = useMemo(() => {
     const map: Record<string, typeof ficha.insumos[number]> = {};
     ficha.insumos.forEach((i) => { map[i.insumo_tipo] = i; });
@@ -214,6 +248,7 @@ export default function FichaAbastecimentoWizard({
         const fichaAtualizada = { ...ficha.ficha, ...payload };
         setFicha((prev) => ({ ...prev, ficha: fichaAtualizada }));
         await persistirFichaLocal(fichaAtualizada);
+        await limparDraftFicha();
       };
       if (!isOnline) {
         await enqueueAtualizarCabecalho(ficha.ficha.id, payload);
@@ -272,6 +307,7 @@ export default function FichaAbastecimentoWizard({
         await enqueueFinalizar(ficha.ficha.id, payload);
         const fichaAtualizada = { ...ficha.ficha, ...payload, status: "FINALIZADA" as const };
         await persistirFichaLocal(fichaAtualizada);
+        await limparDraftFicha();
         alert("Ficha finalizada offline! O saldo final será conferido automaticamente quando o aparelho sincronizar com a internet.");
         onVoltar();
       };
@@ -280,6 +316,7 @@ export default function FichaAbastecimentoWizard({
         const result = await finalizarFicha(ficha.ficha.id, payload);
         if (result.error) { setErro(result.error); return; }
         if (result.alertas?.length) { setAlertasFinalizacao(result.alertas); return; }
+        await limparDraftFicha();
         onVoltar();
       } catch {
         await finalizarOffline();
@@ -896,6 +933,38 @@ function LinhaCard({
   const { isOnline } = useOffline();
   const [draft, setDraft] = useState<Partial<LinhaAbastecimento>>(linha);
   const campo = (k: keyof LinhaAbastecimento, v: any) => setDraft((p) => ({ ...p, [k]: v }));
+
+  // Segunda camada de segurança: protege o abastecimento sendo digitado (ainda não clicou em
+  // "Salvar") contra um crash/fechamento do app. Igual ao rascunho do cabeçalho acima, só que
+  // por linha — a chave inclui o id (ou "nova") pra não misturar o rascunho de duas máquinas.
+  const draftKeyLinha = `insumos_draft_linha_${linha.ficha_id}_${linha.id || "nova"}`;
+  const draftLinhaRestauradoRef = useRef(false);
+  const draftLinhaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    localDb.get<{ id: string; draftData: Partial<LinhaAbastecimento> }>("aux_config", draftKeyLinha).then((d) => {
+      if (ativo && d?.draftData) setDraft((p) => ({ ...p, ...d.draftData }));
+      draftLinhaRestauradoRef.current = true;
+    });
+    return () => { ativo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKeyLinha]);
+
+  useEffect(() => {
+    if (!draftLinhaRestauradoRef.current) return;
+    if (draftLinhaTimerRef.current) clearTimeout(draftLinhaTimerRef.current);
+    draftLinhaTimerRef.current = setTimeout(() => {
+      localDb.put("aux_config", { id: draftKeyLinha, draftData: draft }).catch(() => {});
+    }, 500);
+    return () => { if (draftLinhaTimerRef.current) clearTimeout(draftLinhaTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  // Desmonta só quando o card fecha de verdade (salvou, excluiu ou "X") — nunca num crash,
+  // que não roda cleanup nenhum — então limpar aqui no unmount nunca apaga um rascunho que
+  // ainda precisava sobreviver a um fechamento inesperado do app.
+  useEffect(() => () => { localDb.delete("aux_config", draftKeyLinha).catch(() => {}); }, [draftKeyLinha]);
 
   const [modoNovaMaquina, setModoNovaMaquina] = useState(false);
   const [novoCodigo, setNovoCodigo] = useState("");
