@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Droplets, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
-import { Comboio, Modulo, Material } from "./actions";
+import { SearchableSelect } from "@/components/SearchableSelect";
+import { Comboio, Modulo, Material, Colaborador, criarColaborador } from "./actions";
 import { criarRecargaFinalizada, getSkidsDisponiveis, getSaldoSkid, OrigemRecarga, Skid, SaldoSkidItem } from "./recargaActions";
 
 const inputCls = "w-full px-3 py-2.5 text-sm border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-indigo-500";
@@ -13,14 +14,16 @@ const labelCls = "text-[10px] font-black text-zinc-500 uppercase tracking-wider 
 type ItemForm = { material_id: string; quantidade: string; req_nf: string; tanque_diesel: 1 | 2 };
 
 export default function RecargaModal({
-  comboio, modulos, materiais, onClose, onConcluida,
+  comboio, modulos, materiais, colaboradores, onClose, onConcluida,
 }: {
   comboio: Comboio;
   modulos: Modulo[];
   materiais: Material[];
+  colaboradores: Colaborador[];
   onClose: () => void;
   onConcluida?: () => void;
 }) {
+  const [listaColaboradores, setListaColaboradores] = useState(colaboradores);
   const [origemTipo, setOrigemTipo] = useState<OrigemRecarga>("SKID");
   const [skids, setSkids] = useState<Skid[]>([]);
   const [skidId, setSkidId] = useState("");
@@ -61,6 +64,27 @@ export default function RecargaModal({
     saldoSkid.forEach((s) => { map[s.material_id] = s.saldo; });
     return map;
   }, [saldoSkid]);
+
+  const motoristasOptions = useMemo(
+    () => listaColaboradores.filter((c) => c.tipo === "MOTORISTA").map((c) => ({ value: c.nome, label: c.matricula ? `${c.nome} (${c.matricula})` : c.nome })),
+    [listaColaboradores]
+  );
+
+  function aplicarMotorista(nome: string) {
+    const c = listaColaboradores.find((x) => x.nome === nome);
+    setMotoristaNome(nome);
+    setMotoristaMatricula(c?.matricula || motoristaMatricula);
+  }
+
+  async function adicionarNovoMotorista(nome: string) {
+    const result = await criarColaborador(nome, "MOTORISTA");
+    if (result.error) { setErro(result.error); return; }
+    if (result.colaborador) {
+      const novo = result.colaborador;
+      setListaColaboradores((prev) => (prev.some((c) => c.id === novo.id) ? prev : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))));
+      aplicarMotorista(novo.nome);
+    }
+  }
 
   function toggleMaterial(materialId: string) {
     setItens((prev) => {
@@ -207,7 +231,10 @@ export default function RecargaModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Motorista EUN</label>
-                <input className={inputCls} value={motoristaNome} onChange={(e) => setMotoristaNome(e.target.value)} />
+                <SearchableSelect
+                  options={motoristasOptions} value={motoristaNome} onChange={aplicarMotorista}
+                  onAddNew={adicionarNovoMotorista} placeholder="Selecione ou busque..."
+                />
               </div>
               <div>
                 <label className={labelCls}>Matrícula</label>

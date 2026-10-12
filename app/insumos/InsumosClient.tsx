@@ -203,6 +203,7 @@ export default function InsumosClient({
           comboio={comboioRecarga}
           modulos={modulos}
           materiais={materiais}
+          colaboradores={colaboradores}
           onClose={() => setComboioRecarga(null)}
         />
       )}

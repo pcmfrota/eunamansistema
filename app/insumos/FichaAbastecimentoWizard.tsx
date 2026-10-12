@@ -323,7 +323,7 @@ export default function FichaAbastecimentoWizard({
         </div>
 
         {etapa === 6 && (
-          <EntradasEtapa ficha={ficha} comboio={comboio} modulos={modulos} materiais={materiais} temTanque2={temTanque2} onAjustado={refetchFicha} />
+          <EntradasEtapa ficha={ficha} comboio={comboio} modulos={modulos} materiais={materiais} colaboradores={listaColaboradores} temTanque2={temTanque2} onAjustado={refetchFicha} />
         )}
 
         {etapa === 7 && (
@@ -856,8 +856,8 @@ function LinhaCard({
 // ─── Etapa 6 — Entradas no turno ────────────────────────────────────────────
 
 function EntradasEtapa({
-  ficha, comboio, modulos, materiais, temTanque2, onAjustado,
-}: { ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; materiais: Material[]; temTanque2: boolean; onAjustado: () => void }) {
+  ficha, comboio, modulos, materiais, colaboradores, temTanque2, onAjustado,
+}: { ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; materiais: Material[]; colaboradores: Colaborador[]; temTanque2: boolean; onAjustado: () => void }) {
   const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
   const [mostrarRecarga, setMostrarRecarga] = useState(false);
 
@@ -885,7 +885,7 @@ function EntradasEtapa({
       </button>
       {mostrarRecarga && (
         <RecargaModal
-          comboio={comboio} modulos={modulos} materiais={materiais}
+          comboio={comboio} modulos={modulos} materiais={materiais} colaboradores={colaboradores}
           onClose={() => setMostrarRecarga(false)}
           onConcluida={onAjustado}
         />
