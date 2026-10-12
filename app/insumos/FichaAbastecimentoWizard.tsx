@@ -8,13 +8,21 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { createClient } from "@/utils/supabase/client";
 import {
   FichaCompleta, Comboio, Modulo, Material, Impedimento, MaquinaSuzano, Colaborador,
-  LinhaAbastecimento, FechamentoPayload,
+  LinhaAbastecimento, FechamentoPayload, FichaInsumo,
   atualizarCabecalhoFicha, atualizarFichaInsumo, salvarLinhaAbastecimento, excluirLinhaAbastecimento,
   finalizarFicha, getFicha, getMaquinasPorModulo, criarMaquinaAdHoc, criarColaborador,
 } from "./actions";
 import { InsumoTipo, INSUMO_TIPOS, labelMaterialInsumo } from "./config";
 import RecargaModal from "./RecargaModal";
 import { getRecargasAplicadasNaFicha, RecargaAplicada } from "./recargaActions";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
+import { offlineMedia } from "@/lib/offline-media";
+import {
+  montarFichaCompletaOffline, enqueueAtualizarCabecalho, enqueueAtualizarInsumo,
+  enqueueSalvarLinha, enqueueExcluirLinha, enqueueFinalizar, getRecargasAplicadasNaFichaOffline,
+  persistirFichaLocal, persistirFichaInsumoLocal, persistirLinhaLocal, removerLinhaLocal,
+} from "./offlineInsumos";
 
 const ADICIONAR_MAQUINA = "__ADICIONAR__";
 
@@ -30,6 +38,22 @@ function formatarPlaca(placa: string) {
 
 function formatarNumero(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+}
+
+// Espelha o cálculo de "restou" feito em atualizarFichaInsumo (app/insumos/actions.ts) pra
+// poder gravar o ajuste localmente quando offline, sem esperar o servidor recalcular.
+async function aplicarAjusteInsumoOffline(
+  fichaId: string, insumos: FichaInsumo[], tipo: InsumoTipo,
+  patch: Partial<Pick<FichaInsumo, "acumulado_registradora_inicial" | "quantidade_inicial" | "entrou" | "acumulado_registradora_final">>
+): Promise<FichaInsumo | null> {
+  const atual = insumos.find((i) => i.insumo_tipo === tipo);
+  if (!atual) return null;
+  const novo = { ...atual, ...patch };
+  const restou = Number(novo.quantidade_inicial || 0) + Number(novo.entrou || 0) - Number(novo.saiu || 0);
+  const atualizado: FichaInsumo = { ...novo, restou };
+  await enqueueAtualizarInsumo(fichaId, tipo, patch);
+  await persistirFichaInsumoLocal(atualizado);
+  return atualizado;
 }
 
 const inputCls = "w-full px-3 py-2.5 text-sm border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-amber-500";
@@ -48,6 +72,7 @@ export default function FichaAbastecimentoWizard({
   onVoltar: () => void;
   onAtualizarFicha: (f: FichaCompleta) => void;
 }) {
+  const { isOnline } = useOffline();
   const [listaColaboradores, setListaColaboradores] = useState(colaboradores);
   const [ficha, setFicha] = useState(fichaInicial);
   const [etapa, setEtapa] = useState(1);
@@ -111,18 +136,62 @@ export default function FichaAbastecimentoWizard({
     setCab((p) => ({ ...p, lubrificador_nome: nome, lubrificador_matricula: c?.matricula || p.lubrificador_matricula }));
   }
   async function adicionarNovoColaborador(nome: string, tipo: "MOTORISTA" | "LUBRIFICADOR", aplicar: (nome: string) => void) {
-    const result = await criarColaborador(nome, tipo);
-    if (result.error) { setErro(result.error); return; }
-    if (result.colaborador) {
-      const novo = result.colaborador;
-      setListaColaboradores((prev) => (prev.some((c) => c.id === novo.id) ? prev : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))));
+    const nomeTrim = nome.trim();
+    if (!nomeTrim) return;
+    if (!isOnline) {
+      const existente = listaColaboradores.find((c) => c.nome.toLowerCase() === nomeTrim.toLowerCase());
+      if (existente) { aplicar(existente.nome); return; }
+      const novo: Colaborador = { id: `temp_colab_${Date.now()}`, nome: nomeTrim, matricula: null, tipo };
+      await localDb.put("colaboradores", novo);
+      await localDb.addToQueue("colaborador", "create", novo);
+      setListaColaboradores((prev) => [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome)));
       aplicar(novo.nome);
+      return;
+    }
+    try {
+      const result = await criarColaborador(nomeTrim, tipo);
+      if (result.error) { setErro(result.error); return; }
+      if (result.colaborador) {
+        const novo = result.colaborador;
+        setListaColaboradores((prev) => (prev.some((c) => c.id === novo.id) ? prev : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))));
+        await localDb.put("colaboradores", novo);
+        aplicar(novo.nome);
+      }
+    } catch {
+      await adicionarNovoColaborador(nomeTrim, tipo, aplicar);
+    }
+  }
+
+  async function salvarRegistradoraFinal(tipo: InsumoTipo, valorStr: string) {
+    const patch = { acumulado_registradora_final: valorStr ? Number(valorStr) : undefined };
+    if (!isOnline) {
+      const atualizado = await aplicarAjusteInsumoOffline(ficha.ficha.id, ficha.insumos, tipo, patch);
+      if (atualizado) setFicha((prev) => ({ ...prev, insumos: prev.insumos.map((i) => (i.insumo_tipo === tipo ? atualizado : i)) }));
+      return;
+    }
+    try {
+      const result = await atualizarFichaInsumo(ficha.ficha.id, tipo, patch);
+      if (result && "error" in result && result.error) { setErro(result.error); return; }
+      refetchFicha();
+    } catch {
+      const atualizado = await aplicarAjusteInsumoOffline(ficha.ficha.id, ficha.insumos, tipo, patch);
+      if (atualizado) setFicha((prev) => ({ ...prev, insumos: prev.insumos.map((i) => (i.insumo_tipo === tipo ? atualizado : i)) }));
     }
   }
 
   async function refetchFicha() {
-    const r = await getFicha(ficha.ficha.id);
-    if (r.ficha) { setFicha(r.ficha); onAtualizarFicha(r.ficha); }
+    if (!isOnline) {
+      const r = await montarFichaCompletaOffline(ficha.ficha.id);
+      if (r) { setFicha(r); onAtualizarFicha(r); }
+      return;
+    }
+    try {
+      const r = await getFicha(ficha.ficha.id);
+      if (r.ficha) { setFicha(r.ficha); onAtualizarFicha(r.ficha); }
+    } catch {
+      const r = await montarFichaCompletaOffline(ficha.ficha.id);
+      if (r) { setFicha(r); onAtualizarFicha(r); }
+    }
   }
 
   async function salvarCabecalho() {
@@ -141,10 +210,26 @@ export default function FichaAbastecimentoWizard({
         regua_tanque2_inicial_lts: cab.regua_tanque2_inicial_lts ? Number(cab.regua_tanque2_inicial_lts) : null,
         observacoes: cab.observacoes || null,
       };
-      const result = await atualizarCabecalhoFicha(ficha.ficha.id, payload);
-      if (result.error) { setErro(result.error); return false; }
-      setFicha((prev) => ({ ...prev, ficha: { ...prev.ficha, ...payload } }));
-      return true;
+      const aplicarLocalmente = async () => {
+        const fichaAtualizada = { ...ficha.ficha, ...payload };
+        setFicha((prev) => ({ ...prev, ficha: fichaAtualizada }));
+        await persistirFichaLocal(fichaAtualizada);
+      };
+      if (!isOnline) {
+        await enqueueAtualizarCabecalho(ficha.ficha.id, payload);
+        await aplicarLocalmente();
+        return true;
+      }
+      try {
+        const result = await atualizarCabecalhoFicha(ficha.ficha.id, payload);
+        if (result.error) { setErro(result.error); return false; }
+        await aplicarLocalmente();
+        return true;
+      } catch {
+        await enqueueAtualizarCabecalho(ficha.ficha.id, payload);
+        await aplicarLocalmente();
+        return true;
+      }
     } finally {
       setSalvando(false);
     }
@@ -179,10 +264,26 @@ export default function FichaAbastecimentoWizard({
         codigo_impedimento_id: fechamento.codigo_impedimento_id || null,
         observacoes: fechamento.observacoes_fechamento || null,
       };
-      const result = await finalizarFicha(ficha.ficha.id, payload);
-      if (result.error) { setErro(result.error); return; }
-      if (result.alertas?.length) { setAlertasFinalizacao(result.alertas); return; }
-      onVoltar();
+      // Offline não dá pra rodar a validação de saldo/divergência (depende do estado mais
+      // atual do servidor): finaliza localmente com aviso informativo e confere de verdade
+      // quando sincronizar — travar o colaborador aqui seria pior do que um saldo a conferir
+      // depois (decisão registrada no plano: nunca perder/bloquear o fechamento do turno).
+      const finalizarOffline = async () => {
+        await enqueueFinalizar(ficha.ficha.id, payload);
+        const fichaAtualizada = { ...ficha.ficha, ...payload, status: "FINALIZADA" as const };
+        await persistirFichaLocal(fichaAtualizada);
+        alert("Ficha finalizada offline! O saldo final será conferido automaticamente quando o aparelho sincronizar com a internet.");
+        onVoltar();
+      };
+      if (!isOnline) { await finalizarOffline(); return; }
+      try {
+        const result = await finalizarFicha(ficha.ficha.id, payload);
+        if (result.error) { setErro(result.error); return; }
+        if (result.alertas?.length) { setAlertasFinalizacao(result.alertas); return; }
+        onVoltar();
+      } catch {
+        await finalizarOffline();
+      }
     } finally {
       setSalvando(false);
     }
@@ -320,7 +421,7 @@ export default function FichaAbastecimentoWizard({
         {/* Sempre montado (só escondido via CSS) pra não perder o rascunho em andamento se o
             usuário navegar pra outra etapa sem salvar o abastecimento que estava digitando. */}
         <div className={etapa === 5 ? "" : "hidden"}>
-          <AbastecimentosEtapa ficha={ficha} materiais={materiais} temTanque2={temTanque2} onMudou={refetchFicha} />
+          <AbastecimentosEtapa ficha={ficha} materiais={materiais} modulos={modulos} temTanque2={temTanque2} onMudou={refetchFicha} />
         </div>
 
         {etapa === 6 && (
@@ -334,7 +435,7 @@ export default function FichaAbastecimentoWizard({
                 <label className={labelCls}>Registradora Final — Diesel Tanque 1°</label>
                 <input type="number" step="0.1" className={inputCls}
                   defaultValue={insumoPorTipo.DIESEL_T1?.acumulado_registradora_final ?? ""}
-                  onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, "DIESEL_T1", { acumulado_registradora_final: e.target.value ? Number(e.target.value) : undefined }); refetchFicha(); }}
+                  onBlur={(e) => salvarRegistradoraFinal("DIESEL_T1", e.target.value)}
                 />
               </div>
               {temTanque2 && (
@@ -342,7 +443,7 @@ export default function FichaAbastecimentoWizard({
                   <label className={labelCls}>Registradora Final — Diesel Tanque 2°</label>
                   <input type="number" step="0.1" className={inputCls}
                     defaultValue={insumoPorTipo.DIESEL_T2?.acumulado_registradora_final ?? ""}
-                    onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, "DIESEL_T2", { acumulado_registradora_final: e.target.value ? Number(e.target.value) : undefined }); refetchFicha(); }}
+                    onBlur={(e) => salvarRegistradoraFinal("DIESEL_T2", e.target.value)}
                   />
                 </div>
               )}
@@ -453,6 +554,7 @@ export default function FichaAbastecimentoWizard({
 // ─── Etapa 4 — Conferência de Saldo ─────────────────────────────────────────
 
 function ConferenciaSaldo({ ficha, materiais, temTanque2, onAjustado }: { ficha: FichaCompleta; materiais: Material[]; temTanque2: boolean; onAjustado: () => void }) {
+  const { isOnline } = useOffline();
   const [editando, setEditando] = useState<InsumoTipo | null>(null);
   const [valor, setValor] = useState("");
   const [erroAdmin, setErroAdmin] = useState<string | null>(null);
@@ -460,6 +562,9 @@ function ConferenciaSaldo({ ficha, materiais, temTanque2, onAjustado }: { ficha:
   const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
 
   async function salvarAjuste(tipo: InsumoTipo) {
+    // Exige o administrador (checado no servidor) — não dá pra confirmar offline sem
+    // round-trip, e um ajuste de saldo inicial é raro o bastante pra esperar conexão.
+    if (!isOnline) { setErroAdmin("Ajuste de saldo inicial exige conexão com a internet."); return; }
     const result = await atualizarFichaInsumo(ficha.ficha.id, tipo, { quantidade_inicial: Number(valor) });
     if (result.error) { setErroAdmin(result.error); return; }
     setEditando(null);
@@ -633,8 +738,9 @@ function TabelaAbastecimentos({
 }
 
 function AbastecimentosEtapa({
-  ficha, materiais, temTanque2, onMudou,
-}: { ficha: FichaCompleta; materiais: Material[]; temTanque2: boolean; onMudou: () => void }) {
+  ficha, materiais, modulos, temTanque2, onMudou,
+}: { ficha: FichaCompleta; materiais: Material[]; modulos: Modulo[]; temTanque2: boolean; onMudou: () => void }) {
+  const { isOnline } = useOffline();
   const [novaLinha, setNovaLinha] = useState<Partial<LinhaAbastecimento> | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
@@ -643,9 +749,30 @@ function AbastecimentosEtapa({
 
   useEffect(() => {
     let ativo = true;
-    getMaquinasPorModulo(ficha.ficha.modulo_id).then((m) => { if (ativo) setMaquinas(m); });
+    async function carregarMaquinas() {
+      if (!isOnline) {
+        const moduloId = ficha.ficha.modulo_id;
+        if (!moduloId) { if (ativo) setMaquinas([]); return; }
+        const modulo = modulos.find((m) => m.id === moduloId);
+        const ehCarregamento = modulo?.codigo?.startsWith("CARREG_");
+        const cache = await localDb.getAll<MaquinaSuzano & { ativo?: boolean }>("insumos_maquinas_suzano");
+        const filtradas = cache
+          .filter((m) => m.ativo !== false && (m.modulo_id === moduloId || (ehCarregamento && m.tipo === "GRU")))
+          .sort((a, b) => a.codigo.localeCompare(b.codigo));
+        if (ativo) setMaquinas(filtradas);
+        return;
+      }
+      try {
+        const m = await getMaquinasPorModulo(ficha.ficha.modulo_id);
+        if (ativo) setMaquinas(m);
+      } catch {
+        // sem rede mesmo com isOnline=true: deixa a lista como está, o usuário ainda
+        // pode cadastrar a máquina ad-hoc se ela realmente não aparecer.
+      }
+    }
+    carregarMaquinas();
     return () => { ativo = false; };
-  }, [ficha.ficha.modulo_id]);
+  }, [ficha.ficha.modulo_id, isOnline, modulos]);
 
   function adicionarMaquinaLocal(m: MaquinaSuzano) {
     setMaquinas((prev) => [...prev, m].sort((a, b) => a.codigo.localeCompare(b.codigo)));
@@ -655,12 +782,25 @@ function AbastecimentosEtapa({
     setSalvandoId(chaveLocal);
     setErroLinha(null);
     try {
-      const result = await salvarLinhaAbastecimento(ficha.ficha.id, linha);
-      if (result.error) { setErroLinha(result.error); return; }
-      if (result.warning) setErroLinha(result.warning);
-      setNovaLinha(null);
-      setEditandoId(null);
-      onMudou();
+      const salvarOffline = async () => {
+        const linhaComId = { ...linha, id: linha.id || `temp_linha_${Date.now()}` } as LinhaAbastecimento;
+        await persistirLinhaLocal(linhaComId);
+        await enqueueSalvarLinha(ficha.ficha.id, linhaComId);
+        setNovaLinha(null);
+        setEditandoId(null);
+        onMudou();
+      };
+      if (!isOnline) { await salvarOffline(); return; }
+      try {
+        const result = await salvarLinhaAbastecimento(ficha.ficha.id, linha);
+        if (result.error) { setErroLinha(result.error); return; }
+        if (result.warning) setErroLinha(result.warning);
+        setNovaLinha(null);
+        setEditandoId(null);
+        onMudou();
+      } catch {
+        await salvarOffline();
+      }
     } finally {
       setSalvandoId(null);
     }
@@ -670,9 +810,20 @@ function AbastecimentosEtapa({
     if (!confirm("Excluir este abastecimento?")) return;
     setSalvandoId(linhaId);
     try {
-      await excluirLinhaAbastecimento(linhaId, ficha.ficha.id);
-      setEditandoId(null);
-      onMudou();
+      const excluirOffline = async () => {
+        await removerLinhaLocal(linhaId);
+        await enqueueExcluirLinha(ficha.ficha.id, linhaId);
+        setEditandoId(null);
+        onMudou();
+      };
+      if (!isOnline) { await excluirOffline(); return; }
+      try {
+        await excluirLinhaAbastecimento(linhaId, ficha.ficha.id);
+        setEditandoId(null);
+        onMudou();
+      } catch {
+        await excluirOffline();
+      }
     } finally {
       setSalvandoId(null);
     }
@@ -742,6 +893,7 @@ function LinhaCard({
   novaLinhaLabel?: boolean;
   onMaquinaCriada: (m: MaquinaSuzano) => void;
 }) {
+  const { isOnline } = useOffline();
   const [draft, setDraft] = useState<Partial<LinhaAbastecimento>>(linha);
   const campo = (k: keyof LinhaAbastecimento, v: any) => setDraft((p) => ({ ...p, [k]: v }));
 
@@ -751,25 +903,53 @@ function LinhaCard({
   const [enviandoMaquina, setEnviandoMaquina] = useState(false);
   const [erroMaquina, setErroMaquina] = useState<string | null>(null);
 
+  async function salvarMaquinaOffline(foto: File) {
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Não foi possível ler a foto."));
+      reader.readAsDataURL(foto);
+    });
+    const ext = foto.name.split(".").pop() || "jpg";
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const localFotoId = await offlineMedia.savePhotoLocally(dataUrl, "insumos-fotos-maquinas", fileName);
+    const maquinaOffline: MaquinaSuzano = {
+      id: `temp_maquina_${Date.now()}`, codigo: novoCodigo.trim().toUpperCase(), modulo_id: moduloId,
+      frente: null, tipo: null, origem: "MOTORISTA", foto_url: null,
+    };
+    await localDb.put("insumos_maquinas_suzano", maquinaOffline);
+    await localDb.addToQueue("insumos_maquina_adhoc", "create", { codigo: novoCodigo.trim(), moduloId, localFotoId });
+    onMaquinaCriada(maquinaOffline);
+    campo("equipamento_texto", maquinaOffline.codigo);
+    setModoNovaMaquina(false);
+    setNovoCodigo("");
+    setNovaFoto(null);
+  }
+
   async function salvarMaquinaNova() {
     if (!novoCodigo.trim()) { setErroMaquina("Informe o código/placa da máquina."); return; }
     if (!novaFoto) { setErroMaquina("Tire uma foto da placa/equipamento — é obrigatório pra confirmar o lançamento."); return; }
     setEnviandoMaquina(true);
     setErroMaquina(null);
     try {
-      const supabase = createClient();
-      const ext = novaFoto.name.split(".").pop() || "jpg";
-      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("insumos-fotos-maquinas").upload(fileName, novaFoto);
-      if (uploadError) throw new Error("Erro ao enviar foto: " + uploadError.message);
-      const { data: { publicUrl } } = supabase.storage.from("insumos-fotos-maquinas").getPublicUrl(fileName);
-      const result = await criarMaquinaAdHoc(novoCodigo, moduloId, publicUrl);
-      if (result.error || !result.maquina) { setErroMaquina(result.error || "Erro ao cadastrar a máquina."); return; }
-      onMaquinaCriada(result.maquina);
-      campo("equipamento_texto", result.maquina.codigo);
-      setModoNovaMaquina(false);
-      setNovoCodigo("");
-      setNovaFoto(null);
+      if (!isOnline) { await salvarMaquinaOffline(novaFoto); return; }
+      try {
+        const supabase = createClient();
+        const ext = novaFoto.name.split(".").pop() || "jpg";
+        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("insumos-fotos-maquinas").upload(fileName, novaFoto);
+        if (uploadError) throw new Error("Erro ao enviar foto: " + uploadError.message);
+        const { data: { publicUrl } } = supabase.storage.from("insumos-fotos-maquinas").getPublicUrl(fileName);
+        const result = await criarMaquinaAdHoc(novoCodigo, moduloId, publicUrl);
+        if (result.error || !result.maquina) { setErroMaquina(result.error || "Erro ao cadastrar a máquina."); return; }
+        onMaquinaCriada(result.maquina);
+        campo("equipamento_texto", result.maquina.codigo);
+        setModoNovaMaquina(false);
+        setNovoCodigo("");
+        setNovaFoto(null);
+      } catch {
+        await salvarMaquinaOffline(novaFoto);
+      }
     } catch (e: any) {
       setErroMaquina(e.message || "Erro ao cadastrar a máquina.");
     } finally {
@@ -897,6 +1077,7 @@ function LinhaCard({
 function EntradasEtapa({
   ficha, comboio, modulos, materiais, colaboradores, temTanque2, onAjustado,
 }: { ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; materiais: Material[]; colaboradores: Colaborador[]; temTanque2: boolean; onAjustado: () => void }) {
+  const { isOnline } = useOffline();
   const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
   const [mostrarRecarga, setMostrarRecarga] = useState(false);
   const [recargas, setRecargas] = useState<RecargaAplicada[]>([]);
@@ -904,9 +1085,23 @@ function EntradasEtapa({
 
   useEffect(() => {
     let ativo = true;
-    getRecargasAplicadasNaFicha(ficha.ficha.id).then((r) => { if (ativo) { setRecargas(r); setCarregandoRecargas(false); } });
+    async function carregar() {
+      if (!isOnline) {
+        const r = await getRecargasAplicadasNaFichaOffline(ficha.ficha.id);
+        if (ativo) { setRecargas(r); setCarregandoRecargas(false); }
+        return;
+      }
+      try {
+        const r = await getRecargasAplicadasNaFicha(ficha.ficha.id);
+        if (ativo) { setRecargas(r); setCarregandoRecargas(false); }
+      } catch {
+        const r = await getRecargasAplicadasNaFichaOffline(ficha.ficha.id);
+        if (ativo) { setRecargas(r); setCarregandoRecargas(false); }
+      }
+    }
+    carregar();
     return () => { ativo = false; };
-  }, [ficha.ficha.id, ficha.insumos]);
+  }, [ficha.ficha.id, ficha.insumos, isOnline]);
 
   return (
     <div className="space-y-3">

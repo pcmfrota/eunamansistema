@@ -14,8 +14,9 @@ import { localDb, SyncItem } from "@/lib/offline-db";
 import { INSUMO_TIPOS, InsumoTipo } from "./config";
 import type {
   Comboio, FichaAbastecimento, FichaInsumo, LinhaAbastecimento, FichaCompleta,
-  EstoqueAtualItem, FechamentoPayload,
+  EstoqueAtualItem, FechamentoPayload, Material,
 } from "./actions";
+import type { RecargaAplicada, RecargaInput, Skid, SaldoSkidItem } from "./recargaActions";
 
 // ─── Derivação de comboios (espelha getInsumosBaseData) ────────────────────────
 
@@ -151,6 +152,74 @@ export async function abrirOuCriarFichaOffline(equipamentoId: string): Promise<{
   return { ficha: { ficha: novaFicha, insumos: linhasInsumos, linhas: [] } };
 }
 
+// ─── Recargas já aplicadas na ficha (espelha getRecargasAplicadasNaFicha) ──────
+
+export async function getRecargasAplicadasNaFichaOffline(fichaId: string): Promise<RecargaAplicada[]> {
+  const [recargas, itens, materiaisCache, equipamentosCache] = await Promise.all([
+    localDb.getAll<any>("insumos_fichas_recarga"),
+    localDb.getAll<any>("insumos_recarga_itens"),
+    localDb.getAll<Material>("insumos_materiais"),
+    localDb.getAll<any>("equipamentos"),
+  ]);
+  return recargas
+    .filter((r) => r.aplicado_em_ficha_id === fichaId)
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map((r) => {
+      const skid = equipamentosCache.find((e) => e.id === r.origem_skid_id);
+      const origemLabel =
+        r.origem_tipo === "SKID" ? `Skid ${skid?.placa || "-"}`
+        : r.origem_tipo === "ALMOXARIFADO" ? `Almoxarifado ${r.origem_deposito || "-"}`
+        : r.origem_tipo === "FORNECEDOR" ? "Fornecedor" : (r.origem_outro_texto || "Outro");
+      return {
+        id: r.id, numeroSequencial: r.numero_sequencial, data: r.data, hora: r.hora, origemLabel,
+        responsavelNome: r.responsavel_nome,
+        itens: itens.filter((i) => i.recarga_id === r.id).map((i) => {
+          const mat = materiaisCache.find((m) => m.id === i.material_id);
+          return { material: mat?.material || "-", quantidade: Number(i.quantidade), unidade: mat?.unidade || "" };
+        }),
+      };
+    });
+}
+
+// ─── Skids e recarga (espelha getSkidsDisponiveis/getSaldoSkid/criarRecargaFinalizada) ─
+
+export function getSkidsDisponiveisOffline(equipamentos: { id: string; placa: string; modelo: string | null; tipo: string }[]): Skid[] {
+  return equipamentos
+    .filter((e) => e.tipo === "SKID")
+    .map((e) => ({ id: e.id, placa: e.placa, modelo: e.modelo }))
+    .sort((a, b) => a.placa.localeCompare(b.placa));
+}
+
+export function getSaldoSkidOffline(equipamentoId: string, materiais: Material[], movimentos: any[]): SaldoSkidItem[] {
+  return materiais.map((m) => {
+    const saldo = movimentos
+      .filter((mv) => mv.equipamento_id === equipamentoId && mv.material_id === m.id)
+      .reduce((s, mv) => s + (mv.tipo === "ENTRADA" ? Number(mv.quantidade) : -Number(mv.quantidade)), 0);
+    return { material_id: m.id, material_nome: m.material, ni: m.ni, unidade: m.unidade, saldo };
+  });
+}
+
+// A assinatura chega como data URL inline (SignaturePad não sobe pra Storage — ver
+// components/SignaturePad.tsx), então o RecargaInput inteiro pode ir direto pra fila:
+// nenhuma mídia pra resolver depois, ao contrário da foto da máquina ad-hoc.
+export async function registrarRecargaOffline(input: RecargaInput): Promise<void> {
+  await localDb.addToQueue("insumos_fichas_recarga", "create", input);
+  if (input.origem_tipo === "SKID" && input.origem_skid_id) {
+    const movimentos = input.itens.map((item, idx) => ({
+      id: `temp_mov_${Date.now()}_${idx}`,
+      equipamento_id: input.origem_skid_id,
+      material_id: item.material_id,
+      tipo: "SAIDA",
+      quantidade: item.quantidade,
+      origem_recarga_id: null,
+      data: input.data,
+      _isPendingSync: true,
+    }));
+    await localDb.saveMany("insumos_skid_movimentos", movimentos);
+  }
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+}
+
 // ─── Fila com fusão (evita empilhar N edições idênticas antes de sincronizar) ──
 //
 // Cabeçalho, ajuste de insumo e fechamento são editados várias vezes (um save por
@@ -222,4 +291,26 @@ export async function enqueueFinalizar(fichaId: string, fechamento: FechamentoPa
     (p) => p.fichaId === fichaId,
     () => ({ fichaId, fechamento })
   );
+}
+
+// ─── Espelho local (write-through) ─────────────────────────────────────────
+//
+// Toda mutação bem-sucedida — online ou offline — também grava no cache local,
+// pra sobreviver a um fechamento/crash do app e pra funcionar se a conexão cair
+// logo em seguida (ver Fase B do plano: autosave contínuo monta em cima disto).
+
+export async function persistirFichaLocal(ficha: FichaAbastecimento): Promise<void> {
+  await localDb.put("insumos_fichas_abastecimento", ficha);
+}
+
+export async function persistirFichaInsumoLocal(insumo: FichaInsumo): Promise<void> {
+  await localDb.put("insumos_ficha_insumos", insumo);
+}
+
+export async function persistirLinhaLocal(linha: LinhaAbastecimento): Promise<void> {
+  await localDb.put("insumos_abastecimento_linhas", linha);
+}
+
+export async function removerLinhaLocal(linhaId: string): Promise<void> {
+  await localDb.delete("insumos_abastecimento_linhas", linhaId);
 }

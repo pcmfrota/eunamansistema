@@ -429,15 +429,11 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
     }
 
     else if (entity === "insumos_fichas_recarga") {
+      // Assinatura já vem como data URL inline (SignaturePad não faz upload pra Storage,
+      // só devolve o PNG em base64 — ver components/SignaturePad.tsx), então o payload
+      // inteiro pode ir direto pra action real sem nenhuma resolução de mídia antes.
       if (action === "create") {
-        const input: any = { ...payload };
-        if (input.localAssinaturaId) {
-          const sig = await localDb.get<any>("signatures_queue", input.localAssinaturaId);
-          if (!sig?.remoteUrl) return { success: false, error: "Assinatura da recarga ainda não sincronizada.", retryable: true };
-          input.responsavel_assinatura_url = sig.remoteUrl;
-          delete input.localAssinaturaId;
-        }
-        const res = await criarRecargaFinalizada(input);
+        const res = await criarRecargaFinalizada(payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

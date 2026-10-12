@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse, BarChart3, Database, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  Comboio, Modulo, Material, Impedimento, Colaborador, FichaCompleta, EstoqueAtualItem,
+  Comboio, Modulo, Material, Impedimento, Colaborador, FichaCompleta, FichaAbastecimento, FichaInsumo, EstoqueAtualItem,
   abrirOuCriarFicha, getEstoqueAtualComboio,
 } from "./actions";
 import { labelMaterialInsumo, unidadeMaterialInsumo } from "./config";
+import { deriveComboiosOffline, getEstoqueAtualComboioOffline, abrirOuCriarFichaOffline } from "./offlineInsumos";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 import FichaAbastecimentoWizard from "./FichaAbastecimentoWizard";
 import RecargaModal from "./RecargaModal";
 import FichasLista from "./FichasLista";
@@ -31,7 +34,8 @@ export default function InsumosClient({
   equipamentos: { id: string; placa: string; tipo: string }[];
   error?: string;
 }) {
-  const [comboios] = useState<Comboio[]>(initialComboios);
+  const { isOnline } = useOffline();
+  const [comboios, setComboios] = useState<Comboio[]>(initialComboios);
   const [busca, setBusca] = useState("");
   const [fichaAtiva, setFichaAtiva] = useState<FichaCompleta | null>(null);
   const [carregandoId, setCarregandoId] = useState<string | null>(null);
@@ -40,6 +44,31 @@ export default function InsumosClient({
   const [comboioMenu, setComboioMenu] = useState<Comboio | null>(null);
   const [comboioEstoque, setComboioEstoque] = useState<Comboio | null>(null);
   const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS" | "ESTOQUE" | "PAINEL" | "CADASTROS">("LANCAR");
+
+  // Quando online, o snapshot vindo do servidor (initialComboios) já é a fonte mais
+  // fresca. Offline, deriva saldo/rascunho a partir do cache local (equipamentos +
+  // fichas + insumos sincronizados no último boot), que reflete inclusive fichas
+  // abertas/alteradas offline nesta própria sessão.
+  useEffect(() => {
+    if (isOnline) { setComboios(initialComboios); return; }
+    let ativo = true;
+    async function carregarOffline() {
+      const [equipamentosCache, fichas, fichaInsumos] = await Promise.all([
+        localDb.getAll<any>("equipamentos"),
+        localDb.getAll<FichaAbastecimento>("insumos_fichas_abastecimento"),
+        localDb.getAll<FichaInsumo>("insumos_ficha_insumos"),
+      ]);
+      if (ativo) setComboios(deriveComboiosOffline(equipamentosCache, fichas, fichaInsumos));
+    }
+    carregarOffline();
+    window.addEventListener("offline-db-updated-insumos_fichas_abastecimento", carregarOffline);
+    window.addEventListener("offline-db-updated-sync_queue", carregarOffline);
+    return () => {
+      ativo = false;
+      window.removeEventListener("offline-db-updated-insumos_fichas_abastecimento", carregarOffline);
+      window.removeEventListener("offline-db-updated-sync_queue", carregarOffline);
+    };
+  }, [isOnline, initialComboios]);
 
   const comboiosFiltrados = useMemo(() => {
     const termo = busca.toLowerCase().trim();
@@ -51,9 +80,27 @@ export default function InsumosClient({
     setCarregandoId(comboio.id);
     setErroAbrir(null);
     try {
+      if (!isOnline) {
+        const result = await abrirOuCriarFichaOffline(comboio.id);
+        if (result.error || !result.ficha) {
+          setErroAbrir(result.error || "Não foi possível abrir a ficha offline.");
+          return;
+        }
+        setFichaAtiva(result.ficha);
+        return;
+      }
       const result = await abrirOuCriarFicha(comboio.id);
       if (result.error || !result.ficha) {
         setErroAbrir(result.error || "Não foi possível abrir a ficha.");
+        return;
+      }
+      setFichaAtiva(result.ficha);
+    } catch (err) {
+      // Falha de rede mesmo com isOnline=true (ex: perdeu sinal no meio da chamada):
+      // tenta o caminho offline em vez de perder o clique do colaborador.
+      const result = await abrirOuCriarFichaOffline(comboio.id);
+      if (result.error || !result.ficha) {
+        setErroAbrir("Sem conexão e não foi possível abrir a ficha offline.");
         return;
       }
       setFichaAtiva(result.ficha);
@@ -306,13 +353,34 @@ function ComboioMenuModal({
 }
 
 function EstoqueAtualModal({ comboio, materiais, onClose }: { comboio: Comboio; materiais: Material[]; onClose: () => void }) {
+  const { isOnline } = useOffline();
   const [itens, setItens] = useState<EstoqueAtualItem[] | null>(null);
 
   useEffect(() => {
     let ativo = true;
-    getEstoqueAtualComboio(comboio.id).then((r) => { if (ativo) setItens(r); });
+    async function carregar() {
+      if (!isOnline) {
+        const [fichas, fichaInsumos] = await Promise.all([
+          localDb.getAll<FichaAbastecimento>("insumos_fichas_abastecimento"),
+          localDb.getAll<FichaInsumo>("insumos_ficha_insumos"),
+        ]);
+        if (ativo) setItens(getEstoqueAtualComboioOffline(comboio.id, fichas, fichaInsumos));
+        return;
+      }
+      try {
+        const r = await getEstoqueAtualComboio(comboio.id);
+        if (ativo) setItens(r);
+      } catch {
+        const [fichas, fichaInsumos] = await Promise.all([
+          localDb.getAll<FichaAbastecimento>("insumos_fichas_abastecimento"),
+          localDb.getAll<FichaInsumo>("insumos_ficha_insumos"),
+        ]);
+        if (ativo) setItens(getEstoqueAtualComboioOffline(comboio.id, fichas, fichaInsumos));
+      }
+    }
+    carregar();
     return () => { ativo = false; };
-  }, [comboio.id]);
+  }, [comboio.id, isOnline]);
 
   const temTanque2 = comboio.numero_tanques_diesel >= 2;
   const itensVisiveis = (itens || []).filter((i) => i.insumo_tipo !== "DIESEL_T2" || temTanque2);

@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { Comboio, Modulo, Material, Colaborador, criarColaborador } from "./actions";
-import { criarRecargaFinalizada, getSkidsDisponiveis, getSaldoSkid, OrigemRecarga, Skid, SaldoSkidItem } from "./recargaActions";
+import { criarRecargaFinalizada, getSkidsDisponiveis, getSaldoSkid, OrigemRecarga, Skid, SaldoSkidItem, RecargaInput } from "./recargaActions";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
+import { getSkidsDisponiveisOffline, getSaldoSkidOffline, registrarRecargaOffline } from "./offlineInsumos";
 
 const inputCls = "w-full px-3 py-2.5 text-sm border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-50 outline-none focus:border-indigo-500";
 const labelCls = "text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1.5";
@@ -23,6 +26,7 @@ export default function RecargaModal({
   onClose: () => void;
   onConcluida?: () => void;
 }) {
+  const { isOnline } = useOffline();
   const [listaColaboradores, setListaColaboradores] = useState(colaboradores);
   const [origemTipo, setOrigemTipo] = useState<OrigemRecarga>("SKID");
   const [skids, setSkids] = useState<Skid[]>([]);
@@ -51,13 +55,26 @@ export default function RecargaModal({
   const temTanque2 = comboio.numero_tanques_diesel >= 2;
 
   useEffect(() => {
-    if (origemTipo === "SKID") getSkidsDisponiveis().then(setSkids);
-  }, [origemTipo]);
+    if (origemTipo !== "SKID") return;
+    if (!isOnline) {
+      localDb.getAll<any>("equipamentos").then((eq) => setSkids(getSkidsDisponiveisOffline(eq)));
+      return;
+    }
+    getSkidsDisponiveis()
+      .then(setSkids)
+      .catch(() => localDb.getAll<any>("equipamentos").then((eq) => setSkids(getSkidsDisponiveisOffline(eq))));
+  }, [origemTipo, isOnline]);
 
   useEffect(() => {
-    if (origemTipo === "SKID" && skidId) getSaldoSkid(skidId).then(setSaldoSkid);
-    else setSaldoSkid([]);
-  }, [origemTipo, skidId]);
+    if (!(origemTipo === "SKID" && skidId)) { setSaldoSkid([]); return; }
+    if (!isOnline) {
+      localDb.getAll<any>("insumos_skid_movimentos").then((movs) => setSaldoSkid(getSaldoSkidOffline(skidId, materiais, movs)));
+      return;
+    }
+    getSaldoSkid(skidId)
+      .then(setSaldoSkid)
+      .catch(() => localDb.getAll<any>("insumos_skid_movimentos").then((movs) => setSaldoSkid(getSaldoSkidOffline(skidId, materiais, movs))));
+  }, [origemTipo, skidId, isOnline, materiais]);
 
   const saldoPorMaterial = useMemo(() => {
     const map: Record<string, number> = {};
@@ -77,12 +94,29 @@ export default function RecargaModal({
   }
 
   async function adicionarNovoMotorista(nome: string) {
-    const result = await criarColaborador(nome, "MOTORISTA");
-    if (result.error) { setErro(result.error); return; }
-    if (result.colaborador) {
-      const novo = result.colaborador;
-      setListaColaboradores((prev) => (prev.some((c) => c.id === novo.id) ? prev : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))));
+    const nomeTrim = nome.trim();
+    if (!nomeTrim) return;
+    if (!isOnline) {
+      const existente = listaColaboradores.find((c) => c.nome.toLowerCase() === nomeTrim.toLowerCase());
+      if (existente) { aplicarMotorista(existente.nome); return; }
+      const novo: Colaborador = { id: `temp_colab_${Date.now()}`, nome: nomeTrim, matricula: null, tipo: "MOTORISTA" };
+      await localDb.put("colaboradores", novo);
+      await localDb.addToQueue("colaborador", "create", novo);
+      setListaColaboradores((prev) => [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome)));
       aplicarMotorista(novo.nome);
+      return;
+    }
+    try {
+      const result = await criarColaborador(nomeTrim, "MOTORISTA");
+      if (result.error) { setErro(result.error); return; }
+      if (result.colaborador) {
+        const novo = result.colaborador;
+        setListaColaboradores((prev) => (prev.some((c) => c.id === novo.id) ? prev : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))));
+        await localDb.put("colaboradores", novo);
+        aplicarMotorista(novo.nome);
+      }
+    } catch {
+      await adicionarNovoMotorista(nomeTrim);
     }
   }
 
@@ -105,30 +139,44 @@ export default function RecargaModal({
     if (!listaItens.length) { setErro("Adicione pelo menos um item com quantidade maior que zero."); return; }
     if (origemTipo === "SKID" && !skidId) { setErro("Selecione o skid de origem."); return; }
 
+    const input: RecargaInput = {
+      equipamento_id: comboio.id,
+      modulo_id: moduloId || null,
+      turno: turno || null,
+      data, hora: hora || null,
+      motorista_nome: motoristaNome || null, motorista_matricula: motoristaMatricula || null,
+      observacao: observacao || null,
+      origem_tipo: origemTipo,
+      origem_skid_id: origemTipo === "SKID" ? skidId : null,
+      origem_deposito: origemTipo === "ALMOXARIFADO" ? origemDeposito || null : null,
+      origem_outro_texto: origemTipo === "OUTRO" ? origemOutroTexto || null : null,
+      local_recarga: localRecarga || null,
+      responsavel_nome: responsavelNome || null, responsavel_matricula: responsavelMatricula || null,
+      responsavel_assinatura_url: assinatura || null,
+      itens: listaItens.map((i) => ({
+        material_id: i.material_id, quantidade: Number(i.quantidade), req_nf: i.req_nf || null,
+        tanque_diesel: temTanque2 ? i.tanque_diesel : undefined,
+      })),
+    };
+
     setSalvando(true);
     try {
-      const result = await criarRecargaFinalizada({
-        equipamento_id: comboio.id,
-        modulo_id: moduloId || null,
-        turno: turno || null,
-        data, hora: hora || null,
-        motorista_nome: motoristaNome || null, motorista_matricula: motoristaMatricula || null,
-        observacao: observacao || null,
-        origem_tipo: origemTipo,
-        origem_skid_id: origemTipo === "SKID" ? skidId : null,
-        origem_deposito: origemTipo === "ALMOXARIFADO" ? origemDeposito || null : null,
-        origem_outro_texto: origemTipo === "OUTRO" ? origemOutroTexto || null : null,
-        local_recarga: localRecarga || null,
-        responsavel_nome: responsavelNome || null, responsavel_matricula: responsavelMatricula || null,
-        responsavel_assinatura_url: assinatura || null,
-        itens: listaItens.map((i) => ({
-          material_id: i.material_id, quantidade: Number(i.quantidade), req_nf: i.req_nf || null,
-          tanque_diesel: temTanque2 ? i.tanque_diesel : undefined,
-        })),
-      });
-      if (result.error) { setErro(result.error); return; }
-      setConcluido(true);
-      onConcluida?.();
+      if (!isOnline) {
+        await registrarRecargaOffline(input);
+        setConcluido(true);
+        onConcluida?.();
+        return;
+      }
+      try {
+        const result = await criarRecargaFinalizada(input);
+        if (result.error) { setErro(result.error); return; }
+        setConcluido(true);
+        onConcluida?.();
+      } catch {
+        await registrarRecargaOffline(input);
+        setConcluido(true);
+        onConcluida?.();
+      }
     } finally {
       setSalvando(false);
     }
@@ -155,7 +203,9 @@ export default function RecargaModal({
         {concluido ? (
           <div className="p-8 flex flex-col items-center gap-3 text-center">
             <CheckCircle2 size={40} className="text-emerald-500" />
-            <p className="text-sm font-bold text-zinc-700 dark:text-zinc-200">Recarga registrada com sucesso.</p>
+            <p className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
+              {isOnline ? "Recarga registrada com sucesso." : "Recarga salva offline — será enviada quando sincronizar."}
+            </p>
             <button onClick={onClose} className="mt-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold">Fechar</button>
           </div>
         ) : (
