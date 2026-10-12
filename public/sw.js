@@ -57,7 +57,24 @@ const PRECACHE_URLS = [
   "/insumos",
 ];
 
+// Acha os bundles JS/CSS (/_next/static/...) que uma página referencia no próprio HTML.
+// Sem isso, o precache só guardava o documento de cada página da PRECACHE_URLS — o código
+// que a faz funcionar de verdade só entrava no cache na primeira vez que alguém abria
+// aquela aba específica online. Com isso, uma única conexão já deixa TODAS as abas
+// prontas pra funcionar offline, não só as que o usuário visitou por acaso.
+function extrairAssetsDoHtml(html) {
+  const assets = new Set();
+  const regex = /(?:src|href)="(\/_next\/static\/[^"]+?\.(?:js|css))"/g;
+  let match;
+  while ((match = regex.exec(html))) {
+    assets.add(match[1]);
+  }
+  return assets;
+}
+
 async function precache(cache) {
+  const assetUrls = new Set();
+
   await Promise.all(
     PRECACHE_URLS.map(async (url) => {
       try {
@@ -65,12 +82,32 @@ async function precache(cache) {
         // Ignora respostas redirecionadas (ex: página exige login e caiu em /login):
         // cachear isso na chave original guardaria o conteúdo errado para essa URL.
         if (response && response.ok && !response.redirected) {
+          const paraLerAssets = response.clone();
           await cache.put(url, response);
+          try {
+            const html = await paraLerAssets.text();
+            extrairAssetsDoHtml(html).forEach((a) => assetUrls.add(a));
+          } catch (_) {
+            // Extração de assets é best-effort: a página em si já foi cacheada acima.
+          }
         }
       } catch (err) {
         // Best-effort: um recurso indisponível na instalação não pode impedir os
         // demais de serem cacheados, nem impedir a ativação do Service Worker.
         console.warn("[Service Worker] Falha ao pré-cachear (ignorado):", url, err);
+      }
+    })
+  );
+
+  await Promise.all(
+    Array.from(assetUrls).map(async (assetUrl) => {
+      try {
+        const existente = await cache.match(assetUrl);
+        if (existente) return; // já cacheado (chunk compartilhado entre várias páginas)
+        const res = await fetch(assetUrl, { cache: "no-store" });
+        if (res && res.ok) await cache.put(assetUrl, res);
+      } catch (err) {
+        console.warn("[Service Worker] Falha ao pré-cachear asset (ignorado):", assetUrl, err);
       }
     })
   );
@@ -85,6 +122,22 @@ self.addEventListener("install", (event) => {
       return self.skipWaiting();
     })
   );
+});
+
+// --- MESSAGE EVENT: permite a página pedir um refresh completo do cache offline sem
+// esperar um novo deploy (CACHE_NAME mudar) — disparado a cada vez que o app detecta
+// que voltou a ficar online (ver components/offline-provider.tsx), junto com a
+// sincronização de dados, pra garantir que "conectar e desconectar" deixe TODO o
+// aplicativo pronto pra uso offline, não só os dados.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "REFRESH_PRECACHE") {
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) => {
+        console.log("[Service Worker] Atualizando cache offline completo (reconexão)...");
+        return precache(cache);
+      })
+    );
+  }
 });
 
 // --- ACTIVATE EVENT: Clean up old caches ---

@@ -242,6 +242,19 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           console.error("[OfflineProvider] Erro ao rodar boot sync:", err);
         }
+
+        // Além dos dados, também atualiza o cache de navegação/código offline (páginas +
+        // JS/CSS de TODAS as abas do sistema, não só as já visitadas) — pra "conectar e
+        // desconectar" deixar o aplicativo inteiro pronto pra uso sem internet depois,
+        // sem depender do usuário ter clicado em cada tela manualmente antes.
+        try {
+          if ("serviceWorker" in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            registration.active?.postMessage({ type: "REFRESH_PRECACHE" });
+          }
+        } catch (err) {
+          console.warn("[OfflineProvider] Falha ao pedir refresh do cache offline:", err);
+        }
       }, 1500);
 
       return () => clearTimeout(timerId);
