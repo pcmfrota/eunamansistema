@@ -1,0 +1,3 @@
+/* Reaproveita o design system (tokens de cor, tema claro/escuro) do app principal —
+   já inclui as diretivas @tailwind, não precisa repetir aqui. */
+@import "../../app/globals.css";

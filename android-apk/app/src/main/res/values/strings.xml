@@ -1,6 +1,10 @@
 <resources>
     <string name="app_name">EUNAMAN PCM</string>
     <string name="launch_url">https://eunamansistema.vercel.app/</string>
+    <!-- App de campo embutido no APK (Fase 0 em diante) — ver o plano em
+         C:\Users\pcmeu\.claude\plans\misty-bubbling-cookie.md. Carregado via file://
+         dos assets do próprio app, nunca depende de rede/cache pra abrir. -->
+    <string name="field_app_url">file:///android_asset/field-app/index.html</string>
     <string name="asset_host">eunamansistema.vercel.app</string>
     <string name="asset_statements">
         [{

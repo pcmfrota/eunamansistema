@@ -18,3 +18,7 @@ local.properties
 # Keystore - NUNCA commitar isso!
 *.jks
 *.keystore
+
+# Build do field-app (Vite) copiado pra cá antes de compilar o APK — gerado, não editar
+# aqui. Ver field-app/ (fonte) — reconstrua com: cd ../field-app && npm run build && cp -r dist/* ../android-apk/app/src/main/assets/field-app/
+/app/src/main/assets/field-app

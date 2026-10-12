@@ -80,6 +80,9 @@ public class EunamanActivity extends AppCompatActivity {
     private Runnable pageLoadWatchdogRunnable;
 
     private boolean isLoggingOut = false;
+    // true quando o WebView está no site ao vivo (módulos de escritório) em vez do app
+    // de campo embutido — usado só pelo botão voltar do Android (onBackPressed).
+    private boolean estaNoSiteAoVivo = false;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
     private String pendingPhotoDataUrl = null;
@@ -146,6 +149,25 @@ public class EunamanActivity extends AppCompatActivity {
     protected void onDestroy() {
         watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        // No site ao vivo (módulos de escritório, aberto via EunamanApp.openLiveSite()),
+        // o botão voltar do Android navega pelo histórico normal do WebView primeiro; só
+        // quando não há mais pra onde voltar é que volta pro app de campo embutido. No
+        // app de campo (SPA, sem histórico de navegação real do WebView) o botão voltar
+        // deve ser tratado pela própria SPA (ex: React Router), não aqui.
+        if (estaNoSiteAoVivo) {
+            if (webView != null && webView.canGoBack()) {
+                webView.goBack();
+            } else {
+                estaNoSiteAoVivo = false;
+                webView.loadUrl(getString(R.string.field_app_url));
+            }
+            return;
+        }
+        super.onBackPressed();
     }
 
     @Override
@@ -632,6 +654,27 @@ public class EunamanActivity extends AppCompatActivity {
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
+
+        // App de campo (embutido, file://) <-> site ao vivo (módulos de escritório) —
+        // ver plano em C:\Users\pcmeu\.claude\plans\misty-bubbling-cookie.md. O app de
+        // campo chama EunamanApp.openLiveSite() quando o usuário escolhe um módulo de
+        // escritório; o site ao vivo (quando aberto assim) pode chamar openFieldApp()
+        // pra voltar. estaNoSiteAoVivo rastreia o modo atual pro botão voltar do Android.
+        @JavascriptInterface
+        public void openLiveSite() {
+            runOnUiThread(() -> {
+                estaNoSiteAoVivo = true;
+                webView.loadUrl(getString(R.string.launch_url));
+            });
+        }
+
+        @JavascriptInterface
+        public void openFieldApp() {
+            runOnUiThread(() -> {
+                estaNoSiteAoVivo = false;
+                webView.loadUrl(getString(R.string.field_app_url));
+            });
+        }
 
         @JavascriptInterface
         public void clearCache() {
