@@ -5,15 +5,15 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos';
-  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos' | 'insumos_maquina_adhoc';
+  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'register' | 'close' | 'add_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal' | 'abrir_ficha' | 'atualizar_cabecalho' | 'atualizar_insumo' | 'salvar_linha' | 'excluir_linha' | 'finalizar';
   payload: any;
   timestamp: number;
 }
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 28;
+  private dbVersion = 29;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -102,6 +102,14 @@ export class OfflineDB {
     if (!db.objectStoreNames.contains('insumos_recarga_itens')) db.createObjectStore('insumos_recarga_itens', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('insumos_materiais')) db.createObjectStore('insumos_materiais', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('insumos_modulos')) db.createObjectStore('insumos_modulos', { keyPath: 'id' });
+    // Saldo/restou por insumo de cada ficha — necessário offline pra saber o estoque
+    // atual do comboio sem depender de uma consulta ao servidor.
+    if (!db.objectStoreNames.contains('insumos_ficha_insumos')) db.createObjectStore('insumos_ficha_insumos', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_impedimentos')) db.createObjectStore('insumos_impedimentos', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('insumos_maquinas_suzano')) db.createObjectStore('insumos_maquinas_suzano', { keyPath: 'id' });
+    // Livro-razão de movimentos do skid (ENTRADA/SAIDA) — o saldo é sempre a soma
+    // deste cache local, nunca um valor gravado solto (mesma regra do servidor).
+    if (!db.objectStoreNames.contains('insumos_skid_movimentos')) db.createObjectStore('insumos_skid_movimentos', { keyPath: 'id' });
   }
 
   async open(requiredStore?: string): Promise<IDBDatabase> {

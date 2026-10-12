@@ -15,7 +15,8 @@ import {
   Clock,
   Droplets,
   AlertTriangle,
-  Send
+  Send,
+  Fuel
 } from "lucide-react";
 import { localDb, SyncItem } from "@/lib/offline-db";
 import { cn } from "@/lib/utils";
@@ -281,6 +282,10 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "calendario": return "Calendário Suzano";
       case "colaborador": return "Colaborador";
       case "prev_prog_semanal": return "Prog. Preventiva";
+      case "insumos_fichas_abastecimento": return "Ficha de Abastecimento";
+      case "insumos_abastecimento_linhas": return "Lançamento de Abastecimento";
+      case "insumos_fichas_recarga": return "Ficha de Recarga";
+      case "insumos_maquina_adhoc": return "Máquina Cadastrada em Campo";
       default: return entity;
     }
   };
@@ -300,6 +305,12 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "validate": return "Validação";
       case "save_calendario": return "Salvar Escala";
       case "update_status_prog_semanal": return "Atualizar Prog. Preventiva";
+      case "abrir_ficha": return "Abertura de Ficha";
+      case "atualizar_cabecalho": return "Atualizar Cabeçalho";
+      case "atualizar_insumo": return "Ajuste de Insumo";
+      case "salvar_linha": return "Lançamento de Abastecimento";
+      case "excluir_linha": return "Excluir Lançamento";
+      case "finalizar": return "Finalização";
       default: return action;
     }
   };
@@ -313,6 +324,10 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "pneu": return "text-rose-500 bg-rose-500/10 border-rose-500/20 dark:text-rose-400";
       case "backlog": return "text-indigo-500 bg-indigo-500/10 border-indigo-500/20 dark:text-indigo-400";
       case "lavagem": return "text-cyan-500 bg-cyan-500/10 border-cyan-500/20 dark:text-cyan-400";
+      case "insumos_fichas_abastecimento":
+      case "insumos_abastecimento_linhas":
+      case "insumos_fichas_recarga":
+      case "insumos_maquina_adhoc": return "text-amber-600 bg-amber-500/10 border-amber-500/20 dark:text-amber-400";
       default: return "text-zinc-500 bg-zinc-500/10 border-zinc-500/20 dark:text-zinc-400";
     }
   };
@@ -326,6 +341,9 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "pneu": return <CircleDot size={14} />;
       case "backlog": return <FileText size={14} />;
       case "lavagem": return <Droplets size={14} />;
+      case "insumos_fichas_abastecimento":
+      case "insumos_abastecimento_linhas": return <Fuel size={14} />;
+      case "insumos_fichas_recarga": return <Droplets size={14} />;
       default: return <Database size={14} />;
     }
   };
@@ -352,6 +370,9 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     if (item.entity === "backlog") {
       if (p.prefixo) return `Prefixo: ${p.prefixo}`;
       if (p.os_vinculada) return `O.S.: ${p.os_vinculada}`;
+    }
+    if (item.entity === "insumos_fichas_abastecimento" || item.entity === "insumos_abastecimento_linhas") {
+      if (p.fichaId) return `Ficha: ${String(p.fichaId).slice(0, 8)}`;
     }
     if (p.id) return `ID: ${p.id}`;
     return "";

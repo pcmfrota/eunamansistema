@@ -49,7 +49,7 @@ const syncTasks: Record<
   equipamentos: (supabase) =>
     supabase
       .from("equipamentos")
-      .select("id, placa, modelo, modulo, area, tipo, categoria, status, created_at, deleted_at")
+      .select("id, placa, modelo, modulo, area, tipo, categoria, status, created_at, deleted_at, deposito_suzano, numero_tanques_diesel, capacidade_tanque_litros")
       .is("deleted_at", null),
 
   escala_frota: (supabase) =>
@@ -190,6 +190,38 @@ const syncTasks: Record<
 
   custos_parcelas: (supabase) =>
     supabase.from("custos_parcelas").select("*").order("mes_vencimento", { ascending: true }),
+
+  // Controle de Insumos (fichas de abastecimento/recarga dos comboios) — reserva de
+  // referência pro fluxo de campo funcionar o dia inteiro sem sinal (ver lib/offline-db.ts).
+  insumos_fichas_abastecimento: (supabase) =>
+    supabase.from("insumos_fichas_abastecimento").select("*").order("data", { ascending: false }).limit(500),
+
+  insumos_ficha_insumos: (supabase) =>
+    supabase.from("insumos_ficha_insumos").select("*"),
+
+  insumos_abastecimento_linhas: (supabase) =>
+    supabase.from("insumos_abastecimento_linhas").select("*"),
+
+  insumos_fichas_recarga: (supabase) =>
+    supabase.from("insumos_fichas_recarga").select("*").order("data", { ascending: false }).limit(500),
+
+  insumos_recarga_itens: (supabase) =>
+    supabase.from("insumos_recarga_itens").select("*"),
+
+  insumos_materiais: (supabase) =>
+    supabase.from("insumos_materiais").select("*"),
+
+  insumos_modulos: (supabase) =>
+    supabase.from("insumos_modulos").select("*"),
+
+  insumos_impedimentos: (supabase) =>
+    supabase.from("insumos_impedimentos").select("*"),
+
+  insumos_maquinas_suzano: (supabase) =>
+    supabase.from("insumos_maquinas_suzano").select("*"),
+
+  insumos_skid_movimentos: (supabase) =>
+    supabase.from("insumos_skid_movimentos").select("*"),
 };
 
 /**

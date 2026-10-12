@@ -3,7 +3,7 @@
  * Orchestrates online/offline decision making and replays enqueued operations.
  */
 
-import { SyncItem, deserializeToFormData } from "./offline-db";
+import { SyncItem, deserializeToFormData, localDb } from "./offline-db";
 import { 
   criarOrdemServico, 
   atualizarStatusOS, 
@@ -87,8 +87,33 @@ import {
   excluirFichaLubrificacao
 } from "@/app/lubrificacao/actions";
 
+import {
+  abrirOuCriarFicha,
+  atualizarCabecalhoFicha,
+  atualizarFichaInsumo,
+  salvarLinhaAbastecimento,
+  excluirLinhaAbastecimento,
+  finalizarFicha,
+  criarMaquinaAdHoc
+} from "@/app/insumos/actions";
+
+import {
+  criarRecargaFinalizada
+} from "@/app/insumos/recargaActions";
+
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
+
+// Mapa em memória para associar ids temporários de fichas de Insumos criadas offline com
+// os ids reais gerados pelo servidor — necessário porque linhas/cabeçalho/fechamento
+// enfileirados depois na mesma ficha referenciam esse id antes dele existir de verdade.
+const tempToRealFichaMap: Record<string, string> = {};
+
+function resolveFichaIdInsumos(id: string): string {
+  if (!id || !id.startsWith("temp_")) return id;
+  const mapeado = tempToRealFichaMap[id] || (typeof window !== "undefined" ? localStorage.getItem(`sync_ficha_insumos_map_${id}`) : null);
+  return mapeado || id;
+}
 
 // --- 1. REPLAY ENGINE (Chamado pelo OfflineProvider) ---
 export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
@@ -361,6 +386,71 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirFichaLubrificacao(payload.id || payload);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_fichas_abastecimento") {
+      if (action === "abrir_ficha") {
+        const { tempId, equipamentoId } = payload;
+        const res = await abrirOuCriarFicha(equipamentoId);
+        if (res.error || !res.ficha) throw new Error(res.error || "Falha ao abrir ficha de abastecimento.");
+        const realId = res.ficha.ficha.id;
+        tempToRealFichaMap[tempId] = realId;
+        if (typeof window !== "undefined") localStorage.setItem(`sync_ficha_insumos_map_${tempId}`, realId);
+      } else if (action === "atualizar_cabecalho") {
+        const fichaId = resolveFichaIdInsumos(payload.fichaId);
+        const res = await atualizarCabecalhoFicha(fichaId, payload.patch);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "atualizar_insumo") {
+        const fichaId = resolveFichaIdInsumos(payload.fichaId);
+        const res = await atualizarFichaInsumo(fichaId, payload.insumoTipo, payload.patch);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "finalizar") {
+        const fichaId = resolveFichaIdInsumos(payload.fichaId);
+        const res = await finalizarFicha(fichaId, payload.fechamento);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_abastecimento_linhas") {
+      const fichaId = resolveFichaIdInsumos(payload.fichaId);
+      if (action === "salvar_linha") {
+        const linha = { ...payload.linha };
+        // Linha criada offline tem id temporário: remove pra cair num insert normal,
+        // deixando o Postgres gerar o uuid real (nada mais referencia o id de uma linha).
+        if (typeof linha.id === "string" && linha.id.startsWith("temp_")) delete linha.id;
+        const res = await salvarLinhaAbastecimento(fichaId, linha);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "excluir_linha") {
+        const res = await excluirLinhaAbastecimento(payload.linhaId, fichaId);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_fichas_recarga") {
+      if (action === "create") {
+        const input: any = { ...payload };
+        if (input.localAssinaturaId) {
+          const sig = await localDb.get<any>("signatures_queue", input.localAssinaturaId);
+          if (!sig?.remoteUrl) return { success: false, error: "Assinatura da recarga ainda não sincronizada.", retryable: true };
+          input.responsavel_assinatura_url = sig.remoteUrl;
+          delete input.localAssinaturaId;
+        }
+        const res = await criarRecargaFinalizada(input);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_maquina_adhoc") {
+      if (action === "create") {
+        let fotoUrl = payload.fotoUrl;
+        if (payload.localFotoId) {
+          const foto = await localDb.get<any>("fotos_queue", payload.localFotoId);
+          if (!foto?.remoteUrl) return { success: false, error: "Foto da máquina ainda não sincronizada.", retryable: true };
+          fotoUrl = foto.remoteUrl;
+        }
+        const res = await criarMaquinaAdHoc(payload.codigo, payload.moduloId, fotoUrl);
         if (res && "error" in res) throw new Error(res.error);
       }
     }
