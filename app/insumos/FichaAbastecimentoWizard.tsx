@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets, Pencil, X, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -54,6 +54,7 @@ export default function FichaAbastecimentoWizard({
   const [erro, setErro] = useState<string | null>(null);
   const [alertasFinalizacao, setAlertasFinalizacao] = useState<string[] | null>(null);
   const [confirmarFimAbastecimentos, setConfirmarFimAbastecimentos] = useState(false);
+  const [confirmouTodosAbastecimentos, setConfirmouTodosAbastecimentos] = useState(false);
 
   const temTanque2 = comboio.numero_tanques_diesel >= 2;
 
@@ -367,13 +368,28 @@ export default function FichaAbastecimentoWizard({
 
             <ResumoCalculado ficha={ficha} temTanque2={temTanque2} />
 
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
+              <div className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">
+                Abastecimentos Realizados ({ficha.linhas.length})
+              </div>
+              <TabelaAbastecimentos linhas={ficha.linhas} temTanque2={temTanque2} />
+            </div>
+
+            <label className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl cursor-pointer">
+              <input type="checkbox" checked={confirmouTodosAbastecimentos}
+                onChange={(e) => setConfirmouTodosAbastecimentos(e.target.checked)} className="w-4 h-4 mt-0.5 shrink-0" />
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                Confirmo que todos os abastecimentos de todas as máquinas deste turno já foram lançados acima.
+              </span>
+            </label>
+
             {alertasFinalizacao && (
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 space-y-2">
                 <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-black text-xs uppercase tracking-wider">
                   <AlertTriangle size={14} /> Divergências encontradas
                 </div>
                 {alertasFinalizacao.map((a, i) => <div key={i} className="text-xs text-amber-700 dark:text-amber-400">{a}</div>)}
-                <button onClick={handleFinalizar} disabled={salvando} className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 disabled:opacity-50">
+                <button onClick={handleFinalizar} disabled={salvando || !confirmouTodosAbastecimentos} className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 disabled:opacity-50">
                   Finalizar mesmo assim
                 </button>
               </div>
@@ -393,7 +409,8 @@ export default function FichaAbastecimentoWizard({
             </button>
           ) : (
             !alertasFinalizacao && (
-              <button onClick={handleFinalizar} disabled={salvando}
+              <button onClick={handleFinalizar} disabled={salvando || !confirmouTodosAbastecimentos}
+                title={!confirmouTodosAbastecimentos ? "Confirme acima que todos os abastecimentos foram lançados" : undefined}
                 className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50">
                 <CheckCircle2 size={16} /> Finalizar Ficha
               </button>
@@ -478,18 +495,91 @@ function linhaVazia(fichaId: string): Partial<LinhaAbastecimento> {
   return { ficha_id: fichaId, tanque_diesel: 1, preventiva: false };
 }
 
-const LUBRIFICANTE_LABEL: [keyof LinhaAbastecimento, string][] = [
-  ["motor", "Motor"], ["corrente", "Corrente"], ["graxa", "Graxa"], ["transmissao", "85W140"],
-  ["fluido_radiador", "Fluido"], ["hidraulico", "Hidráulico"], ["diferencial", "85W140LS"], ["arla", "Arla"],
-];
+function numOuTraco(v: number | null | undefined) {
+  return v ? formatarNumero(Number(v)) : "-";
+}
 
-function resumoLinha(l: Partial<LinhaAbastecimento>): string {
-  const partes: string[] = [];
-  if (Number(l.diesel_litros) > 0) partes.push(`Diesel ${formatarNumero(Number(l.diesel_litros))}L`);
-  LUBRIFICANTE_LABEL.forEach(([campo, label]) => {
-    if (Number(l[campo]) > 0) partes.push(`${label} ${formatarNumero(Number(l[campo]))}`);
-  });
-  return partes.length ? partes.join(" · ") : "Sem quantidades lançadas";
+// Tabela em formato de grade, igual ao bloco "Consumo Detalhado por Equipamento" da ficha de
+// papel — usada tanto na Etapa 5 (com editar/excluir) quanto no fechamento da Etapa 7 (só leitura).
+function TabelaAbastecimentos({
+  linhas, temTanque2, onEditar, onExcluir,
+}: {
+  linhas: LinhaAbastecimento[];
+  temTanque2: boolean;
+  onEditar?: (id: string) => void;
+  onExcluir?: (id: string) => void;
+}) {
+  if (!linhas.length) {
+    return (
+      <div className="text-center text-xs text-zinc-400 py-6 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
+        Nenhum abastecimento lançado ainda.
+      </div>
+    );
+  }
+  const temAcoes = !!(onEditar || onExcluir);
+  return (
+    <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl">
+      <table className="w-full text-xs whitespace-nowrap">
+        <thead>
+          <tr className="text-zinc-400 uppercase text-[9px] font-black bg-zinc-50 dark:bg-zinc-900/60">
+            <th className="text-left p-2">Hr. Ini</th>
+            <th className="text-left p-2">Hr. Fim</th>
+            <th className="text-left p-2">Equipamento</th>
+            <th className="text-right p-2">Horím.</th>
+            <th className="text-center p-2">Prev?</th>
+            <th className="text-right p-2">Diesel{temTanque2 ? " (Tq)" : ""} (L)</th>
+            <th className="text-right p-2">Motor</th>
+            <th className="text-right p-2">Corrente</th>
+            <th className="text-right p-2">Graxa</th>
+            <th className="text-right p-2">85W140</th>
+            <th className="text-right p-2">Fluido</th>
+            <th className="text-right p-2">Hidr.</th>
+            <th className="text-right p-2">85W140LS</th>
+            <th className="text-right p-2">Arla</th>
+            <th className="text-left p-2">Matrícula</th>
+            {temAcoes && <th className="text-right p-2">Ações</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {linhas.map((l) => (
+            <tr key={l.id} className="text-zinc-700 dark:text-zinc-300">
+              <td className="p-2">{l.hora_inicial || "-"}</td>
+              <td className="p-2">{l.hora_final || "-"}</td>
+              <td className="p-2 font-bold text-zinc-900 dark:text-zinc-50">{l.equipamento_texto || "-"}</td>
+              <td className="p-2 text-right">{numOuTraco(l.horimetro)}</td>
+              <td className="p-2 text-center">{l.preventiva ? "Sim" : "Não"}</td>
+              <td className="p-2 text-right">{numOuTraco(l.diesel_litros)}{temTanque2 && Number(l.diesel_litros) > 0 ? ` (T${l.tanque_diesel || 1})` : ""}</td>
+              <td className="p-2 text-right">{numOuTraco(l.motor)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.corrente)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.graxa)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.transmissao)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.fluido_radiador)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.hidraulico)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.diferencial)}</td>
+              <td className="p-2 text-right">{numOuTraco(l.arla)}</td>
+              <td className="p-2">{l.matricula_operador || "-"}</td>
+              {temAcoes && (
+                <td className="p-2">
+                  <div className="flex items-center justify-end gap-1">
+                    {onEditar && (
+                      <button onClick={() => onEditar(l.id)} className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-amber-600">
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                    {onExcluir && (
+                      <button onClick={() => onExcluir(l.id)} className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function AbastecimentosEtapa({
@@ -557,32 +647,21 @@ function AbastecimentosEtapa({
         </div>
       )}
 
-      {ficha.linhas.map((linha) =>
-        editandoId === linha.id ? (
-          <LinhaCard key={linha.id} linha={linha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
-            salvando={salvandoId === linha.id} onSalvar={(l) => salvar(l, linha.id)} onExcluir={() => excluir(linha.id)}
+      <TabelaAbastecimentos
+        linhas={ficha.linhas} temTanque2={temTanque2}
+        onEditar={(id) => { setEditandoId(id); setNovaLinha(null); }}
+        onExcluir={excluir}
+      />
+
+      {editandoId && (() => {
+        const linhaEditando = ficha.linhas.find((l) => l.id === editandoId);
+        if (!linhaEditando) return null;
+        return (
+          <LinhaCard linha={linhaEditando} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
+            salvando={salvandoId === editandoId} onSalvar={(l) => salvar(l, editandoId)} onExcluir={() => excluir(editandoId)}
             onFechar={() => setEditandoId(null)} onMaquinaCriada={adicionarMaquinaLocal} />
-        ) : (
-          <div key={linha.id} className="flex items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3">
-            <button onClick={() => setEditandoId(linha.id)} className="flex-1 text-left min-w-0">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-emerald-500 shrink-0" />
-                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-50 truncate">{linha.equipamento_texto || "Equipamento não informado"}</span>
-                {linha.hora_inicial && <span className="text-[10px] text-zinc-400 shrink-0">{linha.hora_inicial}–{linha.hora_final || "?"}</span>}
-              </div>
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{resumoLinha(linha)}</div>
-            </button>
-            <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => setEditandoId(linha.id)} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-amber-600">
-                <Pencil size={14} />
-              </button>
-              <button onClick={() => excluir(linha.id)} className="p-2 rounded-lg text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-        )
-      )}
+        );
+      })()}
 
       {novaLinha ? (
         <LinhaCard linha={novaLinha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
