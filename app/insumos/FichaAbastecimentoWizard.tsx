@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets, Pencil, X, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
 import { createClient } from "@/utils/supabase/client";
@@ -50,6 +50,7 @@ export default function FichaAbastecimentoWizard({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [alertasFinalizacao, setAlertasFinalizacao] = useState<string[] | null>(null);
+  const [confirmarFimAbastecimentos, setConfirmarFimAbastecimentos] = useState(false);
 
   const temTanque2 = comboio.numero_tanques_diesel >= 2;
 
@@ -116,6 +117,10 @@ export default function FichaAbastecimentoWizard({
   }
 
   async function avancar() {
+    if (etapa === 5) {
+      setConfirmarFimAbastecimentos(true);
+      return;
+    }
     if (etapa <= 3) {
       const ok = await salvarCabecalho();
       if (!ok) return;
@@ -270,9 +275,11 @@ export default function FichaAbastecimentoWizard({
           <ConferenciaSaldo ficha={ficha} temTanque2={temTanque2} onAjustado={refetchFicha} />
         )}
 
-        {etapa === 5 && (
+        {/* Sempre montado (só escondido via CSS) pra não perder o rascunho em andamento se o
+            usuário navegar pra outra etapa sem salvar o abastecimento que estava digitando. */}
+        <div className={etapa === 5 ? "" : "hidden"}>
           <AbastecimentosEtapa ficha={ficha} temTanque2={temTanque2} onMudou={refetchFicha} />
-        )}
+        </div>
 
         {etapa === 6 && (
           <EntradasEtapa ficha={ficha} comboio={comboio} modulos={modulos} materiais={materiais} temTanque2={temTanque2} onAjustado={refetchFicha} />
@@ -360,6 +367,27 @@ export default function FichaAbastecimentoWizard({
           )}
         </div>
       </div>
+
+      {confirmarFimAbastecimentos && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <div className="text-sm font-black text-zinc-900 dark:text-zinc-50">Ainda há mais abastecimentos a serem realizados?</div>
+            <p className="text-xs text-zinc-500">
+              Confira se todas as máquinas abastecidas neste turno já foram lançadas antes de seguir pra próxima etapa.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmarFimAbastecimentos(false)}
+                className="px-4 py-2.5 text-sm font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                Sim, tenho mais
+              </button>
+              <button onClick={() => { setConfirmarFimAbastecimentos(false); setEtapa(6); }}
+                className="px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl">
+                Não, continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -416,10 +444,25 @@ function linhaVazia(fichaId: string): Partial<LinhaAbastecimento> {
   return { ficha_id: fichaId, tanque_diesel: 1, preventiva: false };
 }
 
+const LUBRIFICANTE_LABEL: [keyof LinhaAbastecimento, string][] = [
+  ["motor", "Motor"], ["corrente", "Corrente"], ["graxa", "Graxa"], ["transmissao", "85W140"],
+  ["fluido_radiador", "Fluido"], ["hidraulico", "Hidráulico"], ["diferencial", "85W140LS"], ["arla", "Arla"],
+];
+
+function resumoLinha(l: Partial<LinhaAbastecimento>): string {
+  const partes: string[] = [];
+  if (Number(l.diesel_litros) > 0) partes.push(`Diesel ${formatarNumero(Number(l.diesel_litros))}L`);
+  LUBRIFICANTE_LABEL.forEach(([campo, label]) => {
+    if (Number(l[campo]) > 0) partes.push(`${label} ${formatarNumero(Number(l[campo]))}`);
+  });
+  return partes.length ? partes.join(" · ") : "Sem quantidades lançadas";
+}
+
 function AbastecimentosEtapa({
   ficha, temTanque2, onMudou,
 }: { ficha: FichaCompleta; temTanque2: boolean; onMudou: () => void }) {
   const [novaLinha, setNovaLinha] = useState<Partial<LinhaAbastecimento> | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [erroLinha, setErroLinha] = useState<string | null>(null);
   const [maquinas, setMaquinas] = useState<MaquinaSuzano[]>([]);
@@ -442,6 +485,7 @@ function AbastecimentosEtapa({
       if (result.error) { setErroLinha(result.error); return; }
       if (result.warning) setErroLinha(result.warning);
       setNovaLinha(null);
+      setEditandoId(null);
       onMudou();
     } finally {
       setSalvandoId(null);
@@ -449,9 +493,11 @@ function AbastecimentosEtapa({
   }
 
   async function excluir(linhaId: string) {
+    if (!confirm("Excluir este abastecimento?")) return;
     setSalvandoId(linhaId);
     try {
       await excluirLinhaAbastecimento(linhaId, ficha.ficha.id);
+      setEditandoId(null);
       onMudou();
     } finally {
       setSalvandoId(null);
@@ -470,15 +516,46 @@ function AbastecimentosEtapa({
           {erroLinha}
         </div>
       )}
-      {ficha.linhas.map((linha) => (
-        <LinhaCard key={linha.id} linha={linha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
-          salvando={salvandoId === linha.id} onSalvar={(l) => salvar(l, linha.id)} onExcluir={() => excluir(linha.id)} onMaquinaCriada={adicionarMaquinaLocal} />
-      ))}
+
+      {ficha.linhas.length > 0 && (
+        <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+          {ficha.linhas.length} máquina{ficha.linhas.length > 1 ? "s" : ""} já abastecida{ficha.linhas.length > 1 ? "s" : ""}
+        </div>
+      )}
+
+      {ficha.linhas.map((linha) =>
+        editandoId === linha.id ? (
+          <LinhaCard key={linha.id} linha={linha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
+            salvando={salvandoId === linha.id} onSalvar={(l) => salvar(l, linha.id)} onExcluir={() => excluir(linha.id)}
+            onFechar={() => setEditandoId(null)} onMaquinaCriada={adicionarMaquinaLocal} />
+        ) : (
+          <div key={linha.id} className="flex items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3">
+            <button onClick={() => setEditandoId(linha.id)} className="flex-1 text-left min-w-0">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                <span className="font-bold text-sm text-zinc-900 dark:text-zinc-50 truncate">{linha.equipamento_texto || "Equipamento não informado"}</span>
+                {linha.hora_inicial && <span className="text-[10px] text-zinc-400 shrink-0">{linha.hora_inicial}–{linha.hora_final || "?"}</span>}
+              </div>
+              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{resumoLinha(linha)}</div>
+            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => setEditandoId(linha.id)} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-amber-600">
+                <Pencil size={14} />
+              </button>
+              <button onClick={() => excluir(linha.id)} className="p-2 rounded-lg text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        )
+      )}
+
       {novaLinha ? (
         <LinhaCard linha={novaLinha} maquinas={maquinas} moduloId={ficha.ficha.modulo_id} temTanque2={temTanque2}
-          salvando={salvandoId === "nova"} onSalvar={(l) => salvar(l, "nova")} onExcluir={() => setNovaLinha(null)} novaLinhaLabel onMaquinaCriada={adicionarMaquinaLocal} />
+          salvando={salvandoId === "nova"} onSalvar={(l) => salvar(l, "nova")} onExcluir={() => setNovaLinha(null)}
+          onFechar={() => setNovaLinha(null)} novaLinhaLabel onMaquinaCriada={adicionarMaquinaLocal} />
       ) : (
-        <button onClick={() => setNovaLinha(linhaVazia(ficha.ficha.id))}
+        <button onClick={() => { setNovaLinha(linhaVazia(ficha.ficha.id)); setEditandoId(null); }}
           className="w-full py-3 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 text-sm font-bold flex items-center justify-center gap-2 hover:border-amber-400 hover:text-amber-600">
           <Plus size={16} /> Adicionar Abastecimento
         </button>
@@ -488,7 +565,7 @@ function AbastecimentosEtapa({
 }
 
 function LinhaCard({
-  linha, maquinas, moduloId, temTanque2, salvando, onSalvar, onExcluir, novaLinhaLabel, onMaquinaCriada,
+  linha, maquinas, moduloId, temTanque2, salvando, onSalvar, onExcluir, onFechar, novaLinhaLabel, onMaquinaCriada,
 }: {
   linha: Partial<LinhaAbastecimento>;
   maquinas: MaquinaSuzano[];
@@ -497,6 +574,7 @@ function LinhaCard({
   salvando: boolean;
   onSalvar: (l: Partial<LinhaAbastecimento>) => void;
   onExcluir: () => void;
+  onFechar: () => void;
   novaLinhaLabel?: boolean;
   onMaquinaCriada: (m: MaquinaSuzano) => void;
 }) {
@@ -537,7 +615,14 @@ function LinhaCard({
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3">
-      {novaLinhaLabel && <div className="text-[10px] font-black text-amber-600 uppercase tracking-wider">Novo abastecimento</div>}
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-black text-amber-600 uppercase tracking-wider">
+          {novaLinhaLabel ? "Novo abastecimento" : "Editando abastecimento"}
+        </div>
+        <button onClick={onFechar} className="p-1 rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800" title="Fechar sem excluir">
+          <X size={15} />
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Hora Inicial</label>
