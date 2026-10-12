@@ -243,7 +243,7 @@ export default function FichaAbastecimentoWizard({
 
         {etapa === 2 && (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Motorista</label>
                 <SearchableSelect
@@ -257,7 +257,7 @@ export default function FichaAbastecimentoWizard({
                 <input className={inputCls} value={cab.motorista_matricula} onChange={(e) => setCab((p) => ({ ...p, motorista_matricula: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Lubrificador (opcional)</label>
                 <SearchableSelect
@@ -288,7 +288,7 @@ export default function FichaAbastecimentoWizard({
               <input type="number" step="0.1" className={inputCls} value={cab.km_horimetro_inicial} onChange={(e) => setCab((p) => ({ ...p, km_horimetro_inicial: e.target.value }))} />
             </div>
             <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-2">Régua Inicial (opcional)</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Tanque 1 — CM</label>
                 <input type="number" className={inputCls} value={cab.regua_tanque1_inicial_cm} onChange={(e) => setCab((p) => ({ ...p, regua_tanque1_inicial_cm: e.target.value }))} />
@@ -299,7 +299,7 @@ export default function FichaAbastecimentoWizard({
               </div>
             </div>
             {temTanque2 && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Tanque 2 — CM</label>
                   <input type="number" className={inputCls} value={cab.regua_tanque2_inicial_cm} onChange={(e) => setCab((p) => ({ ...p, regua_tanque2_inicial_cm: e.target.value }))} />
@@ -350,7 +350,7 @@ export default function FichaAbastecimentoWizard({
                 <label className={labelCls}>Horímetro Final do Comboio</label>
                 <input type="number" step="0.1" className={inputCls} value={fechamento.km_horimetro_final} onChange={(e) => setFechamento((p) => ({ ...p, km_horimetro_final: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Régua Final T1 — CM</label>
                   <input type="number" className={inputCls} value={fechamento.regua_tanque1_final_cm} onChange={(e) => setFechamento((p) => ({ ...p, regua_tanque1_final_cm: e.target.value }))} />
@@ -540,6 +540,17 @@ function TabelaAbastecimentos({
     );
   }
   const temAcoes = !!(onEditar || onExcluir);
+  const soma = (campo: keyof LinhaAbastecimento) =>
+    linhas.reduce((acc, l) => acc + (Number(l[campo]) || 0), 0);
+  const totalDiesel = soma("diesel_litros");
+  const totalMotor = soma("motor");
+  const totalCorrente = soma("corrente");
+  const totalGraxa = soma("graxa");
+  const totalTransmissao = soma("transmissao");
+  const totalFluido = soma("fluido_radiador");
+  const totalHidraulico = soma("hidraulico");
+  const totalDiferencial = soma("diferencial");
+  const totalArla = soma("arla");
   return (
     <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl">
       <table className="w-full text-xs whitespace-nowrap">
@@ -600,6 +611,22 @@ function TabelaAbastecimentos({
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="font-black text-zinc-900 dark:text-zinc-50 bg-zinc-50 dark:bg-zinc-900/60 border-t-2 border-zinc-200 dark:border-zinc-800">
+            <td className="p-2" colSpan={5}>Total</td>
+            <td className="p-2 text-right">{formatarNumero(totalDiesel)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalMotor)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalCorrente)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalGraxa)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalTransmissao)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalFluido)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalHidraulico)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalDiferencial)}</td>
+            <td className="p-2 text-right">{formatarNumero(totalArla)}</td>
+            <td className="p-2" />
+            {temAcoes && <td className="p-2" />}
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
@@ -760,7 +787,7 @@ function LinhaCard({
           <X size={15} />
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Hora Inicial</label>
           <input type="time" className={inputCls} value={draft.hora_inicial || ""} onChange={(e) => campo("hora_inicial", e.target.value)} />
@@ -804,7 +831,7 @@ function LinhaCard({
           </div>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Horímetro</label>
           <input type="number" step="0.1" className={inputCls} value={draft.horimetro ?? ""} onChange={(e) => campo("horimetro", e.target.value ? Number(e.target.value) : null)} />
@@ -816,7 +843,7 @@ function LinhaCard({
       </div>
 
       <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">{labelMaterialInsumo("DIESEL_T1", materiais)}</div>
-      <div className={cn("grid gap-3", temTanque2 ? "grid-cols-3" : "grid-cols-2")}>
+      <div className={cn("grid grid-cols-1 gap-3", temTanque2 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         <div>
           <label className={labelCls}>Registradora</label>
           <input type="number" step="0.1" className={inputCls} value={draft.diesel_registradora ?? ""} onChange={(e) => campo("diesel_registradora", e.target.value ? Number(e.target.value) : null)} />
@@ -837,7 +864,7 @@ function LinhaCard({
       </div>
 
       <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pt-1">Lubrificantes</div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {(["motor", "corrente", "graxa", "transmissao", "fluido_radiador", "hidraulico", "diferencial", "arla"] as (keyof LinhaAbastecimento)[]).map((campoNome) => (
           <div key={campoNome}>
             <label className="text-[9px] font-bold text-zinc-400 block mb-1">{labelCampoLinha(campoNome, materiais)}</label>
@@ -847,11 +874,9 @@ function LinhaCard({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 pt-1">
-        <div>
-          <label className={labelCls}>Matrícula do Operador</label>
-          <input className={inputCls} value={draft.matricula_operador || ""} onChange={(e) => campo("matricula_operador", e.target.value)} />
-        </div>
+      <div className="pt-1">
+        <label className={labelCls}>Matrícula do Operador</label>
+        <input className={inputCls} value={draft.matricula_operador || ""} onChange={(e) => campo("matricula_operador", e.target.value)} />
       </div>
       <SignaturePad value={draft.assinatura_operador_url || ""} onChange={(v) => campo("assinatura_operador_url", v)} label="Assinatura do Operador" />
 

@@ -168,7 +168,7 @@ export default function RecargaModal({
 
             <div>
               <label className={labelCls}>Origem da Recarga</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([["SKID", "Skid"], ["ALMOXARIFADO", "Almox."], ["FORNECEDOR", "Fornecedor"], ["OUTRO", "Outro"]] as [OrigemRecarga, string][]).map(([v, label]) => (
                   <button key={v} onClick={() => setOrigemTipo(v)}
                     className={cn("py-2 rounded-xl text-xs font-bold border-2", origemTipo === v ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400" : "border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
@@ -200,7 +200,7 @@ export default function RecargaModal({
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Turno</label>
                 <select className={inputCls} value={turno} onChange={(e) => setTurno(e.target.value as any)}>
@@ -228,7 +228,7 @@ export default function RecargaModal({
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Motorista EUN</label>
                 <SearchableSelect
@@ -267,7 +267,7 @@ export default function RecargaModal({
                         <span>{material.material} ({material.unidade})</span>
                         {origemTipo === "SKID" && skidId && <span className="text-zinc-400 font-normal">Saldo no skid: {saldo?.toLocaleString("pt-BR") ?? "0"}</span>}
                       </div>
-                      <div className={cn("grid gap-2", temTanque2 && material.aplicacao === "DIESEL" ? "grid-cols-3" : "grid-cols-2")}>
+                      <div className={cn("grid grid-cols-1 gap-2", temTanque2 && material.aplicacao === "DIESEL" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
                         <input type="number" step="0.1" placeholder="Quantidade" className={inputCls} value={item.quantidade}
                           onChange={(e) => atualizarItem(item.material_id, { quantidade: e.target.value })} />
                         <input placeholder="REQ/NF" className={inputCls} value={item.req_nf}
@@ -285,7 +285,7 @@ export default function RecargaModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Responsável (Estoque Cliente)</label>
                 <input className={inputCls} value={responsavelNome} onChange={(e) => setResponsavelNome(e.target.value)} />
