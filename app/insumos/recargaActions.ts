@@ -311,3 +311,39 @@ export async function registrarMedicaoSkid(
   revalidatePath("/insumos");
   return { success: true };
 }
+
+// ─── Recargas já aplicadas numa ficha de abastecimento ──────────────────────
+// Mostra na Etapa 6 exatamente quais fichas de recarga alimentaram o "Entrou" — o valor
+// agregado nunca é digitado solto, só muda através de uma recarga de verdade registrada.
+
+export type RecargaAplicada = {
+  id: string; numeroSequencial: number; data: string; hora: string | null; origemLabel: string;
+  responsavelNome: string | null; itens: { material: string; quantidade: number; unidade: string }[];
+};
+
+export async function getRecargasAplicadasNaFicha(fichaId: string): Promise<RecargaAplicada[]> {
+  const supabase = createClient();
+  const { data: recargas } = await supabase
+    .from("insumos_fichas_recarga")
+    .select("id, numero_sequencial, data, hora, origem_tipo, origem_deposito, origem_outro_texto, responsavel_nome, origem_skid:equipamentos!insumos_fichas_recarga_origem_skid_id_fkey(placa)")
+    .eq("aplicado_em_ficha_id", fichaId)
+    .order("created_at", { ascending: false });
+  if (!recargas || !recargas.length) return [];
+
+  const ids = recargas.map((r: any) => r.id);
+  const { data: itens } = await supabase
+    .from("insumos_recarga_itens").select("recarga_id, quantidade, insumos_materiais(material, unidade)").in("recarga_id", ids);
+
+  return recargas.map((r: any) => {
+    const origemLabel = r.origem_tipo === "SKID" ? `Skid ${r.origem_skid?.placa || "-"}`
+      : r.origem_tipo === "ALMOXARIFADO" ? `Almoxarifado ${r.origem_deposito || "-"}`
+      : r.origem_tipo === "FORNECEDOR" ? "Fornecedor" : (r.origem_outro_texto || "Outro");
+    return {
+      id: r.id, numeroSequencial: r.numero_sequencial, data: r.data, hora: r.hora, origemLabel,
+      responsavelNome: r.responsavel_nome,
+      itens: (itens || []).filter((i: any) => i.recarga_id === r.id).map((i: any) => ({
+        material: i.insumos_materiais?.material || "-", quantidade: Number(i.quantidade), unidade: i.insumos_materiais?.unidade || "",
+      })),
+    };
+  });
+}

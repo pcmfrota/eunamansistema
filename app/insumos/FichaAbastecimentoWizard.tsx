@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import { InsumoTipo, INSUMO_TIPOS, labelMaterialInsumo } from "./config";
 import RecargaModal from "./RecargaModal";
+import { getRecargasAplicadasNaFicha, RecargaAplicada } from "./recargaActions";
 
 const ADICIONAR_MAQUINA = "__ADICIONAR__";
 
@@ -873,29 +874,66 @@ function EntradasEtapa({
 }: { ficha: FichaCompleta; comboio: Comboio; modulos: Modulo[]; materiais: Material[]; colaboradores: Colaborador[]; temTanque2: boolean; onAjustado: () => void }) {
   const tipos = INSUMO_TIPOS.filter((t) => temTanque2 || t !== "DIESEL_T2");
   const [mostrarRecarga, setMostrarRecarga] = useState(false);
+  const [recargas, setRecargas] = useState<RecargaAplicada[]>([]);
+  const [carregandoRecargas, setCarregandoRecargas] = useState(true);
+
+  useEffect(() => {
+    let ativo = true;
+    getRecargasAplicadasNaFicha(ficha.ficha.id).then((r) => { if (ativo) { setRecargas(r); setCarregandoRecargas(false); } });
+    return () => { ativo = false; };
+  }, [ficha.ficha.id, ficha.insumos]);
 
   return (
     <div className="space-y-3">
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
         <p className="text-xs text-zinc-500">
-          Quanto cada insumo recebeu de reabastecimento/recarga neste turno. Lançamentos de "+ Registrar Recarga"
-          somam aqui automaticamente.
+          Quanto cada insumo recebeu de recarga neste turno — somado automaticamente a partir das fichas de recarga
+          lançadas abaixo. Esse valor não é digitado direto: use "+ Registrar Recarga".
         </p>
         {tipos.map((tipo) => {
           const insumo = ficha.insumos.find((i) => i.insumo_tipo === tipo);
           return (
             <div key={tipo} className="flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{labelMaterialInsumo(tipo, materiais, temTanque2)}</span>
-              <input type="number" step="0.1" defaultValue={insumo?.entrou ?? 0} className="w-28 px-2 py-1.5 text-right text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950"
-                onBlur={async (e) => { await atualizarFichaInsumo(ficha.ficha.id, tipo, { entrou: Number(e.target.value || 0) }); onAjustado(); }} />
+              <span className="text-sm font-black text-emerald-600">{formatarNumero(Number(insumo?.entrou || 0))}</span>
             </div>
           );
         })}
       </div>
+
       <button onClick={() => setMostrarRecarga(true)}
         className="w-full py-3 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/10">
         <Droplets size={16} /> + Registrar Recarga
       </button>
+
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
+        <div className="text-xs font-black text-zinc-500 uppercase tracking-wider mb-3">
+          Recargas Lançadas Neste Turno ({recargas.length})
+        </div>
+        {carregandoRecargas ? (
+          <div className="text-center text-xs text-zinc-400 py-4">Carregando...</div>
+        ) : recargas.length === 0 ? (
+          <div className="text-center text-xs text-zinc-400 py-4 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
+            Nenhuma recarga lançada ainda nesta ficha.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recargas.map((r) => (
+              <div key={r.id} className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-zinc-900 dark:text-zinc-50">Recarga Nº {r.numeroSequencial} — {r.origemLabel}</span>
+                  <span className="text-zinc-400">{r.data.slice(8, 10)}/{r.data.slice(5, 7)} {r.hora || ""}</span>
+                </div>
+                <div className="text-zinc-500 dark:text-zinc-400 mt-1">
+                  {r.itens.map((i) => `${i.material}: ${formatarNumero(i.quantidade)} ${i.unidade}`).join(" · ")}
+                </div>
+                {r.responsavelNome && <div className="text-[10px] text-zinc-400 mt-1">Responsável: {r.responsavelNome}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {mostrarRecarga && (
         <RecargaModal
           comboio={comboio} modulos={modulos} materiais={materiais} colaboradores={colaboradores}

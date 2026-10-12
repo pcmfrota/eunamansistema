@@ -75,9 +75,12 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
              />
           </div>
           <div className="overflow-y-auto p-1 custom-scrollbar">
-             {filteredOptions.length === 0 && !onAddNew ? (
-               <div className="p-3 text-sm text-center text-zinc-500">Nenhum resultado</div>
-             ) : (
+             {filteredOptions.length === 0 && (
+               <div className="p-3 text-sm text-center text-zinc-500">
+                 {onAddNew ? "Nenhum resultado — digite pra adicionar um novo" : "Nenhum resultado"}
+               </div>
+             )}
+             {filteredOptions.length > 0 && (
                filteredOptions.map(opt => (
                  <div
                    key={opt.value}
