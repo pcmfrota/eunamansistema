@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  Comboio, Modulo, Material, Impedimento, FichaCompleta,
+  Comboio, Modulo, Material, Impedimento, Colaborador, FichaCompleta,
   abrirOuCriarFicha,
 } from "./actions";
 import FichaAbastecimentoWizard from "./FichaAbastecimentoWizard";
@@ -14,12 +14,13 @@ import EstoqueAuditoria from "./EstoqueAuditoria";
 import GraficosPainel from "./GraficosPainel";
 
 export default function InsumosClient({
-  initialComboios, modulos, materiais, impedimentos, equipamentos, error,
+  initialComboios, modulos, materiais, impedimentos, colaboradores, equipamentos, error,
 }: {
   initialComboios: Comboio[];
   modulos: Modulo[];
   materiais: Material[];
   impedimentos: Impedimento[];
+  colaboradores: Colaborador[];
   equipamentos: { id: string; placa: string; tipo: string }[];
   error?: string;
 }) {
@@ -65,6 +66,7 @@ export default function InsumosClient({
         modulos={modulos}
         materiais={materiais}
         impedimentos={impedimentos}
+        colaboradores={colaboradores}
         equipamentos={equipamentos}
         onVoltar={() => setFichaAtiva(null)}
         onAtualizarFicha={(f) => setFichaAtiva(f)}

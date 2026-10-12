@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Search, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface Option {
@@ -15,11 +15,15 @@ interface SearchableSelectProps {
   className?: string;
   disabled?: boolean;
   name?: string;
+  /** Quando informado, mostra "+ Adicionar '<busca>'" no fim da lista pra cadastrar um item
+   * novo na hora (ex: colaborador que não está na base ainda). */
+  onAddNew?: (nome: string) => void | Promise<void>;
 }
 
-export function SearchableSelect({ options, value, onChange, placeholder = "Selecione...", className, disabled, name }: SearchableSelectProps) {
+export function SearchableSelect({ options, value, onChange, placeholder = "Selecione...", className, disabled, name, onAddNew }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [adicionando, setAdicionando] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(opt => opt.value === value);
@@ -71,7 +75,7 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
              />
           </div>
           <div className="overflow-y-auto p-1 custom-scrollbar">
-             {filteredOptions.length === 0 ? (
+             {filteredOptions.length === 0 && !onAddNew ? (
                <div className="p-3 text-sm text-center text-zinc-500">Nenhum resultado</div>
              ) : (
                filteredOptions.map(opt => (
@@ -79,8 +83,8 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
                    key={opt.value}
                    className={cn(
                      "px-3 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors",
-                     opt.value === value 
-                       ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" 
+                     opt.value === value
+                       ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                    )}
                    onClick={() => {
@@ -92,6 +96,27 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
                    {opt.label}
                  </div>
                ))
+             )}
+             {onAddNew && searchTerm.trim() && !options.some(o => o.label.toLowerCase() === searchTerm.trim().toLowerCase()) && (
+               <div
+                 className={cn(
+                   "px-3 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 rounded-lg cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-1.5",
+                   filteredOptions.length > 0 && "mt-1 pt-2 border-t border-zinc-100 dark:border-zinc-800"
+                 )}
+                 onClick={async () => {
+                   const nome = searchTerm.trim();
+                   setAdicionando(true);
+                   try {
+                     await onAddNew(nome);
+                   } finally {
+                     setAdicionando(false);
+                     setIsOpen(false);
+                     setSearchTerm('');
+                   }
+                 }}
+               >
+                 <Plus size={13} /> {adicionando ? "Adicionando..." : `Adicionar "${searchTerm.trim()}"`}
+               </div>
              )}
           </div>
         </div>

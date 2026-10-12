@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, CheckCircle2, Fuel, Camera, Droplets, Pencil, X, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignaturePad } from "@/components/SignaturePad";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { createClient } from "@/utils/supabase/client";
 import {
-  FichaCompleta, Comboio, Modulo, Material, Impedimento, MaquinaSuzano,
+  FichaCompleta, Comboio, Modulo, Material, Impedimento, MaquinaSuzano, Colaborador,
   LinhaAbastecimento, FechamentoPayload,
   atualizarCabecalhoFicha, atualizarFichaInsumo, salvarLinhaAbastecimento, excluirLinhaAbastecimento,
-  finalizarFicha, getFicha, getMaquinasPorModulo, criarMaquinaAdHoc,
+  finalizarFicha, getFicha, getMaquinasPorModulo, criarMaquinaAdHoc, criarColaborador,
 } from "./actions";
 import { InsumoTipo, INSUMO_TIPOS, INSUMO_LABEL } from "./config";
 import RecargaModal from "./RecargaModal";
@@ -34,17 +35,19 @@ const inputCls = "w-full px-3 py-2.5 text-sm border border-zinc-200 dark:border-
 const labelCls = "text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1.5";
 
 export default function FichaAbastecimentoWizard({
-  fichaInicial, comboio, modulos, materiais, impedimentos, equipamentos, onVoltar, onAtualizarFicha,
+  fichaInicial, comboio, modulos, materiais, impedimentos, colaboradores, equipamentos, onVoltar, onAtualizarFicha,
 }: {
   fichaInicial: FichaCompleta;
   comboio: Comboio;
   modulos: Modulo[];
   materiais: Material[];
   impedimentos: Impedimento[];
+  colaboradores: Colaborador[];
   equipamentos: { id: string; placa: string; tipo: string }[];
   onVoltar: () => void;
   onAtualizarFicha: (f: FichaCompleta) => void;
 }) {
+  const [listaColaboradores, setListaColaboradores] = useState(colaboradores);
   const [ficha, setFicha] = useState(fichaInicial);
   const [etapa, setEtapa] = useState(1);
   const [salvando, setSalvando] = useState(false);
@@ -85,6 +88,29 @@ export default function FichaAbastecimentoWizard({
     ficha.insumos.forEach((i) => { map[i.insumo_tipo] = i; });
     return map;
   }, [ficha.insumos]);
+
+  const colaboradoresOptions = useMemo(
+    () => listaColaboradores.map((c) => ({ value: c.nome, label: c.matricula ? `${c.nome} (${c.matricula})` : c.nome })),
+    [listaColaboradores]
+  );
+
+  function aplicarColaboradorMotorista(nome: string) {
+    const c = listaColaboradores.find((x) => x.nome === nome);
+    setCab((p) => ({ ...p, motorista_nome: nome, motorista_matricula: c?.matricula || p.motorista_matricula }));
+  }
+  function aplicarColaboradorLubrificador(nome: string) {
+    const c = listaColaboradores.find((x) => x.nome === nome);
+    setCab((p) => ({ ...p, lubrificador_nome: nome, lubrificador_matricula: c?.matricula || p.lubrificador_matricula }));
+  }
+  async function adicionarNovoColaborador(nome: string, tipo: "MOTORISTA" | "LUBRIFICADOR", aplicar: (nome: string) => void) {
+    const result = await criarColaborador(nome, tipo);
+    if (result.error) { setErro(result.error); return; }
+    if (result.colaborador) {
+      const novo = result.colaborador;
+      setListaColaboradores((prev) => (prev.some((c) => c.id === novo.id) ? prev : [...prev, novo].sort((a, b) => a.nome.localeCompare(b.nome))));
+      aplicar(novo.nome);
+    }
+  }
 
   async function refetchFicha() {
     const r = await getFicha(ficha.ficha.id);
@@ -212,7 +238,11 @@ export default function FichaAbastecimentoWizard({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Motorista</label>
-                <input className={inputCls} value={cab.motorista_nome} onChange={(e) => setCab((p) => ({ ...p, motorista_nome: e.target.value }))} placeholder="Nome" />
+                <SearchableSelect
+                  options={colaboradoresOptions} value={cab.motorista_nome} onChange={aplicarColaboradorMotorista}
+                  onAddNew={(nome) => adicionarNovoColaborador(nome, "MOTORISTA", aplicarColaboradorMotorista)}
+                  placeholder="Selecione ou busque..."
+                />
               </div>
               <div>
                 <label className={labelCls}>Matrícula</label>
@@ -222,7 +252,11 @@ export default function FichaAbastecimentoWizard({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Lubrificador (opcional)</label>
-                <input className={inputCls} value={cab.lubrificador_nome} onChange={(e) => setCab((p) => ({ ...p, lubrificador_nome: e.target.value }))} placeholder="Nome" />
+                <SearchableSelect
+                  options={colaboradoresOptions} value={cab.lubrificador_nome} onChange={aplicarColaboradorLubrificador}
+                  onAddNew={(nome) => adicionarNovoColaborador(nome, "LUBRIFICADOR", aplicarColaboradorLubrificador)}
+                  placeholder="Selecione ou busque..."
+                />
               </div>
               <div>
                 <label className={labelCls}>Matrícula</label>

@@ -29,6 +29,7 @@ export type Modulo = { id: string; codigo: string; nome: string; centro: string 
 export type Material = { id: string; codigo: number | null; ni: string; referencia: string; material: string; unidade: string; aplicacao: string };
 export type Impedimento = { id: string; codigo: string | null; descricao: string };
 export type MaquinaSuzano = { id: string; codigo: string; modulo_id: string | null; frente: "HV" | "FW" | null; tipo: string | null; origem: "CADASTRO" | "MOTORISTA"; foto_url: string | null };
+export type Colaborador = { id: string; nome: string; matricula: string | null };
 
 export type FichaInsumo = {
   id: string;
@@ -121,19 +122,21 @@ export async function getInsumosBaseData(): Promise<{
   modulos: Modulo[];
   materiais: Material[];
   impedimentos: Impedimento[];
+  colaboradores: Colaborador[];
   error?: string;
 }> {
   const supabase = createClient();
 
-  const [{ data: equipamentos, error: eqError }, { data: modulos }, { data: materiais }, { data: impedimentos }] = await Promise.all([
+  const [{ data: equipamentos, error: eqError }, { data: modulos }, { data: materiais }, { data: impedimentos }, { data: colaboradores }] = await Promise.all([
     supabase.from("equipamentos").select("id, placa, modelo, tipo, modulo, deposito_suzano, numero_tanques_diesel, capacidade_tanque_litros")
       .eq("tipo", "COMBOIO").is("deleted_at", null).order("placa"),
     supabase.from("insumos_modulos").select("id, codigo, nome, centro, deposito, controle").eq("ativo", true).order("nome"),
     supabase.from("insumos_materiais").select("id, codigo, ni, referencia, material, unidade, aplicacao").eq("ativo", true).order("codigo"),
     supabase.from("insumos_impedimentos").select("id, codigo, descricao").eq("ativo", true).order("descricao"),
+    supabase.from("colaboradores").select("id, nome, matricula").eq("status", "Ativo").order("nome"),
   ]);
 
-  if (eqError) return { comboios: [], modulos: [], materiais: [], impedimentos: [], error: eqError.message };
+  if (eqError) return { comboios: [], modulos: [], materiais: [], impedimentos: [], colaboradores: [], error: eqError.message };
 
   const equipList = equipamentos || [];
   const comboios: Comboio[] = await Promise.all(
@@ -167,7 +170,7 @@ export async function getInsumosBaseData(): Promise<{
     })
   );
 
-  return { comboios, modulos: modulos || [], materiais: materiais || [], impedimentos: impedimentos || [] };
+  return { comboios, modulos: modulos || [], materiais: materiais || [], impedimentos: impedimentos || [], colaboradores: colaboradores || [] };
 }
 
 // Autocomplete da grade de abastecimento: máquinas + frota (qualquer tipo), pra sugestão.
@@ -175,6 +178,28 @@ export async function getEquipamentosParaAbastecimento(): Promise<{ id: string; 
   const supabase = createClient();
   const { data } = await supabase.from("equipamentos").select("id, placa, tipo").is("deleted_at", null).order("placa");
   return data || [];
+}
+
+// Cadastro em campo: motorista/lubrificador que o usuário não encontrou na lista de
+// colaboradores pode ser adicionado na hora, e fica salvo pra próxima ficha já aparecer.
+export async function criarColaborador(nome: string, tipo: string): Promise<{ colaborador?: Colaborador; error?: string }> {
+  const nomeTrim = nome.trim();
+  if (!nomeTrim) return { error: "Informe o nome do colaborador." };
+  const supabase = createClient();
+
+  const { data: existente } = await supabase.from("colaboradores").select("id, nome, matricula").ilike("nome", nomeTrim).maybeSingle();
+  if (existente) return { colaborador: existente };
+
+  const { data, error } = await supabase.from("colaboradores").insert({ nome: nomeTrim, status: "Ativo", tipo }).select("id, nome, matricula").single();
+  if (error) {
+    if (error.code === "23505") {
+      const { data: retry } = await supabase.from("colaboradores").select("id, nome, matricula").ilike("nome", nomeTrim).maybeSingle();
+      if (retry) return { colaborador: retry };
+    }
+    return { error: error.message };
+  }
+  revalidatePath("/insumos");
+  return { colaborador: data };
 }
 
 // ─── Cadastro de Máquinas Suzano ────────────────────────────────────────────

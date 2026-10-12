@@ -13,6 +13,7 @@ export default async function InsumosPage() {
       modulos={baseData.modulos}
       materiais={baseData.materiais}
       impedimentos={baseData.impedimentos}
+      colaboradores={baseData.colaboradores}
       equipamentos={equipamentos}
       error={baseData.error}
     />
