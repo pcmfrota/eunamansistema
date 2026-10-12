@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse, BarChart3 } from "lucide-react";
+import { Fuel, Search, Truck, Clock, Droplets, LayoutGrid, ListChecks, Warehouse, BarChart3, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Comboio, Modulo, Material, Impedimento, Colaborador, FichaCompleta,
@@ -12,6 +12,7 @@ import RecargaModal from "./RecargaModal";
 import FichasLista from "./FichasLista";
 import EstoqueAuditoria from "./EstoqueAuditoria";
 import GraficosPainel from "./GraficosPainel";
+import Cadastros from "./Cadastros";
 
 export default function InsumosClient({
   initialComboios, modulos, materiais, impedimentos, colaboradores, equipamentos, error,
@@ -30,7 +31,7 @@ export default function InsumosClient({
   const [carregandoId, setCarregandoId] = useState<string | null>(null);
   const [erroAbrir, setErroAbrir] = useState<string | null>(null);
   const [comboioRecarga, setComboioRecarga] = useState<Comboio | null>(null);
-  const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS" | "ESTOQUE" | "PAINEL">("LANCAR");
+  const [abaPrincipal, setAbaPrincipal] = useState<"LANCAR" | "FICHAS" | "ESTOQUE" | "PAINEL" | "CADASTROS">("LANCAR");
 
   const comboiosFiltrados = useMemo(() => {
     const termo = busca.toLowerCase().trim();
@@ -105,6 +106,10 @@ export default function InsumosClient({
           className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", abaPrincipal === "PAINEL" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
           <BarChart3 size={13} /> Painel
         </button>
+        <button onClick={() => setAbaPrincipal("CADASTROS")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider", abaPrincipal === "CADASTROS" ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500")}>
+          <Database size={13} /> Cadastros
+        </button>
       </div>
 
       {error && (
@@ -119,6 +124,8 @@ export default function InsumosClient({
         <EstoqueAuditoria comboios={comboios} materiais={materiais} />
       ) : abaPrincipal === "PAINEL" ? (
         <GraficosPainel />
+      ) : abaPrincipal === "CADASTROS" ? (
+        <Cadastros />
       ) : (
       <>
       {erroAbrir && (

@@ -29,7 +29,7 @@ export type Modulo = { id: string; codigo: string; nome: string; centro: string 
 export type Material = { id: string; codigo: number | null; ni: string; referencia: string; material: string; unidade: string; aplicacao: string };
 export type Impedimento = { id: string; codigo: string | null; descricao: string };
 export type MaquinaSuzano = { id: string; codigo: string; modulo_id: string | null; frente: "HV" | "FW" | null; tipo: string | null; origem: "CADASTRO" | "MOTORISTA"; foto_url: string | null };
-export type Colaborador = { id: string; nome: string; matricula: string | null };
+export type Colaborador = { id: string; nome: string; matricula: string | null; tipo: string | null };
 
 export type FichaInsumo = {
   id: string;
@@ -133,7 +133,7 @@ export async function getInsumosBaseData(): Promise<{
     supabase.from("insumos_modulos").select("id, codigo, nome, centro, deposito, controle").eq("ativo", true).order("nome"),
     supabase.from("insumos_materiais").select("id, codigo, ni, referencia, material, unidade, aplicacao").eq("ativo", true).order("codigo"),
     supabase.from("insumos_impedimentos").select("id, codigo, descricao").eq("ativo", true).order("descricao"),
-    supabase.from("colaboradores").select("id, nome, matricula").eq("status", "Ativo").order("nome"),
+    supabase.from("colaboradores").select("id, nome, matricula, tipo").eq("status", "Ativo").order("nome"),
   ]);
 
   if (eqError) return { comboios: [], modulos: [], materiais: [], impedimentos: [], colaboradores: [], error: eqError.message };
@@ -187,13 +187,13 @@ export async function criarColaborador(nome: string, tipo: string): Promise<{ co
   if (!nomeTrim) return { error: "Informe o nome do colaborador." };
   const supabase = createClient();
 
-  const { data: existente } = await supabase.from("colaboradores").select("id, nome, matricula").ilike("nome", nomeTrim).maybeSingle();
+  const { data: existente } = await supabase.from("colaboradores").select("id, nome, matricula, tipo").ilike("nome", nomeTrim).maybeSingle();
   if (existente) return { colaborador: existente };
 
-  const { data, error } = await supabase.from("colaboradores").insert({ nome: nomeTrim, status: "Ativo", tipo }).select("id, nome, matricula").single();
+  const { data, error } = await supabase.from("colaboradores").insert({ nome: nomeTrim, status: "Ativo", tipo }).select("id, nome, matricula, tipo").single();
   if (error) {
     if (error.code === "23505") {
-      const { data: retry } = await supabase.from("colaboradores").select("id, nome, matricula").ilike("nome", nomeTrim).maybeSingle();
+      const { data: retry } = await supabase.from("colaboradores").select("id, nome, matricula, tipo").ilike("nome", nomeTrim).maybeSingle();
       if (retry) return { colaborador: retry };
     }
     return { error: error.message };

@@ -90,8 +90,14 @@ export default function FichaAbastecimentoWizard({
     return map;
   }, [ficha.insumos]);
 
-  const colaboradoresOptions = useMemo(
-    () => listaColaboradores.map((c) => ({ value: c.nome, label: c.matricula ? `${c.nome} (${c.matricula})` : c.nome })),
+  // Motorista só lista quem está cadastrado como MOTORISTA; Lubrificador normalmente é outra
+  // pessoa (tipo LUBRIFICADOR), mas aceita também um motorista como exceção pra casos esporádicos.
+  const motoristasOptions = useMemo(
+    () => listaColaboradores.filter((c) => c.tipo === "MOTORISTA").map((c) => ({ value: c.nome, label: c.matricula ? `${c.nome} (${c.matricula})` : c.nome })),
+    [listaColaboradores]
+  );
+  const lubrificadoresOptions = useMemo(
+    () => listaColaboradores.filter((c) => c.tipo === "LUBRIFICADOR" || c.tipo === "MOTORISTA").map((c) => ({ value: c.nome, label: c.matricula ? `${c.nome} (${c.matricula})` : c.nome })),
     [listaColaboradores]
   );
 
@@ -240,7 +246,7 @@ export default function FichaAbastecimentoWizard({
               <div>
                 <label className={labelCls}>Motorista</label>
                 <SearchableSelect
-                  options={colaboradoresOptions} value={cab.motorista_nome} onChange={aplicarColaboradorMotorista}
+                  options={motoristasOptions} value={cab.motorista_nome} onChange={aplicarColaboradorMotorista}
                   onAddNew={(nome) => adicionarNovoColaborador(nome, "MOTORISTA", aplicarColaboradorMotorista)}
                   placeholder="Selecione ou busque..."
                 />
@@ -254,7 +260,7 @@ export default function FichaAbastecimentoWizard({
               <div>
                 <label className={labelCls}>Lubrificador (opcional)</label>
                 <SearchableSelect
-                  options={colaboradoresOptions} value={cab.lubrificador_nome} onChange={aplicarColaboradorLubrificador}
+                  options={lubrificadoresOptions} value={cab.lubrificador_nome} onChange={aplicarColaboradorLubrificador}
                   onAddNew={(nome) => adicionarNovoColaborador(nome, "LUBRIFICADOR", aplicarColaboradorLubrificador)}
                   placeholder="Selecione ou busque..."
                 />
