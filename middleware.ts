@@ -20,7 +20,7 @@ const MODULO_PERMISSOES: Record<string, string[]> = {
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
-const PUBLIC_PATHS = ['/login', '/api/', '/manifest.json', '/sw.js', '/offline.html']
+const PUBLIC_PATHS = ['/login', '/api/', '/manifest.json', '/sw.js', '/offline.html', '/privacidade']
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
