@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v18";
+const CACHE_NAME = "eunaman-cache-v19";
 const OFFLINE_URL = "/offline.html";
 
 // fetch() puro não tem timeout embutido: se a rede travar no meio do caminho
@@ -57,11 +57,32 @@ const PRECACHE_URLS = [
   "/insumos",
 ];
 
-// Acha os bundles JS/CSS (/_next/static/...) que uma página referencia no próprio HTML.
-// Sem isso, o precache só guardava o documento de cada página da PRECACHE_URLS — o código
-// que a faz funcionar de verdade só entrava no cache na primeira vez que alguém abria
-// aquela aba específica online. Com isso, uma única conexão já deixa TODAS as abas
-// prontas pra funcionar offline, não só as que o usuário visitou por acaso.
+// Cacheia uma lista de URLs (páginas ou assets) sem deixar uma falha isolada
+// derrubar as demais, e sem recachear um asset que outra página já trouxe.
+async function cacharLista(cache, urls) {
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const existente = await cache.match(url);
+        if (existente) return;
+        const response = await fetch(url, { cache: "no-store" });
+        // Ignora respostas redirecionadas (ex: página exige login e caiu em /login):
+        // cachear isso na chave original guardaria o conteúdo errado para essa URL.
+        if (response && response.ok && !response.redirected) {
+          await cache.put(url, response);
+        }
+      } catch (err) {
+        console.warn("[Service Worker] Falha ao pré-cachear (ignorado):", url, err);
+      }
+    })
+  );
+}
+
+// Acha os bundles JS/CSS (/_next/static/...) que uma página referencia no próprio HTML —
+// usado só como PLANO B, caso o manifesto gerado no build (abaixo) não esteja disponível
+// (ex: ambiente de desenvolvimento, que não roda o passo de build). Em produção o
+// manifesto é sempre a fonte usada, porque é exato (vem do próprio Next.js); isto aqui é
+// só uma aproximação que não enxerga chunks carregados via import dinâmico.
 function extrairAssetsDoHtml(html) {
   const assets = new Set();
   const regex = /(?:src|href)="(\/_next\/static\/[^"]+?\.(?:js|css))"/g;
@@ -72,15 +93,12 @@ function extrairAssetsDoHtml(html) {
   return assets;
 }
 
-async function precache(cache) {
+async function precacheComFallbackHtml(cache) {
   const assetUrls = new Set();
-
   await Promise.all(
     PRECACHE_URLS.map(async (url) => {
       try {
         const response = await fetch(url, { cache: "no-store" });
-        // Ignora respostas redirecionadas (ex: página exige login e caiu em /login):
-        // cachear isso na chave original guardaria o conteúdo errado para essa URL.
         if (response && response.ok && !response.redirected) {
           const paraLerAssets = response.clone();
           await cache.put(url, response);
@@ -92,25 +110,37 @@ async function precache(cache) {
           }
         }
       } catch (err) {
-        // Best-effort: um recurso indisponível na instalação não pode impedir os
-        // demais de serem cacheados, nem impedir a ativação do Service Worker.
         console.warn("[Service Worker] Falha ao pré-cachear (ignorado):", url, err);
       }
     })
   );
+  await cacharLista(cache, Array.from(assetUrls));
+}
 
-  await Promise.all(
-    Array.from(assetUrls).map(async (assetUrl) => {
-      try {
-        const existente = await cache.match(assetUrl);
-        if (existente) return; // já cacheado (chunk compartilhado entre várias páginas)
-        const res = await fetch(assetUrl, { cache: "no-store" });
-        if (res && res.ok) await cache.put(assetUrl, res);
-      } catch (err) {
-        console.warn("[Service Worker] Falha ao pré-cachear asset (ignorado):", assetUrl, err);
-      }
-    })
-  );
+// Fonte principal: o manifesto gerado em cada build (scripts/generate-sw-manifest.js,
+// a partir de .next/app-build-manifest.json — o próprio Next.js sabendo exatamente quais
+// arquivos cada rota precisa, sem precisar adivinhar lendo HTML). Isso garante que a
+// PRIMEIRA conexão depois de cada atualização do app já deixa TUDO (todas as abas, com
+// o JS/CSS de verdade) disponível offline — não só as abas que o usuário abriu na mão.
+async function precache(cache) {
+  let manifest = null;
+  try {
+    const res = await fetch("/sw-precache-manifest.json", { cache: "no-store" });
+    if (res.ok) manifest = await res.json();
+  } catch (err) {
+    console.warn("[Service Worker] Sem sw-precache-manifest.json, usando fallback:", err);
+  }
+
+  if (manifest && Array.isArray(manifest.routes) && Array.isArray(manifest.assets)) {
+    await cacharLista(cache, [
+      ...PRECACHE_URLS.filter((u) => u.startsWith("/manifest.json") || u.endsWith(".png")), // ícones/manifest não vêm do build do Next
+      ...manifest.routes,
+      ...manifest.assets,
+    ]);
+    return;
+  }
+
+  await precacheComFallbackHtml(cache);
 }
 
 // --- INSTALL EVENT: Cache core assets ---

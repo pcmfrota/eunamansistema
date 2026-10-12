@@ -10,6 +10,9 @@ coverage/
 .next/
 out/
 
+# Gerado automaticamente a cada build (postbuild) — ver scripts/generate-sw-manifest.js
+public/sw-precache-manifest.json
+
 # Production
 build/
 
