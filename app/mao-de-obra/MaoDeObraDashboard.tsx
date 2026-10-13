@@ -566,7 +566,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           <div className="h-64 w-full">
             {dadosPorDia.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dadosPorDia} barCategoryGap="35%">
+                <BarChart data={dadosPorDia} barCategoryGap="35%" margin={{ top: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis dataKey="data" stroke="#888888" fontSize={10} />
                   <YAxis stroke="#888888" fontSize={10} />
@@ -574,17 +574,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {mostrarProdutivo && (
                     <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]} maxBarSize={70}>
-                      <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="produtivo" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                   {mostrarImprodutivo && (
                     <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]} maxBarSize={70}>
-                      <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="ocioso" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                   {mostrarNaoApontadoBar && (
                     <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]} maxBarSize={70}>
-                      <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="naoApontado" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                 </BarChart>
@@ -602,7 +602,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           <div className="h-64 w-full">
             {dadosPorMes.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dadosPorMes}>
+                <BarChart data={dadosPorMes} margin={{ top: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis dataKey="mes" stroke="#888888" fontSize={10} />
                   <YAxis stroke="#888888" fontSize={10} />
@@ -610,17 +610,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {mostrarProdutivo && (
                     <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="produtivo" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                   {mostrarImprodutivo && (
                     <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="ocioso" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                   {mostrarNaoApontadoBar && (
                     <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="naoApontado" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                 </BarChart>
@@ -725,7 +725,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           <div className="h-80 w-full">
             {dadosPorColaborador.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dadosPorColaborador}>
+                <BarChart data={dadosPorColaborador} margin={{ top: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis
                     dataKey="nome"
@@ -742,17 +742,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
                   {mostrarProdutivo && (
                     <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="produtivo" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                   {mostrarImprodutivo && (
                     <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="ocioso" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                   {mostrarNaoApontadoBar && (
                     <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="naoApontado" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
                     </Bar>
                   )}
                 </BarChart>
