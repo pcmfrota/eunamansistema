@@ -257,19 +257,35 @@ export default function BaseFrotasPage() {
 
   const handleDelete = async (vehicle: any) => {
     if (confirm(`Tem certeza que deseja excluir o veículo ${vehicle.placa}?`)) {
-      const res = await excluirEquipamento(vehicle.id);
-      if ('error' in res) alert(res.error);
-      else loadData();
+      if (isOnline) {
+        const res = await excluirEquipamento(vehicle.id);
+        if ('error' in res) alert(res.error);
+        else loadData();
+      } else {
+        await localDb.delete("equipamentos", vehicle.id);
+        await localDb.addToQueue("equipamentos", "delete", { id: vehicle.id });
+        window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+        setVehicles(prev => prev.filter(v => v.id !== vehicle.id));
+      }
     }
   };
 
   const handleBatchDelete = async () => {
     if (confirm(`Tem certeza que deseja excluir os ${selectedVehicles.length} veículos selecionados?`)) {
-      const res = await excluirEquipamentosMassivo(selectedVehicles);
-      if ('error' in res) alert(res.error);
-      else {
+      if (isOnline) {
+        const res = await excluirEquipamentosMassivo(selectedVehicles);
+        if ('error' in res) alert(res.error);
+        else {
+          setSelectedVehicles([]);
+          loadData();
+        }
+      } else {
+        const ids = [...selectedVehicles];
+        await localDb.deleteMany("equipamentos", ids);
+        await localDb.addToQueue("equipamentos", "bulk_delete", ids);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
+        setVehicles(prev => prev.filter(v => !ids.includes(v.id)));
         setSelectedVehicles([]);
-        loadData();
       }
     }
   };

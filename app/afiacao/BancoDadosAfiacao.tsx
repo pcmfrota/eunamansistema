@@ -9,6 +9,8 @@ import {
   renderCamposDetalhes,
   TIPO_FORMULARIO_OPCOES,
 } from "./AfiacaoForm";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 
 // ─────────────────────────────────────────────
 // Cores por tipo
@@ -115,6 +117,7 @@ function ModalEdicao({
   onClose: () => void;
   onSalvar: (updated: any) => void;
 }) {
+  const { isOnline } = useOffline();
   const [form, setForm] = useState({
     data:            registro.data?.split("T")[0] || "",
     afiador:         registro.afiador || "",
@@ -155,11 +158,19 @@ function ModalEdicao({
     setLoading(true);
     setErro("");
     try {
-      const result = await atualizarAfiacao(registro.id, form);
-      if (result.success) {
-        onSalvar(result.data);
+      if (isOnline) {
+        const result = await atualizarAfiacao(registro.id, form);
+        if (result.success) {
+          onSalvar(result.data);
+        } else {
+          setErro(result.error || "Erro desconhecido ao salvar.");
+        }
       } else {
-        setErro(result.error || "Erro desconhecido ao salvar.");
+        const atualizado = { ...registro, ...form };
+        await localDb.put("afiacao", atualizado);
+        await localDb.addToQueue("afiacao", "update", { id: registro.id, ...form });
+        window.dispatchEvent(new CustomEvent("offline-db-updated-afiacao"));
+        onSalvar(atualizado);
       }
     } catch (e: any) {
       setErro(e.message);
@@ -523,6 +534,7 @@ interface Props {
 }
 
 export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate, onDelete }: Props) {
+  const { isOnline } = useOffline();
   const [busca, setBusca] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
@@ -569,12 +581,20 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
 
   const handleExcluir = async () => {
     if (!modalExclusao) return;
-    const result = await deletarAfiacao(modalExclusao.id);
-    if (result.success) {
+    if (isOnline) {
+      const result = await deletarAfiacao(modalExclusao.id);
+      if (result.success) {
+        onDelete(modalExclusao.id);
+        setModalExclusao(null);
+      } else {
+        alert("Erro ao excluir: " + result.error);
+      }
+    } else {
+      await localDb.delete("afiacao", modalExclusao.id);
+      await localDb.addToQueue("afiacao", "delete", { id: modalExclusao.id });
+      window.dispatchEvent(new CustomEvent("offline-db-updated-afiacao"));
       onDelete(modalExclusao.id);
       setModalExclusao(null);
-    } else {
-      alert("Erro ao excluir: " + result.error);
     }
   };
 

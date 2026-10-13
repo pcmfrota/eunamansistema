@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos' | 'insumos_maquina_adhoc';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos' | 'insumos_maquina_adhoc' | 'afiacao' | 'aux_afiacao' | 'equipamentos';
   // 'update_lancamento' faltava aqui mesmo já sendo tratado em lib/offline-actions.ts —
   // gap de tipo pré-existente (nunca dava erro porque nenhum call site usava esse literal
   // de verdade; CaptacaoClient.tsx tinha o bug de usar 'update' em vez de 'update_lancamento'

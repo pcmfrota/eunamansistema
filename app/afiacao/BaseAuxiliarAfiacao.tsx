@@ -4,6 +4,8 @@ import React, { useState, useTransition, useMemo } from "react";
 import { salvarAuxiliarAfiacao, excluirAuxiliarAfiacao, importarPadroesAuxiliares } from "./actions";
 import { MATERIAIS_DB, ESTADO_RECEBIMENTO, TIPO_DESCARTE } from "./materiaisDB";
 import { Plus, Trash2, Pencil, Database, AlertCircle, Download, X, Save } from "lucide-react";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 
 interface AuxItem {
   id: string;
@@ -22,6 +24,7 @@ interface Props {
 const MODULOS = ["MA02", "MA04", "MA05", "MA06", "MA07"];
 
 export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Props) {
+  const { isOnline } = useOffline();
   const [category, setCategory] = useState<"afiador" | "maquina" | "material" | "estado_recebimento" | "tipo_descarte">("afiador");
   const [modulo, setModulo] = useState("MA02");
   const [value, setValue] = useState("");
@@ -85,21 +88,40 @@ export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Pro
     }
 
     startTransition(async () => {
-      const res = await salvarAuxiliarAfiacao(
-        category, 
-        val, 
-        category === "maquina" ? modulo : undefined,
-        metadata
-      );
-      if (res.success) {
+      if (isOnline) {
+        const res = await salvarAuxiliarAfiacao(
+          category,
+          val,
+          category === "maquina" ? modulo : undefined,
+          metadata
+        );
+        if (res.success) {
+          setValue("");
+          setMetaCodigo("");
+          setMetaNi("");
+          setMetaCusto("");
+          setMetaTipo("");
+          onAdd();
+        } else {
+          setError(res.error || "Erro ao salvar auxiliar.");
+        }
+      } else {
+        const optimista = {
+          id: `temp_${Date.now()}`,
+          category,
+          value: val,
+          modulo: category === "maquina" ? modulo : null,
+          metadata,
+        };
+        await localDb.put("aux_afiacao", optimista);
+        await localDb.addToQueue("aux_afiacao", "create", optimista);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-aux_afiacao"));
         setValue("");
         setMetaCodigo("");
         setMetaNi("");
         setMetaCusto("");
         setMetaTipo("");
         onAdd();
-      } else {
-        setError(res.error || "Erro ao salvar auxiliar.");
       }
     });
   };
@@ -119,11 +141,18 @@ export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Pro
       return;
     }
 
-    const res = await excluirAuxiliarAfiacao(id);
-    if (res.success) {
-      onDelete();
+    if (isOnline) {
+      const res = await excluirAuxiliarAfiacao(id);
+      if (res.success) {
+        onDelete();
+      } else {
+        alert("Erro ao excluir: " + res.error);
+      }
     } else {
-      alert("Erro ao excluir: " + res.error);
+      await localDb.delete("aux_afiacao", id);
+      await localDb.addToQueue("aux_afiacao", "delete", { id });
+      window.dispatchEvent(new CustomEvent("offline-db-updated-aux_afiacao"));
+      onDelete();
     }
   };
 
@@ -172,18 +201,33 @@ export default function BaseAuxiliarAfiacao({ auxiliares, onAdd, onDelete }: Pro
     }
 
     startTransition(async () => {
-      const res = await salvarAuxiliarAfiacao(
-        editingItem.category,
-        val,
-        editingItem.category === "maquina" ? editingItem.modulo || undefined : undefined,
-        metadata,
-        editingItem.id
-      );
-      if (res.success) {
+      if (isOnline) {
+        const res = await salvarAuxiliarAfiacao(
+          editingItem.category,
+          val,
+          editingItem.category === "maquina" ? editingItem.modulo || undefined : undefined,
+          metadata,
+          editingItem.id
+        );
+        if (res.success) {
+          setEditingItem(null);
+          onAdd();
+        } else {
+          alert("Erro ao salvar alteração: " + res.error);
+        }
+      } else {
+        const atualizado = {
+          id: editingItem.id,
+          category: editingItem.category,
+          value: val,
+          modulo: editingItem.category === "maquina" ? editingItem.modulo || null : null,
+          metadata,
+        };
+        await localDb.put("aux_afiacao", atualizado);
+        await localDb.addToQueue("aux_afiacao", "update", atualizado);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-aux_afiacao"));
         setEditingItem(null);
         onAdd();
-      } else {
-        alert("Erro ao salvar alteração: " + res.error);
       }
     });
   };

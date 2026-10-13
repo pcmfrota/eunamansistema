@@ -101,6 +101,21 @@ import {
   criarRecargaFinalizada
 } from "@/app/insumos/recargaActions";
 
+import {
+  salvarAfiacao,
+  atualizarAfiacao,
+  deletarAfiacao,
+  salvarAuxiliarAfiacao,
+  excluirAuxiliarAfiacao
+} from "@/app/afiacao/actions";
+
+import {
+  criarEquipamento,
+  salvarVeiculoCompleto,
+  excluirEquipamento,
+  excluirEquipamentosMassivo
+} from "@/app/base-frotas/actions";
+
 // Mapa em memória para associar números de OS temporários criados offline com os reais criados no servidor
 const tempToRealOSMap: Record<string, string> = {};
 
@@ -447,6 +462,54 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
           fotoUrl = foto.remoteUrl;
         }
         const res = await criarMaquinaAdHoc(payload.codigo, payload.moduloId, fotoUrl);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "afiacao") {
+      if (action === "create") {
+        const res = await salvarAfiacao(payload);
+        if (res && !res.success) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...data } = payload;
+        const res = await atualizarAfiacao(id, data);
+        if (res && !res.success) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deletarAfiacao(payload.id ?? payload);
+        if (res && !res.success) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "aux_afiacao") {
+      if (action === "create" || action === "update") {
+        const res = await salvarAuxiliarAfiacao(
+          payload.category,
+          payload.value,
+          payload.modulo,
+          payload.metadata,
+          payload.id
+        );
+        if (res && !res.success) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirAuxiliarAfiacao(payload.id ?? payload);
+        if (res && !res.success) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "equipamentos") {
+      if (action === "create") {
+        const formData = deserializeToFormData(payload);
+        const res = await criarEquipamento(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...data } = payload;
+        const res = await salvarVeiculoCompleto(id, data);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirEquipamento(payload.id ?? payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "bulk_delete") {
+        const res = await excluirEquipamentosMassivo(payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

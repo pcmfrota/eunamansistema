@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { X, Clock, Save } from 'lucide-react'
 import { criarEquipamento, salvarVeiculoCompleto } from './actions'
+import { useOffline } from '@/components/offline-provider'
+import { localDb } from '@/lib/offline-db'
 
 interface EquipamentoModalProps {
   isOpen: boolean
@@ -18,6 +20,7 @@ const todayStr = () => {
 const TIPOS = ['COMBOIO', 'MUNCK', 'MULTIFUNCIONAL', 'PIPA', 'ESCAVADEIRA', 'CARRETAGEM', 'SAVEIRO', 'STRADA', 'C3', 'SKID', 'OUTROS']
 
 export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: EquipamentoModalProps) {
+  const { isOnline } = useOffline()
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -91,7 +94,7 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
       if (editingVehicle) {
         // EDIÇÃO — usa a nova action unificada
         const tipoFinal = f.tipo === 'OUTROS' ? f.customTipo : f.tipo
-        const res = await salvarVeiculoCompleto(editingVehicle.id, {
+        const dadosVeiculo = {
           tipo: tipoFinal,
           categoria: f.categoria,
           modulo: f.modulo,
@@ -103,10 +106,30 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
           periodo_inicio: f.periodo_inicio,
           periodo_fim: f.periodo_fim,
           placa: editingVehicle.placa,
-        })
-        if ('error' in res) { alert(`Erro: ${res.error}`); return }
-        if (res.horimetroWarning) {
-          alert(`⚠️ Dados básicos e escala salvos!\n\nHorímetro não foi salvo:\n${res.horimetroWarning}`)
+        }
+
+        if (isOnline) {
+          const res = await salvarVeiculoCompleto(editingVehicle.id, dadosVeiculo)
+          if ('error' in res) { alert(`Erro: ${res.error}`); return }
+          if ((res as any).horimetroWarning) {
+            alert(`⚠️ Dados básicos e escala salvos!\n\nHorímetro não foi salvo:\n${(res as any).horimetroWarning}`)
+          }
+        } else {
+          const atualizado = {
+            ...editingVehicle,
+            tipo: dadosVeiculo.tipo,
+            categoria: dadosVeiculo.categoria,
+            modulo: dadosVeiculo.modulo,
+            area: dadosVeiculo.area,
+            status: dadosVeiculo.status,
+            ultimo_hist: parseFloat(f.horimetro) || editingVehicle.ultimo_hist,
+            escala: f.carga_horaria
+              ? { carga_horaria: Number(f.carga_horaria), periodo_inicio: f.periodo_inicio, periodo_fim: f.periodo_fim }
+              : editingVehicle.escala,
+          }
+          await localDb.put("equipamentos", atualizado)
+          await localDb.addToQueue("equipamentos", "update", { id: editingVehicle.id, ...dadosVeiculo })
+          window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
         }
         setSaved(true)
         setTimeout(() => onClose(), 800)
@@ -120,8 +143,30 @@ export default function EquipamentoModal({ isOpen, onClose, editingVehicle }: Eq
         fd.set('carga_horaria', f.carga_horaria)
         fd.set('periodo_inicio', f.periodo_inicio)
         fd.set('periodo_fim', f.periodo_fim)
-        const res = await criarEquipamento(fd)
-        if ('error' in res) { alert(`Erro: ${res.error}`); return }
+
+        if (isOnline) {
+          const res = await criarEquipamento(fd)
+          if ('error' in res) { alert(`Erro: ${res.error}`); return }
+        } else {
+          const placa = String(fd.get('placa') || '').toUpperCase().trim()
+          const optimista = {
+            id: `temp_${Date.now()}`,
+            placa,
+            tipo: f.tipo === 'OUTROS' ? f.customTipo : f.tipo,
+            categoria: f.categoria,
+            modulo: f.modulo,
+            area: f.area,
+            status: f.status,
+            ultimo_hist: parseFloat(f.horimetro) || 0,
+            escala: f.carga_horaria
+              ? { carga_horaria: Number(f.carga_horaria), periodo_inicio: f.periodo_inicio, periodo_fim: f.periodo_fim }
+              : null,
+            created_at: new Date().toISOString(),
+          }
+          await localDb.put("equipamentos", optimista)
+          await localDb.addToQueue("equipamentos", "create", fd)
+          window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+        }
         setSaved(true)
         setTimeout(() => onClose(), 800)
       }

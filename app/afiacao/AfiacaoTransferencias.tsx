@@ -4,6 +4,8 @@ import React, { useState, useMemo, useRef } from "react";
 import { Plus, Trash2, X, Search } from "lucide-react";
 import { salvarAfiacao, deletarAfiacao } from "./actions";
 import { MATERIAIS_DB, buscarMaterialPorCodigo } from "./materiaisDB";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 
 const AFIADORES = [
   "KHAYNAN FERNANDES FERREIRA","FELYPE DANIEL MACEDO VIEIRA","JOSIEL DA SILVA RIBEIRO",
@@ -23,6 +25,8 @@ export default function AfiacaoTransferencias({
   onInsert,
   onDelete,
 }: TransferenciasProps) {
+  const { isOnline } = useOffline();
+
   // ── Estados de Exibição e Filtros ──
   const [pesquisa, setPesquisa] = useState("");
   const [filtroDeposito, setFiltroDeposito] = useState("Todos");
@@ -155,19 +159,34 @@ export default function AfiacaoTransferencias({
         },
       };
 
-      const res = await salvarAfiacao(payload);
-      if (res.success && res.data) {
-        onInsert(res.data);
+      if (isOnline) {
+        const res = await salvarAfiacao(payload);
+        if (res.success && res.data) {
+          onInsert(res.data);
+          setShowModal(false);
+          // Resetar form
+          setFormMaterial(null);
+          setFormMaterialSearch("");
+          setFormQtd("");
+          setFormStatus("");
+          setFormFicha("761" + Math.floor(100000 + Math.random() * 900000).toString());
+          alert("✅ Entrada de estoque registrada com sucesso!");
+        } else {
+          alert("❌ Erro ao salvar: " + res.error);
+        }
+      } else {
+        const optimista = { id: `temp_${Date.now()}`, ...payload, created_at: new Date().toISOString() };
+        await localDb.put("afiacao", optimista);
+        await localDb.addToQueue("afiacao", "create", optimista);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-afiacao"));
+        onInsert(optimista);
         setShowModal(false);
-        // Resetar form
         setFormMaterial(null);
         setFormMaterialSearch("");
         setFormQtd("");
         setFormStatus("");
         setFormFicha("761" + Math.floor(100000 + Math.random() * 900000).toString());
-        alert("✅ Entrada de estoque registrada com sucesso!");
-      } else {
-        alert("❌ Erro ao salvar: " + res.error);
+        alert("✅ Entrada de estoque registrada (offline — será sincronizada ao reconectar).");
       }
     } catch (err: any) {
       alert("❌ Ocorreu um erro: " + err.message);
@@ -181,12 +200,20 @@ export default function AfiacaoTransferencias({
       return;
     }
     try {
-      const res = await deletarAfiacao(id);
-      if (res.success) {
-        onDelete(id);
-        alert("✅ Transferência excluída com sucesso!");
+      if (isOnline) {
+        const res = await deletarAfiacao(id);
+        if (res.success) {
+          onDelete(id);
+          alert("✅ Transferência excluída com sucesso!");
+        } else {
+          alert("❌ Erro ao excluir: " + res.error);
+        }
       } else {
-        alert("❌ Erro ao excluir: " + res.error);
+        await localDb.delete("afiacao", id);
+        await localDb.addToQueue("afiacao", "delete", { id });
+        window.dispatchEvent(new CustomEvent("offline-db-updated-afiacao"));
+        onDelete(id);
+        alert("✅ Transferência excluída (offline — será sincronizada ao reconectar).");
       }
     } catch (err: any) {
       alert("❌ Ocorreu um erro: " + err.message);

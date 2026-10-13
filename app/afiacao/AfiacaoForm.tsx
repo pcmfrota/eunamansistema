@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { salvarAfiacao } from "./actions";
 import { MATERIAIS_DB, ESTADO_RECEBIMENTO, TIPO_DESCARTE } from "./materiaisDB";
+import { useOffline } from "@/components/offline-provider";
+import { localDb } from "@/lib/offline-db";
 
 // ─────────────────────────────────────────────────────────────
 // Constantes compartilhadas
@@ -133,6 +135,7 @@ export default function AfiacaoForm({
   onSuccess: (data: any) => void;
   auxiliares?: any[];
 }) {
+  const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [materialSearch, setMaterialSearch] = useState("");
@@ -211,15 +214,27 @@ export default function AfiacaoForm({
     }
     setLoading(true);
     try {
-      const result = await salvarAfiacao(formData);
-      if (result.success) {
+      if (isOnline) {
+        const result = await salvarAfiacao(formData);
+        if (result.success) {
+          setSucesso(true);
+          onSuccess(result.data);
+          setTimeout(() => setSucesso(false), 3000);
+          setFormData({ data:"",afiador:"",modulo:"",maquina:"",letra:"",kit:"",tipo_formulario:"",detalhes:{} });
+          setMaterialSearch("");
+        } else {
+          alert("Erro ao salvar: " + result.error);
+        }
+      } else {
+        const optimista = { id: `temp_${Date.now()}`, ...formData, created_at: new Date().toISOString() };
+        await localDb.put("afiacao", optimista);
+        await localDb.addToQueue("afiacao", "create", optimista);
+        window.dispatchEvent(new CustomEvent("offline-db-updated-afiacao"));
         setSucesso(true);
-        onSuccess(result.data);
+        onSuccess(optimista);
         setTimeout(() => setSucesso(false), 3000);
         setFormData({ data:"",afiador:"",modulo:"",maquina:"",letra:"",kit:"",tipo_formulario:"",detalhes:{} });
         setMaterialSearch("");
-      } else {
-        alert("Erro ao salvar: " + result.error);
       }
     } catch (err: any) {
       alert("Erro: " + err.message);
