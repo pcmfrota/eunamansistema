@@ -25,7 +25,8 @@ import {
   BarChart2,
   Plus,
   Wrench,
-  BadgeDollarSign
+  BadgeDollarSign,
+  Fuel
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -164,6 +165,13 @@ const portalItems = [
     desc: "Custos de manutenção, faturamento e status de pagamento da frota.",
     icon: BadgeDollarSign,
     color: "from-emerald-500 to-green-600 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 dark:border-emerald-400/20"
+  },
+  {
+    name: "Controle de Insumos",
+    path: "/insumos",
+    desc: "Abastecimento, recarga e estoque de insumos dos comboios da frota.",
+    icon: Fuel,
+    color: "from-amber-500 to-yellow-600 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 dark:border-amber-400/20"
   }
 ];
 
