@@ -20,7 +20,10 @@ import {
 import { BarChart2, Clock, Users, TrendingUp, ClipboardList, Download, Loader2 } from "lucide-react";
 import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
+import { isAtividadeProdutiva } from "./tiposAtividade";
 import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
+
+type FiltroCategoria = "" | "PRODUTIVO" | "IMPRODUTIVO" | "NAO_APONTADO";
 
 const PRODUTIVO_COLOR = "#4f46e5"; // indigo — paleta padrão do projeto
 const OCIOSO_COLOR = "#f97316"; // laranja — usado como "Improdutivo" na exibição
@@ -81,6 +84,10 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
   const [filterColaborador, setFilterColaborador] = useState("");
+  // Isola uma única categoria (Produtivo/Improdutivo/Não Apontado) nos gráficos do
+  // dashboard — reduz os 3 gráficos empilhados a uma única série e filtra os gráficos/
+  // tabela que dependem do tipo de atividade apontada.
+  const [filterCategoria, setFilterCategoria] = useState<FiltroCategoria>("");
   const [exportandoPdf, setExportandoPdf] = useState(false);
   // Envolve todo o conteúdo do relatório (KPIs + gráficos + tabelas) — é essa área que vira
   // a imagem capturada pelo html2canvas na exportação em PDF, sem incluir a barra de filtros.
@@ -212,6 +219,12 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   // Fonte primária é a lista de apontamentos individuais; cai para o JSONB
   // legado (ficha.atividades) só para fichas antigas sem nenhum apontamento próprio.
   const dadosPorTipo = useMemo(() => {
+    // "Não Apontado" não tem tipo_atividade (é justamente a ausência de apontamento) —
+    // não existe o que listar aqui nesse caso.
+    if (filterCategoria === "NAO_APONTADO") return [];
+    const bateCategoria = (tipo: string) =>
+      !filterCategoria || isAtividadeProdutiva(tipo) === (filterCategoria === "PRODUTIVO");
+
     const map: Record<string, number> = {};
     const jornadaIds = new Set(fichasFiltradas.map(f => f.id));
     const jornadasComApontamento = new Set<string>();
@@ -219,6 +232,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
     (apontamentos || []).forEach(a => {
       if (!a.jornada_id || !jornadaIds.has(a.jornada_id)) return;
       jornadasComApontamento.add(a.jornada_id);
+      if (!bateCategoria(a.tipo_atividade)) return;
       const minutos = typeof a.tempo_gasto_minutos === "number" ? a.tempo_gasto_minutos : 0;
       if (!minutos) return;
       map[a.tipo_atividade] = (map[a.tipo_atividade] || 0) + minutos / 60;
@@ -227,7 +241,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
     fichasFiltradas.forEach(f => {
       if (jornadasComApontamento.has(f.id)) return;
       (f.atividades || []).forEach(a => {
-        if (!a.tempo_gasto) return;
+        if (!a.tempo_gasto || !bateCategoria(a.tipo_atividade)) return;
         const [h, m] = a.tempo_gasto.split(":").map(Number);
         if (isNaN(h) || isNaN(m)) return;
         map[a.tipo_atividade] = (map[a.tipo_atividade] || 0) + h + m / 60;
@@ -237,7 +251,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
     return Object.entries(map)
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
-  }, [fichasFiltradas, apontamentos]);
+  }, [fichasFiltradas, apontamentos, filterCategoria]);
 
   const totalHorasPorTipo = useMemo(() => dadosPorTipo.reduce((s, d) => s + d.value, 0) || 1, [dadosPorTipo]);
 
@@ -283,21 +297,29 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
 
   // Distribuição por Tipo de Manutenção (Corretiva Emergencial/Programada, Preventiva, Preditiva)
   const dadosPorTipoManutencao = useMemo(() => {
+    // Mesmo raciocínio do gráfico de tipo de atividade: "Não Apontado" não existe aqui.
+    if (filterCategoria === "NAO_APONTADO") return [];
     const jornadaIds = new Set(fichasFiltradas.map(f => f.id));
     const map: Record<string, number> = {};
     (apontamentos || []).forEach(a => {
       if (!a.jornada_id || !jornadaIds.has(a.jornada_id) || !a.tipo_manutencao) return;
+      if (filterCategoria && isAtividadeProdutiva(a.tipo_atividade) !== (filterCategoria === "PRODUTIVO")) return;
       const minutos = typeof a.tempo_gasto_minutos === "number" ? a.tempo_gasto_minutos : 0;
       map[a.tipo_manutencao] = (map[a.tipo_manutencao] || 0) + minutos / 60;
     });
     return Object.entries(map)
       .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
-  }, [fichasFiltradas, apontamentos]);
+  }, [fichasFiltradas, apontamentos, filterCategoria]);
 
   // Detalhamento apontamento-por-apontamento (Atividades e Observações), respeitando o
   // período/colaborador filtrados acima mais o filtro de "Dia" exclusivo dessa seção.
   const apontamentosDetalhados = useMemo(() => {
+    // "Não Apontado" é a ausência de apontamento — não há linha pra listar aqui.
+    if (filterCategoria === "NAO_APONTADO") return [];
+    const bateCategoria = (tipo: string) =>
+      !filterCategoria || isAtividadeProdutiva(tipo) === (filterCategoria === "PRODUTIVO");
+
     const fichaById: Record<string, FichaMaoObraItem> = {};
     fichasFiltradas.forEach(f => { fichaById[f.id] = f; });
 
@@ -311,6 +333,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       if (!a.jornada_id) return;
       const f = fichaById[a.jornada_id];
       if (!f) return;
+      if (!bateCategoria(a.tipo_atividade)) return;
       const data = f.data_jornada || f.created_at?.split("T")[0] || "";
       if (filterDia && data !== filterDia) return;
       linhas.push({
@@ -333,6 +356,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       const data = f.data_jornada || f.created_at?.split("T")[0] || "";
       if (filterDia && data !== filterDia) return;
       (f.atividades || []).forEach(a => {
+        if (!bateCategoria(a.tipo_atividade)) return;
         const [h, m] = (a.tempo_gasto || "0:00").split(":").map(Number);
         linhas.push({
           id: a.id,
@@ -353,7 +377,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       if (x.colaborador !== y.colaborador) return x.colaborador.localeCompare(y.colaborador);
       return (x.hora_inicio || "").localeCompare(y.hora_inicio || "");
     });
-  }, [fichasFiltradas, apontamentos, filterDia]);
+  }, [fichasFiltradas, apontamentos, filterDia, filterCategoria]);
 
   // Quando dia + colaborador estão os dois selecionados, dá pra identificar a jornada exata
   // e mostrar o cabeçalho dela (horário do turno, status, observação da jornada).
@@ -361,6 +385,12 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
     if (!filterDia || !filterColaborador) return null;
     return fichasFiltradas.find(f => (f.data_jornada || f.created_at?.split("T")[0]) === filterDia) || null;
   }, [fichasFiltradas, filterDia, filterColaborador]);
+
+  // Controla quais das 3 séries aparecem nos gráficos empilhados — com uma categoria
+  // selecionada, os outros dois `<Bar>` somem e só resta a barra isolada.
+  const mostrarProdutivo = !filterCategoria || filterCategoria === "PRODUTIVO";
+  const mostrarImprodutivo = !filterCategoria || filterCategoria === "IMPRODUTIVO";
+  const mostrarNaoApontadoBar = !filterCategoria || filterCategoria === "NAO_APONTADO";
 
   const selectCls =
     "px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none";
@@ -459,6 +489,16 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
+        <select
+          value={filterCategoria}
+          onChange={e => setFilterCategoria(e.target.value as FiltroCategoria)}
+          className={selectCls}
+        >
+          <option value="">Todas as Categorias</option>
+          <option value="PRODUTIVO">Produtivo</option>
+          <option value="IMPRODUTIVO">Improdutivo</option>
+          <option value="NAO_APONTADO">Não Apontado</option>
+        </select>
 
         <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-700">
           <span className="text-[10px] font-bold text-slate-400 uppercase">Período</span>
@@ -532,15 +572,21 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <YAxis stroke="#888888" fontSize={10} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]} maxBarSize={70}>
-                    <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
-                  <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={[0, 0, 0, 0]} maxBarSize={70}>
-                    <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
-                  <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]} maxBarSize={70}>
-                    <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
+                  {mostrarProdutivo && (
+                    <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]} maxBarSize={70}>
+                      <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
+                  {mostrarImprodutivo && (
+                    <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]} maxBarSize={70}>
+                      <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
+                  {mostrarNaoApontadoBar && (
+                    <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]} maxBarSize={70}>
+                      <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -562,15 +608,21 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <YAxis stroke="#888888" fontSize={10} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]}>
-                    <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
-                  <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={[0, 0, 0, 0]}>
-                    <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
-                  <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
+                  {mostrarProdutivo && (
+                    <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+                      <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
+                  {mostrarImprodutivo && (
+                    <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+                      <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
+                  {mostrarNaoApontadoBar && (
+                    <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -600,7 +652,9 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">
+                {filterCategoria === "NAO_APONTADO" ? "Não se aplica a \"Não Apontado\" — é tempo sem nenhum tipo de atividade registrado." : "Sem apontamentos no período."}
+              </p>
             )}
           </div>
         </div>
@@ -623,9 +677,9 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                     dataKey="value"
                     label={({ name, value, percent }) => `${name}: ${value}h (${(percent * 100).toFixed(0)}%)`}
                   >
-                    <Cell fill={PRODUTIVO_COLOR} />
-                    <Cell fill={OCIOSO_COLOR} />
-                    <Cell fill={NAO_APONTADO_COLOR} />
+                    <Cell fill={PRODUTIVO_COLOR} opacity={filterCategoria && filterCategoria !== "PRODUTIVO" ? 0.25 : 1} />
+                    <Cell fill={OCIOSO_COLOR} opacity={filterCategoria && filterCategoria !== "IMPRODUTIVO" ? 0.25 : 1} />
+                    <Cell fill={NAO_APONTADO_COLOR} opacity={filterCategoria && filterCategoria !== "NAO_APONTADO" ? 0.25 : 1} />
                   </Pie>
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
@@ -656,7 +710,9 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Nenhuma atividade com tipo de manutenção informado.</p>
+              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">
+                {filterCategoria === "NAO_APONTADO" ? "Não se aplica a \"Não Apontado\" — é tempo sem nenhum tipo de atividade registrado." : "Nenhuma atividade com tipo de manutenção informado."}
+              </p>
             )}
           </div>
         </div>
@@ -684,15 +740,21 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <YAxis stroke="#888888" fontSize={10} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                  <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={[0, 0, 0, 0]}>
-                    <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
-                  <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={[0, 0, 0, 0]}>
-                    <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
-                  <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
-                  </Bar>
+                  {mostrarProdutivo && (
+                    <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+                      <LabelList dataKey="produtivo" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
+                  {mostrarImprodutivo && (
+                    <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
+                      <LabelList dataKey="ocioso" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
+                  {mostrarNaoApontadoBar && (
+                    <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="naoApontado" position="inside" fill="#fff" fontSize={9} formatter={horasLabel} />
+                    </Bar>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             ) : (
