@@ -28,7 +28,6 @@ type FiltroCategoria = "" | "PRODUTIVO" | "IMPRODUTIVO" | "NAO_APONTADO";
 const PRODUTIVO_COLOR = "#4f46e5"; // indigo — paleta padrão do projeto
 const OCIOSO_COLOR = "#f97316"; // laranja — usado como "Improdutivo" na exibição
 const NAO_APONTADO_COLOR = "#94a3b8"; // slate — tempo da jornada sem nenhum registro
-const PIE_COLORS = ["#4f46e5", "#10b981", "#f97316", "#0ea5e9", "#a855f7", "#ec4899", "#14b8a6", "#eab308", "#ef4444", "#64748b", "#a1a1aa"];
 
 // Duração da jornada (início/fim do dia) menos o total apontado — mesmo cálculo já usado
 // no relatório individual (FichaPDFModal), aqui agregado pro dashboard.
@@ -657,9 +656,21 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
         </div>
 
         <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3 lg:col-span-2">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-            <BarChart2 size={14} /> Distribuição por Tipo de Atividade
-          </h3>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <BarChart2 size={14} /> Distribuição por Tipo de Atividade
+            </h3>
+            <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: PRODUTIVO_COLOR }} />
+                Produtivo
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: OCIOSO_COLOR }} />
+                Improdutivo
+              </span>
+            </div>
+          </div>
           <div className="h-80 w-full">
             {dadosPorTipo.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -671,7 +682,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Bar dataKey="value" name="Horas" radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="value" position="top" fontSize={10} formatter={horasLabel} />
                     {dadosPorTipo.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={isAtividadeProdutiva(entry.name) ? PRODUTIVO_COLOR : OCIOSO_COLOR} />
                     ))}
                   </Bar>
                 </BarChart>
