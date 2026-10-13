@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Clock } from "lucide-react";
+import { X, Printer, Clock, Maximize2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 
@@ -542,6 +542,7 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
 
   const [mounted, setMounted] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -622,6 +623,27 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
             <h3 className="font-bold text-lg tracking-wide">Gerando PDF da OS...</h3>
             <p className="text-sm text-zinc-400">Preparando o arquivo para baixar e compartilhar</p>
           </div>
+        </div>
+      )}
+
+      {fotoExpandida && (
+        <div
+          className="fixed inset-0 z-[1400] flex items-center justify-center p-4 bg-zinc-950/95 backdrop-blur-sm"
+          onClick={() => setFotoExpandida(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setFotoExpandida(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={fotoExpandida}
+            alt="Foto ampliada"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 
@@ -837,57 +859,25 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                   </div>
                 </div>
 
-                {/* ── Bloco Novo — Memória de Cálculo PCM ── */}
-                <div className="border-b border-gray-900 bg-blue-50/50">
-                  <div className="bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 flex items-center gap-2">
-                    <Clock size={12} /> Cálculo de Disponibilidade PCM
-                  </div>
-                  <div className="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[10px] leading-relaxed">
-                    <div>
-                      <p className="font-bold text-blue-800 mb-1 italic uppercase">Impacto desta O.S:</p>
-                      <ul className="space-y-1 text-zinc-700">
-                        <li>
-                          <span className="font-black text-zinc-950">Indisponibilidade Mecânica (DM):</span> 
-                          <span className="ml-1 px-1.5 py-0.5 rounded bg-zinc-900 text-white font-mono font-bold">
-                            {horasCalc}
-                          </span>
-                        </li>
-                        <li>
-                          <span className="font-black text-zinc-950">Indisponibilidade Operacional (DO):</span> 
-                          <span className={`ml-1 px-1.5 py-0.5 rounded font-mono font-bold ${minutosDO && minutosDO > 0 ? "bg-red-600 text-white" : "bg-emerald-600 text-white"}`}>
-                            {minutosDO != null ? formatMinutesToHms(minutosDO) : "Calculando..."}
-                          </span>
-                          {os.foi_enviado_reserva && (
-                            <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium italic">
-                              (Impacto reduzido por Veículo Reserva: {os.qual_reserva || "Sim"})
-                            </span>
-                          )}
-                        </li>
-                      </ul>
-                      <p className="mt-2 text-zinc-500 text-[9px]">
-                        *A DO considera apenas o tempo entre abertura e fechamento que coincidiu com o turno operacional do veículo.
-                      </p>
-                    </div>
-                    <div className="bg-white/70 p-3 rounded border border-blue-200">
-                      <p className="font-bold text-zinc-800 mb-1 text-[9px] uppercase tracking-tighter">Regras PCM (Exemplo Turno 08h-16h):</p>
-                      <p className="text-zinc-500 leading-tight">
-                        Se quebrar às 13:00h, conta 3h de DO (até o fim do turno). Se quebrar após as 16:00h, o impacto na DO é zero.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
                 {/* ── Bloco Fotos do Serviço ── */}
                 {os.fotos && os.fotos.length > 0 && (
                   <div className="border-b border-gray-900 bg-white">
                     <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
                       Evidências / Fotos do Serviço
                     </div>
-                    <div className="grid grid-cols-5 gap-2 px-3 py-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-3 py-3">
                       {os.fotos.map((foto, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-gray-300 bg-black flex items-center justify-center h-[100px]">
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setFotoExpandida(foto)}
+                          className="group relative aspect-square rounded-md overflow-hidden border border-gray-300 bg-black flex items-center justify-center h-[180px] cursor-zoom-in"
+                        >
                           <img src={foto} alt={`Foto ${idx + 1}`} className="max-w-full max-h-full object-cover" />
-                        </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                            <Maximize2 size={22} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </button>
                       ))}
                     </div>
                   </div>
