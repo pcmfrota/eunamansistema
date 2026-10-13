@@ -5,12 +5,11 @@
 // lib/offline-db.ts e lib/offline-sync.ts do app principal sem nenhuma alteração.
 import { useEffect, useState } from "react";
 import { localDb } from "@/lib/offline-db";
-import { useAuth } from "../auth/AuthProvider";
+import { ChevronLeft } from "lucide-react";
 
 type Equipamento = { id: string; placa: string; modelo: string | null; tipo: string };
 
-export function EquipamentosScreen() {
-  const { userEmail, signOut } = useAuth();
+export function EquipamentosScreen({ onVoltar }: { onVoltar: () => void }) {
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([]);
   const [status, setStatus] = useState("Carregando do aparelho...");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -61,14 +60,11 @@ export function EquipamentosScreen() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-lg font-black">EUNAMAN Campo — Fase 0</h1>
-          <p className="text-xs text-zinc-500">{userEmail}</p>
-        </div>
-        <button onClick={() => signOut()} className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs font-bold text-zinc-300">
-          Sair
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={onVoltar} className="p-2 rounded-xl bg-zinc-800 text-zinc-300">
+          <ChevronLeft size={18} />
         </button>
+        <h1 className="text-lg font-black">Equipamentos (teste)</h1>
       </div>
 
       <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-2 ${isOnline ? "bg-emerald-950/50 text-emerald-400 border border-emerald-900" : "bg-amber-950/50 text-amber-400 border border-amber-900"}`}>

@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { useAuth } from "../auth/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 
+// Login direto contra o Supabase (sem Server Action) — o AuthProvider real
+// (@/components/auth-context, portado de components/auth-context.tsx) já escuta
+// onAuthStateChange e assume sozinho assim que o login aqui der certo.
 export function LoginScreen() {
-  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -13,8 +15,9 @@ export function LoginScreen() {
     setErro(null);
     setEnviando(true);
     try {
-      const result = await signIn(email.trim(), senha);
-      if (result.error) setErro(result.error);
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha });
+      if (error) setErro(error.message);
     } finally {
       setEnviando(false);
     }
@@ -24,7 +27,7 @@ export function LoginScreen() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-5">
       <form onSubmit={handleSubmit} className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
         <h1 className="text-lg font-black text-zinc-50">EUNAMAN Campo</h1>
-        <p className="text-xs text-zinc-500">Prova de conceito offline (Fase 0) — faça login online pelo menos uma vez.</p>
+        <p className="text-xs text-zinc-500">Faça login online pelo menos uma vez — depois disso funciona offline o dia inteiro.</p>
         {erro && <div className="text-xs text-red-400 bg-red-950/40 border border-red-900 rounded-xl p-3">{erro}</div>}
         <div>
           <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1.5">E-mail</label>

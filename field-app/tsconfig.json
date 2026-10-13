@@ -15,8 +15,16 @@
     "baseUrl": ".",
     "paths": {
       "@/utils/supabase/client": ["./src/lib/supabase-client.ts"],
+      "@/components/auth-context": ["./src/compat/auth-context.tsx"],
+      "@/components/offline-provider": ["./src/compat/offline-provider.tsx"],
+      "@/components/premium-loader": ["./src/compat/premium-loader.tsx"],
+      "@/src/repositories/PneusRepository": ["./src/repositories/PneusRepository.ts"],
+      "@/src/repositories/EquipamentoRepository": ["./src/repositories/EquipamentoRepository.ts"],
       "@/lib/*": ["../lib/*"],
       "@/components/*": ["../components/*"],
+      "@/hooks/*": ["../hooks/*"],
+      "@/src/models/*": ["../src/models/*"],
+      "@/src/utils/*": ["../src/utils/*"],
       "@/utils/*": ["../utils/*"],
       "@/*": ["../*"]
     }
