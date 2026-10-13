@@ -9,9 +9,13 @@
 //    CONFIRMADO NA FASE 0: com createBrowserClient, o login funcionava mas toda consulta
 //    seguinte saía sem o token do usuário (RLS devolvia 0 linhas silenciosamente); trocando
 //    pro client puro (sessão só via localStorage, sem depender de cookie) resolveu.
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 
-let client: any = null;
+// Tipado (não "any"): client: any colapsava toda a cadeia supabase.from(...).select(...)
+// pra "any" solto (sem nem o shape de array), o que por sua vez fazia o tsc apontar
+// "implicitamente any" em todo .map()/.filter() rio abaixo nos módulos portados — eram
+// só o efeito colateral deste shim, não bugs de verdade nesses arquivos.
+let client: SupabaseClient | null = null;
 
 export const createClient = () => {
   if (client) return client;

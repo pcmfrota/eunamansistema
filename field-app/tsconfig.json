@@ -20,6 +20,8 @@
       "@/components/premium-loader": ["./src/compat/premium-loader.tsx"],
       "@/src/repositories/PneusRepository": ["./src/repositories/PneusRepository.ts"],
       "@/src/repositories/EquipamentoRepository": ["./src/repositories/EquipamentoRepository.ts"],
+      "@/src/services/CaptacaoService": ["./src/services/CaptacaoService.ts"],
+      "@/src/services/BacklogService": ["./src/services/BacklogService.ts"],
       "@/lib/*": ["../lib/*"],
       "@/components/*": ["../components/*"],
       "@/hooks/*": ["../hooks/*"],

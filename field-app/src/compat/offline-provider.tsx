@@ -315,6 +315,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "insumos_abastecimento_linhas": return "Lançamento de Abastecimento";
       case "insumos_fichas_recarga": return "Ficha de Recarga";
       case "insumos_maquina_adhoc": return "Máquina Cadastrada em Campo";
+      case "ficha_mao_obra": return "Ficha de Mão de Obra";
+      case "apontamento_mao_obra": return "Apontamento de Mão de Obra";
       default: return entity;
     }
   };
@@ -340,6 +342,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "salvar_linha": return "Lançamento de Abastecimento";
       case "excluir_linha": return "Excluir Lançamento";
       case "finalizar": return "Finalização";
+      case "update_lancamento": return "Alterar Lançamento";
       default: return action;
     }
   };
@@ -357,6 +360,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "insumos_abastecimento_linhas":
       case "insumos_fichas_recarga":
       case "insumos_maquina_adhoc": return "text-amber-600 bg-amber-500/10 border-amber-500/20 dark:text-amber-400";
+      case "ficha_mao_obra":
+      case "apontamento_mao_obra": return "text-violet-500 bg-violet-500/10 border-violet-500/20 dark:text-violet-400";
       default: return "text-zinc-500 bg-zinc-500/10 border-zinc-500/20 dark:text-zinc-400";
     }
   };
@@ -373,6 +378,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       case "insumos_fichas_abastecimento":
       case "insumos_abastecimento_linhas": return <Fuel size={14} />;
       case "insumos_fichas_recarga": return <Droplets size={14} />;
+      case "ficha_mao_obra":
+      case "apontamento_mao_obra": return <Clock size={14} />;
       default: return <Database size={14} />;
     }
   };

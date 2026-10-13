@@ -1,0 +1,88 @@
+// Port de app/captacao/actions.ts — sem "use server"/revalidatePath. CaptacaoService
+// resolve pro client de browser via alias (ver vite.config.ts).
+import { CaptacaoService } from '@/src/services/CaptacaoService';
+import { FichaCaptacao, LancamentoCaptacao } from '@/src/models/captacao';
+
+export async function criarFicha(data: Omit<FichaCaptacao, 'id' | 'status' | 'created_at'>) {
+  try {
+    const result = await CaptacaoService.createFicha(data);
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action criarFicha:", error);
+    return { error: error.message || "Erro ao criar ficha de captação." };
+  }
+}
+
+export async function atualizarFicha(id: string, updates: Partial<FichaCaptacao>) {
+  try {
+    const result = await CaptacaoService.updateFicha(id, updates);
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action atualizarFicha:", error);
+    return { error: error.message || "Erro ao atualizar ficha de captação." };
+  }
+}
+
+export async function excluirFicha(id: string) {
+  try {
+    await CaptacaoService.deleteFicha(id);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro na action excluirFicha:", error);
+    return { error: error.message || "Erro ao excluir ficha de captação." };
+  }
+}
+
+export async function fecharFicha(id: string) {
+  try {
+    const result = await CaptacaoService.updateFicha(id, { status: 'Fechada' });
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action fecharFicha:", error);
+    return { error: error.message || "Erro ao fechar ficha." };
+  }
+}
+
+// Reabre uma ficha mesmo depois que o período operacional (calendario_suzano) já virou —
+// ver comentário da coluna reaberta_em na migration. Sem essa marca, só voltar o status
+// para "Aberta" não basta: a trava automática por período no cliente re-bloquearia a
+// ficha de novo assim que ela é lida.
+export async function reabrirFicha(id: string) {
+  try {
+    const result = await CaptacaoService.updateFicha(id, { status: 'Aberta', reaberta_em: new Date().toISOString() });
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action reabrirFicha:", error);
+    return { error: error.message || "Erro ao reabrir ficha." };
+  }
+}
+
+export async function adicionarLancamento(data: Omit<LancamentoCaptacao, 'id' | 'created_at'>) {
+  try {
+    const result = await CaptacaoService.addLancamento(data);
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action adicionarLancamento:", error);
+    return { error: error.message || "Erro ao adicionar lançamento de captação." };
+  }
+}
+
+export async function excluirLancamento(id: string) {
+  try {
+    await CaptacaoService.deleteLancamento(id);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro na action excluirLancamento:", error);
+    return { error: error.message || "Erro ao excluir lançamento de captação." };
+  }
+}
+
+export async function atualizarLancamento(id: string, updates: Partial<LancamentoCaptacao>) {
+  try {
+    const result = await CaptacaoService.updateLancamento(id, updates);
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Erro na action atualizarLancamento:", error);
+    return { error: error.message || "Erro ao atualizar lançamento de captação." };
+  }
+}

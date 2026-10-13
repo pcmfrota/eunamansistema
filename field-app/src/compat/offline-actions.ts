@@ -14,6 +14,26 @@ import {
   excluirInspecoesMassivo,
   importarInspecoesPneus,
 } from "../modules/pneus/actions";
+import {
+  upsertBacklogItem,
+  deleteBacklogItems,
+  importarBacklog,
+} from "../modules/backlog/actions";
+import {
+  criarFicha,
+  atualizarFicha,
+  fecharFicha,
+  excluirFicha,
+  adicionarLancamento,
+  atualizarLancamento,
+  excluirLancamento,
+} from "../modules/captacao/actions";
+import {
+  salvarFichaMaoObra,
+  excluirFichaMaoObra,
+  salvarApontamento,
+  excluirApontamento,
+} from "../modules/mao-de-obra/actions";
 
 export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   const { entity, action, payload } = item;
@@ -39,6 +59,73 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "import") {
         const res = await importarInspecoesPneus(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "backlog") {
+      if (action === "create" || action === "update") {
+        // Remapeamento de OS temporária (OS-OFF-...) pro número real: deixado só por
+        // compatibilidade de formato com o payload do app principal — nunca dispara de
+        // verdade aqui, já que o módulo OS ainda não foi portado pro field-app (ver plano).
+        const tempOS = payload.os;
+        if (tempOS && typeof tempOS === "string" && tempOS.startsWith("OS-OFF-")) {
+          const realOSNum = typeof window !== "undefined" ? localStorage.getItem(`sync_os_map_${tempOS}`) : null;
+          if (realOSNum) payload.os = realOSNum;
+        }
+        const res = await upsertBacklogItem(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteBacklogItems(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "import") {
+        const res = await importarBacklog(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "captacao") {
+      if (action === "create") {
+        const res = await criarFicha(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...updates } = payload;
+        const res = await atualizarFicha(id, updates);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "close") {
+        const res = await fecharFicha(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirFicha(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "add_lancamento") {
+        const res = await adicionarLancamento(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update_lancamento") {
+        const { id, ...updates } = payload;
+        const res = await atualizarLancamento(id, updates);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete_lancamento") {
+        const res = await excluirLancamento(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "ficha_mao_obra") {
+      if (action === "create" || action === "update" || action === "close") {
+        const res = await salvarFichaMaoObra(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirFichaMaoObra(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "apontamento_mao_obra") {
+      if (action === "create" || action === "update") {
+        const res = await salvarApontamento(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirApontamento(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

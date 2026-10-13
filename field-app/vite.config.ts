@@ -33,6 +33,10 @@ export default defineConfig({
       // cópias locais com só essa troca de import (ver field-app/src/repositories/).
       { find: "@/src/repositories/PneusRepository", replacement: path.resolve(__dirname, "src/repositories/PneusRepository.ts") },
       { find: "@/src/repositories/EquipamentoRepository", replacement: path.resolve(__dirname, "src/repositories/EquipamentoRepository.ts") },
+      // CaptacaoService original importa @/utils/supabase/server direto (sem repositório
+      // por baixo) — cópia local troca só esse import (ver field-app/src/services/).
+      { find: "@/src/services/CaptacaoService", replacement: path.resolve(__dirname, "src/services/CaptacaoService.ts") },
+      { find: "@/src/services/BacklogService", replacement: path.resolve(__dirname, "src/services/BacklogService.ts") },
       // Resto de lib/ e components/ é puro TypeScript sem nada do Next.js — reaproveita
       // direto do repo principal, sem copiar.
       { find: "@/lib", replacement: path.resolve(__dirname, "../lib") },
