@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from "./theme-provider";
 import { useAuth } from "./auth-context";
+import { useOffline } from "./offline-provider";
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -54,7 +55,7 @@ const navigation = [
   { name: 'Dashboard',                path: '/dashboard',              icon: LayoutDashboard },
   { name: 'Ficha Mão de Obra',         path: '/mao-de-obra',            icon: Wrench },
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
-  { name: 'Checklist Mecânicos',      path: '/checklist-mecanicos',    icon: ClipboardList },
+  { name: 'Checklist Mecânicos',      path: '/checklist-mecanicos',    icon: ClipboardList, offlineCapable: false },
   { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
   { name: 'Boletim de Pneus',         path: '/pneus',                  icon: CircleDot },
   { name: 'Backlog',                  path: '/backlog',                icon: FileText },
@@ -70,21 +71,30 @@ const navigation = [
   { name: 'Controle de Insumos',       path: '/insumos',                icon: Fuel },
 ];
 
-function getFilteredNavigation(permissions: string[], role?: string) {
-  // Segurança: Admin sempre vê tudo
-  if (role === 'admin') return navigation;
-  
+function getFilteredNavigation(permissions: string[], role?: string, isOnline: boolean = true) {
+  let result = navigation;
+
   // Segurança: Visitante sempre vê as 5 abas obrigatórias (Dashboard, Horímetros, Backlog, Calendário, Documentos)
   if (role === 'visitante') {
-    return navigation.filter(item => 
+    result = navigation.filter(item =>
       ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'].includes(item.path)
     );
+  } else if (role !== 'admin') {
+    // Se não houver permissões salvas no BD ainda, mantém todas as abas por padrão
+    if (permissions && permissions.length > 0) {
+      result = navigation.filter(item => permissions.includes(item.path) || item.path === '/mao-de-obra');
+    }
+  }
+  // Admin sempre vê tudo (role === 'admin' mantém `result` como `navigation` completa)
+
+  // Sem internet: some com as abas que não funcionam offline (não têm fallback de
+  // leitura nem fila de sincronização pra escrita) — ver levantamento do Controle de Custos
+  // e demais módulos offline-first. Hoje só Checklist Mecânicos se encaixa nisso.
+  if (!isOnline) {
+    result = result.filter(item => item.offlineCapable !== false);
   }
 
-  // Se não houver permissões salvas no BD ainda, retorna todas as abas por padrão
-  if (!permissions || permissions.length === 0) return navigation;
-  
-  return navigation.filter(item => permissions.includes(item.path) || item.path === '/mao-de-obra');
+  return result;
 }
 
 const adminNavigation = [
@@ -95,6 +105,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { profile, signOut, loading: authLoading, user, permissions } = useAuth();
+  const { isOnline } = useOffline();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -457,7 +468,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="space-y-0.5">
-            {getFilteredNavigation(permissions, profile?.role).map((item, index) => {
+            {getFilteredNavigation(permissions, profile?.role, isOnline).map((item, index) => {
               const isActive = pathname === item.path;
               return (
                 <Link

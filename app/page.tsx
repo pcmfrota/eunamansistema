@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-context";
+import { useOffline } from "@/components/offline-provider";
 import { 
   LayoutDashboard, 
   Clipboard,
@@ -68,12 +69,13 @@ const portalItems = [
     icon: ClipboardList, 
     color: "from-amber-500 to-orange-600 bg-amber-500/10 text-amber-400 border-amber-500/20" 
   },
-  { 
-    name: "Checklist Mecânicos", 
-    path: "/checklist-mecanicos", 
-    desc: "Inspeções e apontamentos de não-conformidades de frotas.", 
-    icon: ClipboardList, 
-    color: "from-green-500 to-emerald-600 bg-green-500/10 text-green-400 border-green-500/20" 
+  {
+    name: "Checklist Mecânicos",
+    path: "/checklist-mecanicos",
+    desc: "Inspeções e apontamentos de não-conformidades de frotas.",
+    icon: ClipboardList,
+    color: "from-green-500 to-emerald-600 bg-green-500/10 text-green-400 border-green-500/20",
+    offlineCapable: false
   },
   { 
     name: "Controle de Horímetros", 
@@ -187,6 +189,7 @@ const adminPortalItems = [
 
 export default function PortalPage() {
   const { profile, signOut, loading: authLoading, permissions } = useAuth();
+  const { isOnline } = useOffline();
   const { theme, setTheme } = useTheme();
   const [greeting, setGreeting] = useState("Olá");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -224,18 +227,27 @@ export default function PortalPage() {
     if (!profile) return [];
     const normalizedRole = profile.role?.toLowerCase().trim();
     const isUserAdmin = normalizedRole === 'admin' || normalizedRole === 'administrador';
+
+    let result;
     if (isUserAdmin) {
-      return [...portalItems, ...adminPortalItems];
+      result = [...portalItems, ...adminPortalItems];
+    } else if (!permissions || permissions.length === 0) {
+      result = [portalItems[0]]; // Default a ver pelo menos o dashboard
+    } else {
+      const allowed = portalItems.filter(item => permissions.includes(item.path) || item.path === "/lubrificacao");
+      if (permissions.includes("/admin/usuarios")) {
+        allowed.push(...adminPortalItems);
+      }
+      result = allowed;
     }
-    if (!permissions || permissions.length === 0) {
-      return [portalItems[0]]; // Default a ver pelo menos o dashboard
+
+    // Sem internet: some com os cards que não funcionam offline (sem fallback de leitura
+    // nem fila de sincronização pra escrita). Hoje só Checklist Mecânicos se encaixa nisso.
+    if (!isOnline) {
+      result = result.filter((item: any) => item.offlineCapable !== false);
     }
-    
-    const allowed = portalItems.filter(item => permissions.includes(item.path) || item.path === "/lubrificacao");
-    if (permissions.includes("/admin/usuarios")) {
-      allowed.push(...adminPortalItems);
-    }
-    return allowed;
+
+    return result;
   };
 
   const allowedItems = getFilteredItems();
