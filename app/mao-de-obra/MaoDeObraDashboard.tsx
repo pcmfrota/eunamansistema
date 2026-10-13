@@ -47,6 +47,31 @@ function calcNaoApontado(f: FichaMaoObraItem): number {
 // Formata o valor de uma barra/fatia só quando há algo relevante pra mostrar — evita poluir
 // o gráfico com rótulos "0h" em toda barra vazia.
 const horasLabel = (v: any) => (typeof v === "number" && v > 0 ? `${v}h` : "");
+
+// Rótulo de valor das barras empilhadas (Produtivo/Improdutivo/Não Apontado). Quando a
+// categoria está isolada ("isolado"), a barra não é mais empilhada — o rótulo vai por cima
+// dela, em texto escuro sobre o fundo branco do card (sempre legível, qualquer altura).
+// Empilhado (3 categorias juntas), o rótulo some quando o segmento é curto demais pra
+// caber o texto dentro — do contrário o texto vaza/sobrepõe o segmento vizinho e fica
+// ilegível (span de poucos px de altura pra fonte de 9px).
+function BarValueLabel(props: any) {
+  const { x, y, width, height, value, isolado } = props;
+  if (!(typeof value === "number" && value > 0) || !Number.isFinite(width) || !Number.isFinite(height)) return null;
+  if (isolado) {
+    return (
+      <text x={x + width / 2} y={y - 6} fill="#334155" fontSize={9} fontWeight={600} textAnchor="middle">
+        {`${value}h`}
+      </text>
+    );
+  }
+  if (height < 13) return null;
+  return (
+    <text x={x + width / 2} y={y + height / 2 + 3} fill="#fff" fontSize={9} textAnchor="middle">
+      {`${value}h`}
+    </text>
+  );
+}
+
 const minutosParaHoras = (min: number) => {
   const h = Math.floor((min || 0) / 60);
   const m = (min || 0) % 60;
@@ -574,17 +599,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {mostrarProdutivo && (
                     <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]} maxBarSize={70}>
-                      <LabelList dataKey="produtivo" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="produtivo" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                   {mostrarImprodutivo && (
                     <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]} maxBarSize={70}>
-                      <LabelList dataKey="ocioso" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="ocioso" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                   {mostrarNaoApontadoBar && (
                     <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]} maxBarSize={70}>
-                      <LabelList dataKey="naoApontado" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="naoApontado" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                 </BarChart>
@@ -610,17 +635,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   {mostrarProdutivo && (
                     <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="produtivo" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="produtivo" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                   {mostrarImprodutivo && (
                     <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="ocioso" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="ocioso" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                   {mostrarNaoApontadoBar && (
                     <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="naoApontado" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="naoApontado" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                 </BarChart>
@@ -742,17 +767,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                   <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
                   {mostrarProdutivo && (
                     <Bar dataKey="produtivo" name="Produtivo" stackId="a" fill={PRODUTIVO_COLOR} radius={filterCategoria === "PRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="produtivo" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="produtivo" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                   {mostrarImprodutivo && (
                     <Bar dataKey="ocioso" name="Improdutivo" stackId="a" fill={OCIOSO_COLOR} radius={filterCategoria === "IMPRODUTIVO" ? [4, 4, 0, 0] : [0, 0, 0, 0]}>
-                      <LabelList dataKey="ocioso" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="ocioso" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                   {mostrarNaoApontadoBar && (
                     <Bar dataKey="naoApontado" name="Não Apontado" stackId="a" fill={NAO_APONTADO_COLOR} radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="naoApontado" position={filterCategoria ? "top" : "inside"} fill={filterCategoria ? "#334155" : "#fff"} fontSize={9} formatter={horasLabel} />
+                      <LabelList dataKey="naoApontado" content={(p: any) => <BarValueLabel {...p} isolado={Boolean(filterCategoria)} />} />
                     </Bar>
                   )}
                 </BarChart>
