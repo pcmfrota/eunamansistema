@@ -18,6 +18,7 @@ interface Props {
   calendario?: any[]
   onEdit: (item: any) => void
   onDelete: (id: string) => void
+  onQuickView: (item: any) => void
 }
 
 const CRITICIDADE_COLORS: Record<string, { bg: string, text: string, chart: string }> = {
@@ -93,7 +94,7 @@ function formatAIMarkdown(text: string) {
   });
 }
 
-export default function BacklogDashboard({ items, placas, calendario = [], onEdit, onDelete }: Props) {
+export default function BacklogDashboard({ items, placas, calendario = [], onEdit, onDelete, onQuickView }: Props) {
   const currentPeriod = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
@@ -1231,7 +1232,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                     <tr
                       key={item.id}
                       className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-all cursor-pointer group"
-                      onClick={() => onEdit(item)}
+                      onClick={() => onQuickView(item)}
                     >
                       <td className="px-4 py-3 font-black text-zinc-900 dark:text-zinc-50">
                         <span className="flex items-center gap-1.5">

@@ -26,6 +26,7 @@ interface BacklogTableProps {
   onToggleSelectAll: () => void
   onEdit: (item: any) => void
   onDelete: (id: string) => void
+  onQuickView: (item: any) => void
   view: 'Geral' | 'Detalhamento'
 }
 
@@ -79,8 +80,9 @@ export default function BacklogTable({
   selectedIds, 
   onToggleSelect, 
   onToggleSelectAll, 
-  onEdit, 
+  onEdit,
   onDelete,
+  onQuickView,
   view
 }: BacklogTableProps) {
   const { profile } = useAuth();
@@ -154,7 +156,7 @@ export default function BacklogTable({
                   "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40 transition-all group cursor-pointer",
                   selectedIds.has(item.id) && "bg-indigo-50/50 dark:bg-indigo-900/10"
                 )}
-                onClick={() => onEdit(item)}
+                onClick={() => onQuickView(item)}
               >
                 <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                   <input 

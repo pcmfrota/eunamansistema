@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
 import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog } from './actions';
 import BacklogModal from './BacklogModal';
+import BacklogQuickView from './BacklogQuickView';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
 import BacklogAIImportModal from './BacklogAIImportModal';
@@ -63,6 +64,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [quickViewItem, setQuickViewItem] = useState<any>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAIImportOpen, setIsAIImportOpen] = useState(false);
 
@@ -228,8 +230,13 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   }, []);
 
   const handleEdit = (item: any) => {
+    setQuickViewItem(null);
     setEditingItem(item);
     setIsModalOpen(true);
+  };
+
+  const handleQuickView = (item: any) => {
+    setQuickViewItem(item);
   };
 
   const performDelete = async (idsArray: string[]) => {
@@ -733,7 +740,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         </div>
       ) : view === 'Dashboard' ? (
         /* Dashboard View */
-        <BacklogDashboard items={items} placas={localPlacas} calendario={calendario} onEdit={handleEdit} onDelete={handleDelete} />
+        <BacklogDashboard items={items} placas={localPlacas} calendario={calendario} onEdit={handleEdit} onDelete={handleDelete} onQuickView={handleQuickView} />
       ) : view === 'Solicitacoes' ? (
         /* Solicitações de Exclusão (somente administrador) */
         <BacklogSolicitacoesExclusao requests={solicitacoes} loading={solicitacoesLoading} onRefresh={loadSolicitacoes} />
@@ -793,6 +800,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
               }}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onQuickView={handleQuickView}
               view={view as 'Geral' | 'Detalhamento'}
             />
           </div>
@@ -809,7 +817,13 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       </div>
 
       {/* Modals */}
-      <BacklogModal 
+      <BacklogQuickView
+        item={quickViewItem}
+        onClose={() => setQuickViewItem(null)}
+        onEdit={handleEdit}
+      />
+
+      <BacklogModal
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); refreshData(); }}
         placas={localPlacas}

@@ -14,7 +14,9 @@ import {
   Layers,
   ArrowRight,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  Clipboard
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFormDraft } from '@/hooks/use-form-draft'
@@ -52,7 +54,40 @@ const initialValues = {
   data_rc: '', data_nec_material: '', previsao_material: '',
   situacao_rc: '', dias_abertura: '', data_programacao: '',
   status_programacao: 'Não Programado', previsao_conclusao: '',
-  data_conclusao: '', delta: '', dias_resolucao: '', observacao: ''
+  data_conclusao: '', delta: '', dias_resolucao: '', observacao: '',
+  evidencia_imagens: [] as string[]
+}
+
+// Redimensiona/comprime pro mesmo padrão já usado nas fotos de O.S (máx. 800px,
+// JPEG 60%) — evita payloads gigantes indo pro banco e pra fila de sincronização
+// offline, tanto vindo de um arquivo escolhido quanto de uma imagem colada.
+function comprimirImagem(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.6));
+        } else {
+          resolve(src);
+        }
+      };
+      img.onerror = () => resolve(src);
+      img.src = src;
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ─── Component Helpers ────────────────────────────────────────────────────────
@@ -107,6 +142,51 @@ export default function BacklogModal({
       setForm(prev => ({ ...prev, data_conclusao: getCurrentLocalDatetime() }))
     }
   }, [form.status, form.data_conclusao, setForm])
+
+  // ── Evidência (Foto): upload ou colar (Ctrl+V), até 2 fotos ──
+  const fotosEvidencia: string[] = form.evidencia_imagens || []
+  const [fotoProcessando, setFotoProcessando] = useState(false)
+
+  const adicionarFotoEvidencia = async (blob: Blob) => {
+    if (fotosEvidencia.length >= 2) return
+    setFotoProcessando(true)
+    try {
+      const dataUrl = await comprimirImagem(blob)
+      setForm(prev => ({ ...prev, evidencia_imagens: [...(prev.evidencia_imagens || []), dataUrl] }))
+    } catch (err) {
+      console.error('Erro ao processar foto de evidência:', err)
+    } finally {
+      setFotoProcessando(false)
+    }
+  }
+
+  const removerFotoEvidencia = (idx: number) => {
+    setForm(prev => ({ ...prev, evidencia_imagens: (prev.evidencia_imagens || []).filter((_: string, i: number) => i !== idx) }))
+  }
+
+  // Colar (Ctrl+V) uma imagem da área de transferência enquanto a Etapa 3 está ativa —
+  // só intercepta quando o clipboard realmente tem uma imagem, pra não atrapalhar colar
+  // texto normalmente em qualquer campo da tela.
+  useEffect(() => {
+    if (!isOpen || step !== 3) return
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const blob = item.getAsFile()
+          if (blob) {
+            e.preventDefault()
+            adicionarFotoEvidencia(blob)
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, step, fotosEvidencia.length])
 
   // Helper para interpretar o valor salvo em tempo_execucao para Horas e Minutos
   const parseTempoToHM = (val: string) => {
@@ -473,6 +553,52 @@ export default function BacklogModal({
                           <option value="PROGRAMADO">🟢 PROGRAMADO</option>
                           <option value="ENCERRADO">✅ ENCERRADO</option>
                        </select>
+                    </Field>
+                    <Field label={`Evidência (Foto) — ${fotosEvidencia.length}/2`} span={2}>
+                       <div className="grid grid-cols-2 gap-3">
+                          {fotosEvidencia.map((foto, idx) => (
+                             <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
+                                <img src={foto} alt={`Evidência ${idx + 1}`} className="w-full h-full object-cover" />
+                                <button
+                                   type="button"
+                                   onClick={() => removerFotoEvidencia(idx)}
+                                   title="Remover foto"
+                                   className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors shadow"
+                                >
+                                   <X size={12} className="stroke-[3]" />
+                                </button>
+                             </div>
+                          ))}
+                          {fotosEvidencia.length < 2 && (
+                             <label
+                                htmlFor="backlog-foto-evidencia-input"
+                                className="aspect-video rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:border-amber-400 dark:hover:border-amber-600 transition-colors text-center px-2"
+                             >
+                                {fotoProcessando ? (
+                                   <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Processando...</span>
+                                ) : (
+                                   <>
+                                      <div className="flex items-center gap-2 text-zinc-400">
+                                         <Camera size={18} />
+                                         <Clipboard size={16} />
+                                      </div>
+                                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Adicionar ou Colar (Ctrl+V)</span>
+                                   </>
+                                )}
+                                <input
+                                   id="backlog-foto-evidencia-input"
+                                   type="file"
+                                   accept="image/*"
+                                   className="hidden"
+                                   onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) adicionarFotoEvidencia(file)
+                                      e.target.value = ''
+                                   }}
+                                />
+                             </label>
+                          )}
+                       </div>
                     </Field>
                  </div>
                )}
