@@ -243,6 +243,11 @@ export default function OSFormModal({
   onSavedFechada,
 }: OSFormModalProps) {
   const { isOnline } = useOffline();
+  // Dentro do app Android (ponte nativa EunamanApp), o modal mostra só os campos
+  // essenciais pro lançamento rápido em campo; os de classificação/escritório
+  // (Tipo de Manutenção, Reserva, Sistema/Sub-Sistema/Componente) ficam ocultos
+  // via CSS (não desmontados) pra não zerar valor já salvo ao editar no celular.
+  const isAndroidApp = typeof window !== "undefined" && !!(window as any).EunamanApp;
   const [loading, setLoading] = useState(false);
   const isSubmitting = useRef(false); // Guard contra duplo clique
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
@@ -1105,8 +1110,8 @@ export default function OSFormModal({
             />
           </div>
 
-          {/* Tipo de Manutenção + Reserva */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+          {/* Tipo de Manutenção + Reserva — só Escritório (Web) */}
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 items-center ${isAndroidApp ? "hidden" : ""}`}>
             <Field label="Tipo de Manutenção">
               <select name="classe" defaultValue={initialData?.classe || "CORRETIVA"} className={I}>
                 <option value="CORRETIVA">CORRETIVA</option>
@@ -1130,9 +1135,9 @@ export default function OSFormModal({
             </div>
           </div>
 
-          {/* Reserva details */}
+          {/* Reserva details — só Escritório (Web) */}
           {foiReserva && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 ${isAndroidApp ? "hidden" : ""}`}>
               <Field label="Qual o Caminhão Reserva?">
                 <select name="qual_reserva" required
                   defaultValue={initialData?.qual_reserva || ""}
@@ -1498,8 +1503,8 @@ export default function OSFormModal({
             <input type="hidden" name="assinatura_mecanico" value={JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos })} />
           </div>
 
-          {/* Componente / Sistema / Sub-Sistema — busca começa pelo componente */}
-          <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
+          {/* Componente / Sistema / Sub-Sistema — busca começa pelo componente — só Escritório (Web) */}
+          <div className={`p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 ${isAndroidApp ? "hidden" : ""}`}>
             <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Componente / Sistema / Sub-Sistema</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Componente">
