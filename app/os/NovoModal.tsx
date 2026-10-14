@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { X, CheckCircle2, AlertTriangle, ListChecks, Check, FlipHorizontal } from "lucide-react";
+import { X, CheckCircle2, AlertTriangle, ListChecks, Check, FlipHorizontal, Maximize2 } from "lucide-react";
 import { SearchableSelect } from '@/components/SearchableSelect';
 
 // ─── Componente de Câmera In-Page ────────────────────────────────────────────
@@ -245,6 +245,7 @@ export default function OSFormModal({
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(false);
   const isSubmitting = useRef(false); // Guard contra duplo clique
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
   const [equip, setEquip] = useState<Equipamento | null>(null);
   const [operacaoTipo, setOperacaoTipo] = useState(initialData?.operacao_tipo || "");
   const [foiReserva, setFoiReserva] = useState(initialData?.foi_enviado_reserva || false);
@@ -1587,11 +1588,18 @@ export default function OSFormModal({
             {fotos.length > 0 ? (
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
                 {fotos.map((foto, idx) => (
-                  <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
+                  <div
+                    key={idx}
+                    className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black cursor-zoom-in"
+                    onClick={() => setFotoExpandida(foto)}
+                  >
                     <img src={foto} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
+                      <Maximize2 size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                     <button
                       type="button"
-                      onClick={() => removeFoto(idx)}
+                      onClick={(e) => { e.stopPropagation(); removeFoto(idx); }}
                       className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors shadow"
                       title="Remover Foto"
                     >
@@ -1716,6 +1724,23 @@ export default function OSFormModal({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Foto ampliada (evidência de serviço) ── */}
+      {fotoExpandida && (
+        <div
+          className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-zinc-950/95 backdrop-blur-sm"
+          onClick={() => setFotoExpandida(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setFotoExpandida(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={22} />
+          </button>
+          <img src={fotoExpandida} alt="Foto ampliada" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>

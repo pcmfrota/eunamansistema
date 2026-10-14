@@ -43,9 +43,9 @@ function calcularDias(item: any): { dias: number; encerrado: boolean } | null {
 }
 
 const Linha = ({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) => (
-  <div className="flex flex-col gap-0.5 min-w-0">
+  <div className="flex flex-col gap-1 min-w-0">
     <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold truncate">{label}</span>
-    <span className={`text-[12px] border-b border-dotted border-gray-300 pb-0.5 break-words ${bold ? 'font-black' : 'font-semibold'} text-gray-800`}>{value || '—'}</span>
+    <span className={`text-[13px] border-b border-dotted border-gray-300 pb-1 break-words ${bold ? 'font-black' : 'font-semibold'} text-gray-800`}>{value || '—'}</span>
   </div>
 )
 
@@ -230,7 +230,7 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
     <>
       <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md">
         <div className="absolute inset-0" onClick={onClose} />
-        <div className="relative z-10 w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+        <div className="relative z-10 w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
           <div className="p-4 border-b border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50">
             <div className="flex items-center gap-2">
               <EunamanLogo size={32} />
@@ -275,7 +275,7 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
 
               <div className="border-b border-gray-900">
                 <SecTitle>Identificação</SecTitle>
-                <div className="flex px-0.5 pt-2 pb-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-4 py-3">
                   <Linha label="Data de Evidência" value={fmtData(item.data_evidencia)} bold />
                   <Linha label="Criticidade" value={item.criticidade === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'} />
                   <Linha label="Colaborador" value={item.colaborador} />
@@ -285,28 +285,28 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
 
               <div className="border-b border-gray-900">
                 <SecTitle>Localização</SecTitle>
-                <div className="flex px-0.5 pt-2 pb-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-4 pt-3 pb-2">
                   <Linha label="Módulo" value={item.modulo} />
                   <Linha label="Tipo" value={item.tipo} />
                   <Linha label="TAG" value={item.tag} />
                   <Linha label="Campo / Base" value={item.campo_base} />
                 </div>
-                <div className="flex px-0.5 pb-2">
+                <div className="grid grid-cols-1 gap-4 px-4 pb-3">
                   <Linha label="Região x Programação" value={item.regiao_programa} />
                 </div>
               </div>
 
               <div className="border-b border-gray-900">
                 <SecTitle>Atividade &amp; Classificação Técnica</SecTitle>
-                <div className="px-3 py-2 min-h-[48px]">
+                <div className="px-4 py-3 min-h-[48px]">
                   <p className="text-[11px] font-semibold text-amber-700 leading-relaxed whitespace-pre-wrap">{item.descricao || '—'}</p>
                 </div>
-                <div className="flex px-0.5 pb-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 pb-3">
                   <Linha label="Sistema" value={sistemaLabel} />
                   <Linha label="Subsistema" value={subsistemaLabel} />
                   <Linha label="Componente" value={componenteLabel} />
                 </div>
-                <div className="flex px-0.5 pb-2">
+                <div className="grid grid-cols-2 gap-4 px-4 pb-3">
                   <Linha label="Nº O.S" value={item.os} />
                   <Linha label="Tempo Estimado" value={item.tempo_execucao} />
                 </div>
@@ -314,12 +314,12 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
 
               <div className="border-b border-gray-900">
                 <SecTitle>Materiais &amp; RC</SecTitle>
-                <div className="flex px-0.5 pt-2 pb-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 pt-3 pb-2">
                   <Linha label="Material" value={item.material} />
                   <Linha label="Nº RC" value={item.nr_rc} />
                   <Linha label="Fornecedor" value={item.fornecedor} />
                 </div>
-                <div className="flex px-0.5 pb-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 pb-3">
                   <Linha label="Mão de Obra" value={item.mao_obra} />
                   <Linha label="Detalhamento" value={item.detalhamento} />
                   <Linha label="Situação RC" value={item.situacao_rc} />
@@ -328,12 +328,12 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
 
               <div className="border-b border-gray-900">
                 <SecTitle>Programação &amp; Conclusão</SecTitle>
-                <div className="flex px-0.5 pt-2 pb-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 pt-3 pb-2">
                   <Linha label="Previsão Programação" value={fmtData(item.data_programacao)} />
                   <Linha label="Status Programação" value={item.status_programacao} />
                   <Linha label="Data de Conclusão" value={fmtData(item.data_conclusao)} />
                 </div>
-                <div className="px-3 pb-2 min-h-[28px]">
+                <div className="px-4 pb-3 min-h-[28px]">
                   <p className="text-[10px] text-gray-600 leading-relaxed whitespace-pre-wrap">{item.observacao || '—'}</p>
                 </div>
               </div>
@@ -341,7 +341,7 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
               {fotosAntes.length > 0 && (
                 <div className="border-b border-gray-900 bg-white">
                   <SecTitle>Evidência (Antes)</SecTitle>
-                  <div className="grid grid-cols-2 gap-2 px-3 py-2">
+                  <div className="grid grid-cols-2 gap-3 px-4 py-3">
                     {fotosAntes.map((foto, idx) => (
                       <button key={idx} type="button" onClick={() => setFotoExpandida(foto)} className="aspect-video rounded-md overflow-hidden border border-gray-300 bg-black cursor-zoom-in">
                         <img src={foto} alt={`Evidência ${idx + 1}`} className="w-full h-full object-cover" />
@@ -354,7 +354,7 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
               {fotosDepois.length > 0 && (
                 <div className="border-b border-gray-900 bg-white">
                   <SecTitle>Evidência (Após Conclusão)</SecTitle>
-                  <div className="grid grid-cols-2 gap-2 px-3 py-2">
+                  <div className="grid grid-cols-2 gap-3 px-4 py-3">
                     {fotosDepois.map((foto, idx) => (
                       <button key={idx} type="button" onClick={() => setFotoExpandida(foto)} className="aspect-video rounded-md overflow-hidden border border-gray-300 bg-black cursor-zoom-in">
                         <img src={foto} alt={`Evidência conclusão ${idx + 1}`} className="w-full h-full object-cover" />
