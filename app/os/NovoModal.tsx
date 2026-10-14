@@ -259,6 +259,7 @@ export default function OSFormModal({
   const [componente, setComponente] = useState(initialData?.componente || "");
   const [dataAbertura, setDataAbertura] = useState(initialData?.data_abertura?.slice(0,16) || getLocalDT());
   const [dataFechamento, setDataFechamento] = useState(initialData?.data_fechamento?.slice(0,16) || "");
+  const [status, setStatus] = useState(initialData?.status || "Aberta");
   const [mecanicos, setMecanicos] = useState<string[]>(
     (initialData as any)?.mecanicos?.length ? (initialData as any).mecanicos : [""]
   );
@@ -428,6 +429,7 @@ export default function OSFormModal({
           if (d.componente !== undefined) setComponente(d.componente);
           if (d.dataAbertura !== undefined) setDataAbertura(d.dataAbertura);
           if (d.dataFechamento !== undefined) setDataFechamento(d.dataFechamento);
+          if (d.status !== undefined) setStatus(d.status);
           if (d.mecanicos !== undefined) setMecanicos(d.mecanicos);
           if (d.assinaturas !== undefined) setAssinaturas(d.assinaturas);
           else if (d.assinaturaDataUrl !== undefined) setAssinaturas(d.assinaturaDataUrl ? [d.assinaturaDataUrl] : []);
@@ -453,10 +455,6 @@ export default function OSFormModal({
               if (d.horario_parada !== undefined) {
                 const el = form.querySelector('[name="horario_parada"]') as HTMLInputElement;
                 if (el) el.value = d.horario_parada;
-              }
-              if (d.status !== undefined) {
-                const el = form.querySelector('[name="status"]') as HTMLSelectElement;
-                if (el) el.value = d.status;
               }
               if (d.horimetro !== undefined) {
                 const el = form.querySelector('[name="horimetro"]') as HTMLInputElement;
@@ -1026,7 +1024,11 @@ export default function OSFormModal({
             </Field>
             <Field label="Fechamento da OS">
               <input name="data_fechamento" type="datetime-local"
-                value={dataFechamento} onChange={e => setDataFechamento(e.target.value)}
+                value={dataFechamento}
+                onChange={e => {
+                  setDataFechamento(e.target.value);
+                  if (e.target.value) setStatus("Fechada");
+                }}
                 className={I} />
             </Field>
           </div>
@@ -1034,7 +1036,7 @@ export default function OSFormModal({
           {/* Status + Placa */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Status *">
-              <select name="status" required defaultValue={initialData?.status || "Aberta"} className={I}>
+              <select name="status" required value={status} onChange={e => setStatus(e.target.value)} className={I}>
                 <option>Aberta</option>
                 <option>Programado</option>
                 <option>Fechada</option>
