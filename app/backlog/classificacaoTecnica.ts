@@ -196,6 +196,12 @@ export const ORIGENS: { cod: string; nome: string }[] = [
 
 export const MAO_DE_OBRA_SUGESTOES = ["THIAGO", "HIGOR", "SOLDA", "TERCEIRO", "BORRACHARIA"]
 
+export const REGIAO_PROGRAMACAO_SUGESTOES = [
+  "OFICINA",
+  "PROG PARA OFICINA",
+  "PROGRAMAR NA BASE",
+]
+
 export const DETALHAMENTO_PEDIDO_SUGESTOES = [
   "AGUARDANDO PAGAMENTO",
   "LIBERADO FORNECEDOR",

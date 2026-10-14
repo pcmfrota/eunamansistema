@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { mesAnoOperacional } from '@/lib/calendario-suzano'
+import { MultiSelect } from '@/components/MultiSelect'
+import { calcularTipoPedido } from './classificacaoTecnica'
 
 interface Props {
   items: any[]
@@ -24,6 +26,7 @@ interface Props {
 const CRITICIDADE_COLORS: Record<string, { bg: string, text: string, chart: string }> = {
   'A': { bg: 'bg-[#fde8e8] dark:bg-red-950/40 border-red-200 dark:border-red-900/50', text: 'text-[#e74c3c] dark:text-red-400', chart: '#f05252' },
   'B': { bg: 'bg-[#ebf5fb] dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50', text: 'text-[#3498db] dark:text-blue-400', chart: '#2563eb' },
+  'C': { bg: 'bg-[#eafaf1] dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50', text: 'text-[#16a34a] dark:text-emerald-400', chart: '#16a34a' },
 }
 
 const STATUS_COLORS: Record<string, { bg: string, text: string }> = {
@@ -61,6 +64,27 @@ function parseHours(val: any): number {
   const cleaned = str.replace(/[^\d.,]/g, '').replace(',', '.');
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
+}
+
+// Número da semana ISO a partir de uma data (chave de agrupamento dos gráficos de
+// "tempo médio por semana" — mesmo conceito da coluna SEMANA da planilha original, só que
+// calculado ao vivo a partir de data_evidencia em vez de confiar numa coluna gravada que
+// poderia ficar dessincronizada.
+function getSemanaISO(dataStr: string): number {
+  const d = new Date(dataStr.split('T')[0])
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7))
+  const yearStart = new Date(d.getFullYear(), 0, 1)
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+}
+
+// Diferença em dias entre duas datas (string YYYY-MM-DD ou ISO) — null se alguma faltar.
+function diasEntreDatas(inicio?: string | null, fim?: string | null): number | null {
+  if (!inicio || !fim) return null
+  const d1 = new Date(String(inicio).split('T')[0])
+  const d2 = new Date(String(fim).split('T')[0])
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return null
+  return Math.round((d2.getTime() - d1.getTime()) / 86400000)
 }
 
 function formatAIMarkdown(text: string) {
@@ -139,6 +163,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const [filterMecanico, setFilterMecanico] = useState('')
   const [filterDataInicio, setFilterDataInicio] = useState('')
   const [filterDataFim, setFilterDataFim] = useState('')
+  const [filterOrigens, setFilterOrigens] = useState<string[]>([])
+  const [filterTipos, setFilterTipos] = useState<string[]>([])
 
   // Map database status and criticidade to target dashboard schema
   const mappedItems = useMemo(() => {
@@ -154,10 +180,13 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         mappedStatus = 'PROGRAMADO'
       }
 
-      // 2. Map Criticidade
+      // 2. Map Criticidade — preserva "C" (baixa) quando presente (ex: registros antigos
+      // importados da planilha), já que o formulário atual só deixa escolher A/B.
       let mappedCriticidade = String(item.criticidade || 'B').toUpperCase().trim()
       if (mappedCriticidade === 'A' || mappedCriticidade === 'INTERDIÇÃO' || mappedCriticidade === 'INTERDICAO' || mappedCriticidade === 'ALTA') {
         mappedCriticidade = 'A'
+      } else if (mappedCriticidade === 'C' || mappedCriticidade === 'BAIXA') {
+        mappedCriticidade = 'C'
       } else {
         mappedCriticidade = 'B'
       }
@@ -219,6 +248,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     const modulos = new Set<string>()
     const anos = new Set<string>()
     const mecanicos = new Set<string>()
+    const origens = new Set<string>()
+    const tipos = new Set<string>()
 
     mappedItems.forEach(i => {
       if (i.fornecedor) fornecedores.add(i.fornecedor)
@@ -226,6 +257,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       if (i.modulo) modulos.add(i.modulo)
       if (i.mappedYear) anos.add(i.mappedYear)
       if (i.colaborador) mecanicos.add(i.colaborador)
+      if (i.origem) origens.add(String(i.origem).toUpperCase().trim())
+      if (i.tipo) tipos.add(String(i.tipo).toUpperCase().trim())
     })
 
     return {
@@ -233,7 +266,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       areas: Array.from(areas).sort(),
       modulos: Array.from(modulos).sort(),
       anos: Array.from(anos).sort(),
-      mecanicos: Array.from(mecanicos).sort()
+      mecanicos: Array.from(mecanicos).sort(),
+      origens: Array.from(origens).sort(),
+      tipos: Array.from(tipos).sort()
     }
   }, [mappedItems])
 
@@ -261,6 +296,12 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       // 6c. Mês (Data)
       if (filterMes && item.mappedMonth !== filterMes) return false
 
+      // 6d. Origem (multi-select)
+      if (filterOrigens.length > 0 && !filterOrigens.includes(String(item.origem || '').toUpperCase().trim())) return false
+
+      // 6e. Tipo (multi-select)
+      if (filterTipos.length > 0 && !filterTipos.includes(String(item.tipo || '').toUpperCase().trim())) return false
+
       // 6b. Date Range Filter
       if (filterDataInicio || filterDataFim) {
         if (!item.data_evidencia) return false;
@@ -280,7 +321,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
       return true
     })
-  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterDataInicio, filterDataFim, search])
+  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterOrigens, filterTipos, filterDataInicio, filterDataFim, search])
 
   // Quantos filtros estão ativos além do padrão — mostrado como selo no botão
   // quando o painel de filtros está fechado, pra não esconder que algo está filtrando.
@@ -292,11 +333,13 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     if (filterArea) count++
     if (filterModulo) count++
     if (filterMecanico) count++
+    if (filterOrigens.length > 0) count++
+    if (filterTipos.length > 0) count++
     if (filterDataInicio) count++
     if (filterDataFim) count++
     if (search) count++
     return count
-  }, [filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterMecanico, filterDataInicio, filterDataFim, search])
+  }, [filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterMecanico, filterOrigens, filterTipos, filterDataInicio, filterDataFim, search])
 
   // Apply all filters including Mechanic
   const filtered = useMemo(() => {
@@ -347,7 +390,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
   // Donut: Etiqueta por Criticidade
   const donutData = useMemo(() => {
-    const map: Record<string, number> = { 'A': 0, 'B': 0 }
+    const map: Record<string, number> = { 'A': 0, 'B': 0, 'C': 0 }
     filtered.forEach(i => {
       if (map[i.mappedCriticidade] !== undefined) {
         map[i.mappedCriticidade]++
@@ -450,6 +493,122 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const topMechanicChartData = useMemo(() => {
     return mechanicStats.slice(0, 8)
   }, [mechanicStats])
+
+  // ─── BACKLOG POR TIPO DE EQUIPAMENTO (Concluído x Pendente empilhado) ───
+  const barTipoStackData = useMemo(() => {
+    const map: Record<string, { name: string; concluido: number; pendente: number }> = {}
+    filtered.forEach(i => {
+      const key = String(i.tipo || 'N/A').toUpperCase().trim() || 'N/A'
+      if (!map[key]) map[key] = { name: key, concluido: 0, pendente: 0 }
+      if (i.mappedStatus === 'ENCERRADO') map[key].concluido++
+      else map[key].pendente++
+    })
+    return Object.values(map).sort((a, b) => (b.concluido + b.pendente) - (a.concluido + a.pendente))
+  }, [filtered])
+
+  // ─── STATUS DO BACKLOG POR PLACA (Concluído x Pendente empilhado, top 25) ───
+  const barPlacaStackData = useMemo(() => {
+    const map: Record<string, { name: string; concluido: number; pendente: number }> = {}
+    filtered.forEach(i => {
+      const key = i.frota || 'SEM PLACA'
+      if (!map[key]) map[key] = { name: key, concluido: 0, pendente: 0 }
+      if (i.mappedStatus === 'ENCERRADO') map[key].concluido++
+      else map[key].pendente++
+    })
+    return Object.values(map)
+      .sort((a, b) => (b.concluido + b.pendente) - (a.concluido + a.pendente))
+      .slice(0, 25)
+  }, [filtered])
+
+  const placaResumo = useMemo(() => ({
+    total: filtered.length,
+    critA: filtered.filter(i => i.mappedCriticidade === 'A').length,
+    critB: filtered.filter(i => i.mappedCriticidade === 'B').length,
+  }), [filtered])
+
+  // ─── PROG. E EXECUÇÃO / RCS ───────────────────────────────────────────────
+
+  // Tempo médio (dias) entre a evidência e a data de programação, por semana da evidência.
+  const tempoMedioProgPorSemana = useMemo(() => {
+    const acc: Record<number, { soma: number; qtd: number }> = {}
+    filtered.forEach(i => {
+      const dias = diasEntreDatas(i.data_evidencia, i.data_programacao)
+      if (dias === null || dias < 0) return
+      const semana = getSemanaISO(i.data_evidencia)
+      if (!acc[semana]) acc[semana] = { soma: 0, qtd: 0 }
+      acc[semana].soma += dias
+      acc[semana].qtd++
+    })
+    return Object.entries(acc)
+      .map(([semana, v]) => ({ name: `S${semana}`, semana: Number(semana), value: Number((v.soma / v.qtd).toFixed(1)) }))
+      .sort((a, b) => a.semana - b.semana)
+  }, [filtered])
+
+  // Tempo médio (dias) entre a evidência e a conclusão, por semana da evidência.
+  const tempoMedioResolucaoPorSemana = useMemo(() => {
+    const acc: Record<number, { soma: number; qtd: number }> = {}
+    filtered.forEach(i => {
+      const dias = diasEntreDatas(i.data_evidencia, i.data_conclusao)
+      if (dias === null || dias < 0) return
+      const semana = getSemanaISO(i.data_evidencia)
+      if (!acc[semana]) acc[semana] = { soma: 0, qtd: 0 }
+      acc[semana].soma += dias
+      acc[semana].qtd++
+    })
+    return Object.entries(acc)
+      .map(([semana, v]) => ({ name: `S${semana}`, semana: Number(semana), value: Number((v.soma / v.qtd).toFixed(1)) }))
+      .sort((a, b) => a.semana - b.semana)
+  }, [filtered])
+
+  // Tipo de Pedido (URGENTE/NORMAL/PROGRAMADO) — mesmo cálculo já usado no formulário,
+  // aplicado aqui item a item e agregado.
+  const tipoPedidoPieData = useMemo(() => {
+    const map: Record<string, number> = { URGENTE: 0, NORMAL: 0, PROGRAMADO: 0 }
+    filtered.forEach(i => {
+      const tipo = calcularTipoPedido(i.data_evidencia, i.data_nec_material)
+      if (tipo && map[tipo] !== undefined) map[tipo]++
+    })
+    return Object.entries(map).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
+  const TIPO_PEDIDO_COLORS: Record<string, string> = { URGENTE: '#dc2626', NORMAL: '#ca8a04', PROGRAMADO: '#16a34a' }
+
+  // Tempo médio (dias) entre a evidência e a abertura da RC, por tipo de equipamento.
+  const tempoMedioAberturaReqData = useMemo(() => {
+    const acc: Record<string, { soma: number; qtd: number }> = {}
+    filtered.forEach(i => {
+      const dias = diasEntreDatas(i.data_evidencia, i.data_rc)
+      if (dias === null) return
+      const key = String(i.tipo || 'N/A').toUpperCase().trim() || 'N/A'
+      if (!acc[key]) acc[key] = { soma: 0, qtd: 0 }
+      acc[key].soma += dias
+      acc[key].qtd++
+    })
+    return Object.entries(acc)
+      .map(([name, v]) => ({ name, value: Number((v.soma / v.qtd).toFixed(1)) }))
+      .sort((a, b) => b.value - a.value)
+  }, [filtered])
+
+  // Situação RC (ATENDE / NÃO ATENDE / SEM PREVISÃO / SEM REQUISIÇÃO) — calculada e
+  // gravada automaticamente no formulário (ver app/backlog/classificacaoTecnica.ts).
+  const situacaoRcData = useMemo(() => {
+    const map: Record<string, number> = {}
+    filtered.forEach(i => {
+      const v = String(i.situacao_rc || '').toUpperCase().trim()
+      if (!v) return
+      map[v] = (map[v] || 0) + 1
+    })
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [filtered])
+
+  const SITUACAO_RC_COLORS: Record<string, string> = {
+    'ATENDE': '#16a34a',
+    'NÃO ATENDE': '#dc2626',
+    'SEM PREVISÃO': '#ca8a04',
+    'SEM REQUISIÇÃO': '#64748b',
+  }
 
   // Recharts Custom vertical bar label containing count and MoM percentage change pill
   const renderCustomBarLabel = (props: any) => {
@@ -787,7 +946,32 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 <option value="">Todos</option>
                 <option value="A">A - Crítico</option>
                 <option value="B">B - Normal</option>
+                <option value="C">C - Baixa</option>
               </select>
+            </div>
+
+            {/* Origem (multi-select) */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Origem</span>
+              <MultiSelect
+                options={filterOptions.origens.map(o => ({ value: o, label: o }))}
+                values={filterOrigens}
+                onChange={setFilterOrigens}
+                placeholder="Todos"
+                className="[&>div]:py-1 [&>div]:min-h-[34px] [&>div]:text-xs"
+              />
+            </div>
+
+            {/* Tipo (multi-select) */}
+            <div>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Tipo</span>
+              <MultiSelect
+                options={filterOptions.tipos.map(t => ({ value: t, label: t }))}
+                values={filterTipos}
+                onChange={setFilterTipos}
+                placeholder="Todos"
+                className="[&>div]:py-1 [&>div]:min-h-[34px] [&>div]:text-xs"
+              />
             </div>
 
             {/* Fornecedor */}
@@ -1179,6 +1363,97 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </div>
       </div>
 
+      {/* ─── ROW 3.5: BACKLOG POR TIPO / POR PLACA (Concluído x Pendente) ─── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 w-full">
+        {/* Card: BACKLOG POR TIPO DE EQUIPAMENTO */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between border-l-4 border-emerald-600 pl-3 mb-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+              BACKLOG POR TIPO DE EQUIPAMENTO
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" /> Concluído
+              </span>
+              <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" /> Pendente
+              </span>
+            </div>
+          </div>
+          <div className="h-[260px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={barTipoStackData}
+                layout="vertical"
+                margin={{ left: -10, right: 40, top: 10, bottom: 10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+                <XAxis type="number" hide />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={90}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="concluido" name="Concluído" stackId="a" fill="#16a34a" barSize={16} />
+                <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Card: STATUS DO BACKLOG POR PLACA */}
+        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between border-l-4 border-blue-600 pl-3 mb-4 flex-wrap gap-2">
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+              STATUS DO BACKLOG POR PLACA
+            </h3>
+            <div className="flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[8px] font-black uppercase">Total {placaResumo.total}</span>
+              <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[8px] font-black uppercase">Crit. A {placaResumo.critA}</span>
+              <span className="px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 text-[8px] font-black uppercase">Crit. B {placaResumo.critB}</span>
+            </div>
+          </div>
+          <div className="h-[260px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barPlacaStackData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={60} />
+                <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="concluido" name="Concluído" stackId="a" fill="#16a34a" barSize={14} />
+                <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={14} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* ─── ROW 4: DETALHAMENTO DO BACKLOG ─────────────────────────────────────────── */}
       <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden flex flex-col w-full">
         <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex items-center justify-between">
@@ -1530,6 +1805,216 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-0.5">
               Priorizar backlogs com Criticidade A
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── ROW 6: PROG. E EXECUÇÃO / RCS ─────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 w-full">
+        <div className="border-l-4 border-rose-600 pl-3">
+          <h2 className="text-xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">
+            PROG. E EXECUÇÃO / RCS
+          </h2>
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+            Tempo de programação, resolução e situação das requisições de compra
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+          {/* Card: TEMPO MÉDIO P/ PROG. MANUTENÇÃO */}
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="border-l-4 border-indigo-600 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                TEMPO MÉDIO P/ PROG. MANUTENÇÃO
+              </h3>
+              <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Dias entre evidência e programação, por semana</p>
+            </div>
+            <div className="h-[220px] w-full">
+              {tempoMedioProgPorSemana.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={tempoMedioProgPorSemana} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                    <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} interval={Math.ceil(tempoMedioProgPorSemana.length / 15)} />
+                    <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null
+                        const data = payload[0].payload
+                        return (
+                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                            {data.name}: <span className="text-indigo-400">{data.value} dias</span>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
+              )}
+            </div>
+          </div>
+
+          {/* Card: TEMPO MÉDIO RESOLUÇÃO */}
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="border-l-4 border-rose-600 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                TEMPO MÉDIO RESOLUÇÃO
+              </h3>
+              <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Dias entre evidência e conclusão, por semana</p>
+            </div>
+            <div className="h-[220px] w-full">
+              {tempoMedioResolucaoPorSemana.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={tempoMedioResolucaoPorSemana} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                    <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} interval={Math.ceil(tempoMedioResolucaoPorSemana.length / 15)} />
+                    <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null
+                        const data = payload[0].payload
+                        return (
+                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                            {data.name}: <span className="text-rose-400">{data.value} dias</span>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="value" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
+          {/* Card: TIPO DE PEDIDO */}
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="border-l-4 border-amber-500 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                TIPO DE PEDIDO
+              </h3>
+            </div>
+            <div className="h-[200px] w-full relative flex items-center justify-center">
+              {tipoPedidoPieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={tipoPedidoPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ value }) => value}
+                      labelLine={false}
+                    >
+                      {tipoPedidoPieData.map((entry, idx) => (
+                        <Cell key={idx} fill={TIPO_PEDIDO_COLORS[entry.name] || '#cbd5e1'} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null
+                        const data = payload[0]
+                        return (
+                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                            {data.name}: <span className="text-amber-400">{data.value}</span>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
+              )}
+            </div>
+          </div>
+
+          {/* Card: TEMPO MÉDIO P/ ABERTURA DE REQUISIÇÃO */}
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="border-l-4 border-cyan-600 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                TEMPO MÉDIO P/ ABERTURA DE REQUISIÇÃO
+              </h3>
+              <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Dias entre evidência e Data da RC, por tipo</p>
+            </div>
+            <div className="h-[200px] w-full">
+              {tempoMedioAberturaReqData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={tempoMedioAberturaReqData} layout="vertical" margin={{ left: -10, right: 30, top: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} width={80} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null
+                        const data = payload[0].payload
+                        return (
+                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                            {data.name}: <span className="text-cyan-400">{data.value} dias</span>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="value" fill="#0891b2" radius={[0, 4, 4, 0]} barSize={14} label={{ position: 'right', fill: '#71717a', fontSize: 9, fontWeight: 900 }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
+              )}
+            </div>
+          </div>
+
+          {/* Card: SITUAÇÃO R.C */}
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                SITUAÇÃO R.C
+              </h3>
+            </div>
+            <div className="h-[200px] w-full">
+              {situacaoRcData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={situacaoRcData} layout="vertical" margin={{ left: -10, right: 40, top: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} width={95} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null
+                        const data = payload[0].payload
+                        return (
+                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                            {data.name}: <span className="text-emerald-400">{data.value}</span>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}>
+                      {situacaoRcData.map((entry, idx) => (
+                        <Cell key={idx} fill={SITUACAO_RC_COLORS[entry.name] || '#94a3b8'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
+              )}
+            </div>
           </div>
         </div>
       </div>

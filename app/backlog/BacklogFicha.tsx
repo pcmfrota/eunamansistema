@@ -138,6 +138,9 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
             ${rows('TAG', item.tag)}
             ${rows('Campo / Base', item.campo_base)}
           </div>
+          <div style="display:flex;padding:0 2px 8px 2px;">
+            ${rows('Região x Programação', item.regiao_programa)}
+          </div>
         </div>
 
         <div style="border-bottom:1px solid #111;">
@@ -287,6 +290,9 @@ export default function BacklogFichaModal({ item, onClose }: { item: any; onClos
                   <Linha label="Tipo" value={item.tipo} />
                   <Linha label="TAG" value={item.tag} />
                   <Linha label="Campo / Base" value={item.campo_base} />
+                </div>
+                <div className="flex px-0.5 pb-2">
+                  <Linha label="Região x Programação" value={item.regiao_programa} />
                 </div>
               </div>
 

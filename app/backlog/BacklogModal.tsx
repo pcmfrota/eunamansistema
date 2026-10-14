@@ -32,6 +32,7 @@ import {
   ORIGENS,
   MAO_DE_OBRA_SUGESTOES,
   DETALHAMENTO_PEDIDO_SUGESTOES,
+  REGIAO_PROGRAMACAO_SUGESTOES,
   calcularTipoPedido,
   calcularSituacaoRC
 } from './classificacaoTecnica'
@@ -657,6 +658,18 @@ export default function BacklogModal({
                   <option value="CAMPO">CAMPO</option>
                   <option value="BASE">BASE</option>
                 </select>
+              </Field>
+              <Field label="Região x Programação" span={2}>
+                <input
+                  className={inputCls}
+                  list="backlog-regiao-programacao"
+                  placeholder="Ex: OFICINA, PROG PARA OFICINA..."
+                  value={form.regiao_programa}
+                  onChange={e => setForm({...form, regiao_programa: e.target.value})}
+                />
+                <datalist id="backlog-regiao-programacao">
+                  {REGIAO_PROGRAMACAO_SUGESTOES.map(r => <option key={r} value={r} />)}
+                </datalist>
               </Field>
             </div>
           </section>
