@@ -75,18 +75,19 @@ export async function criarOrdemServico(formData: FormData) {
       ;(data as any).created_by_nome = profile?.full_name || user.email || 'Usuário';
     }
 
-    // Se criado por mecânico, inicia como pendente de aprovação (aprovado = false)
-    data.aprovado = userRole !== 'mecanico';
+    // Só admin e PCM lançam já validado; qualquer outro cargo (mecânico, encarregado,
+    // gestão, supervisor, ou lançamento feito pelo app de campo) entra pendente de validação.
+    data.aprovado = userRole === 'admin' || userRole === 'pcm';
 
     const result = await OSService.createOS(data)
     revalidatePath('/os')
     revalidatePath('/')
     if (result.success && result.data) {
       if (!result.data.aprovado) {
-        await notificarPapeis(['admin', 'supervisor_manutencao'], {
+        await notificarPapeis(['admin', 'pcm'], {
           tipo: 'os_pendente_validacao',
           titulo: 'Nova OS pendente de validação',
-          mensagem: `${(data as any).created_by_nome || 'Um mecânico'} lançou a OS ${result.data.numero_os} na placa ${result.data.placa}.`,
+          mensagem: `${(data as any).created_by_nome || 'Um usuário'} lançou a OS ${result.data.numero_os} na placa ${result.data.placa}.`,
           link: `/os?abrir=${result.data.id}`,
         })
       }
@@ -142,11 +143,11 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
     const data = parseFormData(formData)
     data.mecanicos = extractMecanicos(formData)
     
-    // Se editado por mecânico, volta a requerer aprovação (aprovado = false)
+    // Se editado por quem não é admin/PCM, volta a requerer validação (aprovado = false)
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     let userRole = 'visitante';
-    let userNome = 'Um mecânico';
+    let userNome = 'Um usuário';
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
@@ -159,7 +160,8 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
       }
     }
 
-    if (userRole === 'mecanico') {
+    const precisaValidar = userRole !== 'admin' && userRole !== 'pcm';
+    if (precisaValidar) {
       data.aprovado = false;
     }
 
@@ -170,10 +172,10 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
       if (result.data.status === 'Fechada') {
         await closeLinkedBacklogs(result.data)
       }
-      if (userRole === 'mecanico') {
-        await notificarPapeis(['admin', 'supervisor_manutencao'], {
+      if (precisaValidar) {
+        await notificarPapeis(['admin', 'pcm'], {
           tipo: 'os_pendente_validacao',
-          titulo: 'OS editada por mecânico — pendente de validação',
+          titulo: 'OS editada — pendente de validação',
           mensagem: `${userNome} editou a OS ${result.data.numero_os} na placa ${result.data.placa}.`,
           link: `/os?abrir=${result.data.id}`,
         })
@@ -190,18 +192,18 @@ export async function aprovarOrdemServico(id: string) {
   try {
     const supabase = createClient();
     
-    // Verifica se quem está tentando atualizar é admin/pcm/gestao
+    // Só admin e PCM validam ordens de serviço
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Não autenticado" };
-    
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, full_name')
       .eq('id', user.id)
       .single();
 
-    if (!profile || profile.role === 'mecanico' || profile.role === 'visitante') {
-      return { error: "Apenas administradores, PCM ou gestores podem aprovar ordens de serviço." };
+    if (!profile || (profile.role !== 'admin' && profile.role !== 'pcm')) {
+      return { error: "Apenas administradores ou PCM podem validar ordens de serviço." };
     }
 
     const result = await OSService.updateOS(id, {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { Download, Plus, Search, Pencil, Trash2, X, Check, Lock, BarChart2, List, FileText, Printer, ArrowLeft, Filter, ChevronDown, ShieldCheck, MessageCircle, Eye } from "lucide-react";
 import {
   criarOrdemServico,
@@ -297,7 +297,7 @@ export default function ControleOSClient({
   const [pdfAction, setPdfAction] = useState<'download' | 'share' | 'print' | null>(null);
   const [exportingOS, setExportingOS] = useState<OS | null>(null);
   const [isPending, startTransition] = useTransition();
-  const { profile } = useAuth();
+  const { profile, loading: profileLoading } = useAuth();
 
   const isVisitante = profile?.role === "visitante";
 
@@ -720,7 +720,7 @@ export default function ControleOSClient({
 
   // Quem pode validar/aprovar OS lançadas por mecânico — mesma regra já usada em
   // aprovarOrdemServico (app/os/actions.ts) e no botão "Aprovar" de cada linha.
-  const podeAprovar = !isVisitante && profile?.role !== 'mecanico';
+  const podeAprovar = profile?.role === 'admin' || profile?.role === 'pcm';
 
   // Todas as OS pendentes de aprovação, sem nenhum filtro da Lista aplicado — a aba
   // Validação é sempre a lista completa/canônica, pra garantir que nada passe despercebido.
@@ -728,6 +728,22 @@ export default function ControleOSClient({
     () => ordens.filter(o => o.aprovado === false).sort((a, b) => new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime()),
     [ordens]
   );
+
+  // Se o PCM/admin tem OS pendentes de validação, a tela de entrada já abre direto
+  // na aba Validação — em vez do menu — pra garantir que ele veja isso antes de
+  // seguir pra lista geral. Só decide uma vez (não briga com a navegação manual
+  // do usuário depois, nem interrompe se ele chegou via link direto ?abrir=).
+  const gateValidacaoAplicado = useRef(false);
+  useEffect(() => {
+    if (gateValidacaoAplicado.current) return;
+    if (profileLoading) return; // espera o cargo carregar antes de decidir
+    gateValidacaoAplicado.current = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("abrir") || params.get("new")) return;
+    if (podeAprovar && pendentesAprovacao.length > 0) {
+      setActiveTab("validacao");
+    }
+  }, [podeAprovar, pendentesAprovacao.length, profileLoading]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filtradas.length) {
@@ -1111,7 +1127,7 @@ export default function ControleOSClient({
               </div>
               <div>
                 <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Validação</h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">OS lançadas por mecânicos aguardando aprovação</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">OS lançadas em campo aguardando validação do PCM/Administrador</p>
               </div>
             </button>
           )}
@@ -1271,6 +1287,11 @@ export default function ControleOSClient({
                             </span>
                           )}
                         </div>
+                        {os.created_by_nome && (
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 whitespace-nowrap">
+                            Lançado por: {os.created_by_nome}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">{os.placa || "-"}</td>
@@ -1304,10 +1325,10 @@ export default function ControleOSClient({
                         )}
                         {!isVisitante && (
                           <>
-                            {os.aprovado === false && profile?.role !== 'mecanico' && (
-                              <button 
-                                title="Aprovar Lançamento" 
-                                onClick={() => handleApproveOS(os.id)} 
+                            {os.aprovado === false && podeAprovar && (
+                              <button
+                                title="Aprovar Lançamento"
+                                onClick={() => handleApproveOS(os.id)}
                                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800 transition-all shadow-sm"
                               >
                                 <Check size={13} />
@@ -1677,7 +1698,7 @@ export default function ControleOSClient({
             {/* List of actions */}
             <div className="p-4 flex flex-col gap-2 bg-zinc-50/50 dark:bg-zinc-950/50">
               {/* Option: Aprovar */}
-              {selectedOSActions.aprovado === false && profile?.role !== 'mecanico' && (
+              {selectedOSActions.aprovado === false && podeAprovar && (
                 <button
                   onClick={() => {
                     handleApproveOS(selectedOSActions.id);
