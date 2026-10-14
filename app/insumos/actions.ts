@@ -583,9 +583,8 @@ export async function finalizarFicha(
 
   for (const insumo of insumos || []) {
     const nomeInsumo = labelMaterialInsumo(insumo.insumo_tipo as InsumoTipo, materiaisAtivos || [], true);
-    if (Number(insumo.restou) < 0) {
-      return { error: `"${nomeInsumo}" ficaria com saldo negativo (${insumo.restou}). Confira os lançamentos antes de finalizar.` };
-    }
+    // Saldo negativo não trava a finalização — só fica visível em vermelho na ficha
+    // (ver FichaAbastecimentoWizard.tsx) pra ser investigado depois, sem bloquear o lançamento.
     if ((insumo.insumo_tipo === "DIESEL_T1" || insumo.insumo_tipo === "DIESEL_T2") && insumo.acumulado_registradora_final != null && insumo.acumulado_registradora_inicial != null) {
       const porRegistradora = Number(insumo.acumulado_registradora_final) - Number(insumo.acumulado_registradora_inicial);
       const diff = Math.abs(porRegistradora - Number(insumo.saiu));

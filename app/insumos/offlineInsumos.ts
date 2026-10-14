@@ -204,19 +204,8 @@ export function getSaldoSkidOffline(equipamentoId: string, materiais: Material[]
 // nenhuma mídia pra resolver depois, ao contrário da foto da máquina ad-hoc.
 export async function registrarRecargaOffline(input: RecargaInput): Promise<void> {
   await localDb.addToQueue("insumos_fichas_recarga", "create", input);
-  if (input.origem_tipo === "SKID" && input.origem_skid_id) {
-    const movimentos = input.itens.map((item, idx) => ({
-      id: `temp_mov_${Date.now()}_${idx}`,
-      equipamento_id: input.origem_skid_id,
-      material_id: item.material_id,
-      tipo: "SAIDA",
-      quantidade: item.quantidade,
-      origem_recarga_id: null,
-      data: input.data,
-      _isPendingSync: true,
-    }));
-    await localDb.saveMany("insumos_skid_movimentos", movimentos);
-  }
+  // Skid tem controle de estoque próprio — recarga não debita o skid (ver
+  // criarRecargaFinalizada em recargaActions.ts, mesma regra).
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
 }
 

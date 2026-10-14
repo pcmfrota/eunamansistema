@@ -53,11 +53,6 @@ function aplicacaoParaInsumoTipo(aplicacao: string, tanqueDiesel?: 1 | 2 | null)
   return aplicacao as InsumoTipo;
 }
 
-async function calcularSaldoSkidMaterial(supabase: any, equipamentoId: string, materialId: string): Promise<number> {
-  const { data } = await supabase.from("insumos_skid_movimentos").select("tipo, quantidade").eq("equipamento_id", equipamentoId).eq("material_id", materialId);
-  return (data || []).reduce((s: number, m: any) => s + (m.tipo === "ENTRADA" ? Number(m.quantidade) : -Number(m.quantidade)), 0);
-}
-
 export async function getSkidsDisponiveis(): Promise<Skid[]> {
   const supabase = createClient();
   const { data } = await supabase.from("equipamentos").select("id, placa, modelo").eq("tipo", "SKID").is("deleted_at", null).order("placa");
@@ -121,16 +116,6 @@ export async function criarRecargaFinalizada(input: RecargaInput): Promise<{ suc
   const { data: materiaisInfo } = await supabase.from("insumos_materiais").select("id, material, aplicacao").in("id", input.itens.map((i) => i.material_id));
   const mapaMateriais = new Map((materiaisInfo || []).map((m: any) => [m.id, m]));
 
-  if (input.origem_tipo === "SKID" && input.origem_skid_id) {
-    for (const item of input.itens) {
-      const saldo = await calcularSaldoSkidMaterial(supabase, input.origem_skid_id, item.material_id);
-      if (item.quantidade > saldo) {
-        const nome = mapaMateriais.get(item.material_id)?.material || "insumo";
-        return { error: `Quantidade de "${nome}" (${item.quantidade}) é maior que o saldo disponível no skid (${saldo}).` };
-      }
-    }
-  }
-
   const usuario = await getUsuarioAtual(supabase);
 
   const { data: recarga, error } = await supabase.from("insumos_fichas_recarga").insert({
@@ -148,14 +133,9 @@ export async function criarRecargaFinalizada(input: RecargaInput): Promise<{ suc
     input.itens.map((i) => ({ recarga_id: recarga.id, material_id: i.material_id, quantidade: i.quantidade, req_nf: i.req_nf, tanque_diesel: i.tanque_diesel || null }))
   );
 
-  if (input.origem_tipo === "SKID" && input.origem_skid_id) {
-    await supabase.from("insumos_skid_movimentos").insert(
-      input.itens.map((i) => ({
-        equipamento_id: input.origem_skid_id, material_id: i.material_id, tipo: "SAIDA", quantidade: i.quantidade,
-        origem_recarga_id: recarga.id, data: input.data, criado_por: usuario.id,
-      }))
-    );
-  }
+  // O skid tem controle de estoque próprio, independente das recargas: recarregar um
+  // comboio a partir de um skid só registra a ficha (acima) e credita no comboio
+  // (abaixo) — não debita o skid, que é mantido/auditado separadamente.
 
   const { data: fichaAberta } = await supabase
     .from("insumos_fichas_abastecimento").select("id")
