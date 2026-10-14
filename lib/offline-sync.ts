@@ -66,9 +66,10 @@ const syncTasks: Record<
     supabase
       .from("ordens_servico")
       .select(`
-        id, numero_os, placa, modulo, status, data_abertura, data_fechamento, 
-        horas_manutencao, descricao, horimetro, operacao_tipo, local, classe, 
-        foi_enviado_reserva, motivo, sistema, sub_sistema, componente, 
+        id, numero_os, placa, modulo, status, data_abertura, data_fechamento,
+        horas_manutencao, descricao, horimetro, km, foto_horimetro, foto_km,
+        operacao_tipo, local, classe,
+        foi_enviado_reserva, motivo, sistema, sub_sistema, componente,
         observacoes, horario_parada, equipamento_id, qual_reserva, horas_reserva_chegou,
         mecanicos, assinatura_mecanico, fotos,
         equipamento:equipamento_id (placa, modulo)
