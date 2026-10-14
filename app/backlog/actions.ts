@@ -9,6 +9,7 @@ import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 import { revalidatePath } from 'next/cache';
 import { getUserFilial } from '@/utils/filial';
 import { registrarExclusao } from '@/lib/audit-log';
+import { registrarHistoricoBacklog, HistoricoBacklog } from '@/lib/backlog-historico';
 import { GoogleGenAI, Type, ApiError } from '@google/genai';
 import { z } from 'zod';
 
@@ -23,11 +24,52 @@ export async function getBacklog(limit: number = 5000) {
 
 export async function upsertBacklogItem(item: any) {
   try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    // Edição de verdade: tem id real (não "temp_..." de um registro criado offline
+    // ainda não sincronizado). Busca o snapshot "antes" pra guardar o diff completo.
+    const ehEdicao = !!(item.id && !String(item.id).startsWith('temp_'));
+    let antes: any = null;
+    if (ehEdicao) {
+      const { data } = await supabase.from('backlog').select('*').eq('id', item.id).maybeSingle();
+      antes = data;
+    }
+
     const { data } = await BacklogService.upsert(item);
     revalidatePath('/backlog');
+
+    const depois = Array.isArray(data) ? data[0] : data;
+    const descricao = `${depois?.frota || item.frota || 'S/ FROTA'} — ${depois?.descricao || item.descricao || ''}`;
+    await registrarHistoricoBacklog({
+      supabase,
+      acao: ehEdicao ? 'EDICAO' : 'CRIACAO',
+      registroId: depois?.id || item.id,
+      descricao,
+      dadosAntes: antes,
+      dadosDepois: depois,
+    });
+
     return { success: true, data };
   } catch (error: any) {
     return { error: error.message };
+  }
+}
+
+export async function getBacklogHistorico(): Promise<HistoricoBacklog[]> {
+  try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('backlog_historico')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    return (data || []) as HistoricoBacklog[];
+  } catch (error: any) {
+    console.error('Erro getBacklogHistorico:', error);
+    return [];
   }
 }
 
@@ -459,17 +501,27 @@ export async function responderSolicitacaoExclusao(requestId: string, aprovado: 
     if (updateError) throw new Error(updateError.message);
 
     if (aprovado && request.backlog_id) {
+      const { data: rowAntes } = await supabase.from('backlog').select('*').eq('id', request.backlog_id).maybeSingle();
+
       const { error: deleteError } = await supabase.from('backlog').delete().eq('id', request.backlog_id);
       if (deleteError) throw new Error(deleteError.message);
 
+      const descricao = `${request.backlog_frota || 'S/ FROTA'} — ${request.backlog_descricao || ''}`;
       await registrarExclusao({
         supabase,
         modulo: 'Backlog',
         tabelaOrigem: 'backlog',
         registroId: request.backlog_id,
-        descricao: `${request.backlog_frota || 'S/ FROTA'} — ${request.backlog_descricao || ''}`,
+        descricao,
         dados: request,
         origem: 'SOLICITACAO_APROVADA',
+      });
+      await registrarHistoricoBacklog({
+        supabase,
+        acao: 'EXCLUSAO',
+        registroId: request.backlog_id,
+        descricao,
+        dadosAntes: rowAntes || request,
       });
     }
 

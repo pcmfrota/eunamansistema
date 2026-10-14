@@ -4,6 +4,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { BacklogItemInsert, BacklogItemUpdate } from '../models/backlog';
 import { registrarExclusoesEmLote } from '@/lib/audit-log';
+import { registrarHistoricoBacklog } from '@/lib/backlog-historico';
 
 export class BacklogRepository {
   static async list(limit: number = 5000) {
@@ -47,6 +48,13 @@ export class BacklogRepository {
           dados: r,
         }))
       );
+      await Promise.all(rows.map(r => registrarHistoricoBacklog({
+        supabase,
+        acao: 'EXCLUSAO',
+        registroId: r.id,
+        descricao: `${r.frota || 'S/ FROTA'} — ${r.descricao || ''}`,
+        dadosAntes: r,
+      })));
     }
 
     return result;

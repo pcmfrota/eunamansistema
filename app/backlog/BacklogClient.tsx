@@ -14,12 +14,17 @@ import {
   ArrowRight,
   Database,
   BarChart3,
-  Sparkles
+  Sparkles,
+  History,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
-import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog } from './actions';
+import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog, getBacklogHistorico } from './actions';
+import type { HistoricoBacklog, AcaoHistoricoBacklog } from '@/lib/backlog-historico';
+import { nomeSistema, nomeSubsistema, nomeComponente } from './classificacaoTecnica';
 import BacklogModal from './BacklogModal';
 import BacklogQuickView from './BacklogQuickView';
 import BacklogTable from './BacklogTable';
@@ -55,7 +60,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento' | 'Solicitacoes'>('Dashboard');
+  const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento' | 'Solicitacoes' | 'Historico'>('Dashboard');
 
   // Gerar O.S. a partir de itens de backlog selecionados
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
@@ -94,7 +99,24 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       loadSolicitacoes();
     }
   }, [isAdmin, isOnline, loadSolicitacoes]);
-  
+
+  // Histórico (quem criou/editou/excluiu cada item) — carregado sob demanda na
+  // primeira vez que a aba é aberta, igual ao Controle de Custos.
+  const [historico, setHistorico] = useState<HistoricoBacklog[] | null>(null);
+  const [historicoCarregando, setHistoricoCarregando] = useState(false);
+  const [buscaHistorico, setBuscaHistorico] = useState("");
+  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string>("");
+  const [linhaExpandidaHistorico, setLinhaExpandidaHistorico] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (view !== 'Historico' || historico !== null || historicoCarregando) return;
+    setHistoricoCarregando(true);
+    getBacklogHistorico()
+      .then((data) => setHistorico(data))
+      .catch(() => setHistorico([]))
+      .finally(() => setHistoricoCarregando(false));
+  }, [view, historico, historicoCarregando]);
+
   // Search State
   const [search, setSearch] = useState("");
 
@@ -461,6 +483,75 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     XLSX.writeFile(wb, "EUNAMAN_Backlog.xlsx");
   };
 
+  // ── Histórico: labels, formatação e diff (mesmo padrão do Controle de Custos) ──
+  const ACAO_LABEL: Record<AcaoHistoricoBacklog, string> = { CRIACAO: "Criação", EDICAO: "Edição", EXCLUSAO: "Exclusão" };
+  const ACAO_BADGE: Record<AcaoHistoricoBacklog, string> = {
+    CRIACAO: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+    EDICAO: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    EXCLUSAO: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+  };
+
+  const CAMPO_LABEL: Record<string, string> = {
+    data_evidencia: "Data de Evidência", status: "Status", criticidade: "Criticidade",
+    modulo: "Módulo", regiao_programa: "Região x Programação", frota: "Frota", tag: "TAG",
+    tipo: "Tipo", descricao: "Descrição", origem: "Origem", colaborador: "Colaborador",
+    tempo_execucao: "Tempo Estimado", campo_base: "Campo / Base", os: "Nº O.S", material: "Material",
+    nr_rc: "Nº RC", nr_ordem: "Nº Ordem", fornecedor: "Fornecedor", detalhamento: "Detalhamento do Pedido",
+    data_rc: "Data da RC", data_nec_material: "Data Necessidade Material", previsao_material: "Previsão do Material",
+    situacao_rc: "Situação RC", data_programacao: "Previsão Programação", mao_obra: "Mão de Obra",
+    status_programacao: "Status Programação", previsao_conclusao: "Previsão Conclusão",
+    data_conclusao: "Data de Conclusão", observacao: "Observação",
+    sistema_cod: "Sistema", subsistema_cod: "Subsistema", componente_cod: "Componente",
+  };
+  const CAMPO_IGNORAR_HISTORICO = new Set([
+    "id", "filial_id", "created_at", "_isPendingSync",
+    "evidencia_imagens", "evidencia_imagens_conclusao", "evidencia_imagem",
+    "semana", "mes", "ano", "dias_abertura", "delta", "dias_resolucao",
+  ]);
+
+  function formatarValorHistorico(campo: string, valor: any): string {
+    if (valor === null || valor === undefined || valor === "") return "-";
+    if (["data_evidencia", "data_rc", "data_nec_material", "data_programacao", "data_conclusao"].includes(campo)) {
+      const d = String(valor).split("T")[0];
+      const partes = d.split("-");
+      return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : String(valor);
+    }
+    if (campo === "sistema_cod") return `${valor} – ${nomeSistema(Number(valor))}`;
+    if (campo === "subsistema_cod") return `${valor} – ${nomeSubsistema(Number(valor))}`;
+    if (campo === "componente_cod") return `${valor} – ${nomeComponente(Number(valor))}`;
+    if (campo === "criticidade") return valor === "A" ? "A - Crítico" : valor === "C" ? "C - Baixa" : "B - Normal";
+    if (typeof valor === "boolean") return valor ? "Sim" : "Não";
+    return String(valor);
+  }
+
+  function montarComparacaoHistorico(antes: any, depois: any) {
+    const chaves = Array.from(new Set([...(antes ? Object.keys(antes) : []), ...(depois ? Object.keys(depois) : [])]))
+      .filter((k) => !CAMPO_IGNORAR_HISTORICO.has(k));
+    return chaves.map((campo) => {
+      const valorAntes = antes ? antes[campo] : undefined;
+      const valorDepois = depois ? depois[campo] : undefined;
+      return {
+        campo,
+        label: CAMPO_LABEL[campo] || campo.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        antes: formatarValorHistorico(campo, valorAntes),
+        depois: formatarValorHistorico(campo, valorDepois),
+        mudou: !!(antes && depois) && String(valorAntes) !== String(valorDepois),
+      };
+    });
+  }
+
+  const historicoFiltrado = React.useMemo(() => {
+    let lista = historico || [];
+    if (filtroAcaoHistorico) lista = lista.filter((h) => h.acao === filtroAcaoHistorico);
+    const term = buscaHistorico.toLowerCase().trim();
+    if (term) {
+      lista = lista.filter(
+        (h) => h.descricao?.toLowerCase().includes(term) || h.usuario_nome?.toLowerCase().includes(term)
+      );
+    }
+    return lista;
+  }, [historico, filtroAcaoHistorico, buscaHistorico]);
+
   return (
     <div className="p-3 md:p-5 flex flex-col gap-4 w-full h-full animate-in fade-in duration-700">
       
@@ -527,7 +618,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         {/* Row 1: View tabs + refresh */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex gap-2 p-1.5 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-sm">
-            {(['Geral', 'Dashboard', 'Detalhamento', 'Solicitacoes'] as const)
+            {(['Geral', 'Dashboard', 'Detalhamento', 'Solicitacoes', 'Historico'] as const)
               .filter(v => v !== 'Solicitacoes' || isAdmin)
               .map(v => (
               <button
@@ -540,7 +631,8 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
               >
                 {v === 'Dashboard' && <BarChart3 size={12} />}
                 {v === 'Solicitacoes' && <ShieldAlert size={12} />}
-                {v === 'Solicitacoes' ? 'Solicitação de Exclusão' : v}
+                {v === 'Historico' && <History size={12} />}
+                {v === 'Solicitacoes' ? 'Solicitação de Exclusão' : v === 'Historico' ? 'Histórico' : v}
                 {v === 'Solicitacoes' && pendentesCount > 0 && (
                   <span className="px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[8px] leading-none">{pendentesCount}</span>
                 )}
@@ -744,6 +836,111 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       ) : view === 'Solicitacoes' ? (
         /* Solicitações de Exclusão (somente administrador) */
         <BacklogSolicitacoesExclusao requests={solicitacoes} loading={solicitacoesLoading} onRefresh={loadSolicitacoes} />
+      ) : view === 'Historico' ? (
+        /* Histórico: tudo que foi criado/editado/excluído e quem mexeu */
+        <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+              <input
+                value={buscaHistorico}
+                onChange={(e) => setBuscaHistorico(e.target.value)}
+                placeholder="Buscar por descrição ou usuário..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-indigo-500"
+              />
+            </div>
+            <select
+              value={filtroAcaoHistorico}
+              onChange={(e) => setFiltroAcaoHistorico(e.target.value)}
+              className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
+            >
+              <option value="">Todas as Ações</option>
+              <option value="CRIACAO">Criação</option>
+              <option value="EDICAO">Edição</option>
+              <option value="EXCLUSAO">Exclusão</option>
+            </select>
+          </div>
+
+          {historicoCarregando ? (
+            <div className="flex items-center justify-center py-16 text-zinc-400">
+              <RefreshCcw className="animate-spin" size={24} />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="text-[11px] uppercase">
+                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">Data/Hora</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center">Ação</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">Descrição</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">Usuário</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center w-16">Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody className="text-zinc-700 dark:text-zinc-300 text-xs">
+                  {historicoFiltrado.map((h, idx) => (
+                    <React.Fragment key={h.id}>
+                      <tr className={idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : ""}>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 whitespace-nowrap">
+                          {new Date(h.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center">
+                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap", ACAO_BADGE[h.acao])}>
+                            {ACAO_LABEL[h.acao]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">{h.descricao || "-"}</td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 whitespace-nowrap">{h.usuario_nome || "Sistema"}</td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center">
+                          {(h.dados_antes || h.dados_depois) && (
+                            <button onClick={() => setLinhaExpandidaHistorico(linhaExpandidaHistorico === h.id ? null : h.id)} className="p-1 text-zinc-400 hover:text-indigo-600">
+                              {linhaExpandidaHistorico === h.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {linhaExpandidaHistorico === h.id && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-3 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60">
+                            <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                              <table className="w-full text-left border-collapse bg-white dark:bg-zinc-950">
+                                <thead className="text-[10px] uppercase sticky top-0">
+                                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                                    <th className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800">Campo</th>
+                                    {h.dados_antes && <th className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800">Antes</th>}
+                                    {h.dados_depois && <th className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800">Depois</th>}
+                                  </tr>
+                                </thead>
+                                <tbody className="text-[11px]">
+                                  {montarComparacaoHistorico(h.dados_antes, h.dados_depois).map((linha) => (
+                                    <tr key={linha.campo} className={linha.mudou ? "bg-amber-50 dark:bg-amber-900/10" : ""}>
+                                      <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-600 dark:text-zinc-300 whitespace-nowrap">{linha.label}</td>
+                                      {h.dados_antes && (
+                                        <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">{linha.antes}</td>
+                                      )}
+                                      {h.dados_depois && (
+                                        <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800 font-medium text-zinc-800 dark:text-zinc-100">{linha.depois}</td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                  {historicoFiltrado.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 border border-zinc-200 dark:border-zinc-800 text-center text-zinc-500">Nenhum registro de histórico encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       ) : (
         <>
           {/* Multi-Select Floating Bar */}

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Clock, Edit3 } from 'lucide-react'
+import { X, Clock, Edit3, Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import BacklogFichaModal from './BacklogFicha'
 
 // Mesma regra de "dias em aberto" já usada no dashboard (BacklogDashboard.tsx): conta de
 // data_evidencia (quando foi lançado) até data_conclusao (se já encerrado) ou até hoje.
@@ -27,6 +28,7 @@ export default function BacklogQuickView({
   onEdit: (item: any) => void
 }) {
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null)
+  const [mostrarFicha, setMostrarFicha] = useState(false)
 
   if (!item) return null
 
@@ -139,6 +141,13 @@ export default function BacklogQuickView({
             Fechar
           </button>
           <button
+            onClick={() => setMostrarFicha(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            title="Ver ficha pra imprimir ou baixar em PDF"
+          >
+            <Printer size={14} /> Ver Ficha
+          </button>
+          <button
             onClick={() => onEdit(item)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-sm"
           >
@@ -146,6 +155,10 @@ export default function BacklogQuickView({
           </button>
         </div>
       </div>
+
+      {mostrarFicha && (
+        <BacklogFichaModal item={item} onClose={() => setMostrarFicha(false)} />
+      )}
 
       {fotoExpandida && (
         <div
