@@ -30,7 +30,20 @@ const VALID_COLUMNS = new Set([
   'observacao',
   'evidencia_imagem',
   'evidencia_imagens',
-  'created_at'
+  'created_at',
+  // Classificação técnica (Sistema/Subsistema/Componente) e demais campos que já
+  // existiam no banco (migração antiga) mas nunca tinham sido liberados aqui — por isso
+  // nunca eram salvos de verdade, mesmo já aparecendo no formulário.
+  'sistema_cod',
+  'subsistema_cod',
+  'componente_cod',
+  'mao_obra',
+  'detalhamento',
+  'data_rc',
+  'data_nec_material',
+  'previsao_material',
+  'situacao_rc',
+  'previsao_conclusao'
 ]);
 
 export class BacklogService {
