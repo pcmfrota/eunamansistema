@@ -13,7 +13,10 @@ import {
   Clock,
   AlertCircle,
   Camera,
-  Clipboard
+  Clipboard,
+  Maximize2,
+  Printer,
+  Download
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFormDraft } from '@/hooks/use-form-draft'
@@ -21,6 +24,7 @@ import { upsertBacklogItem } from './actions'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
+import BacklogFichaModal from './BacklogFicha'
 import {
   SISTEMAS,
   subsistemasDoSistema,
@@ -63,6 +67,7 @@ const initialValues = {
   status_programacao: 'Não Programado', previsao_conclusao: '',
   data_conclusao: '', delta: '', dias_resolucao: '', observacao: '',
   evidencia_imagens: [] as string[],
+  evidencia_imagens_conclusao: [] as string[],
   sistema_cod: null as number | null,
   subsistema_cod: null as number | null,
   componente_cod: null as number | null,
@@ -102,10 +107,12 @@ function comprimirImagem(blob: Blob): Promise<string> {
 }
 
 // ─── Component Helpers ────────────────────────────────────────────────────────
-function Field({ label, children, span = 1 }: { label: string, children: React.ReactNode, span?: number }) {
+function Field({ label, children, span = 1, required = false }: { label: string, children: React.ReactNode, span?: number, required?: boolean }) {
   return (
     <div className={cn("space-y-1.5", span === 2 && "col-span-1 md:col-span-2")}>
-       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">{label}</label>
+       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">
+         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+       </label>
        {children}
     </div>
   )
@@ -159,6 +166,77 @@ function DataOuRotulo({ value, onChange, rotulos }: { value: string; onChange: (
   )
 }
 
+// Grupo de até 2 fotos (upload, colar, expandir, remover) — reaproveitado pra evidência
+// "antes" (Atividade) e "depois da conclusão" (Programação), únicas diferenças são o
+// campo do form que cada grupo escreve e o id do input de arquivo.
+function GrupoFotosEvidencia({
+  fotos,
+  inputId,
+  processando,
+  onAdicionar,
+  onRemover,
+  onExpandir,
+  onFoco,
+}: {
+  fotos: string[]
+  inputId: string
+  processando: boolean
+  onAdicionar: (file: File) => void
+  onRemover: (idx: number) => void
+  onExpandir: (foto: string) => void
+  onFoco: () => void
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3" onClick={onFoco}>
+      {fotos.map((foto, idx) => (
+        <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black group cursor-zoom-in" onClick={() => onExpandir(foto)}>
+          <img src={foto} alt={`Evidência ${idx + 1}`} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
+            <Maximize2 size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRemover(idx) }}
+            title="Remover foto"
+            className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors shadow"
+          >
+            <X size={12} className="stroke-[3]" />
+          </button>
+        </div>
+      ))}
+      {fotos.length < 2 && (
+        <label
+          htmlFor={inputId}
+          className="aspect-video rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:border-amber-400 dark:hover:border-amber-600 transition-colors text-center px-2"
+        >
+          {processando ? (
+            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Processando...</span>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 text-zinc-400">
+                <Camera size={18} />
+                <Clipboard size={16} />
+              </div>
+              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Adicionar ou Colar (Ctrl+V)</span>
+            </>
+          )}
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) onAdicionar(file)
+              e.target.value = ''
+            }}
+          />
+        </label>
+      )}
+    </div>
+  )
+}
+
 type Colaborador = { id: string; nome: string }
 
 export default function BacklogModal({
@@ -179,6 +257,7 @@ export default function BacklogModal({
   const { isOnline } = useOffline()
   const { form, setForm, clearDraft, hasContent } = useFormDraft('backlog', initialValues)
   const formBodyRef = useRef<HTMLDivElement>(null)
+  const [mostrarFicha, setMostrarFicha] = useState(false)
 
   useEffect(() => {
     if (editData) {
@@ -213,16 +292,24 @@ export default function BacklogModal({
 
   const tipoPedido = calcularTipoPedido(form.data_evidencia, form.data_nec_material)
 
-  // ── Evidência (Foto): upload ou colar (Ctrl+V), até 2 fotos ──
+  // ── Evidência (Foto): upload ou colar (Ctrl+V), até 2 fotos — antes e depois da
+  // conclusão são dois grupos independentes, mas compartilham a mesma lógica.
+  type CampoFoto = 'evidencia_imagens' | 'evidencia_imagens_conclusao'
   const fotosEvidencia: string[] = form.evidencia_imagens || []
+  const fotosConclusao: string[] = form.evidencia_imagens_conclusao || []
   const [fotoProcessando, setFotoProcessando] = useState(false)
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null)
+  // Pra onde vai a próxima foto colada (Ctrl+V) — atualizado ao clicar em qualquer uma
+  // das duas áreas de evidência, já que colar é um evento global da página.
+  const [campoFotoAtivo, setCampoFotoAtivo] = useState<CampoFoto>('evidencia_imagens')
 
-  const adicionarFotoEvidencia = async (blob: Blob) => {
-    if (fotosEvidencia.length >= 2) return
+  const adicionarFoto = async (blob: Blob, campo: CampoFoto) => {
+    const atual: string[] = (form as any)[campo] || []
+    if (atual.length >= 2) return
     setFotoProcessando(true)
     try {
       const dataUrl = await comprimirImagem(blob)
-      setForm(prev => ({ ...prev, evidencia_imagens: [...(prev.evidencia_imagens || []), dataUrl] }))
+      setForm(prev => ({ ...prev, [campo]: [...(((prev as any)[campo]) || []), dataUrl] }))
     } catch (err) {
       console.error('Erro ao processar foto de evidência:', err)
     } finally {
@@ -230,8 +317,8 @@ export default function BacklogModal({
     }
   }
 
-  const removerFotoEvidencia = (idx: number) => {
-    setForm(prev => ({ ...prev, evidencia_imagens: (prev.evidencia_imagens || []).filter((_: string, i: number) => i !== idx) }))
+  const removerFoto = (campo: CampoFoto, idx: number) => {
+    setForm(prev => ({ ...prev, [campo]: (((prev as any)[campo]) || []).filter((_: string, i: number) => i !== idx) }))
   }
 
   // Colar (Ctrl+V) uma imagem da área de transferência enquanto o modal está aberto — só
@@ -247,7 +334,7 @@ export default function BacklogModal({
           const blob = item.getAsFile()
           if (blob) {
             e.preventDefault()
-            adicionarFotoEvidencia(blob)
+            adicionarFoto(blob, campoFotoAtivo)
           }
           break
         }
@@ -256,7 +343,7 @@ export default function BacklogModal({
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, fotosEvidencia.length])
+  }, [isOpen, campoFotoAtivo, fotosEvidencia.length, fotosConclusao.length])
 
   // Helper para interpretar o valor salvo em tempo_execucao para Horas e Minutos
   const parseTempoToHM = (val: string) => {
@@ -381,6 +468,21 @@ export default function BacklogModal({
 
   const handleSubmit = async () => {
     if (isSubmitting.current) return
+
+    const faltando: string[] = []
+    if (!form.data_evidencia) faltando.push('Data de Evidência')
+    if (!form.colaborador) faltando.push('Colaborador / Mecânico')
+    if (!form.origem?.trim()) faltando.push('Origem')
+    if (!form.frota) faltando.push('Frota (Placa)')
+    if (!form.descricao?.trim()) faltando.push('Descrição da Atividade')
+    if (!form.sistema_cod) faltando.push('Sistema')
+    if (!form.subsistema_cod) faltando.push('Subsistema')
+    if (!form.componente_cod) faltando.push('Componente')
+    if (faltando.length > 0) {
+      alert('Preencha os campos obrigatórios antes de salvar:\n\n- ' + faltando.join('\n- '))
+      return
+    }
+
     isSubmitting.current = true
     setLoading(true)
 
@@ -480,7 +582,7 @@ export default function BacklogModal({
           <section>
             <SectionHeader icon={SECOES[0].icon} label={SECOES[0].label} color={SECOES[0].color} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field label="Data de Evidência" span={2}>
+              <Field label="Data de Evidência" span={2} required>
                 <div className="flex items-center gap-2">
                   <input
                     className={cn(inputCls, "flex-1 font-mono")}
@@ -504,14 +606,14 @@ export default function BacklogModal({
                   <option value="B">B - NORMAL</option>
                 </select>
               </Field>
-              <Field label="Colaborador / Mecânico">
+              <Field label="Colaborador / Mecânico" required>
                 <SearchableSelect
                   options={(colaboradores || []).map(c => ({ value: c.nome, label: c.nome }))}
                   value={form.colaborador || ''}
                   onChange={val => setForm({...form, colaborador: val})}
                 />
               </Field>
-              <Field label="Origem">
+              <Field label="Origem" required>
                 <input
                   className={inputCls}
                   list="backlog-origens"
@@ -530,7 +632,7 @@ export default function BacklogModal({
           <section>
             <SectionHeader icon={SECOES[1].icon} label={SECOES[1].label} color={SECOES[1].color} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field label="Frota (Placa)" span={2}>
+              <Field label="Frota (Placa)" span={2} required>
                 <SearchableSelect
                   options={heavyActivePlacas.map(p => ({ value: p.placa, label: `${p.placa}${p.modulo ? ` (${p.modulo})` : ''}` }))}
                   value={form.frota}
@@ -563,11 +665,11 @@ export default function BacklogModal({
           <section>
             <SectionHeader icon={SECOES[2].icon} label={SECOES[2].label} color={SECOES[2].color} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field label="Descrição da Atividade" span={2}>
+              <Field label="Descrição da Atividade" span={2} required>
                 <textarea className={cn(inputCls, "min-h-[100px] resize-none")} placeholder="Detalhe a falha detectada..." value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} />
               </Field>
 
-              <Field label="Sistema">
+              <Field label="Sistema" required>
                 <select
                   className={inputCls}
                   value={form.sistema_cod ?? ''}
@@ -580,7 +682,7 @@ export default function BacklogModal({
                   {SISTEMAS.map(s => <option key={s.cod} value={s.cod}>{s.cod} – {s.nome}</option>)}
                 </select>
               </Field>
-              <Field label="Subsistema">
+              <Field label="Subsistema" required>
                 <select
                   className={inputCls}
                   value={form.subsistema_cod ?? ''}
@@ -594,7 +696,7 @@ export default function BacklogModal({
                   {subsistemasDisponiveis.map(s => <option key={s.cod} value={s.cod}>{s.cod} – {s.nome}</option>)}
                 </select>
               </Field>
-              <Field label="Componente" span={2}>
+              <Field label="Componente" span={2} required>
                 <select
                   className={inputCls}
                   value={form.componente_cod ?? ''}
@@ -672,50 +774,15 @@ export default function BacklogModal({
                 </select>
               </Field>
               <Field label={`Evidência (Foto) — ${fotosEvidencia.length}/2`} span={2}>
-                <div className="grid grid-cols-2 gap-3">
-                  {fotosEvidencia.map((foto, idx) => (
-                    <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
-                      <img src={foto} alt={`Evidência ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removerFotoEvidencia(idx)}
-                        title="Remover foto"
-                        className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors shadow"
-                      >
-                        <X size={12} className="stroke-[3]" />
-                      </button>
-                    </div>
-                  ))}
-                  {fotosEvidencia.length < 2 && (
-                    <label
-                      htmlFor="backlog-foto-evidencia-input"
-                      className="aspect-video rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:border-amber-400 dark:hover:border-amber-600 transition-colors text-center px-2"
-                    >
-                      {fotoProcessando ? (
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Processando...</span>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2 text-zinc-400">
-                            <Camera size={18} />
-                            <Clipboard size={16} />
-                          </div>
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Adicionar ou Colar (Ctrl+V)</span>
-                        </>
-                      )}
-                      <input
-                        id="backlog-foto-evidencia-input"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) adicionarFotoEvidencia(file)
-                          e.target.value = ''
-                        }}
-                      />
-                    </label>
-                  )}
-                </div>
+                <GrupoFotosEvidencia
+                  fotos={fotosEvidencia}
+                  inputId="backlog-foto-evidencia-input"
+                  processando={fotoProcessando}
+                  onAdicionar={(file) => adicionarFoto(file, 'evidencia_imagens')}
+                  onRemover={(idx) => removerFoto('evidencia_imagens', idx)}
+                  onExpandir={setFotoExpandida}
+                  onFoco={() => setCampoFotoAtivo('evidencia_imagens')}
+                />
               </Field>
             </div>
           </section>
@@ -834,6 +901,17 @@ export default function BacklogModal({
               <Field label="Observações de Programação" span={2}>
                 <textarea className={cn(inputCls, "min-h-[80px] resize-none")} value={form.observacao || ''} onChange={e => setForm({...form, observacao: e.target.value})} />
               </Field>
+              <Field label={`Evidência Após Conclusão — ${fotosConclusao.length}/2`} span={2}>
+                <GrupoFotosEvidencia
+                  fotos={fotosConclusao}
+                  inputId="backlog-foto-conclusao-input"
+                  processando={fotoProcessando}
+                  onAdicionar={(file) => adicionarFoto(file, 'evidencia_imagens_conclusao')}
+                  onRemover={(idx) => removerFoto('evidencia_imagens_conclusao', idx)}
+                  onExpandir={setFotoExpandida}
+                  onFoco={() => setCampoFotoAtivo('evidencia_imagens_conclusao')}
+                />
+              </Field>
             </div>
           </section>
 
@@ -847,16 +925,47 @@ export default function BacklogModal({
           >
             CANCELAR
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-black shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {loading ? <><Clock size={16} className="animate-spin" /> Salvando...</> : <><CheckCircle2 size={16} /> SALVAR BACKLOG</>}
-          </button>
+          <div className="flex items-center gap-3">
+            {editData && (
+              <button
+                onClick={() => setMostrarFicha(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-2xl text-sm font-black transition-all"
+                title="Gerar ficha pra imprimir ou baixar em PDF"
+              >
+                <Printer size={16} /> FICHA
+              </button>
+            )}
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex items-center gap-2 px-10 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-black shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? <><Clock size={16} className="animate-spin" /> Salvando...</> : <><CheckCircle2 size={16} /> SALVAR BACKLOG</>}
+            </button>
+          </div>
         </div>
 
       </div>
+
+      {fotoExpandida && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-zinc-950/95 backdrop-blur-sm"
+          onClick={() => setFotoExpandida(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setFotoExpandida(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={22} />
+          </button>
+          <img src={fotoExpandida} alt="Foto ampliada" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+
+      {mostrarFicha && editData && (
+        <BacklogFichaModal item={{ ...editData, ...form }} onClose={() => setMostrarFicha(false)} />
+      )}
     </div>
   )
 }

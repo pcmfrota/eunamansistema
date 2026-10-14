@@ -30,6 +30,7 @@ const VALID_COLUMNS = new Set([
   'observacao',
   'evidencia_imagem',
   'evidencia_imagens',
+  'evidencia_imagens_conclusao',
   'created_at',
   // Classificação técnica (Sistema/Subsistema/Componente) e demais campos que já
   // existiam no banco (migração antiga) mas nunca tinham sido liberados aqui — por isso

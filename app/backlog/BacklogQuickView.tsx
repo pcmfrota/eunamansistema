@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { X, Clock, Edit3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,8 @@ export default function BacklogQuickView({
   onClose: () => void
   onEdit: (item: any) => void
 }) {
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null)
+
   if (!item) return null
 
   // Prioriza as novas fotos manuais (até 2); cai pro campo legado singular usado pelo
@@ -35,6 +38,7 @@ export default function BacklogQuickView({
       : item.evidencia_imagem
         ? [item.evidencia_imagem]
         : []
+  const fotosConclusao: string[] = item.evidencia_imagens_conclusao || []
 
   const aging = calcularDias(item)
 
@@ -93,16 +97,34 @@ export default function BacklogQuickView({
               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1.5">Evidência</p>
               <div className={cn('grid gap-2', fotos.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
                 {fotos.map((foto, idx) => (
-                  <a
+                  <button
                     key={idx}
-                    href={foto}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black"
-                    title="Abrir em tamanho real"
+                    type="button"
+                    onClick={() => setFotoExpandida(foto)}
+                    className="block aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black cursor-zoom-in"
+                    title="Clique para ampliar"
                   >
                     <img src={foto} alt={`Evidência ${idx + 1}`} className="w-full h-full object-cover" />
-                  </a>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {fotosConclusao.length > 0 && (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1.5">Evidência Após Conclusão</p>
+              <div className={cn('grid gap-2', fotosConclusao.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
+                {fotosConclusao.map((foto, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setFotoExpandida(foto)}
+                    className="block aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black cursor-zoom-in"
+                    title="Clique para ampliar"
+                  >
+                    <img src={foto} alt={`Evidência conclusão ${idx + 1}`} className="w-full h-full object-cover" />
+                  </button>
                 ))}
               </div>
             </div>
@@ -124,6 +146,22 @@ export default function BacklogQuickView({
           </button>
         </div>
       </div>
+
+      {fotoExpandida && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-950/95 backdrop-blur-sm"
+          onClick={() => setFotoExpandida(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setFotoExpandida(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={22} />
+          </button>
+          <img src={fotoExpandida} alt="Foto ampliada" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   )
 }
