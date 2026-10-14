@@ -33,7 +33,7 @@ import {
 } from './classificacaoTecnica'
 
 // ─── Types and Config ────────────────────────────────────────────────────────
-type Placa = { id: string; placa: string; modulo: string | null; area?: string | null }
+type Placa = { id: string; placa: string; modulo: string | null; area?: string | null; tipo?: string | null }
 
 const SECOES = [
   { id: "identificacao", label: "Identificação", icon: Tag, color: "bg-indigo-500" },
@@ -504,9 +504,6 @@ export default function BacklogModal({
                   <option value="B">B - NORMAL</option>
                 </select>
               </Field>
-              <Field label="Tipo">
-                <input className={inputCls} placeholder="Ex: Corretiva" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} />
-              </Field>
               <Field label="Colaborador / Mecânico">
                 <SearchableSelect
                   options={(colaboradores || []).map(c => ({ value: c.nome, label: c.nome }))}
@@ -539,18 +536,25 @@ export default function BacklogModal({
                   value={form.frota}
                   onChange={val => {
                     const eq = heavyActivePlacas.find(p => p.placa === val);
-                    setForm({...form, frota: val, modulo: eq?.modulo || '', campo_base: eq?.area || ''});
+                    setForm({...form, frota: val, modulo: eq?.modulo || '', tipo: eq?.tipo || ''});
                   }}
                 />
               </Field>
               <Field label="Módulo">
                 <input className={readOnlyCls} readOnly placeholder="Selecione a placa..." value={form.modulo} title="Vem automaticamente do cadastro da placa na Base de Frotas" />
               </Field>
+              <Field label="Tipo">
+                <input className={readOnlyCls} readOnly placeholder="Selecione a placa..." value={form.tipo} title="Vem automaticamente do cadastro da placa na Base de Frotas (Comboio, Munck, Multifuncional, Pipa...)" />
+              </Field>
               <Field label="TAG">
                 <input className={inputCls} placeholder="Identificador" value={form.tag} onChange={e => setForm({...form, tag: e.target.value})} />
               </Field>
               <Field label="Campo / Base" span={2}>
-                <input className={readOnlyCls} readOnly placeholder="Selecione a placa..." value={form.campo_base} title="Vem automaticamente do cadastro da placa na Base de Frotas" />
+                <select className={inputCls} value={form.campo_base || ''} onChange={e => setForm({...form, campo_base: e.target.value})}>
+                  <option value="">Onde será feita a manutenção?</option>
+                  <option value="CAMPO">CAMPO</option>
+                  <option value="BASE">BASE</option>
+                </select>
               </Field>
             </div>
           </section>
