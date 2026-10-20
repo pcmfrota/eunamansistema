@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarExclusao, registrarExclusoesEmLote } from "@/lib/audit-log";
+import { registrarHistoricoControladoriaFrota, HistoricoControladoriaFrota } from "@/lib/controladoria-frota-historico";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ export type ControladoriaFrota = {
   cnh_categoria: string | null;
   cnh_validade: string | null;
   cnh_anexo_url: string | null;
+  termos_anexo_url: string | null;
   observacoes: string | null;
   filial_id: string;
   created_at?: string;
@@ -82,11 +84,16 @@ export async function upsertControladoriaFrota(formData: FormData) {
     cnh_categoria: campoData(formData, "cnh_categoria"),
     cnh_validade: campoData(formData, "cnh_validade"),
     cnh_anexo_url: campoData(formData, "cnh_anexo_url"),
+    termos_anexo_url: campoData(formData, "termos_anexo_url"),
     observacoes: campoData(formData, "observacoes"),
     updated_at: new Date().toISOString(),
   };
 
+  const descricao = `${nome} — ${payload.cargo || ""} (Mat. ${payload.matricula || "N/A"})`;
+
   if (id) {
+    const { data: antes } = await supabase.from("controladoria_frota").select("*").eq("id", id).maybeSingle();
+
     const { data, error } = await supabase
       .from("controladoria_frota")
       .update(payload)
@@ -94,6 +101,11 @@ export async function upsertControladoriaFrota(formData: FormData) {
       .select()
       .single();
     if (error) return { error: error.message };
+
+    await registrarHistoricoControladoriaFrota({
+      supabase, acao: "EDICAO", registroId: id, descricao, dadosAntes: antes, dadosDepois: data,
+    });
+
     revalidatePath("/controladoria-frota");
     return { success: true, data };
   }
@@ -106,6 +118,10 @@ export async function upsertControladoriaFrota(formData: FormData) {
     .select()
     .single();
   if (error) return { error: error.message };
+
+  await registrarHistoricoControladoriaFrota({
+    supabase, acao: "CRIACAO", registroId: data.id, descricao, dadosDepois: data,
+  });
 
   revalidatePath("/controladoria-frota");
   return { success: true, data };
@@ -127,17 +143,39 @@ export async function excluirControladoriaFrota(id: string) {
   const { error } = await supabase.from("controladoria_frota").delete().eq("id", id);
   if (error) return { error: error.message };
 
+  const descricao = `${row?.nome || ""} — ${row?.cargo || ""} (Mat. ${row?.matricula || "N/A"})`;
+
   await registrarExclusao({
     supabase,
     modulo: "Controladoria de Gestão de Frota",
     tabelaOrigem: "controladoria_frota",
     registroId: id,
-    descricao: `${row?.nome || ""} — ${row?.cargo || ""} (Mat. ${row?.matricula || "N/A"})`,
+    descricao,
     dados: row,
+  });
+
+  await registrarHistoricoControladoriaFrota({
+    supabase, acao: "EXCLUSAO", registroId: id, descricao, dadosAntes: row,
   });
 
   revalidatePath("/controladoria-frota");
   return { success: true };
+}
+
+// ── HISTÓRICO ─────────────────────────────────────────────────────────────────
+
+export async function getControladoriaFrotaHistorico(): Promise<HistoricoControladoriaFrota[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("controladoria_frota_historico")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+  if (error) {
+    console.error("Erro getControladoriaFrotaHistorico:", error);
+    return [];
+  }
+  return data || [];
 }
 
 // ── IMPORTAÇÃO (planilha "Relação de Cartão de Acesso") ───────────────────────
@@ -274,6 +312,12 @@ export async function excluirControladoriaFrotaEmLote(ids: string[]) {
         })),
         "DIRETO"
       );
+      for (const r of rows) {
+        await registrarHistoricoControladoriaFrota({
+          supabase, acao: "EXCLUSAO", registroId: r.id,
+          descricao: `${r.nome || ""} — ${r.cargo || ""}`, dadosAntes: r,
+        });
+      }
     }
 
     revalidatePath("/controladoria-frota");

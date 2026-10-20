@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
-import { ShieldCheck, Plus, Edit2, Trash2, X, Search, Eye, Download, Upload, Loader2, CreditCard, AlertTriangle } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { ShieldCheck, Plus, Edit2, Trash2, X, Search, Eye, Download, Upload, Loader2, CreditCard, AlertTriangle, FileText, ChevronDown, ChevronUp, RefreshCcw, History, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
-import { ControladoriaFrota, upsertControladoriaFrota, excluirControladoriaFrota, importarControladoriaFrota } from "./actions";
+import { ControladoriaFrota, upsertControladoriaFrota, excluirControladoriaFrota, importarControladoriaFrota, getControladoriaFrotaHistorico } from "./actions";
+import { AcaoHistoricoControladoriaFrota, HistoricoControladoriaFrota } from "@/lib/controladoria-frota-historico";
 import { createClient } from "@/utils/supabase/client";
 import Script from "next/script";
 
@@ -54,6 +55,26 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
   const [anexoUrlAtual, setAnexoUrlAtual] = useState<string>("");
+  const [termosUrlAtual, setTermosUrlAtual] = useState<string>("");
+  const [uploadingTermos, setUploadingTermos] = useState(false);
+
+  // ── Histórico (quem criou/editou/excluiu cada registro) — carregado sob
+  // demanda na primeira vez que a aba é aberta, mesmo padrão do Backlog. ──
+  const [view, setView] = useState<"lista" | "historico">("lista");
+  const [historico, setHistorico] = useState<HistoricoControladoriaFrota[] | null>(null);
+  const [historicoCarregando, setHistoricoCarregando] = useState(false);
+  const [buscaHistorico, setBuscaHistorico] = useState("");
+  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string>("");
+  const [linhaExpandidaHistorico, setLinhaExpandidaHistorico] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (view !== "historico" || historico !== null || historicoCarregando) return;
+    setHistoricoCarregando(true);
+    getControladoriaFrotaHistorico()
+      .then(data => setHistorico(data))
+      .catch(() => setHistorico([]))
+      .finally(() => setHistoricoCarregando(false));
+  }, [view, historico, historicoCarregando]);
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -66,11 +87,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       if (filtroCnh === "proximos" && (isDateNull || (dias as number) <= 0 || (dias as number) > 30)) return false;
       if (filtroCnh === "em_dia" && (isDateNull || (dias as number) <= 30)) return false;
       return true;
-    }).sort((a, b) => {
-      const da = a.cnh_validade ? calcularDias(a.cnh_validade) : Infinity;
-      const db = b.cnh_validade ? calcularDias(b.cnh_validade) : Infinity;
-      return da - db;
-    });
+    }).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
   }, [registros, busca, filtroCnh]);
 
   const vencidasCount = useMemo(
@@ -81,12 +98,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   const abrirNovo = () => {
     setEditingData(null);
     setAnexoUrlAtual("");
+    setTermosUrlAtual("");
     setModalOpen(true);
   };
 
   const abrirEditar = (item: ControladoriaFrota) => {
     setEditingData(item);
     setAnexoUrlAtual(item.cnh_anexo_url || "");
+    setTermosUrlAtual(item.termos_anexo_url || "");
     setModalOpen(true);
   };
 
@@ -122,6 +141,31 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       formData.delete("cnh_anexo_arquivo");
       formData.set("cnh_anexo_url", anexoUrl);
 
+      const termosFile = formData.get("termos_anexo_arquivo") as File;
+      let termosUrl = termosUrlAtual;
+      if (termosFile && termosFile.size > 0) {
+        if (!isOnline) {
+          alert("Não é possível anexar arquivo offline. Conecte-se à internet para enviar os termos.");
+          setLoading(false);
+          return;
+        }
+        setUploadingTermos(true);
+        const supabase = createClient();
+        const ext = termosFile.name.split(".").pop();
+        const fileName = `termos/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("documentos").upload(fileName, termosFile);
+        setUploadingTermos(false);
+        if (uploadError) {
+          alert("Erro ao enviar anexo dos termos: " + uploadError.message);
+          setLoading(false);
+          return;
+        }
+        const { data: { publicUrl } } = supabase.storage.from("documentos").getPublicUrl(fileName);
+        termosUrl = publicUrl;
+      }
+      formData.delete("termos_anexo_arquivo");
+      formData.set("termos_anexo_url", termosUrl);
+
       if (isOnline) {
         const res = await upsertControladoriaFrota(formData);
         if (res && "error" in res) throw new Error(res.error);
@@ -135,13 +179,13 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       } else {
         const serialized = serializeFormData(formData);
         if (editingData?.id) {
-          const updated = { ...editingData, ...serialized, cnh_anexo_url: anexoUrl, _isPendingSync: true };
+          const updated = { ...editingData, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, _isPendingSync: true };
           await localDb.put("controladoria_frota", updated);
-          await localDb.addToQueue("controladoria_frota", "update", { id: editingData.id, ...serialized, cnh_anexo_url: anexoUrl });
+          await localDb.addToQueue("controladoria_frota", "update", { id: editingData.id, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl });
           setRegistros(prev => prev.map(r => r.id === editingData.id ? updated : r));
         } else {
           const tempId = `temp_cf_${Date.now()}`;
-          const newItem = { id: tempId, ...serialized, cnh_anexo_url: anexoUrl, filial_id: "MATRIZ", _isPendingSync: true };
+          const newItem = { id: tempId, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, filial_id: "MATRIZ", _isPendingSync: true };
           await localDb.put("controladoria_frota", newItem);
           await localDb.addToQueue("controladoria_frota", "create", serialized);
           setRegistros(prev => [...prev, newItem as any].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -257,6 +301,58 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
     XLSX.writeFile(workbook, "controladoria_gestao_frota.xlsx");
   };
 
+  // ── Histórico: labels, formatação e diff (mesmo padrão do Backlog/Custos) ──
+  const ACAO_LABEL: Record<AcaoHistoricoControladoriaFrota, string> = { CRIACAO: "Criação", EDICAO: "Edição", EXCLUSAO: "Exclusão" };
+  const ACAO_BADGE: Record<AcaoHistoricoControladoriaFrota, string> = {
+    CRIACAO: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+    EDICAO: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    EXCLUSAO: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+  };
+
+  const CAMPO_LABEL: Record<string, string> = {
+    matricula: "Matrícula", nome: "Nome", cargo: "Cargo", local: "Local", data_admissao: "Data de Admissão",
+    numero_cartao: "N° Cartão", cartao_ativo: "Ativo", termo_assinado_cartao: "Termo Assinado",
+    data_entrega_cartao: "Data de Entrega", termo_ciencia_monitoramento: "Ciência Monitoramento",
+    politica_frotas: "Política de Frotas", cartao_devolvido: "Cartão Devolvido",
+    cnh_numero: "Nº CNH", cnh_categoria: "Categoria CNH", cnh_validade: "Validade CNH",
+    cnh_anexo_url: "Anexo CNH", termos_anexo_url: "Anexo dos Termos", observacoes: "Observações",
+  };
+  const CAMPO_IGNORAR_HISTORICO = new Set(["id", "filial_id", "created_at", "updated_at", "_isPendingSync"]);
+
+  function formatarValorHistorico(campo: string, valor: any): string {
+    if (valor === null || valor === undefined || valor === "") return "-";
+    if (["data_admissao", "data_entrega_cartao", "cnh_validade"].includes(campo)) return formatarData(valor);
+    if (typeof valor === "boolean") return valor ? "Sim" : "Não";
+    if (campo === "cnh_anexo_url" || campo === "termos_anexo_url") return "Anexo enviado";
+    return String(valor);
+  }
+
+  function montarComparacaoHistorico(antes: any, depois: any) {
+    const chaves = Array.from(new Set([...(antes ? Object.keys(antes) : []), ...(depois ? Object.keys(depois) : [])]))
+      .filter(k => !CAMPO_IGNORAR_HISTORICO.has(k));
+    return chaves.map(campo => {
+      const valorAntes = antes ? antes[campo] : undefined;
+      const valorDepois = depois ? depois[campo] : undefined;
+      return {
+        campo,
+        label: CAMPO_LABEL[campo] || campo.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+        antes: formatarValorHistorico(campo, valorAntes),
+        depois: formatarValorHistorico(campo, valorDepois),
+        mudou: !!(antes && depois) && String(valorAntes) !== String(valorDepois),
+      };
+    });
+  }
+
+  const historicoFiltrado = useMemo(() => {
+    let lista = historico || [];
+    if (filtroAcaoHistorico) lista = lista.filter(h => h.acao === filtroAcaoHistorico);
+    const term = buscaHistorico.toLowerCase().trim();
+    if (term) {
+      lista = lista.filter(h => h.descricao?.toLowerCase().includes(term) || h.usuario_nome?.toLowerCase().includes(term));
+    }
+    return lista;
+  }, [historico, filtroAcaoHistorico, buscaHistorico]);
+
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[96rem] mx-auto w-full">
       <Script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" strategy="lazyOnload" />
@@ -296,6 +392,26 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
         </div>
       )}
 
+      {/* Abas */}
+      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800">
+        <button
+          onClick={() => setView("lista")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
+            view === "lista" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
+        >
+          <List size={15} /> Lista
+        </button>
+        <button
+          onClick={() => setView("historico")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
+            view === "historico" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
+        >
+          <History size={15} /> Histórico
+        </button>
+      </div>
+
+      {view === "lista" && (
+      <>
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
         <div className="relative flex-1 min-w-[220px]">
@@ -321,14 +437,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                {["Mat", "Nome", "Cargo", "Local", "Nº Cartão", "Ativo", "CNH Validade", "CNH Anexo", "Ações"].map(h => (
+                {["Mat", "Nome", "Cargo", "Local", "Nº Cartão", "Ativo", "CNH Validade", "CNH Anexo", "Termos", "Ações"].map(h => (
                   <th key={h} className={cn("px-3 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider", h === "Ações" ? "text-right" : "text-left")}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
               {filtrados.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum registro encontrado</td></tr>
+                <tr><td colSpan={10} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum registro encontrado</td></tr>
               ) : filtrados.map(item => {
                 const isDateNull = !item.cnh_validade;
                 const dias = isDateNull ? null : calcularDias(item.cnh_validade as string);
@@ -355,6 +471,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                       ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
                     </td>
                     <td className="px-3 py-2.5">
+                      {item.termos_anexo_url ? (
+                        <div className="flex items-center gap-2">
+                          <a href={item.termos_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-bold flex items-center gap-1"><Eye size={12} /> Ver</a>
+                          <a href={item.termos_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-blue-600 text-[10px] font-bold flex items-center gap-1"><Download size={12} /> Baixar</a>
+                        </div>
+                      ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
                       {!isVisitante && (
                         <div className="flex items-center justify-end gap-1">
                           <button title="Editar" onClick={() => abrirEditar(item)} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
@@ -374,6 +498,110 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
         </div>
         <div className="px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400">{filtrados.length} registro(s)</div>
       </div>
+      </>
+      )}
+
+      {view === "historico" && (
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={15} />
+              <input
+                value={buscaHistorico}
+                onChange={e => setBuscaHistorico(e.target.value)}
+                placeholder="Buscar por descrição ou usuário..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+            <select
+              value={filtroAcaoHistorico}
+              onChange={e => setFiltroAcaoHistorico(e.target.value)}
+              className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none"
+            >
+              <option value="">Todas as Ações</option>
+              <option value="CRIACAO">Criação</option>
+              <option value="EDICAO">Edição</option>
+              <option value="EXCLUSAO">Exclusão</option>
+            </select>
+          </div>
+
+          {historicoCarregando ? (
+            <div className="flex items-center justify-center py-16 text-zinc-400">
+              <RefreshCcw className="animate-spin" size={24} />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="text-[11px] uppercase">
+                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">Data/Hora</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center">Ação</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">Descrição</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">Usuário</th>
+                    <th className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center w-16">Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody className="text-zinc-700 dark:text-zinc-300 text-xs">
+                  {historicoFiltrado.map((h, idx) => (
+                    <Fragment key={h.id}>
+                      <tr className={idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : ""}>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 whitespace-nowrap">
+                          {new Date(h.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center">
+                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap", ACAO_BADGE[h.acao])}>
+                            {ACAO_LABEL[h.acao]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800">{h.descricao || "-"}</td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 whitespace-nowrap">{h.usuario_nome || "Sistema"}</td>
+                        <td className="px-3 py-2 border border-zinc-200 dark:border-zinc-800 text-center">
+                          {(h.dados_antes || h.dados_depois) && (
+                            <button onClick={() => setLinhaExpandidaHistorico(linhaExpandidaHistorico === h.id ? null : h.id)} className="p-1 text-zinc-400 hover:text-blue-600">
+                              {linhaExpandidaHistorico === h.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {linhaExpandidaHistorico === h.id && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-3 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60">
+                            <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                              <table className="w-full text-left border-collapse bg-white dark:bg-zinc-950">
+                                <thead className="text-[10px] uppercase sticky top-0">
+                                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                                    <th className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800">Campo</th>
+                                    {h.dados_antes && <th className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800">Antes</th>}
+                                    {h.dados_depois && <th className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800">Depois</th>}
+                                  </tr>
+                                </thead>
+                                <tbody className="text-[11px]">
+                                  {montarComparacaoHistorico(h.dados_antes, h.dados_depois).map(linha => (
+                                    <tr key={linha.campo} className={linha.mudou ? "bg-amber-50 dark:bg-amber-900/10" : ""}>
+                                      <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-600 dark:text-zinc-300 whitespace-nowrap">{linha.label}</td>
+                                      {h.dados_antes && <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">{linha.antes}</td>}
+                                      {h.dados_depois && <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-800 font-medium text-zinc-800 dark:text-zinc-100">{linha.depois}</td>}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                  {historicoFiltrado.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 border border-zinc-200 dark:border-zinc-800 text-center text-zinc-500">Nenhum registro de histórico encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal de lançamento */}
       {modalOpen && (
@@ -423,6 +651,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                     <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">{f.label}</span>
                   </label>
                 ))}
+              </div>
+              <div>
+                <label className={labelCls}>Anexo dos Termos Assinados (foto ou PDF)</label>
+                <input type="file" name="termos_anexo_arquivo" accept="image/*,application/pdf" className={inputCls} />
+                {termosUrlAtual && (
+                  <p className="text-xs text-blue-600 mt-1">Anexo atual: <a href={termosUrlAtual} target="_blank" rel="noreferrer" className="underline">Visualizar</a></p>
+                )}
+                {uploadingTermos && <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Enviando anexo...</p>}
               </div>
 
               <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">CNH do Condutor</p>
