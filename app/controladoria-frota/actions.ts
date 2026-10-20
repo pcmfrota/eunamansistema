@@ -28,6 +28,8 @@ export type ControladoriaFrota = {
   cnh_validade: string | null;
   cnh_anexo_url: string | null;
   termos_anexo_url: string | null;
+  curso_direcao_segura_validade: string | null;
+  curso_direcao_segura_anexo_url: string | null;
   observacoes: string | null;
   filial_id: string;
   created_at?: string;
@@ -88,6 +90,8 @@ export async function upsertControladoriaFrota(formData: FormData) {
     cnh_validade: campoData(formData, "cnh_validade"),
     cnh_anexo_url: campoData(formData, "cnh_anexo_url"),
     termos_anexo_url: campoData(formData, "termos_anexo_url"),
+    curso_direcao_segura_validade: campoData(formData, "curso_direcao_segura_validade"),
+    curso_direcao_segura_anexo_url: campoData(formData, "curso_direcao_segura_anexo_url"),
     observacoes: campoData(formData, "observacoes"),
     updated_at: new Date().toISOString(),
   };
@@ -296,6 +300,8 @@ export async function importarControladoriaFrota(rows: any[]) {
             cnh_validade: m.cnh_validade ?? existente.cnh_validade,
             cnh_anexo_url: existente.cnh_anexo_url,
             termos_anexo_url: existente.termos_anexo_url,
+            curso_direcao_segura_validade: existente.curso_direcao_segura_validade,
+            curso_direcao_segura_anexo_url: existente.curso_direcao_segura_anexo_url,
           },
         });
       } else {

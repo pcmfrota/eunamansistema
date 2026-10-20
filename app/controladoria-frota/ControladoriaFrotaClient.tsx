@@ -58,6 +58,8 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   const [anexoUrlAtual, setAnexoUrlAtual] = useState<string>("");
   const [termosUrlAtual, setTermosUrlAtual] = useState<string>("");
   const [uploadingTermos, setUploadingTermos] = useState(false);
+  const [cursoUrlAtual, setCursoUrlAtual] = useState<string>("");
+  const [uploadingCurso, setUploadingCurso] = useState(false);
 
   // ── Histórico (quem criou/editou/excluiu cada registro) — carregado sob
   // demanda na primeira vez que a aba é aberta, mesmo padrão do Backlog. ──
@@ -134,6 +136,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
     setEditingData(null);
     setAnexoUrlAtual("");
     setTermosUrlAtual("");
+    setCursoUrlAtual("");
     setModalOpen(true);
   };
 
@@ -141,6 +144,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
     setEditingData(item);
     setAnexoUrlAtual(item.cnh_anexo_url || "");
     setTermosUrlAtual(item.termos_anexo_url || "");
+    setCursoUrlAtual(item.curso_direcao_segura_anexo_url || "");
     setModalOpen(true);
   };
 
@@ -201,6 +205,31 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       formData.delete("termos_anexo_arquivo");
       formData.set("termos_anexo_url", termosUrl);
 
+      const cursoFile = formData.get("curso_direcao_segura_anexo_arquivo") as File;
+      let cursoUrl = cursoUrlAtual;
+      if (cursoFile && cursoFile.size > 0) {
+        if (!isOnline) {
+          alert("Não é possível anexar arquivo offline. Conecte-se à internet para enviar o certificado.");
+          setLoading(false);
+          return;
+        }
+        setUploadingCurso(true);
+        const supabase = createClient();
+        const ext = cursoFile.name.split(".").pop();
+        const fileName = `direcao-segura/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("documentos").upload(fileName, cursoFile);
+        setUploadingCurso(false);
+        if (uploadError) {
+          alert("Erro ao enviar anexo do curso: " + uploadError.message);
+          setLoading(false);
+          return;
+        }
+        const { data: { publicUrl } } = supabase.storage.from("documentos").getPublicUrl(fileName);
+        cursoUrl = publicUrl;
+      }
+      formData.delete("curso_direcao_segura_anexo_arquivo");
+      formData.set("curso_direcao_segura_anexo_url", cursoUrl);
+
       if (isOnline) {
         const res = await upsertControladoriaFrota(formData);
         if (res && "error" in res) throw new Error(res.error);
@@ -214,13 +243,13 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       } else {
         const serialized = serializeFormData(formData);
         if (editingData?.id) {
-          const updated = { ...editingData, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, _isPendingSync: true };
+          const updated = { ...editingData, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, curso_direcao_segura_anexo_url: cursoUrl, _isPendingSync: true };
           await localDb.put("controladoria_frota", updated);
-          await localDb.addToQueue("controladoria_frota", "update", { id: editingData.id, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl });
+          await localDb.addToQueue("controladoria_frota", "update", { id: editingData.id, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, curso_direcao_segura_anexo_url: cursoUrl });
           setRegistros(prev => prev.map(r => r.id === editingData.id ? updated : r));
         } else {
           const tempId = `temp_cf_${Date.now()}`;
-          const newItem = { id: tempId, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, filial_id: "MATRIZ", _isPendingSync: true };
+          const newItem = { id: tempId, ...serialized, cnh_anexo_url: anexoUrl, termos_anexo_url: termosUrl, curso_direcao_segura_anexo_url: cursoUrl, filial_id: "MATRIZ", _isPendingSync: true };
           await localDb.put("controladoria_frota", newItem);
           await localDb.addToQueue("controladoria_frota", "create", serialized);
           setRegistros(prev => [...prev, newItem as any].sort((a, b) => a.nome.localeCompare(b.nome)));
@@ -329,6 +358,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       "Política de frotas": r.politica_frotas === true ? "SIM" : r.politica_frotas === false ? "NÃO" : "",
       "Cartão devolvido": r.cartao_devolvido === true ? "SIM" : r.cartao_devolvido === false ? "NÃO" : "",
       "CNH Número": r.cnh_numero || "", "CNH Categoria": r.cnh_categoria || "", "CNH Validade": formatarData(r.cnh_validade),
+      "Validade Direção Segura": formatarData(r.curso_direcao_segura_validade),
     }));
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
@@ -351,14 +381,15 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
     politica_frotas: "Política de Frotas", cartao_devolvido: "Cartão Devolvido",
     cnh_numero: "Nº CNH", cnh_categoria: "Categoria CNH", cnh_validade: "Validade CNH",
     cnh_anexo_url: "Anexo CNH", termos_anexo_url: "Anexo dos Termos", observacoes: "Observações",
+    curso_direcao_segura_validade: "Validade Direção Segura", curso_direcao_segura_anexo_url: "Anexo Direção Segura",
   };
   const CAMPO_IGNORAR_HISTORICO = new Set(["id", "filial_id", "created_at", "updated_at", "_isPendingSync"]);
 
   function formatarValorHistorico(campo: string, valor: any): string {
     if (valor === null || valor === undefined || valor === "") return "-";
-    if (["data_admissao", "data_entrega_cartao", "cnh_validade"].includes(campo)) return formatarData(valor);
+    if (["data_admissao", "data_entrega_cartao", "cnh_validade", "curso_direcao_segura_validade"].includes(campo)) return formatarData(valor);
     if (typeof valor === "boolean") return valor ? "Sim" : "Não";
-    if (campo === "cnh_anexo_url" || campo === "termos_anexo_url") return "Anexo enviado";
+    if (campo === "cnh_anexo_url" || campo === "termos_anexo_url" || campo === "curso_direcao_segura_anexo_url") return "Anexo enviado";
     return String(valor);
   }
 
@@ -479,14 +510,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                {["Mat", "Nome", "CPF", "Cargo", "Local", "Nº Cartão", "Ativo", "CNH Validade", "CNH Anexo", "Termos", "Ações"].map(h => (
+                {["Mat", "Nome", "CPF", "Cargo", "Local", "Nº Cartão", "Ativo", "CNH Validade", "CNH Anexo", "Termos", "Direção Segura", "Ações"].map(h => (
                   <th key={h} className={cn("px-3 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider", h === "Ações" ? "text-right" : "text-left")}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
               {filtrados.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum registro encontrado</td></tr>
+                <tr><td colSpan={12} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum registro encontrado</td></tr>
               ) : filtrados.map(item => {
                 const isDateNull = !item.cnh_validade;
                 const dias = isDateNull ? null : calcularDias(item.cnh_validade as string);
@@ -518,6 +549,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                         <div className="flex items-center gap-2">
                           <a href={item.termos_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-bold flex items-center gap-1"><Eye size={12} /> Ver</a>
                           <a href={item.termos_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-blue-600 text-[10px] font-bold flex items-center gap-1"><Download size={12} /> Baixar</a>
+                        </div>
+                      ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {item.curso_direcao_segura_anexo_url ? (
+                        <div className="flex items-center gap-2">
+                          <a href={item.curso_direcao_segura_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-bold flex items-center gap-1"><Eye size={12} /> Ver</a>
+                          <a href={item.curso_direcao_segura_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-blue-600 text-[10px] font-bold flex items-center gap-1"><Download size={12} /> Baixar</a>
                         </div>
                       ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
                     </td>
@@ -795,6 +834,20 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                 )}
                 {uploadingTermos && <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Enviando anexo...</p>}
               </div>
+
+              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">Curso de Direção Segura</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className={labelCls}>Validade do Curso</label>
+                  <input name="curso_direcao_segura_validade" type="date" defaultValue={editingData?.curso_direcao_segura_validade || ""} className={inputCls} /></div>
+                <div>
+                  <label className={labelCls}>Anexo do Certificado (foto ou PDF)</label>
+                  <input type="file" name="curso_direcao_segura_anexo_arquivo" accept="image/*,application/pdf" className={inputCls} />
+                </div>
+              </div>
+              {cursoUrlAtual && (
+                <p className="text-xs text-blue-600 -mt-2">Anexo atual: <a href={cursoUrlAtual} target="_blank" rel="noreferrer" className="underline">Visualizar</a></p>
+              )}
+              {uploadingCurso && <p className="text-xs text-zinc-400 -mt-2 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Enviando anexo...</p>}
 
               <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">CNH do Condutor</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
