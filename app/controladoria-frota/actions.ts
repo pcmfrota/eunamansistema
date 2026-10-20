@@ -208,7 +208,8 @@ export async function importarControladoriaFrota(rows: any[]) {
     }).filter(Boolean) as any[];
 
     if (mapped.length === 0) {
-      return { error: "Nenhum registro válido encontrado para importação (coluna Nome não encontrada)." };
+      const colunasEncontradas = rows.length > 0 ? Object.keys(rows[0]).join(", ") : "(planilha sem linhas lidas)";
+      return { error: `Nenhum registro válido encontrado (coluna "Nome" não reconhecida). Colunas detectadas na planilha: ${colunasEncontradas || "nenhuma"}.` };
     }
 
     // Substitui quem já existe (mesmo nome) pra reimportar o mesmo relatório sem duplicar,

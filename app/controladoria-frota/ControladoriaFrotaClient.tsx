@@ -202,7 +202,20 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
         const workbook = XLSX.read(fileData, { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        // Relatórios como o "Relação de Cartão de Acesso" trazem uma linha de título
+        // (ex: "RELAÇÃO DE CARTÃO DE ACESSO - INVIO TRACK") ANTES da linha de
+        // cabeçalhos de verdade — sheet_to_json() sem range usaria essa linha de
+        // título como se fossem os nomes das colunas, e a coluna "Nome" nunca seria
+        // encontrada. Varre as primeiras linhas brutas pra achar a que realmente
+        // contém "nome" como célula, e só então lê a planilha a partir dali.
+        const linhasCruas: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+        let linhaCabecalho = 0;
+        for (let i = 0; i < Math.min(linhasCruas.length, 10); i++) {
+          const temNome = (linhasCruas[i] || []).some(c => String(c ?? "").trim().toLowerCase() === "nome");
+          if (temNome) { linhaCabecalho = i; break; }
+        }
+        const json = XLSX.utils.sheet_to_json(worksheet, { range: linhaCabecalho });
 
         const res = await importarControladoriaFrota(json);
         if (res && "error" in res) {
