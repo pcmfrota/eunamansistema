@@ -247,7 +247,10 @@ export default function OSFormModal({
   // essenciais pro lançamento rápido em campo; os de classificação/escritório
   // (Tipo de Manutenção, Reserva, Sistema/Sub-Sistema/Componente) ficam ocultos
   // via CSS (não desmontados) pra não zerar valor já salvo ao editar no celular.
-  const isAndroidApp = typeof window !== "undefined" && !!(window as any).EunamanApp;
+  const isAndroidApp = typeof window !== "undefined" && (
+    !!(window as any).EunamanApp ||
+    (typeof navigator !== "undefined" && navigator.userAgent.includes("EunamanApp"))
+  );
   const [loading, setLoading] = useState(false);
   const isSubmitting = useRef(false); // Guard contra duplo clique
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
