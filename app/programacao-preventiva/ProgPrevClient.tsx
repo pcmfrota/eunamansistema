@@ -257,12 +257,18 @@ export default function ProgPrevClient({
   )
 
   // ── Computed derivations from progSemanais ──────────────────────────
-  // 1. Planejamento mensal
+  // 1. Planejamento mensal — por EQUIPAMENTO distinto, igual ao % Execução do
+  // Provisionamento (TabProvisionamento): uma placa reprogramada pra outra semana
+  // do mesmo mês gera mais de um lançamento/linha, mas é o mesmo caminhão — contar
+  // por linha dilui o percentual e não bate com o Provisionamento. Ver mesma lógica
+  // em placasUnicas/concluidosEquip logo abaixo, em TabProvisionamento.
   const mensaisComputado = useMemo(() => MESES.map((_, i) => {
     const mes = i + 1
     const itens = progSemanais.filter(p => p.mes_numero === mes)
     if (itens.length === 0) return { mes, mesAbr: MESES_A[i], meta: 100, realizado: null }
-    const pct = Math.round(itens.filter(p => p.status === "CONCLUÍDO").length / itens.length * 100)
+    const placasUnicas = new Set(itens.map(p => p.placa).filter((v): v is string => !!v))
+    const placasConcluidas = new Set(itens.filter(p => p.status === "CONCLUÍDO").map(p => p.placa).filter((v): v is string => !!v))
+    const pct = placasUnicas.size > 0 ? Math.round(placasConcluidas.size / placasUnicas.size * 100) : 0
     return { mes, mesAbr: MESES_A[i], meta: 100, realizado: pct }
   }), [progSemanais])
 
