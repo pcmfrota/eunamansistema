@@ -80,7 +80,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return registros.filter(r => {
-      if (termo && !(`${r.nome} ${r.matricula || ""} ${r.cargo || ""}`.toLowerCase().includes(termo))) return false;
+      if (termo && !(`${r.nome} ${r.matricula || ""} ${r.cargo || ""} ${r.cpf || ""}`.toLowerCase().includes(termo))) return false;
       const isDateNull = !r.cnh_validade;
       const dias = isDateNull ? null : calcularDias(r.cnh_validade as string);
       if (filtroCnh === "sem_data" && !isDateNull) return false;
@@ -320,7 +320,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
     const XLSX = (window as any).XLSX;
     if (!XLSX) { alert("A biblioteca do Excel ainda está carregando."); return; }
     const rows = filtrados.map(r => ({
-      Mat: r.matricula || "", Nome: r.nome, "Cargo Básico Descrição": r.cargo || "", Local: r.local || "",
+      Mat: r.matricula || "", Nome: r.nome, CPF: r.cpf || "", "Cargo Básico Descrição": r.cargo || "", Local: r.local || "",
       Admissão: formatarData(r.data_admissao), "N° Cartão": r.numero_cartao || "",
       Ativo: r.cartao_ativo === true ? "SIM" : r.cartao_ativo === false ? "NÃO" : "",
       "Termo assinado cartão ?": r.termo_assinado_cartao === true ? "SIM" : r.termo_assinado_cartao === false ? "NÃO" : "",
@@ -345,7 +345,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   };
 
   const CAMPO_LABEL: Record<string, string> = {
-    matricula: "Matrícula", nome: "Nome", cargo: "Cargo", local: "Local", data_admissao: "Data de Admissão",
+    matricula: "Matrícula", nome: "Nome", cpf: "CPF", cargo: "Cargo", local: "Local", data_admissao: "Data de Admissão",
     numero_cartao: "N° Cartão", cartao_ativo: "Ativo", termo_assinado_cartao: "Termo Assinado",
     data_entrega_cartao: "Data de Entrega", termo_ciencia_monitoramento: "Ciência Monitoramento",
     politica_frotas: "Política de Frotas", cartao_devolvido: "Cartão Devolvido",
@@ -459,7 +459,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={15} />
           <input
-            type="text" placeholder="Buscar por nome, matrícula ou cargo..." value={busca}
+            type="text" placeholder="Buscar por nome, matrícula, CPF ou cargo..." value={busca}
             onChange={e => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-blue-500/30"
           />
@@ -479,14 +479,14 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                {["Mat", "Nome", "Cargo", "Local", "Nº Cartão", "Ativo", "CNH Validade", "CNH Anexo", "Termos", "Ações"].map(h => (
+                {["Mat", "Nome", "CPF", "Cargo", "Local", "Nº Cartão", "Ativo", "CNH Validade", "CNH Anexo", "Termos", "Ações"].map(h => (
                   <th key={h} className={cn("px-3 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider", h === "Ações" ? "text-right" : "text-left")}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
               {filtrados.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum registro encontrado</td></tr>
+                <tr><td colSpan={11} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum registro encontrado</td></tr>
               ) : filtrados.map(item => {
                 const isDateNull = !item.cnh_validade;
                 const dias = isDateNull ? null : calcularDias(item.cnh_validade as string);
@@ -494,6 +494,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                   <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
                     <td className="px-3 py-2.5 font-mono text-[12px] text-zinc-500">{item.matricula || "-"}</td>
                     <td className="px-3 py-2.5 font-semibold text-zinc-800 dark:text-zinc-200">{item.nome}</td>
+                    <td className="px-3 py-2.5 font-mono text-[11px] text-zinc-500">{item.cpf || "-"}</td>
                     <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{item.cargo || "-"}</td>
                     <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{item.local || "-"}</td>
                     <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400 text-[11px]">{item.numero_cartao || "-"}</td>
@@ -755,6 +756,8 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                   <input name="nome" required defaultValue={editingData?.nome || ""} className={inputCls} /></div>
                 <div><label className={labelCls}>Matrícula</label>
                   <input name="matricula" defaultValue={editingData?.matricula || ""} className={inputCls} /></div>
+                <div><label className={labelCls}>CPF</label>
+                  <input name="cpf" placeholder="000.000.000-00" defaultValue={editingData?.cpf || ""} className={inputCls} /></div>
                 <div><label className={labelCls}>Cargo</label>
                   <input name="cargo" defaultValue={editingData?.cargo || ""} className={inputCls} /></div>
                 <div><label className={labelCls}>Local</label>

@@ -12,6 +12,7 @@ export type ControladoriaFrota = {
   id: string;
   matricula: string | null;
   nome: string;
+  cpf: string | null;
   cargo: string | null;
   local: string | null;
   data_admissao: string | null;
@@ -71,6 +72,7 @@ export async function upsertControladoriaFrota(formData: FormData) {
   const payload = {
     matricula: campoData(formData, "matricula"),
     nome,
+    cpf: campoData(formData, "cpf"),
     cargo: campoData(formData, "cargo"),
     local: campoData(formData, "local"),
     data_admissao: campoData(formData, "data_admissao"),
@@ -229,6 +231,7 @@ export async function importarControladoriaFrota(rows: any[]) {
       return {
         matricula: getVal(row, ["mat", "matricula", "matrícula"]) ? String(getVal(row, ["mat", "matricula", "matrícula"])).trim() : null,
         nome,
+        cpf: getVal(row, ["cpf"]) ? String(getVal(row, ["cpf"])).trim() : null,
         cargo: getVal(row, ["cargo básico descrição", "cargo basico descricao", "cargo"]) ? String(getVal(row, ["cargo básico descrição", "cargo basico descricao", "cargo"])).trim() : null,
         local: getVal(row, ["local"]) ? String(getVal(row, ["local"])).trim() : null,
         data_admissao: parseData(getVal(row, ["admissão", "admissao", "data_admissao"])),
@@ -251,16 +254,37 @@ export async function importarControladoriaFrota(rows: any[]) {
       return { error: `Nenhum registro válido encontrado (coluna "Nome" não reconhecida). Colunas detectadas na planilha: ${colunasEncontradas || "nenhuma"}.` };
     }
 
-    // Substitui quem já existe (mesmo nome) pra reimportar o mesmo relatório sem duplicar,
+    // Uma mesma pessoa pode aparecer mais de uma vez na própria planilha (ex: reemissão
+    // de cartão) — sem isso, cada ocorrência vira uma linha nova em vez de uma atualizar
+    // a outra, já que a checagem contra o banco (abaixo) é feita antes do loop. Dedupe
+    // por matrícula (quando houver) ou nome, mantendo a ÚLTIMA ocorrência (mais recente).
+    const porChaveNaPlanilha = new Map<string, any>();
+    for (const m of mapped) {
+      porChaveNaPlanilha.set(m.matricula || m.nome, m);
+    }
+    const mappedSemDuplicata = Array.from(porChaveNaPlanilha.values());
+
+    // Substitui quem já existe — por matrícula quando ambos os lados tiverem uma (mais
+    // confiável), senão por nome — pra reimportar o mesmo relatório sem duplicar,
     // preservando CNH/anexo já lançados manualmente antes (merge, não substituição total).
-    const nomes = mapped.map(m => m.nome);
-    const { data: existentes } = await supabase.from("controladoria_frota").select("*").in("nome", nomes);
-    const porNome = new Map((existentes || []).map((e: any) => [e.nome, e]));
+    const nomes = mappedSemDuplicata.map(m => m.nome);
+    const matriculas = mappedSemDuplicata.map(m => m.matricula).filter(Boolean) as string[];
+    const [{ data: porNomeRows }, { data: porMatriculaRows }] = await Promise.all([
+      supabase.from("controladoria_frota").select("*").in("nome", nomes),
+      matriculas.length > 0
+        ? supabase.from("controladoria_frota").select("*").in("matricula", matriculas)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const existentesPorId = new Map<string, any>();
+    [...(porNomeRows || []), ...(porMatriculaRows || [])].forEach(e => existentesPorId.set(e.id, e));
+    const existentes = Array.from(existentesPorId.values());
+    const porMatricula = new Map(existentes.filter((e: any) => e.matricula).map((e: any) => [e.matricula, e]));
+    const porNome = new Map(existentes.map((e: any) => [e.nome, e]));
 
     const paraInserir: any[] = [];
     const paraAtualizar: { id: string; payload: any }[] = [];
-    for (const m of mapped) {
-      const existente = porNome.get(m.nome);
+    for (const m of mappedSemDuplicata) {
+      const existente = (m.matricula && porMatricula.get(m.matricula)) || porNome.get(m.nome);
       if (existente) {
         paraAtualizar.push({
           id: existente.id,
@@ -271,6 +295,7 @@ export async function importarControladoriaFrota(rows: any[]) {
             cnh_categoria: m.cnh_categoria ?? existente.cnh_categoria,
             cnh_validade: m.cnh_validade ?? existente.cnh_validade,
             cnh_anexo_url: existente.cnh_anexo_url,
+            termos_anexo_url: existente.termos_anexo_url,
           },
         });
       } else {
