@@ -66,6 +66,7 @@ const navigation = [
   { name: 'Controle de Lavagens',     path: '/lavagens',               icon: ModernWaterIcon },
   { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
   { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
+  { name: 'Controladoria de Gestão',  path: '/controladoria-frota',    icon: ShieldCheck },
   { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
   { name: 'Controle de Custos',        path: '/custos',                 icon: BadgeDollarSign },
   { name: 'Controle de Insumos',       path: '/insumos',                icon: Fuel },

@@ -17,6 +17,7 @@ const MODULO_PERMISSOES: Record<string, string[]> = {
   '/perfil':                   ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
   '/checklist-mecanicos':      ['admin', 'pcm', 'gestao', 'mecanico'],
   '/documentos':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
+  '/controladoria-frota':      ['admin', 'pcm', 'gestao'],
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
@@ -162,7 +163,7 @@ export async function middleware(request: NextRequest) {
       }
     } catch {
       // Fallbacks locais de segurança se der erro de conexão
-      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos'];
+      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/controladoria-frota'];
       if (userRole === 'visitante') userPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
       else if (userRole === 'mecanico') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
       else if (userRole === 'supervisor_manutencao') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];

@@ -224,6 +224,9 @@ const syncTasks: Record<
 
   insumos_skid_movimentos: (supabase) =>
     supabase.from("insumos_skid_movimentos").select("*"),
+
+  controladoria_frota: (supabase) =>
+    supabase.from("controladoria_frota").select("*").order("nome", { ascending: true }),
 };
 
 /**

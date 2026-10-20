@@ -27,7 +27,8 @@ import {
   Plus,
   Wrench,
   BadgeDollarSign,
-  Fuel
+  Fuel,
+  ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -160,6 +161,13 @@ const portalItems = [
     desc: "Gerenciamento de CIV/CIPP, Tacógrafo e Laudos.",
     icon: Clipboard,
     color: "from-orange-500 to-red-600 bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25 dark:border-orange-400/20"
+  },
+  {
+    name: "Controladoria de Gestão de Frota",
+    path: "/controladoria-frota",
+    desc: "Cartão de acesso, termos e vencimento de CNH dos condutores.",
+    icon: ShieldCheck,
+    color: "from-indigo-500 to-blue-600 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25 dark:border-indigo-400/20"
   },
   {
     name: "Controle de Custos",

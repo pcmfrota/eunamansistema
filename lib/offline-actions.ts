@@ -75,6 +75,11 @@ import {
 } from "@/app/documentos/actions";
 
 import {
+  upsertControladoriaFrota,
+  excluirControladoriaFrota
+} from "@/app/controladoria-frota/actions";
+
+import {
   salvarFichaMaoObra,
   excluirFichaMaoObra,
   salvarApontamento,
@@ -369,6 +374,16 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await deleteLaudoImplemento(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "controladoria_frota") {
+      if (action === "create" || action === "update") {
+        const formData = deserializeToFormData(payload);
+        const res = await upsertControladoriaFrota(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirControladoriaFrota(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }
