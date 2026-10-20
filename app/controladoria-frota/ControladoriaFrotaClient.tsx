@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, Fragment } from "react";
-import { ShieldCheck, Plus, Edit2, Trash2, X, Search, Eye, Download, Upload, Loader2, CreditCard, AlertTriangle, FileText, ChevronDown, ChevronUp, RefreshCcw, History, List } from "lucide-react";
+import { ShieldCheck, Plus, Edit2, Trash2, X, Search, Eye, Download, Upload, Loader2, CreditCard, AlertTriangle, FileText, ChevronDown, ChevronUp, RefreshCcw, History, List, BarChart2, Users } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
@@ -60,7 +61,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
 
   // ── Histórico (quem criou/editou/excluiu cada registro) — carregado sob
   // demanda na primeira vez que a aba é aberta, mesmo padrão do Backlog. ──
-  const [view, setView] = useState<"lista" | "historico">("lista");
+  const [view, setView] = useState<"lista" | "dashboard" | "historico">("lista");
   const [historico, setHistorico] = useState<HistoricoControladoriaFrota[] | null>(null);
   const [historicoCarregando, setHistoricoCarregando] = useState(false);
   const [buscaHistorico, setBuscaHistorico] = useState("");
@@ -94,6 +95,40 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
     () => registros.filter(r => r.cnh_validade && calcularDias(r.cnh_validade) <= 0).length,
     [registros]
   );
+
+  // ── Dashboard de CNH ──────────────────────────────────────────────────────
+  const STATUS_CNH_COLOR = { vencida: "#dc2626", proxima: "#facc15", em_dia: "#059669", sem_data: "#a1a1aa" };
+  const dashboardCnh = useMemo(() => {
+    let vencida = 0, proxima = 0, emDia = 0, semData = 0;
+    const porLocalVencida = new Map<string, number>();
+    const comDias = registros.map(r => {
+      if (!r.cnh_validade) { semData++; return { ...r, dias: null as number | null }; }
+      const dias = calcularDias(r.cnh_validade);
+      if (dias <= 0) { vencida++; porLocalVencida.set(r.local || "Sem local", (porLocalVencida.get(r.local || "Sem local") || 0) + 1); }
+      else if (dias <= 30) proxima++;
+      else emDia++;
+      return { ...r, dias };
+    });
+
+    const statusData = [
+      { name: "Vencida", value: vencida, color: STATUS_CNH_COLOR.vencida },
+      { name: "Vence em 30 dias", value: proxima, color: STATUS_CNH_COLOR.proxima },
+      { name: "Em dia", value: emDia, color: STATUS_CNH_COLOR.em_dia },
+      { name: "Sem validade", value: semData, color: STATUS_CNH_COLOR.sem_data },
+    ].filter(d => d.value > 0);
+
+    const porLocalData = Array.from(porLocalVencida.entries())
+      .map(([local, total]) => ({ local, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    const urgentes = comDias
+      .filter(r => r.dias !== null)
+      .sort((a, b) => (a.dias as number) - (b.dias as number))
+      .slice(0, 15);
+
+    return { total: registros.length, vencida, proxima, emDia, semData, statusData, porLocalData, urgentes };
+  }, [registros]);
 
   const abrirNovo = () => {
     setEditingData(null);
@@ -402,6 +437,13 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
           <List size={15} /> Lista
         </button>
         <button
+          onClick={() => setView("dashboard")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
+            view === "dashboard" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
+        >
+          <BarChart2 size={15} /> Dashboard
+        </button>
+        <button
           onClick={() => setView("historico")}
           className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
             view === "historico" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
@@ -499,6 +541,96 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
         <div className="px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400">{filtrados.length} registro(s)</div>
       </div>
       </>
+      )}
+
+      {view === "dashboard" && (
+        <div className="flex flex-col gap-6">
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { label: "Total de Condutores", value: dashboardCnh.total, color: "#2563eb", icon: Users },
+              { label: "CNH Vencida", value: dashboardCnh.vencida, color: STATUS_CNH_COLOR.vencida, icon: AlertTriangle },
+              { label: "Vence em 30 dias", value: dashboardCnh.proxima, color: STATUS_CNH_COLOR.proxima, icon: AlertTriangle },
+              { label: "CNH em Dia", value: dashboardCnh.emDia, color: STATUS_CNH_COLOR.em_dia, icon: ShieldCheck },
+              { label: "Sem Validade Cadastrada", value: dashboardCnh.semData, color: STATUS_CNH_COLOR.sem_data, icon: FileText },
+            ].map(k => (
+              <div key={k.label} className="relative rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 overflow-hidden">
+                <div className="absolute top-0 left-0 bottom-0 w-1 rounded-l-2xl" style={{ background: k.color }} />
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{k.label}</p>
+                <p className="text-3xl font-black mt-1" style={{ color: k.color }}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Pizza: distribuição por status */}
+            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
+              <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-3">Status da CNH</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={dashboardCnh.statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
+                      {dashboardCnh.statusData.map((entry, i) => <Cell key={i} fill={entry.color} stroke="none" />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Barras: CNH vencida por local */}
+            <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
+              <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-3">CNH Vencida por Local</h3>
+              <div className="h-64">
+                {dashboardCnh.porLocalData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-zinc-400">Nenhuma CNH vencida 🎉</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboardCnh.porLocalData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="local" width={110} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="total" fill={STATUS_CNH_COLOR.vencida} radius={[0, 4, 4, 0]} barSize={18} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela: mais urgentes */}
+          <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800">
+              <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Mais Urgentes</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                    {["Nome", "Local", "Cargo", "Validade CNH", "Situação"].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-blue-500 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
+                  {dashboardCnh.urgentes.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-10 text-center text-zinc-400 text-sm">Nenhum condutor com CNH cadastrada</td></tr>
+                  ) : dashboardCnh.urgentes.map(r => (
+                    <tr key={r.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                      <td className="px-3 py-2.5 font-semibold text-zinc-800 dark:text-zinc-200">{r.nome}</td>
+                      <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{r.local || "-"}</td>
+                      <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{r.cargo || "-"}</td>
+                      <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{formatarData(r.cnh_validade)}</td>
+                      <td className="px-3 py-2.5">{getCnhBadge(r.dias)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {view === "historico" && (

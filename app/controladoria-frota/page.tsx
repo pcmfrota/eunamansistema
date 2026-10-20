@@ -31,6 +31,13 @@ export default function ControladoriaFrotaPage() {
             const fresh = await localDb.getAll("controladoria_frota");
             if (active) setRegistros(fresh);
           }
+
+          // Checagem de CNH vencida "sob demanda" (sem cron no projeto) — dispara
+          // no máximo uma notificação por registro a cada poucos dias, ver o
+          // throttle em verificarAlertasCnhVencida (actions.ts).
+          import("./actions").then(({ verificarAlertasCnhVencida }) => {
+            verificarAlertasCnhVencida().catch(() => {});
+          });
         }
       } catch (err) {
         console.error("Erro ao carregar controladoria de frota:", err);

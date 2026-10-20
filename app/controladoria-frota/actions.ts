@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarExclusao, registrarExclusoesEmLote } from "@/lib/audit-log";
 import { registrarHistoricoControladoriaFrota, HistoricoControladoriaFrota } from "@/lib/controladoria-frota-historico";
+import { notificarPapeis } from "@/lib/notificacoes";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -322,6 +323,50 @@ export async function excluirControladoriaFrotaEmLote(ids: string[]) {
 
     revalidatePath("/controladoria-frota");
     return { success: true };
+  } catch (err: any) {
+    return { error: err.message || String(err) };
+  }
+}
+
+// ── ALERTA DE CNH VENCIDA ──────────────────────────────────────────────────────
+// Não há job agendado (cron) no projeto — a checagem roda "sob demanda", disparada
+// pelo carregamento da página (ver page.tsx), que é naturalmente frequente o
+// bastante pra quem usa o sistema. Pra não disparar a mesma notificação a cada
+// visita, cada registro só é reavisado depois de alguns dias (cnh_alerta_enviado_em).
+const DIAS_ENTRE_REALERTAS = 7;
+
+export async function verificarAlertasCnhVencida() {
+  try {
+    const supabase = createClient();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const limiteReAlerta = new Date(Date.now() - DIAS_ENTRE_REALERTAS * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: vencidas, error } = await supabase
+      .from("controladoria_frota")
+      .select("id, nome, cnh_validade, cnh_alerta_enviado_em")
+      .not("cnh_validade", "is", null)
+      .lte("cnh_validade", hoje);
+    if (error) return { error: error.message };
+
+    const paraAlertar = (vencidas || []).filter(
+      v => !v.cnh_alerta_enviado_em || v.cnh_alerta_enviado_em < limiteReAlerta
+    );
+    if (paraAlertar.length === 0) return { success: true, alertados: 0 };
+
+    const nomes = paraAlertar.map(v => v.nome).join(", ");
+    await notificarPapeis(["admin", "pcm"], {
+      tipo: "cnh_vencida",
+      titulo: paraAlertar.length === 1 ? "CNH vencida" : `${paraAlertar.length} CNHs vencidas`,
+      mensagem: `${nomes} — confira a Controladoria de Gestão de Frota.`,
+      link: "/controladoria-frota",
+    });
+
+    await supabase
+      .from("controladoria_frota")
+      .update({ cnh_alerta_enviado_em: new Date().toISOString() })
+      .in("id", paraAlertar.map(v => v.id));
+
+    return { success: true, alertados: paraAlertar.length };
   } catch (err: any) {
     return { error: err.message || String(err) };
   }

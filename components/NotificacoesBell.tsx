@@ -39,7 +39,7 @@ export default function NotificacoesBell() {
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const podeReceber = profile?.role === 'admin' || profile?.role === 'supervisor_manutencao'
+  const podeReceber = profile?.role === 'admin' || profile?.role === 'pcm' || profile?.role === 'supervisor_manutencao'
 
   const carregar = async () => {
     const res: any = await getMinhasNotificacoes(20)
