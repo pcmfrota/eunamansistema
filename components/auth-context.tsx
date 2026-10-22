@@ -378,8 +378,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
-        // Remove cookie de papel do usuário
-        document.cookie = 'x-user-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+
+        // Limpeza explícita de TODOS os cookies de sessão/papel. Confirmado com teste
+        // real contra o site em produção (Playwright, inspecionando os cookies antes/depois
+        // do logout): supabase.auth.signOut() NÃO estava limpando de fato o cookie
+        // sb-<project>-auth-token no navegador — ele sobrevivia intacto, e a próxima
+        // página (/login), ao montar do zero, achava essa sessão "válida" via getSession(),
+        // relogava o usuário sozinho e reescrevia x-user-role/x-user-filial/x-user-permissions,
+        // dando a impressão de que "nada" tinha sido limpo. Por isso limpamos aqui, de forma
+        // explícita e síncrona, o cookie de sessão do Supabase (pelo nome real, calculado a
+        // partir do project ref) além dos cookies auxiliares de papel/filial/permissões.
+        const expirePast = 'expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;';
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const projectRef = supabaseUrl.split('.')[0].split('//')[1];
+        if (projectRef) {
+          const cookieBase = `sb-${projectRef}-auth-token`;
+          [cookieBase, `${cookieBase}.0`, `${cookieBase}.1`, `${cookieBase}-code-verifier`].forEach(name => {
+            document.cookie = `${name}=; ${expirePast}`;
+          });
+        }
+        document.cookie = `x-user-role=; ${expirePast}`;
+        document.cookie = `x-user-filial=; ${expirePast}`;
+        document.cookie = `x-user-permissions=; ${expirePast}`;
       }
 
       setUser(null);
