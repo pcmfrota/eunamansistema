@@ -469,10 +469,10 @@ export default function ChecklistFrotaClient({
   // quando o usuário termina de preenchê-la (todos os itens respondidos, ou
   // assinatura concluída) — avançando automaticamente para a próxima seção.
   const sequenciaSecoes = useMemo(
-    () => ["geral", ...secoesAtuais.map(({ sec }) => sec.t), "avarias", "obs", ...SIGS.map(s => s.k)],
+    () => ["identificacao", "geral", ...secoesAtuais.map(({ sec }) => sec.t), "avarias", "obs", ...SIGS.map(s => s.k)],
     [secoesAtuais]
   );
-  const [secaoAberta, setSecaoAberta] = useState<string | null>("geral");
+  const [secaoAberta, setSecaoAberta] = useState<string | null>("identificacao");
 
   useEffect(() => {
     if (secaoAberta && !sequenciaSecoes.includes(secaoAberta)) setSecaoAberta(sequenciaSecoes[0] ?? null);
@@ -488,6 +488,13 @@ export default function ChecklistFrotaClient({
     });
   };
 
+  // Identificação com todos os campos obrigatórios preenchidos -> fecha e avança sozinha
+  useEffect(() => {
+    if (secaoAberta !== "identificacao") return;
+    if (ID_FIELDS.every(f => !f.req || !!S.id[f.k]?.trim())) avancarSecao("identificacao");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [S.id, secaoAberta]);
+
   // Seção de itens 100% respondida -> fecha e avança sozinha
   useEffect(() => {
     if (!secaoAberta) return;
@@ -498,7 +505,7 @@ export default function ChecklistFrotaClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [S.items, secaoAberta, secoesAtuais]);
 
-  const abrirNovo = () => { setS(estadoVazio()); setErroMsg(null); setSecaoAberta("geral"); setModalOpen(true); };
+  const abrirNovo = () => { setS(estadoVazio()); setErroMsg(null); setSecaoAberta("identificacao"); setModalOpen(true); };
 
   const handleSalvar = async () => {
     setErroMsg(null);
@@ -758,7 +765,12 @@ export default function ChecklistFrotaClient({
 
             <div className="overflow-y-auto p-5 space-y-6">
               {/* Frota + Tipo + identificação */}
-              <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
+              <SecaoAcordeao
+                aberta={secaoAberta === "identificacao"}
+                onToggle={() => alternarSecao("identificacao")}
+                titulo={<>{ID_FIELDS.every(f => !f.req || !!S.id[f.k]?.trim()) && <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />}<span>Frota, tipo e identificação</span></>}
+                extra={<span className="text-[11px] font-bold text-zinc-400">{FROTAS[S.frotaTipo]} · {TIPOS.find(t => t.k === S.tipo)?.l}</span>}
+              >
                 <p className="text-[11px] font-bold uppercase text-zinc-500 mb-1.5">Frota</p>
                 <div className="flex border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden mb-4 flex-wrap">
                   {(Object.keys(FROTAS) as FrotaKey[]).map(k => (
@@ -790,7 +802,7 @@ export default function ChecklistFrotaClient({
                     </div>
                   ))}
                 </div>
-              </div>
+              </SecaoAcordeao>
 
               <ResultadoBanner resultado={resultadoAtual} />
 
