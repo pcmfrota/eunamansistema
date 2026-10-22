@@ -3,27 +3,31 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarExclusao } from "@/lib/audit-log";
+import { ItemResposta, Foto, Avaria, Assinatura } from "./checklistComboioConfig";
 
 export type ChecklistComboio = {
   id: string;
   tipo_checklist: "RECEBIMENTO" | "DEVOLUCAO";
-  empresa: string | null;
   placa: string;
-  nucleo: string | null;
-  mes: string | null;
-  turno: string | null;
+  frota: string | null;
   marca_modelo: string | null;
-  motorista: string | null;
-  matricula_motorista: string | null;
+  nucleo: string | null;
   km: number | null;
+  horimetro: number | null;
+  registradora_diesel: number | null;
+  registradora_insumo: number | null;
+  saldo_tanque: number | null;
+  local: string | null;
   data_checklist: string;
-  respostas: Record<string, string>;
-  fotos: Record<string, string>;
-  pendencias_adicionais: string | null;
-  executante_nome: string | null;
-  executante_mt: string | null;
-  supervisor_nome: string | null;
-  supervisor_mt: string | null;
+  hora: string | null;
+  mecanico: string | null;
+  matricula_mecanico: string | null;
+  responsavel_recebe: string | null;
+  respostas: Record<string, ItemResposta>;
+  fotos_gerais: Record<string, Foto[]>;
+  avarias: Avaria[];
+  assinaturas: Record<string, Assinatura>;
+  observacoes_gerais: string | null;
   status: string;
   criado_por: string | null;
   criado_por_nome: string | null;
@@ -47,23 +51,26 @@ export async function getChecklistsComboio(): Promise<ChecklistComboio[]> {
 
 export async function salvarChecklistComboio(payload: {
   tipo_checklist: "RECEBIMENTO" | "DEVOLUCAO";
-  empresa: string | null;
   placa: string;
-  nucleo: string | null;
-  mes: string | null;
-  turno: string | null;
+  frota: string | null;
   marca_modelo: string | null;
-  motorista: string | null;
-  matricula_motorista: string | null;
+  nucleo: string | null;
   km: number | null;
+  horimetro: number | null;
+  registradora_diesel: number | null;
+  registradora_insumo: number | null;
+  saldo_tanque: number | null;
+  local: string | null;
   data_checklist: string;
-  respostas: Record<string, string>;
-  fotos: Record<string, string>;
-  pendencias_adicionais: string | null;
-  executante_nome: string | null;
-  executante_mt: string | null;
-  supervisor_nome: string | null;
-  supervisor_mt: string | null;
+  hora: string | null;
+  mecanico: string | null;
+  matricula_mecanico: string | null;
+  responsavel_recebe: string | null;
+  respostas: Record<string, ItemResposta>;
+  fotos_gerais: Record<string, Foto[]>;
+  avarias: Avaria[];
+  assinaturas: Record<string, Assinatura>;
+  observacoes_gerais: string | null;
 }) {
   try {
     const supabase = createClient();

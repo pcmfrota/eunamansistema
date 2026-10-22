@@ -1,46 +1,79 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus, X, FileText, Download, Share2, Loader2, Camera, Trash2,
-  Maximize2, ClipboardCheck,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import { ChecklistComboio, salvarChecklistComboio, excluirChecklistComboio } from "./actions";
-import { getComboioConfig, ChecklistGroup, ChecklistItem } from "@/app/checklist-mecanicos/checklistConfig";
-import { baixarOuCompartilharPdf, preCarregarHtml2Pdf } from "@/lib/pdf-share";
+import {
+  ID_FIELDS, GERAL, SIGS, SECTIONS, itemKey, criarItensVazios, criarGeralVazio,
+  Foto, ItemResposta, Avaria, Assinatura,
+} from "./checklistComboioConfig";
 
-// Redimensiona/comprime pro mesmo padrão já usado nas fotos de O.S/Backlog (máx. 800px,
-// JPEG 60%) — evita payloads gigantes indo pro banco e pra fila de sincronização offline.
-function comprimirImagem(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const src = ev.target?.result as string;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX = 800;
-        let w = img.width, h = img.height;
-        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
-        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.6));
-        } else {
-          resolve(src);
-        }
-      };
-      img.onerror = () => resolve(src);
-      img.src = src;
+// ── Compressão de foto (1280px / JPEG 70%, igual ao protótipo validado em campo) ──
+function compress(file: File): Promise<Foto | null> {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const max = 1280;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const r = Math.min(1, max / Math.max(w, h));
+      w = Math.round(w * r); h = Math.round(h * r);
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve({ d: c.toDataURL("image/jpeg", 0.7), w, h });
     };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
   });
+}
+async function readFiles(files: FileList | null): Promise<Foto[]> {
+  if (!files) return [];
+  const out: Foto[] = [];
+  for (const f of Array.from(files)) { const p = await compress(f); if (p) out.push(p); }
+  return out;
+}
+
+type ChecklistState = {
+  tipo: "DEVOLUCAO" | "RECEBIMENTO";
+  id: Record<string, string>;
+  geral: Record<number, Foto[]>;
+  items: Record<string, ItemResposta>;
+  avarias: Avaria[];
+  obs: string;
+  assinaturas: Record<string, Assinatura>;
+};
+
+function estadoVazio(): ChecklistState {
+  return { tipo: "DEVOLUCAO", id: {}, geral: criarGeralVazio(), items: criarItensVazios(), avarias: [], obs: "", assinaturas: {} };
+}
+
+function estadoDeRegistro(c: ChecklistComboio): ChecklistState {
+  return {
+    tipo: c.tipo_checklist,
+    id: {
+      placa: c.placa || "", frota: c.frota || "", modelo: c.marca_modelo || "", nucleo: c.nucleo || "",
+      km: c.km != null ? String(c.km) : "", horimetro: c.horimetro != null ? String(c.horimetro) : "",
+      regdiesel: c.registradora_diesel != null ? String(c.registradora_diesel) : "",
+      reginsumo: c.registradora_insumo != null ? String(c.registradora_insumo) : "",
+      saldo: c.saldo_tanque != null ? String(c.saldo_tanque) : "", local: c.local || "",
+      data: c.data_checklist || "", hora: c.hora || "", mecanico: c.mecanico || "",
+      matricula: c.matricula_mecanico || "", recebedor: c.responsavel_recebe || "",
+    },
+    geral: c.fotos_gerais || {},
+    items: c.respostas || {},
+    avarias: c.avarias || [],
+    obs: c.observacoes_gerais || "",
+    assinaturas: c.assinaturas || {},
+  };
 }
 
 const TIPO_LABEL: Record<string, string> = { RECEBIMENTO: "Recebimento", DEVOLUCAO: "Devolução" };
@@ -48,6 +81,268 @@ const TIPO_BADGE: Record<string, string> = {
   RECEBIMENTO: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
   DEVOLUCAO: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
 };
+
+// ── PDF customizado (jsPDF) — mesmo layout/cores do protótipo validado em campo ──
+const COLORS: Record<string, [number, number, number]> = {
+  C: [30, 122, 70], N: [30, 122, 70], NC: [194, 50, 31], F: [194, 50, 31], NA: [110, 120, 114], M: [180, 130, 0],
+};
+const LABEL: Record<string, string> = { C: "C", NC: "NC", NA: "NA", N: "Normal", M: "Meia vida", F: "Fim de vida" };
+const BRAND: [number, number, number] = [30, 90, 60];
+
+function fmtDataBr(d: string) {
+  if (!d) return "-";
+  const [a, m, dd] = d.split("-");
+  return dd && m && a ? `${dd}/${m}/${a}` : d;
+}
+
+async function buildPDF(S: ChecklistState): Promise<any> {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const W = 210, M = 12, CW = W - 2 * M, BOTTOM = 284;
+  let y = 0;
+
+  function newPage() { doc.addPage(); y = 14; }
+  function ensure(h: number) { if (y + h > BOTTOM) newPage(); }
+  function section(t: string) {
+    ensure(12);
+    doc.setFillColor(...BRAND); doc.rect(M, y, CW, 7, "F");
+    doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+    doc.text(t, M + 3, y + 4.9); y += 10; doc.setTextColor(23, 34, 28);
+  }
+  function photoGrid(list: { p: Foto; cap?: string }[], cols: number) {
+    const gap = 3, cw = (CW - gap * (cols - 1)) / cols;
+    let col = 0, rowH = 0;
+    list.forEach(({ p, cap }) => {
+      let w = cw, h = cw * p.h / p.w;
+      const maxH = cols === 2 ? 75 : cw * 1.1;
+      if (h > maxH) { h = maxH; w = h * p.w / p.h; }
+      const need = h + (cap ? 5 : 0) + 2;
+      if (col === 0) ensure(need); else if (y + need > BOTTOM) { newPage(); col = 0; rowH = 0; }
+      const x = M + col * (cw + gap) + (cw - w) / 2;
+      doc.addImage(p.d, "JPEG", x, y, w, h, undefined, "FAST");
+      if (cap) { doc.setFontSize(8.5); doc.setTextColor(91, 106, 97); doc.setFont("helvetica", "normal"); doc.text(cap, M + col * (cw + gap), y + h + 3.8); }
+      rowH = Math.max(rowH, need); col++;
+      if (col === cols) { y += rowH + 1; col = 0; rowH = 0; }
+    });
+    if (col) y += rowH + 1;
+  }
+
+  // header
+  doc.setFillColor(...BRAND); doc.rect(0, 0, W, 24, "F");
+  doc.setFillColor(242, 183, 5); doc.rect(0, 24, W, 1.6, "F");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+  doc.text(`Checklist de ${TIPO_LABEL[S.tipo].toLowerCase()} - Caminhao comboio`, M, 11);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+  doc.text(`Placa ${S.id.placa || "-"}   |   Data ${fmtDataBr(S.id.data)}${S.id.hora ? " " + S.id.hora : ""}   |   Mecanico ${S.id.mecanico || "-"}`, M, 18);
+  y = 32; doc.setTextColor(23, 34, 28);
+
+  // identificação
+  section("Identificacao");
+  const rows = ID_FIELDS.filter(f => f.k !== "data" && f.k !== "hora");
+  doc.setFontSize(9.5);
+  for (let i = 0; i < rows.length; i += 2) {
+    ensure(7);
+    [rows[i], rows[i + 1]].forEach((f, c) => {
+      if (!f) return;
+      const x = M + c * (CW / 2);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(91, 106, 97); doc.text(f.l, x, y);
+      doc.setFont("helvetica", "bold"); doc.setTextColor(23, 34, 28); doc.text(String(S.id[f.k] || "-"), x + 48, y);
+    });
+    y += 6;
+  }
+
+  // resumo
+  let c = 0, nc = 0, na = 0, sem = 0;
+  SECTIONS.forEach((s, si) => { if (s.tire) return; s.items.forEach((_, ii) => { const v = S.items[itemKey(si, ii)]?.s; if (v === "C") c++; else if (v === "NC") nc++; else if (v === "NA") na++; else sem++; }); });
+  y += 2; ensure(14);
+  const boxes: [string, number, [number, number, number]][] = [["Conforme", c, COLORS.C], ["Nao conforme", nc, COLORS.NC], ["Nao se aplica", na, COLORS.NA], ["Sem resposta", sem, [150, 150, 150]]];
+  const bw = (CW - 9) / 4;
+  boxes.forEach((b, i) => {
+    const x = M + i * (bw + 3);
+    doc.setDrawColor(...b[2]); doc.setLineWidth(0.6); doc.roundedRect(x, y, bw, 12, 1.5, 1.5, "S");
+    doc.setTextColor(...b[2]); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text(String(b[1]), x + 4, y + 8.2);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.text(b[0], x + 14, y + 7.8);
+  });
+  y += 18; doc.setTextColor(23, 34, 28);
+
+  // fotos gerais
+  if (GERAL.some((_, gi) => (S.geral[gi] || []).length)) {
+    section("Fotos gerais");
+    const items: { p: Foto; cap: string }[] = [];
+    GERAL.forEach((g, gi) => (S.geral[gi] || []).forEach(p => items.push({ p, cap: g })));
+    photoGrid(items, 2);
+  }
+
+  // seções de itens
+  SECTIONS.forEach((sec, si) => {
+    section(sec.t);
+    sec.items.forEach((name, ii) => {
+      const it = S.items[itemKey(si, ii)] || { s: "", obs: "", photos: [] };
+      const lbl = (sec.tire ? "Pneu " : `${si + 1}.${ii + 1}  `) + name;
+      doc.setFontSize(9.5); doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(lbl, CW - 34);
+      const obsLines = it.obs ? doc.splitTextToSize("Obs: " + it.obs, CW - 34) : [];
+      const h = Math.max(lines.length, 1) * 4.4 + obsLines.length * 4.2 + 2.6;
+      ensure(h);
+      doc.setTextColor(23, 34, 28); doc.text(lines, M, y + 3.6);
+      const v = it.s; const col2 = v ? COLORS[v] : [160, 160, 160] as [number, number, number];
+      doc.setFillColor(...col2); doc.roundedRect(W - M - 28, y, 28, 5.6, 1, 1, "F");
+      doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
+      doc.text(v ? LABEL[v] : "sem resposta", W - M - 14, y + 3.9, { align: "center" });
+      if (obsLines.length) {
+        const red = v === "NC" || v === "F";
+        doc.setFont("helvetica", "italic"); doc.setFontSize(9);
+        doc.setTextColor(red ? 194 : 91, red ? 50 : 106, red ? 31 : 97);
+        doc.text(obsLines, M, y + 3.6 + lines.length * 4.4);
+      }
+      y += h;
+      doc.setDrawColor(213, 220, 215); doc.setLineWidth(0.2); doc.line(M, y - 1, W - M, y - 1);
+      if (it.photos?.length) { y += 1; photoGrid(it.photos.map(p => ({ p })), 4); }
+    });
+    y += 3;
+  });
+
+  // avarias
+  if (S.avarias.length) {
+    section("Avarias encontradas");
+    S.avarias.forEach((a, i) => {
+      doc.setFontSize(9.5); doc.setFont("helvetica", "bold"); doc.setTextColor(23, 34, 28);
+      const t = doc.splitTextToSize(`${i + 1}. ${a.local || "Local nao informado"}${a.desc ? " - " + a.desc : ""}`, CW);
+      ensure(t.length * 4.4 + 3); doc.text(t, M, y + 3.6); y += t.length * 4.4 + 2;
+      if (a.photos?.length) photoGrid(a.photos.map(p => ({ p })), 3);
+    });
+  }
+
+  // observações + assinaturas
+  section("Observacoes e assinaturas");
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(23, 34, 28);
+  const ol = doc.splitTextToSize(S.obs || "Sem observacoes.", CW);
+  ensure(ol.length * 4.4 + 4); doc.text(ol, M, y + 3.6); y += ol.length * 4.4 + 6;
+
+  const SH = 26, colW = (CW - 10) / 2;
+  let scol = 0;
+  SIGS.forEach(s => {
+    const sig = S.assinaturas[s.k];
+    if (scol === 0) ensure(SH + 13);
+    const x = M + scol * (colW + 10);
+    if (sig?.dataUrl) {
+      let w = colW * 0.85, ih = w; // assume roughly square canvas ratio fallback
+      doc.addImage(sig.dataUrl, "PNG", x, y + SH - Math.min(ih, SH), w, Math.min(ih, SH));
+    }
+    doc.setDrawColor(23, 34, 28); doc.setLineWidth(0.3); doc.line(x, y + SH + 1, x + colW, y + SH + 1);
+    doc.setFontSize(8.5); doc.setFont("helvetica", "bold"); doc.setTextColor(23, 34, 28); doc.text(s.p, x, y + SH + 5);
+    doc.setFont("helvetica", "normal");
+    const nm = sig?.nome || "", mt = sig?.matricula || "";
+    doc.text((nm ? "Nome: " + nm : "Nome: ____________________") + (mt ? " - Mat. " + mt : ""), x, y + SH + 9);
+    scol++; if (scol === 2) { scol = 0; y += SH + 15; }
+  });
+  if (scol) y += SH + 15;
+
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.setFont("helvetica", "normal");
+    doc.text(`Placa ${S.id.placa || "-"}  |  Gerado em ${new Date().toLocaleString("pt-BR")}`, M, 292);
+    doc.text(`Pagina ${i} de ${n}`, W - M, 292, { align: "right" });
+  }
+  return doc;
+}
+
+// ── Assinatura por toque/mouse (canvas) ──────────────────────────────────────
+function SignaturePad({ value, onChange }: { value: string | null; onChange: (dataUrl: string | null) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const hasRef = useRef(false);
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const resize = () => {
+      const rect = cv.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = rect.width * dpr; cv.height = rect.height * dpr;
+      const ctx = cv.getContext("2d")!;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+      hasRef.current = false;
+      if (value) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height); img.src = value; hasRef.current = true; }
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pos = (e: React.PointerEvent) => {
+    const r = canvasRef.current!.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  };
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        className="border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white w-full h-32 touch-none"
+        onPointerDown={e => {
+          drawingRef.current = true;
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+          const ctx = canvasRef.current!.getContext("2d")!;
+          const [x, y] = pos(e);
+          ctx.beginPath(); ctx.moveTo(x, y);
+        }}
+        onPointerMove={e => {
+          if (!drawingRef.current) return;
+          const ctx = canvasRef.current!.getContext("2d")!;
+          const [x, y] = pos(e);
+          ctx.lineTo(x, y); ctx.stroke();
+          hasRef.current = true;
+        }}
+        onPointerUp={() => { drawingRef.current = false; if (hasRef.current) onChange(canvasRef.current!.toDataURL("image/png")); }}
+        onPointerCancel={() => { drawingRef.current = false; }}
+      />
+      <div className="flex justify-between items-center mt-1">
+        <span className="text-[11px] text-zinc-400">Assine com o dedo ou mouse</span>
+        <button
+          type="button"
+          onClick={() => {
+            const cv = canvasRef.current!;
+            const ctx = cv.getContext("2d")!;
+            const rect = cv.getBoundingClientRect();
+            ctx.clearRect(0, 0, rect.width, rect.height);
+            hasRef.current = false;
+            onChange(null);
+          }}
+          className="text-[11px] font-bold text-red-500 hover:text-red-700"
+        >
+          Limpar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Slot de múltiplas fotos (usado em itens, fotos gerais e avarias) ─────────
+function FotoMultiSlot({ photos, onAdd, onRemove, onExpand, readOnly }: {
+  photos: Foto[]; onAdd?: (files: FileList | null) => void; onRemove?: (i: number) => void; onExpand: (d: string) => void; readOnly?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-1">
+      {photos.map((p, i) => (
+        <div key={i} className="relative w-14 h-14 rounded overflow-hidden border border-zinc-200 dark:border-zinc-700 group">
+          <img src={p.d} alt="" className="w-full h-full object-cover cursor-zoom-in" onClick={() => onExpand(p.d)} />
+          {!readOnly && onRemove && (
+            <button type="button" onClick={() => onRemove(i)} className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 text-white text-[10px] leading-4 text-center">×</button>
+          )}
+        </div>
+      ))}
+      {!readOnly && onAdd && (
+        <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline h-14 px-2 border border-dashed border-blue-300 dark:border-blue-800 rounded">
+          <Camera size={13} /> {photos.length > 0 ? `+${photos.length}` : "Foto"}
+          <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={e => { onAdd(e.target.files); e.target.value = ""; }} />
+        </label>
+      )}
+    </div>
+  );
+}
 
 export default function ChecklistComboioClient({
   isVisitante, initialChecklists, equipamentos,
@@ -60,82 +355,91 @@ export default function ChecklistComboioClient({
   const [exportandoPdf, setExportandoPdf] = useState<"download" | "share" | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
+  const [erroMsg, setErroMsg] = useState<string | null>(null);
 
-  useEffect(() => { preCarregarHtml2Pdf(); }, []);
+  const [S, setS] = useState<ChecklistState>(estadoVazio());
 
-  // ── Form state ──────────────────────────────────────────────────────────────
-  const [tipoChecklist, setTipoChecklist] = useState<"RECEBIMENTO" | "DEVOLUCAO" | "">("");
-  const [placa, setPlaca] = useState("");
-  const [nucleo, setNucleo] = useState("");
-  const [mes, setMes] = useState("");
-  const [turno, setTurno] = useState("");
-  const [marcaModelo, setMarcaModelo] = useState("");
-  const [motorista, setMotorista] = useState("");
-  const [matriculaMotorista, setMatriculaMotorista] = useState("");
-  const [km, setKm] = useState("");
-  const [dataChecklist, setDataChecklist] = useState(() => new Date().toISOString().slice(0, 10));
-  const [respostas, setRespostas] = useState<Record<string, string>>({});
-  const [fotos, setFotos] = useState<Record<string, string>>({});
-  const [pendencias, setPendencias] = useState("");
-  const [executanteNome, setExecutanteNome] = useState("");
-  const [executanteMt, setExecutanteMt] = useState("");
-  const [supervisorNome, setSupervisorNome] = useState("");
-  const [supervisorMt, setSupervisorMt] = useState("");
-
-  const resetForm = () => {
-    setTipoChecklist(""); setPlaca(""); setNucleo(""); setMes(""); setTurno("");
-    setMarcaModelo(""); setMotorista(""); setMatriculaMotorista(""); setKm("");
-    setDataChecklist(new Date().toISOString().slice(0, 10));
-    setRespostas({}); setFotos({}); setPendencias("");
-    setExecutanteNome(""); setExecutanteMt(""); setSupervisorNome(""); setSupervisorMt("");
+  const setId = (k: string, v: string) => setS(prev => ({ ...prev, id: { ...prev.id, [k]: k === "placa" ? v.toUpperCase() : v } }));
+  const setItemStatus = (key: string, v: string) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], s: prev.items[key].s === v ? "" : v } } }));
+  const setItemObs = (key: string, v: string) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], obs: v } } }));
+  const addItemFotos = async (key: string, files: FileList | null) => {
+    const novas = await readFiles(files);
+    setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], photos: [...prev.items[key].photos, ...novas] } } }));
   };
+  const delItemFoto = (key: string, i: number) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], photos: prev.items[key].photos.filter((_, x) => x !== i) } } }));
+
+  const addGeralFotos = async (gi: number, files: FileList | null) => {
+    const novas = await readFiles(files);
+    setS(prev => ({ ...prev, geral: { ...prev.geral, [gi]: [...(prev.geral[gi] || []), ...novas] } }));
+  };
+  const delGeralFoto = (gi: number, i: number) => setS(prev => ({ ...prev, geral: { ...prev.geral, [gi]: (prev.geral[gi] || []).filter((_, x) => x !== i) } }));
+
+  const addAvaria = () => setS(prev => ({ ...prev, avarias: [...prev.avarias, { local: "", desc: "", photos: [] }] }));
+  const delAvaria = (i: number) => setS(prev => ({ ...prev, avarias: prev.avarias.filter((_, x) => x !== i) }));
+  const setAvariaCampo = (i: number, campo: "local" | "desc", v: string) => setS(prev => ({ ...prev, avarias: prev.avarias.map((a, x) => x === i ? { ...a, [campo]: v } : a) }));
+  const addAvariaFotos = async (i: number, files: FileList | null) => {
+    const novas = await readFiles(files);
+    setS(prev => ({ ...prev, avarias: prev.avarias.map((a, x) => x === i ? { ...a, photos: [...a.photos, ...novas] } : a) }));
+  };
+  const delAvariaFoto = (i: number, fi: number) => setS(prev => ({ ...prev, avarias: prev.avarias.map((a, x) => x === i ? { ...a, photos: a.photos.filter((_, y) => y !== fi) } : a) }));
+
+  const setAssinatura = (k: string, dataUrl: string | null) => setS(prev => ({ ...prev, assinaturas: { ...prev.assinaturas, [k]: { nome: prev.assinaturas[k]?.nome || "", matricula: prev.assinaturas[k]?.matricula || "", dataUrl } } }));
 
   const handlePlacaChange = (val: string) => {
-    setPlaca(val);
+    setId("placa", val);
     const eq = equipamentos.find(e => e.placa?.toLowerCase() === val.toLowerCase());
-    if (eq) {
-      setNucleo(eq.local || eq.area || eq.modulo || "");
-      setMarcaModelo(eq.modelo || "");
-    }
+    if (eq) { setId("nucleo", eq.local || eq.area || eq.modulo || ""); setId("modelo", eq.modelo || ""); }
   };
 
-  const handleAnswer = (key: string, value: string) => setRespostas(prev => ({ ...prev, [key]: value }));
+  const progresso = useMemo(() => {
+    let t = 0, n = 0;
+    SECTIONS.forEach((sec, si) => { t += sec.items.length; sec.items.forEach((_, ii) => { if (S.items[itemKey(si, ii)]?.s) n++; }); });
+    return { n, t };
+  }, [S.items]);
 
-  const handleFoto = async (itemId: string, file: File | undefined) => {
-    if (!file) return;
-    const dataUrl = await comprimirImagem(file);
-    setFotos(prev => ({ ...prev, [itemId]: dataUrl }));
-  };
+  const abrirNovo = () => { setS(estadoVazio()); setErroMsg(null); setModalOpen(true); };
 
-  const removerFoto = (itemId: string) => setFotos(prev => { const next = { ...prev }; delete next[itemId]; return next; });
+  const handleSalvar = async () => {
+    setErroMsg(null);
+    const faltando = ID_FIELDS.filter(f => f.req && !S.id[f.k]?.trim()).map(f => f.l);
+    if (faltando.length) { setErroMsg("Preencha: " + faltando.join(", ") + "."); return; }
+    const ncSemObs = Object.values(S.items).filter(it => (it.s === "NC" || it.s === "F") && !it.obs?.trim());
+    if (ncSemObs.length) { setErroMsg(`Há ${ncSemObs.length} item(ns) com problema sem descrição. Escreva o que foi encontrado antes de salvar.`); return; }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tipoChecklist || !placa || !dataChecklist) {
-      alert("Preencha o Tipo de Checklist, a Placa e a Data.");
-      return;
-    }
     setLoading(true);
     try {
+      // Garante nome/matrícula dentro de cada assinatura (vêm de S.id pros 2 primeiros papéis)
+      const assinaturasFinal: Record<string, Assinatura> = {};
+      SIGS.forEach(sig => {
+        assinaturasFinal[sig.k] = {
+          nome: S.id[sig.k] || S.assinaturas[sig.k]?.nome || "",
+          matricula: S.id[sig.m] || S.assinaturas[sig.k]?.matricula || "",
+          dataUrl: S.assinaturas[sig.k]?.dataUrl || null,
+        };
+      });
+
       const payload = {
-        tipo_checklist: tipoChecklist as "RECEBIMENTO" | "DEVOLUCAO",
-        empresa: "EUNAMAN",
-        placa: placa.toUpperCase(),
-        nucleo: nucleo || null,
-        mes: mes || null,
-        turno: turno || null,
-        marca_modelo: marcaModelo || null,
-        motorista: motorista || null,
-        matricula_motorista: matriculaMotorista || null,
-        km: km ? parseFloat(km) : null,
-        data_checklist: dataChecklist,
-        respostas,
-        fotos,
-        pendencias_adicionais: pendencias || null,
-        executante_nome: executanteNome || null,
-        executante_mt: executanteMt || null,
-        supervisor_nome: supervisorNome || null,
-        supervisor_mt: supervisorMt || null,
+        tipo_checklist: S.tipo,
+        placa: S.id.placa,
+        frota: S.id.frota || null,
+        marca_modelo: S.id.modelo || null,
+        nucleo: S.id.nucleo || null,
+        km: S.id.km ? parseFloat(S.id.km) : null,
+        horimetro: S.id.horimetro ? parseFloat(S.id.horimetro) : null,
+        registradora_diesel: S.id.regdiesel ? parseFloat(S.id.regdiesel) : null,
+        registradora_insumo: S.id.reginsumo ? parseFloat(S.id.reginsumo) : null,
+        saldo_tanque: S.id.saldo ? parseFloat(S.id.saldo) : null,
+        local: S.id.local || null,
+        data_checklist: S.id.data,
+        hora: S.id.hora || null,
+        mecanico: S.id.mecanico || null,
+        matricula_mecanico: S.id.matricula || null,
+        responsavel_recebe: S.id.recebedor || null,
+        respostas: S.items,
+        fotos_gerais: S.geral,
+        avarias: S.avarias,
+        assinaturas: assinaturasFinal,
+        observacoes_gerais: S.obs || null,
       };
 
       if (isOnline) {
@@ -156,9 +460,8 @@ export default function ChecklistComboioClient({
       window.dispatchEvent(new CustomEvent("offline-db-updated-checklist_comboio"));
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
       setModalOpen(false);
-      resetForm();
     } catch (err: any) {
-      alert("Erro ao salvar: " + (err.message || String(err)));
+      setErroMsg("Erro ao salvar: " + (err.message || String(err)));
     } finally {
       setLoading(false);
     }
@@ -185,177 +488,78 @@ export default function ChecklistComboioClient({
     }
   };
 
-  const handleExportPDF = (checklist: ChecklistComboio, modo: "download" | "share" = "download") => {
-    setViewChecklist(checklist);
+  const handleExportPDF = async (checklist: ChecklistComboio, modo: "download" | "share") => {
     setExportandoPdf(modo);
-    setTimeout(async () => {
-      try {
-        const element = document.getElementById("ficha-checklist-comboio-print");
-        if (!element) { alert("Erro ao localizar a ficha para gerar o PDF."); return; }
-        const filename = `Checklist_Comboio_${TIPO_LABEL[checklist.tipo_checklist]}_${checklist.placa}.pdf`;
-        await baixarOuCompartilharPdf(
-          element, filename,
-          `Checklist Comboio — ${checklist.placa}`,
-          `Checklist de ${TIPO_LABEL[checklist.tipo_checklist]} (Comboio) da placa ${checklist.placa}`,
-          modo
-        );
-      } finally {
-        setExportandoPdf(null);
-      }
-    }, 500);
+    try {
+      const estado = estadoDeRegistro(checklist);
+      const doc = await buildPDF(estado);
+      const blob: Blob = doc.output("blob");
+      const filename = `Checklist_${TIPO_LABEL[checklist.tipo_checklist].replace("ç", "c").replace("ã", "a")}_${checklist.placa}_${checklist.data_checklist}.pdf`;
+      await salvarOuCompartilharBlob(blob, filename, `Checklist Comboio — ${checklist.placa}`, `Checklist de ${TIPO_LABEL[checklist.tipo_checklist]} (Comboio) da placa ${checklist.placa}`, modo);
+    } catch (err: any) {
+      alert("Erro ao gerar o PDF: " + (err.message || String(err)));
+    } finally {
+      setExportandoPdf(null);
+    }
   };
 
-  // ── Renderização dos itens (mesmo padrão visual do Checklist Mecânicos, com
-  // uma seção de foto anexada em TODO item, conforme pedido) ──────────────────
-  const FotoSlot = ({ itemId, readOnlyFotos }: { itemId: string; readOnlyFotos: Record<string, string> | null }) => {
-    const fotosObj = readOnlyFotos || fotos;
-    const foto = fotosObj[itemId];
-    const isReadOnly = readOnlyFotos !== null;
+  // ── Render de item (checklist em preenchimento, ou leitura de um salvo) ────
+  const renderItemLive = (si: number, ii: number) => {
+    const sec = SECTIONS[si];
+    const key = itemKey(si, ii);
+    const it = S.items[key];
+    const vals = sec.tire ? ["N", "M", "F"] : ["C", "NC", "NA"];
+    const needObs = it.s === "NC" || it.s === "F";
     return (
-      <div className="mt-2 pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700">
-        {foto ? (
-          <div className="flex items-center gap-2">
-            <div className="relative group w-12 h-12 rounded overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-zoom-in" onClick={() => setFotoExpandida(foto)}>
-              <img src={foto} alt="Evidência" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                <Maximize2 size={12} className="text-white opacity-0 group-hover:opacity-100" />
-              </div>
-            </div>
-            {!isReadOnly && (
-              <button type="button" onClick={() => removerFoto(itemId)} className="text-red-500 hover:text-red-700 text-[10px] font-bold flex items-center gap-1">
-                <Trash2 size={11} /> Remover
-              </button>
-            )}
-          </div>
-        ) : isReadOnly ? (
-          <span className="text-[10px] text-zinc-400">Sem foto anexada</span>
-        ) : (
-          <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
-            <Camera size={13} /> Anexar Foto
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFoto(itemId, e.target.files?.[0])} />
-          </label>
-        )}
-      </div>
-    );
-  };
-
-  const renderItem = (item: ChecklistItem, readOnlyObj: Record<string, string> | null = null, readOnlyFotos: Record<string, string> | null = null) => {
-    const isReadOnly = readOnlyObj !== null;
-    const resps = readOnlyObj || respostas;
-    const rowCls = "p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full";
-
-    if (item.type === "pneus") {
-      const posicoes = ["DD", "DE", "TD1E", "TD1I", "TD2E", "TD2I", "TE1E", "TE1I", "TE2E", "TE2I"];
-      return (
-        <div key={item.id} className={rowCls}>
-          <span className="text-sm font-bold dark:text-zinc-200 block mb-3 border-b pb-1 border-zinc-200 dark:border-zinc-700">{item.label}</span>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {posicoes.map(pos => (
-              <div key={pos} className="flex flex-col items-center bg-white dark:bg-zinc-950 p-2 rounded border border-zinc-200 dark:border-zinc-800">
-                <span className="text-xs font-bold mb-1">{pos}</span>
-                <div className="flex gap-1">
-                  {(["N", "M", "F"] as const).map(v => (
-                    <label key={v} className={`text-[10px] flex flex-col items-center ${isReadOnly ? "" : "cursor-pointer"}`}>
-                      <input type="radio" name={`pneu_${item.id}_${pos}`} checked={resps[`pneu_${pos}`] === v} onChange={() => !isReadOnly && handleAnswer(`pneu_${pos}`, v)} disabled={isReadOnly} />
-                      <span className={`mt-1 font-bold ${v === "N" ? "text-green-600" : v === "M" ? "text-yellow-600" : "text-red-600"}`}>{v}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+      <div key={key} className="border-t border-zinc-100 dark:border-zinc-800 py-3 first:border-t-0">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex-1 min-w-[160px] text-sm font-medium dark:text-zinc-200">
+            {!sec.tire && <b className="text-zinc-400 dark:text-zinc-500 mr-1">{si + 1}.{ii + 1}</b>}
+            {sec.items[ii]}
+          </span>
+          <div className="flex gap-1.5">
+            {vals.map(v => (
+              <button key={v} type="button" onClick={() => setItemStatus(key, v)} className={cn(
+                "min-w-[44px] h-9 rounded-lg border-2 text-xs font-bold transition-colors",
+                it.s === v
+                  ? v === "NC" || v === "F" ? "bg-red-50 border-red-500 text-red-600 dark:bg-red-900/20"
+                  : v === "NA" || v === "M" ? "bg-zinc-100 border-zinc-400 text-zinc-600 dark:bg-zinc-800"
+                  : "bg-emerald-50 border-emerald-500 text-emerald-600 dark:bg-emerald-900/20"
+                  : "border-zinc-200 dark:border-zinc-700 text-zinc-500"
+              )}>{v}</button>
             ))}
           </div>
-          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ""} onChange={e => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
-          <FotoSlot itemId={item.id} readOnlyFotos={readOnlyFotos} />
         </div>
-      );
-    }
-
-    const radios = (key: string) => (
-      <>
-        <label className="text-xs"><input type="radio" checked={resps[key] === "C"} onChange={() => !isReadOnly && handleAnswer(key, "C")} disabled={isReadOnly} /> <span className="text-green-600 font-bold">C</span></label>
-        <label className="text-xs"><input type="radio" checked={resps[key] === "NC"} onChange={() => !isReadOnly && handleAnswer(key, "NC")} disabled={isReadOnly} /> <span className="text-red-600 font-bold">NC</span></label>
-        <label className="text-xs"><input type="radio" checked={resps[key] === "NA"} onChange={() => !isReadOnly && handleAnswer(key, "NA")} disabled={isReadOnly} /> <span className="text-zinc-500 font-bold">NA</span></label>
-      </>
-    );
-
-    if (item.type === "barras" || item.type === "cinto") {
-      const lados = item.type === "barras" ? ["Lateral Direita", "Lateral Esquerda", "Traseira"] : ["Motorista", "Passageiro"];
-      const prefix = item.type;
-      return (
-        <div key={item.id} className={rowCls}>
-          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
-          <div className="flex flex-wrap gap-4">
-            {lados.map(lado => {
-              const key = `${prefix}_${lado.replace(" ", "_").toLowerCase()}`;
-              return (
-                <div key={lado} className="flex items-center gap-2">
-                  <span className="text-xs w-24">{lado}:</span>
-                  {radios(key)}
-                </div>
-              );
-            })}
-          </div>
-          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ""} onChange={e => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
-          <FotoSlot itemId={item.id} readOnlyFotos={readOnlyFotos} />
-        </div>
-      );
-    }
-
-    if (item.type === "iluminacao") {
-      const luzes = ["Lado Direito Dianteiro", "Lado Esquerdo Dianteiro", "Lado Direito Traseiro", "Lado Esquerdo Traseiro"];
-      return (
-        <div key={item.id} className={rowCls}>
-          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {luzes.map(luz => {
-              const key = `luz_${luz.replace(/ /g, "_").toLowerCase()}`;
-              return (
-                <div key={luz} className="flex justify-between items-center bg-white dark:bg-zinc-950 p-2 rounded border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-xs font-medium">{luz}</span>
-                  <div className="flex gap-2">{radios(key)}</div>
-                </div>
-              );
-            })}
-          </div>
-          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ""} onChange={e => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="mt-2 w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
-          <FotoSlot itemId={item.id} readOnlyFotos={readOnlyFotos} />
-        </div>
-      );
-    }
-
-    if (item.type === "multi" && item.subItems) {
-      return (
-        <div key={item.id} className={rowCls}>
-          <span className="text-sm font-bold dark:text-zinc-200 block mb-2">{item.label}</span>
-          <div className="flex flex-wrap gap-2 md:gap-4 mb-2">
-            {item.subItems.map(sub => {
-              const key = `${item.id}_${sub.id}`;
-              return (
-                <div key={sub.id} className="flex items-center gap-2 bg-white dark:bg-zinc-950 p-1 px-2 rounded border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[10px] uppercase font-semibold">{sub.label}:</span>
-                  {radios(key)}
-                </div>
-              );
-            })}
-          </div>
-          <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ""} onChange={e => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
-          <FotoSlot itemId={item.id} readOnlyFotos={readOnlyFotos} />
-        </div>
-      );
-    }
-
-    // standard
-    return (
-      <div key={item.id} className="p-3 bg-zinc-50 dark:bg-zinc-900 border dark:border-zinc-800 rounded-lg col-span-full md:col-span-1 flex flex-col justify-between">
-        <span className="text-sm font-medium dark:text-zinc-200 mb-2 leading-tight">{item.label}</span>
-        <div className="flex items-center gap-3 mb-2">{radios(item.id)}</div>
-        <input type="text" placeholder="Obs..." value={resps[`${item.id}_obs`] || ""} onChange={e => !isReadOnly && handleAnswer(`${item.id}_obs`, e.target.value)} disabled={isReadOnly} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded px-2 py-1 text-xs outline-none" />
-        <FotoSlot itemId={item.id} readOnlyFotos={readOnlyFotos} />
+        {(it.s || it.obs) && (
+          <input
+            type="text" value={it.obs} onChange={e => setItemObs(key, e.target.value)}
+            placeholder={needObs ? "Descreva o problema (obrigatório)" : "Observação"}
+            className={cn("mt-2 w-full text-xs rounded-lg border px-3 py-2 outline-none bg-white dark:bg-zinc-950",
+              needObs && !it.obs ? "border-red-400 bg-red-50 dark:bg-red-900/10" : "border-zinc-200 dark:border-zinc-700")}
+          />
+        )}
+        <FotoMultiSlot photos={it.photos} onAdd={f => addItemFotos(key, f)} onRemove={i => delItemFoto(key, i)} onExpand={setFotoExpandida} />
       </div>
     );
   };
 
-  const config: ChecklistGroup[] = getComboioConfig();
+  const renderItemView = (si: number, ii: number, estado: ChecklistState) => {
+    const sec = SECTIONS[si];
+    const key = itemKey(si, ii);
+    const it = estado.items[key] || { s: "", obs: "", photos: [] };
+    const v = it.s;
+    const color = !v ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800" : (v === "NC" || v === "F") ? "bg-red-600 text-white" : (v === "NA" || v === "M") ? "bg-zinc-500 text-white" : "bg-emerald-600 text-white";
+    return (
+      <div key={key} className="border-t border-zinc-100 py-2.5 first:border-t-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium text-zinc-700">{!sec.tire && <b className="text-zinc-400 mr-1">{si + 1}.{ii + 1}</b>}{sec.items[ii]}</span>
+          <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap", color)}>{v ? LABEL[v] : "sem resposta"}</span>
+        </div>
+        {it.obs && <p className="text-[11px] text-red-600 italic mt-1">Obs: {it.obs}</p>}
+        {it.photos?.length > 0 && <FotoMultiSlot photos={it.photos} onExpand={setFotoExpandida} readOnly />}
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[96rem] mx-auto w-full">
@@ -365,22 +569,22 @@ export default function ChecklistComboioClient({
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <ClipboardCheck className="text-blue-500" size={24} /> Checklist Comboio — Entrega/Recebimento
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Checklist padrão de devolução e recebimento de caminhão comboio, com evidência fotográfica por item</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Checklist padrão de devolução e recebimento, com foto por item, fotos gerais, avarias e assinaturas</p>
         </div>
         {!isVisitante && (
-          <button onClick={() => { resetForm(); setModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+          <button onClick={abrirNovo} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
             <Plus size={15} /> Novo Checklist
           </button>
         )}
       </div>
 
-      {/* Lista */}
+      {/* Lista / histórico */}
       <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                {["Data", "Tipo", "Placa", "Núcleo", "Motorista", "Ações"].map(h => (
+                {["Data", "Tipo", "Placa", "Núcleo", "Mecânico", "Ações"].map(h => (
                   <th key={h} className={cn("px-3 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider", h === "Ações" ? "text-right" : "text-left")}>{h}</th>
                 ))}
               </tr>
@@ -394,7 +598,7 @@ export default function ChecklistComboioClient({
                   <td className="px-3 py-2.5"><span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", TIPO_BADGE[c.tipo_checklist])}>{TIPO_LABEL[c.tipo_checklist]}</span></td>
                   <td className="px-3 py-2.5 font-semibold text-zinc-800 dark:text-zinc-200">{c.placa}</td>
                   <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{c.nucleo || "-"}</td>
-                  <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{c.motorista || "-"}</td>
+                  <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{c.mecanico || "-"}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
                       <button title="Ver / Gerar PDF" onClick={() => setViewChecklist(c)} className="p-1.5 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><FileText size={14} /></button>
@@ -414,189 +618,216 @@ export default function ChecklistComboioClient({
       {/* Modal de preenchimento */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-5xl shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="sticky top-0 bg-white dark:bg-zinc-950 z-10 pb-4 mb-4 border-b dark:border-zinc-800 flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold dark:text-white">Novo Checklist Comboio</h2>
-                <p className="text-xs text-zinc-500">Preencha conforme o formulário físico — todo item aceita evidência fotográfica</p>
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="p-5 border-b dark:border-zinc-800 flex justify-between items-center gap-4 bg-white dark:bg-zinc-950">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold dark:text-white">Novo Checklist Comboio</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="h-1.5 flex-1 max-w-[200px] bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-600 transition-all" style={{ width: `${progresso.t ? progresso.n / progresso.t * 100 : 0}%` }} />
+                  </div>
+                  <span className="text-[11px] font-bold text-zinc-500">{progresso.n} de {progresso.t}</span>
+                </div>
               </div>
-              <button onClick={() => setModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 bg-zinc-100 dark:bg-zinc-900 p-2 rounded-full"><X size={20} /></button>
+              <button onClick={() => setModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 bg-zinc-100 dark:bg-zinc-900 p-2 rounded-full shrink-0"><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Tipo de Checklist *</label>
-                  <select value={tipoChecklist} onChange={e => setTipoChecklist(e.target.value as any)} required className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Selecione...</option>
-                    <option value="RECEBIMENTO">Recebimento (caminhão novo)</option>
-                    <option value="DEVOLUCAO">Devolução (devolver caminhão)</option>
-                  </select>
+            <div className="overflow-y-auto p-5 space-y-6">
+              {/* Tipo + identificação */}
+              <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
+                <div className="flex border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden mb-4 max-w-sm">
+                  {(["DEVOLUCAO", "RECEBIMENTO"] as const).map(t => (
+                    <button key={t} type="button" onClick={() => setS(prev => ({ ...prev, tipo: t }))} className={cn("flex-1 py-2.5 text-sm font-bold", S.tipo === t ? "bg-blue-600 text-white" : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400")}>
+                      {TIPO_LABEL[t]}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Placa (Comboio) *</label>
-                  <input list="placas-comboio" value={placa} onChange={e => handlePlacaChange(e.target.value)} required placeholder="ABC-1234" className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500 uppercase" />
-                  <datalist id="placas-comboio">
-                    {equipamentos.map((eq, i) => <option key={i} value={eq.placa}>{eq.placa} ({eq.local || eq.area})</option>)}
-                  </datalist>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Núcleo</label>
-                  <input value={nucleo} onChange={e => setNucleo(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Data *</label>
-                  <input type="date" value={dataChecklist} onChange={e => setDataChecklist(e.target.value)} required className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Mês</label>
-                  <input value={mes} onChange={e => setMes(e.target.value)} placeholder="Ex: Outubro" className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Turno</label>
-                  <select value={turno} onChange={e => setTurno(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Selecione...</option>
-                    <option value="1">1º Turno</option>
-                    <option value="2">2º Turno</option>
-                    <option value="3">3º Turno</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Marca/Modelo</label>
-                  <input value={marcaModelo} onChange={e => setMarcaModelo(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Km</label>
-                  <input type="number" step="0.1" value={km} onChange={e => setKm(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Motorista</label>
-                  <input value={motorista} onChange={e => setMotorista(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Matrícula do Motorista</label>
-                  <input value={matriculaMotorista} onChange={e => setMatriculaMotorista(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {ID_FIELDS.map(f => (
+                    <div key={f.k}>
+                      <label className={cn("block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1", f.req && "after:content-['_*'] after:text-red-500")}>{f.l}</label>
+                      {f.k === "placa" ? (
+                        <>
+                          <input list="placas-comboio" value={S.id.placa || ""} onChange={e => handlePlacaChange(e.target.value)} placeholder="ABC-1234" className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500 uppercase" />
+                          <datalist id="placas-comboio">{equipamentos.map((eq, i) => <option key={i} value={eq.placa}>{eq.placa} ({eq.local || eq.area})</option>)}</datalist>
+                        </>
+                      ) : (
+                        <input type={f.type || "text"} value={S.id[f.k] || ""} onChange={e => setId(f.k, e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="space-y-8">
-                {config.map(group => (
-                  <div key={group.id} className="space-y-3">
-                    <div className="bg-zinc-200 dark:bg-zinc-800 px-3 py-2 rounded">
-                      <h3 className="text-sm font-bold dark:text-white uppercase tracking-wider">{group.title}</h3>
+              {/* Fotos gerais */}
+              <details open className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
+                <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300">Fotos gerais do caminhão</summary>
+                <div className="p-4 pt-0">
+                  <p className="text-xs text-zinc-400 mb-3">Uma foto de cada lado, do painel com o km e do implemento.</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {GERAL.map((g, gi) => (
+                      <div key={gi} className="border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg p-3">
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">{g}</span>
+                        <FotoMultiSlot photos={S.geral[gi] || []} onAdd={f => addGeralFotos(gi, f)} onRemove={i => delGeralFoto(gi, i)} onExpand={setFotoExpandida} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </details>
+
+              {/* Seções de itens */}
+              {SECTIONS.map((sec, si) => (
+                <details key={si} open={si === 0} className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
+                  <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+                    <span>{sec.t}</span>
+                    <span className="text-[10px] font-bold text-zinc-400">{sec.items.filter((_, ii) => S.items[itemKey(si, ii)]?.s).length}/{sec.items.length}</span>
+                  </summary>
+                  <div className="px-4 pb-3">
+                    {sec.tire && <p className="text-xs text-zinc-400 mb-1">N = normal, M = meia vida, F = fim de vida.</p>}
+                    {sec.items.map((_, ii) => renderItemLive(si, ii))}
+                  </div>
+                </details>
+              ))}
+
+              {/* Avarias */}
+              <details className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
+                <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300">Avarias encontradas <span className="text-[10px] font-bold text-zinc-400">{S.avarias.length}</span></summary>
+                <div className="p-4 pt-0 space-y-3">
+                  <p className="text-xs text-zinc-400">Descreva cada amassado, risco, trinca ou peça faltando e fotografe de perto.</p>
+                  {S.avarias.map((a, i) => (
+                    <div key={i} className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
+                      <div className="flex gap-2 items-center mb-2">
+                        <strong className="text-xs text-zinc-400 w-5">{i + 1}</strong>
+                        <input value={a.local} onChange={e => setAvariaCampo(i, "local", e.target.value)} placeholder="Local (ex.: lateral direita, para-choque)" className="flex-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none" />
+                      </div>
+                      <div className="flex gap-2 items-center">
+                        <input value={a.desc} onChange={e => setAvariaCampo(i, "desc", e.target.value)} placeholder="Descrição da avaria" className="flex-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none" />
+                        <button type="button" onClick={() => delAvaria(i)} className="text-red-500 hover:text-red-700 text-xs font-bold shrink-0">Remover</button>
+                      </div>
+                      <FotoMultiSlot photos={a.photos} onAdd={f => addAvariaFotos(i, f)} onRemove={fi => delAvariaFoto(i, fi)} onExpand={setFotoExpandida} />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {group.items.map(item => renderItem(item, null, null))}
+                  ))}
+                  <button type="button" onClick={addAvaria} className="border-2 border-blue-500 text-blue-600 dark:text-blue-400 rounded-lg px-4 py-2 text-xs font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20">+ Adicionar avaria</button>
+                </div>
+              </details>
+
+              {/* Observações + assinaturas */}
+              <div className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl p-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Observações gerais</label>
+                  <textarea value={S.obs} onChange={e => setS(prev => ({ ...prev, obs: e.target.value }))} rows={3} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 text-sm outline-none resize-y" />
+                </div>
+                {SIGS.map(sig => (
+                  <div key={sig.k} className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                    <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Assinatura: {sig.l}</h3>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <input value={S.id[sig.k] || ""} onChange={e => setId(sig.k, e.target.value)} placeholder="Nome" className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none" />
+                      <input value={S.id[sig.m] || ""} onChange={e => setId(sig.m, e.target.value)} placeholder="Matrícula" className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none" />
                     </div>
+                    <SignaturePad value={S.assinaturas[sig.k]?.dataUrl || null} onChange={d => setAssinatura(sig.k, d)} />
                   </div>
                 ))}
-
-                <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
-                  <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-1">Pendências Adicionais</label>
-                  <textarea value={pendencias} onChange={e => setPendencias(e.target.value)} rows={3} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-3 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="Outras observações não cobertas pelos itens acima..." />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Executante Check-list</label>
-                      <input value={executanteNome} onChange={e => setExecutanteNome(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div className="w-24">
-                      <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">MT</label>
-                      <input value={executanteMt} onChange={e => setExecutanteMt(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Supervisor Manutenção</label>
-                      <input value={supervisorNome} onChange={e => setSupervisorNome(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                    <div className="w-24">
-                      <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">MT</label>
-                      <input value={supervisorMt} onChange={e => setSupervisorMt(e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-                  </div>
-                </div>
               </div>
+            </div>
 
-              <div className="sticky bottom-0 bg-white dark:bg-zinc-950 py-4 border-t dark:border-zinc-800 flex justify-end gap-3 z-10">
+            <div className="p-4 border-t dark:border-zinc-800 bg-white dark:bg-zinc-950">
+              {erroMsg && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-xs font-semibold">{erroMsg}</div>}
+              <div className="flex justify-end gap-3">
                 <button type="button" onClick={() => setModalOpen(false)} className="px-6 py-2.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg font-bold hover:bg-zinc-300">Cancelar</button>
-                <button type="submit" disabled={loading} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-60">
+                <button type="button" onClick={handleSalvar} disabled={loading} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-60">
                   {loading && <Loader2 className="animate-spin" size={18} />} Salvar Checklist
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Visualizador / área de impressão (PDF) */}
-      {viewChecklist && (
-        <div className="fixed inset-0 z-[100] flex justify-center bg-zinc-100 dark:bg-zinc-950 overflow-y-auto">
-          <div className="w-full max-w-4xl bg-white p-8 min-h-screen shadow-xl relative">
-            <div className="absolute top-4 right-4 flex gap-2 flex-wrap justify-end">
-              <button onClick={() => handleExportPDF(viewChecklist, "download")} disabled={!!exportandoPdf} className="px-4 py-2 bg-blue-600 text-white rounded font-bold text-sm shadow hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
-                <Download size={16} /> {exportandoPdf === "download" ? "Gerando..." : "Baixar PDF"}
-              </button>
-              <button onClick={() => handleExportPDF(viewChecklist, "share")} disabled={!!exportandoPdf} className="px-4 py-2 bg-emerald-600 text-white rounded font-bold text-sm shadow hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-60">
-                <Share2 size={16} /> {exportandoPdf === "share" ? "Gerando..." : "Enviar WhatsApp"}
-              </button>
-              <button onClick={() => setViewChecklist(null)} className="p-2 bg-zinc-200 text-zinc-600 rounded hover:bg-zinc-300 shadow"><X size={20} /></button>
-            </div>
-
-            <div id="ficha-checklist-comboio-print">
-              <div className="border-b-2 border-zinc-900 pb-4 mb-6">
-                <h1 className="text-2xl font-black text-center uppercase tracking-widest text-zinc-900">
-                  Checklist Comboio — {TIPO_LABEL[viewChecklist.tipo_checklist]}
-                </h1>
-                <p className="text-center text-xs text-zinc-500 mt-1">EUNAMAN — ENTREGA/RECEBIMENTO</p>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 p-4 border rounded bg-zinc-50 border-zinc-300 text-zinc-800 text-xs">
-                <div><span className="font-bold">Placa:</span> {viewChecklist.placa}</div>
-                <div><span className="font-bold">Núcleo:</span> {viewChecklist.nucleo || "-"}</div>
-                <div><span className="font-bold">Data:</span> {viewChecklist.data_checklist?.split("-").reverse().join("/")}</div>
-                <div><span className="font-bold">Mês:</span> {viewChecklist.mes || "-"}</div>
-                <div><span className="font-bold">Turno:</span> {viewChecklist.turno || "-"}</div>
-                <div><span className="font-bold">Marca/Modelo:</span> {viewChecklist.marca_modelo || "-"}</div>
-                <div><span className="font-bold">Motorista:</span> {viewChecklist.motorista || "-"}</div>
-                <div><span className="font-bold">Matrícula:</span> {viewChecklist.matricula_motorista || "-"}</div>
-                <div><span className="font-bold">Km:</span> {viewChecklist.km ?? "-"}</div>
-              </div>
-
-              <div className="space-y-6 text-zinc-800">
-                {config.map(group => (
-                  <div key={group.id} className="space-y-2">
-                    <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs">{group.title}</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {group.items.map(item => renderItem(item, viewChecklist.respostas || {}, viewChecklist.fotos || {}))}
-                    </div>
-                  </div>
-                ))}
-
-                {viewChecklist.pendencias_adicionais && (
-                  <div className="mt-8">
-                    <h3 className="font-bold bg-zinc-200 p-1 px-2 border-l-4 border-zinc-500 uppercase text-xs mb-2">Pendências Adicionais</h3>
-                    <div className="border border-zinc-300 p-3 whitespace-pre-wrap text-sm">{viewChecklist.pendencias_adicionais}</div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4 mt-10 pt-4 border-t border-zinc-300 text-xs">
-                  <div><span className="font-bold">Executante Check-list:</span> {viewChecklist.executante_nome || "-"} {viewChecklist.executante_mt ? `(MT: ${viewChecklist.executante_mt})` : ""}</div>
-                  <div><span className="font-bold">Supervisor Manutenção:</span> {viewChecklist.supervisor_nome || "-"} {viewChecklist.supervisor_mt ? `(MT: ${viewChecklist.supervisor_mt})` : ""}</div>
+      {/* Visualização (histórico) */}
+      {viewChecklist && (() => {
+        const estado = estadoDeRegistro(viewChecklist);
+        return (
+          <div className="fixed inset-0 z-[100] flex justify-center bg-zinc-100 dark:bg-zinc-950 overflow-y-auto">
+            <div className="w-full max-w-3xl bg-white p-6 min-h-screen shadow-xl relative">
+              <div className="flex justify-between items-start gap-3 flex-wrap mb-4 sticky top-0 bg-white pb-3 z-10">
+                <h1 className="text-lg font-black uppercase text-zinc-900">Checklist de {TIPO_LABEL[estado.tipo].toLowerCase()} — {estado.id.placa}</h1>
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => handleExportPDF(viewChecklist, "download")} disabled={!!exportandoPdf} className="px-3 py-2 bg-blue-600 text-white rounded font-bold text-xs shadow hover:bg-blue-700 flex items-center gap-1.5 disabled:opacity-60">
+                    <Download size={14} /> {exportandoPdf === "download" ? "Gerando..." : "Baixar PDF"}
+                  </button>
+                  <button onClick={() => handleExportPDF(viewChecklist, "share")} disabled={!!exportandoPdf} className="px-3 py-2 bg-emerald-600 text-white rounded font-bold text-xs shadow hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-60">
+                    <Share2 size={14} /> {exportandoPdf === "share" ? "Gerando..." : "WhatsApp"}
+                  </button>
+                  <button onClick={() => setViewChecklist(null)} className="p-2 bg-zinc-200 text-zinc-600 rounded hover:bg-zinc-300 shadow"><X size={18} /></button>
                 </div>
               </div>
 
-              <div className="mt-8 text-center text-[10px] text-zinc-400 border-t pt-3">
-                Documento gerado automaticamente pelo EUNAMAN Sistema.
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5 p-3 border rounded bg-zinc-50 border-zinc-200 text-zinc-800 text-xs">
+                {ID_FIELDS.filter(f => f.k !== "data" && f.k !== "hora").map(f => (
+                  <div key={f.k}><span className="font-bold">{f.l}:</span> {estado.id[f.k] || "-"}</div>
+                ))}
+                <div><span className="font-bold">Data:</span> {fmtDataBr(estado.id.data)} {estado.id.hora}</div>
+              </div>
+
+              {Object.values(estado.geral).some(l => l?.length) && (
+                <div className="mb-5">
+                  <h3 className="font-bold bg-zinc-200 p-1.5 px-2 text-xs uppercase mb-2">Fotos gerais</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {GERAL.map((g, gi) => (estado.geral[gi] || []).length > 0 && (
+                      <div key={gi}>
+                        <span className="text-[11px] text-zinc-500 block mb-1">{g}</span>
+                        <FotoMultiSlot photos={estado.geral[gi]} onExpand={setFotoExpandida} readOnly />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {SECTIONS.map((sec, si) => (
+                <div key={si} className="mb-5">
+                  <h3 className="font-bold bg-zinc-200 p-1.5 px-2 text-xs uppercase mb-1">{sec.t}</h3>
+                  {sec.items.map((_, ii) => renderItemView(si, ii, estado))}
+                </div>
+              ))}
+
+              {estado.avarias.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="font-bold bg-zinc-200 p-1.5 px-2 text-xs uppercase mb-2">Avarias encontradas</h3>
+                  {estado.avarias.map((a, i) => (
+                    <div key={i} className="border border-zinc-200 rounded-lg p-2 mb-2">
+                      <p className="text-xs font-bold">{i + 1}. {a.local || "Local não informado"}</p>
+                      {a.desc && <p className="text-xs text-zinc-600">{a.desc}</p>}
+                      <FotoMultiSlot photos={a.photos} onExpand={setFotoExpandida} readOnly />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {estado.obs && (
+                <div className="mb-5">
+                  <h3 className="font-bold bg-zinc-200 p-1.5 px-2 text-xs uppercase mb-2">Observações gerais</h3>
+                  <p className="text-xs whitespace-pre-wrap border border-zinc-200 p-2 rounded">{estado.obs}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 mt-6 pt-3 border-t border-zinc-200">
+                {SIGS.map(sig => {
+                  const a = estado.assinaturas[sig.k];
+                  return (
+                    <div key={sig.k} className="text-xs">
+                      <p className="font-bold text-zinc-700">{sig.l}</p>
+                      {a?.dataUrl ? <img src={a.dataUrl} alt="assinatura" className="h-10 my-1" /> : <p className="text-zinc-400 italic my-1">Sem assinatura</p>}
+                      <p className="text-zinc-500">{a?.nome || "-"} {a?.matricula ? `(Mat. ${a.matricula})` : ""}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Lightbox de foto */}
+      {/* Lightbox */}
       {fotoExpandida && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center bg-zinc-950/95 backdrop-blur-sm p-4" onClick={() => setFotoExpandida(null)}>
           <button onClick={() => setFotoExpandida(null)} className="absolute top-4 right-4 text-white/80 hover:text-white p-2"><X size={24} /></button>
