@@ -147,11 +147,16 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       setIsLoggingOut(true);
       console.log('[MainLayout] Solicitando saída...');
       
-      // Garantia: Redireciona em no máximo 2 segundos mesmo se a API travar
+      // Garantia: redireciona mesmo se a API travar — mas só como ÚLTIMO recurso. Com
+      // 2s esse timer vencia a corrida contra o próprio signOut() (que espera o servidor
+      // invalidar o cookie de sessão antes de redirecionar) sempre que a rede/Vercel
+      // demorava um pouco mais — aí o redirecionamento acontecia com o cookie de sessão
+      // AINDA válido, e a tela de login encontrava essa sessão e logava de volta sozinho
+      // (bug: "logout não pega"). 8s dá folga de sobra pro round-trip real terminar.
       const logoutTimeout = setTimeout(() => {
         console.warn('[MainLayout] Timeout no logout. Forçando redirecionamento.');
         window.location.replace('/login');
-      }, 2000);
+      }, 8000);
 
       await signOut();
       clearTimeout(logoutTimeout);
