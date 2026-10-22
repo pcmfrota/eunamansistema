@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus, X, FileText, Download, Share2, Loader2, Camera, Trash2,
-  ClipboardCheck, AlertTriangle, ShieldAlert, ShieldCheck,
+  ClipboardCheck, AlertTriangle, ShieldAlert, ShieldCheck, ChevronDown, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
@@ -370,6 +370,24 @@ function FotoMultiSlot({ photos, onAdd, onRemove, onExpand, readOnly }: {
   );
 }
 
+// ── Seção de acordeão: fechada por padrão, abre ao clicar no cabeçalho ──────
+function SecaoAcordeao({
+  aberta, onToggle, titulo, extra, children,
+}: { aberta: boolean; onToggle: () => void; titulo: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl overflow-hidden">
+      <button type="button" onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left">
+        <span className="font-bold text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">{titulo}</span>
+        <span className="flex items-center gap-2 shrink-0">
+          {extra}
+          <ChevronDown size={16} className={cn("text-zinc-400 transition-transform", aberta && "rotate-180")} />
+        </span>
+      </button>
+      {aberta && <div className="px-4 pb-4">{children}</div>}
+    </div>
+  );
+}
+
 export default function ChecklistFrotaClient({
   isVisitante, initialChecklists, equipamentos,
 }: { isVisitante: boolean; initialChecklists: ChecklistFrota[]; equipamentos: any[] }) {
@@ -410,7 +428,10 @@ export default function ChecklistFrotaClient({
   };
   const delAvariaFoto = (i: number, fi: number) => setS(prev => ({ ...prev, avarias: prev.avarias.map((a, x) => x === i ? { ...a, photos: a.photos.filter((_, y) => y !== fi) } : a) }));
 
-  const setAssinatura = (k: string, dataUrl: string | null) => setS(prev => ({ ...prev, assinaturas: { ...prev.assinaturas, [k]: { nome: prev.assinaturas[k]?.nome || "", matricula: prev.assinaturas[k]?.matricula || "", dataUrl } } }));
+  const setAssinatura = (k: string, dataUrl: string | null) => {
+    setS(prev => ({ ...prev, assinaturas: { ...prev.assinaturas, [k]: { nome: prev.assinaturas[k]?.nome || "", matricula: prev.assinaturas[k]?.matricula || "", dataUrl } } }));
+    if (dataUrl) avancarSecao(k);
+  };
 
   const marcarPendentesComoC = (secaoTitulo: string, itens: { t: string }[], tire: boolean) => {
     setS(prev => {
@@ -444,7 +465,40 @@ export default function ChecklistFrotaClient({
 
   const resultadoAtual = useMemo(() => calcularResultado(S.frotaTipo, S.tipo, S.items), [S.frotaTipo, S.tipo, S.items]);
 
-  const abrirNovo = () => { setS(estadoVazio()); setErroMsg(null); setModalOpen(true); };
+  // ── Acordeão: cada seção começa fechada, abre ao clicar, e fecha sozinha
+  // quando o usuário termina de preenchê-la (todos os itens respondidos, ou
+  // assinatura concluída) — avançando automaticamente para a próxima seção.
+  const sequenciaSecoes = useMemo(
+    () => ["geral", ...secoesAtuais.map(({ sec }) => sec.t), "avarias", "obs", ...SIGS.map(s => s.k)],
+    [secoesAtuais]
+  );
+  const [secaoAberta, setSecaoAberta] = useState<string | null>("geral");
+
+  useEffect(() => {
+    if (secaoAberta && !sequenciaSecoes.includes(secaoAberta)) setSecaoAberta(sequenciaSecoes[0] ?? null);
+  }, [sequenciaSecoes, secaoAberta]);
+
+  const alternarSecao = (chave: string) => setSecaoAberta(prev => (prev === chave ? null : chave));
+
+  const avancarSecao = (chaveAtual: string) => {
+    setSecaoAberta(prev => {
+      if (prev !== chaveAtual) return prev;
+      const idx = sequenciaSecoes.indexOf(chaveAtual);
+      return idx >= 0 && idx < sequenciaSecoes.length - 1 ? sequenciaSecoes[idx + 1] : null;
+    });
+  };
+
+  // Seção de itens 100% respondida -> fecha e avança sozinha
+  useEffect(() => {
+    if (!secaoAberta) return;
+    const atual = secoesAtuais.find(({ sec }) => sec.t === secaoAberta);
+    if (!atual || atual.itens.length === 0) return;
+    const completo = atual.itens.every(it => !!S.items[itemKey(atual.sec.t, it.t)]?.s);
+    if (completo) avancarSecao(secaoAberta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [S.items, secaoAberta, secoesAtuais]);
+
+  const abrirNovo = () => { setS(estadoVazio()); setErroMsg(null); setSecaoAberta("geral"); setModalOpen(true); };
 
   const handleSalvar = async () => {
     setErroMsg(null);
@@ -741,44 +795,49 @@ export default function ChecklistFrotaClient({
               <ResultadoBanner resultado={resultadoAtual} />
 
               {/* Fotos gerais */}
-              <details open className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
-                <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300">Fotos gerais do caminhão</summary>
-                <div className="p-4 pt-0">
-                  <p className="text-xs text-zinc-400 mb-3">Uma foto de cada lado, do painel com o km, do horímetro e do implemento.</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {GERAL.map((g, gi) => (
-                      <div key={gi} className="border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg p-3">
-                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">{g}</span>
-                        <FotoMultiSlot photos={S.geral[gi] || []} onAdd={f => addGeralFotos(gi, f)} onRemove={i => delGeralFoto(gi, i)} onExpand={setFotoExpandida} />
-                      </div>
-                    ))}
-                  </div>
+              <SecaoAcordeao aberta={secaoAberta === "geral"} onToggle={() => alternarSecao("geral")} titulo="Fotos gerais do caminhão">
+                <p className="text-xs text-zinc-400 mb-3">Uma foto de cada lado, do painel com o km, do horímetro e do implemento.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {GERAL.map((g, gi) => (
+                    <div key={gi} className="border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg p-3">
+                      <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 block mb-1">{g}</span>
+                      <FotoMultiSlot photos={S.geral[gi] || []} onAdd={f => addGeralFotos(gi, f)} onRemove={i => delGeralFoto(gi, i)} onExpand={setFotoExpandida} />
+                    </div>
+                  ))}
                 </div>
-              </details>
+              </SecaoAcordeao>
 
               {/* Seções de itens (filtradas por frota + tipo) */}
-              {secoesAtuais.map(({ sec, itens }, si) => (
-                <details key={sec.t} open={si === 0} className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
-                  <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-2">
-                    <span>{sec.t}</span>
-                    <span className="flex items-center gap-2">
-                      <button type="button" onClick={e => { e.preventDefault(); marcarPendentesComoC(sec.t, itens, !!sec.tire); }} className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+              {secoesAtuais.map(({ sec, itens }) => {
+                const respondidos = itens.filter(it => S.items[itemKey(sec.t, it.t)]?.s).length;
+                const completo = itens.length > 0 && respondidos === itens.length;
+                return (
+                  <SecaoAcordeao
+                    key={sec.t}
+                    aberta={secaoAberta === sec.t}
+                    onToggle={() => alternarSecao(sec.t)}
+                    titulo={<>{completo && <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />}<span>{sec.t}</span></>}
+                    extra={<>
+                      <button type="button" onClick={e => { e.stopPropagation(); marcarPendentesComoC(sec.t, itens, !!sec.tire); }} className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
                         Marcar pendentes como {sec.tire ? "N" : "C"}
                       </button>
-                      <span className="text-[10px] font-bold text-zinc-400">{itens.filter(it => S.items[itemKey(sec.t, it.t)]?.s).length}/{itens.length}</span>
-                    </span>
-                  </summary>
-                  <div className="px-4 pb-3">
+                      <span className="text-[10px] font-bold text-zinc-400">{respondidos}/{itens.length}</span>
+                    </>}
+                  >
                     {sec.tire && <p className="text-xs text-zinc-400 mb-1">N = normal, M = meia vida, F = fim de vida.</p>}
                     {itens.map(it => renderItemLive(sec, it))}
-                  </div>
-                </details>
-              ))}
+                  </SecaoAcordeao>
+                );
+              })}
 
               {/* Avarias */}
-              <details className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
-                <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300">Avarias encontradas <span className="text-[10px] font-bold text-zinc-400">{S.avarias.length}</span></summary>
-                <div className="p-4 pt-0 space-y-3">
+              <SecaoAcordeao
+                aberta={secaoAberta === "avarias"}
+                onToggle={() => alternarSecao("avarias")}
+                titulo="Avarias encontradas"
+                extra={<span className="text-[10px] font-bold text-zinc-400">{S.avarias.length}</span>}
+              >
+                <div className="space-y-3">
                   <p className="text-xs text-zinc-400">Descreva cada amassado, risco, trinca ou peça faltando e fotografe de perto.</p>
                   {S.avarias.map((a, i) => (
                     <div key={i} className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
@@ -795,25 +854,31 @@ export default function ChecklistFrotaClient({
                   ))}
                   <button type="button" onClick={addAvaria} className="border-2 border-blue-500 text-blue-600 dark:text-blue-400 rounded-lg px-4 py-2 text-xs font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20">+ Adicionar avaria</button>
                 </div>
-              </details>
+              </SecaoAcordeao>
 
-              {/* Observações + assinaturas */}
-              <div className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl p-4 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Observações gerais</label>
-                  <textarea value={S.obs} onChange={e => setS(prev => ({ ...prev, obs: e.target.value }))} rows={3} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 text-sm outline-none resize-y" />
-                </div>
-                {SIGS.map(sig => (
-                  <div key={sig.k} className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
-                    <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Assinatura: {sig.l}</h3>
+              {/* Observações gerais */}
+              <SecaoAcordeao aberta={secaoAberta === "obs"} onToggle={() => alternarSecao("obs")} titulo="Observações gerais">
+                <textarea value={S.obs} onChange={e => setS(prev => ({ ...prev, obs: e.target.value }))} rows={3} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 text-sm outline-none resize-y" />
+              </SecaoAcordeao>
+
+              {/* Assinaturas (uma seção por responsável) */}
+              {SIGS.map(sig => {
+                const assinado = !!S.assinaturas[sig.k]?.dataUrl;
+                return (
+                  <SecaoAcordeao
+                    key={sig.k}
+                    aberta={secaoAberta === sig.k}
+                    onToggle={() => alternarSecao(sig.k)}
+                    titulo={<>{assinado && <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />}<span>Assinatura: {sig.l}</span></>}
+                  >
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <input value={S.id[sig.k] || ""} onChange={e => setId(sig.k, e.target.value)} placeholder="Nome" className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none" />
                       <input value={S.id[sig.m] || ""} onChange={e => setId(sig.m, e.target.value)} placeholder="Matrícula" className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none" />
                     </div>
                     <SignaturePad value={S.assinaturas[sig.k]?.dataUrl || null} onChange={d => setAssinatura(sig.k, d)} />
-                  </div>
-                ))}
-              </div>
+                  </SecaoAcordeao>
+                );
+              })}
             </div>
 
             <div className="p-4 border-t dark:border-zinc-800 bg-white dark:bg-zinc-950">
