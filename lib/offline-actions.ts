@@ -80,6 +80,11 @@ import {
 } from "@/app/controladoria-frota/actions";
 
 import {
+  salvarChecklistComboio,
+  excluirChecklistComboio
+} from "@/app/checklist-comboio/actions";
+
+import {
   salvarFichaMaoObra,
   excluirFichaMaoObra,
   salvarApontamento,
@@ -384,6 +389,15 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirControladoriaFrota(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "checklist_comboio") {
+      if (action === "create") {
+        const res = await salvarChecklistComboio(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirChecklistComboio(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

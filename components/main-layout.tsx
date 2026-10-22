@@ -8,7 +8,8 @@ import { useAuth } from "./auth-context";
 import { useOffline } from "./offline-provider";
 import { 
   LayoutDashboard, 
-  ClipboardList, 
+  ClipboardList,
+  ClipboardCheck,
   Calendar, 
   Gauge,
   Truck, 
@@ -67,6 +68,7 @@ const navigation = [
   { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
   { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
   { name: 'Controladoria de Gestão',  path: '/controladoria-frota',    icon: ShieldCheck },
+  { name: 'Checklist Comboio',        path: '/checklist-comboio',      icon: ClipboardCheck },
   { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
   { name: 'Controle de Custos',        path: '/custos',                 icon: BadgeDollarSign },
   { name: 'Controle de Insumos',       path: '/insumos',                icon: Fuel },
