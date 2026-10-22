@@ -47,6 +47,16 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const [recentlySynced, setRecentlySynced] = useState<any[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // Limite de frequência entre tentativas AUTOMÁTICAS de sincronização — numa área de
+  // sinal instável (comum em campo), a rede pode oscilar online/offline várias vezes por
+  // segundo, e tanto o efeito abaixo quanto o callback nativo onNetworkSync disparavam uma
+  // nova sincronização completa a cada oscilação, sem nenhum intervalo mínimo. Isso gera
+  // rajadas de requisições repetidas num curto espaço de tempo — exatamente o padrão que
+  // disparou o desafio anti-DDoS da Vercel (ver sessão de suporte). O botão manual
+  // "Sincronizar agora" continua sempre imediato (passa bypassCooldown=true).
+  const lastAutoSyncAttemptRef = useRef(0);
+  const AUTO_SYNC_COOLDOWN_MS = 15000;
+
   // --- 1. Verificador de Conectividade Ativa (Ping Real) ---
   const checkConnectivity = async (): Promise<boolean> => {
     if (typeof window === "undefined") return false;
@@ -132,8 +142,17 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // --- 3. Motor de Sincronização (Replay Queue) ---
-  const triggerSync = async (forceOnline = false) => {
+  const triggerSync = async (forceOnline = false, bypassCooldown = false) => {
     if (syncing || (!isOnline && !forceOnline)) return;
+
+    if (!bypassCooldown) {
+      const agora = Date.now();
+      if (agora - lastAutoSyncAttemptRef.current < AUTO_SYNC_COOLDOWN_MS) {
+        console.log("[Sync Manager] Tentativa automática ignorada (cooldown ativo — conexão instável).");
+        return;
+      }
+      lastAutoSyncAttemptRef.current = agora;
+    }
 
     try {
       const queue = await localDb.getQueue();
@@ -589,7 +608,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
             <button
               onClick={async () => {
                 try {
-                  await triggerSync(true);
+                  await triggerSync(true, true);
                   alert("Sincronização forçada iniciada!");
                 } catch(e) {
                   alert("Erro ao tentar sincronizar.");
