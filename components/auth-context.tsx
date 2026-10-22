@@ -367,24 +367,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     console.log('[Auth] Iniciando Logout...');
     try {
-      // Se estiver no aplicativo nativo (WebView com EunamanApp), chama o logout nativo
-      if (typeof window !== 'undefined' && (window as any).EunamanApp?.logout) {
-        console.log('[Auth] Ponte nativa EunamanApp encontrada. Acionando expurgo de cache nativo...');
-        (window as any).EunamanApp.logout();
-        return; // Retorna pois o Android cuidará do expurgo e do reload da URL
-      }
-
-      // Limpeza forçada de tudo antes mesmo de chamar o Supabase (prevenção de travamento)
+      // Limpeza forçada de tudo ANTES de qualquer outra coisa — inclusive antes da ponte
+      // nativa do app Android. getInitialAuth() (acima) reconstrói o login lendo direto
+      // do localStorage pra abrir rápido sem esperar o servidor; a limpeza nativa
+      // (WebStorage.deleteAllData(), no Android) é assíncrona, e se a página recarregar
+      // antes dela terminar de verdade, esse localStorage antigo ainda está lá e o app
+      // "loga de volta" sozinho (bug relatado: logout não "pega" dentro do app). Fazendo
+      // a limpeza aqui, de forma síncrona, ela já está garantida antes de qualquer reload,
+      // nativo ou não.
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
         // Remove cookie de papel do usuário
         document.cookie = 'x-user-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
       }
-      
+
       setUser(null);
       setProfile(null);
       setPermissions([]);
+
+      // Se estiver no aplicativo nativo (WebView com EunamanApp), chama o logout nativo
+      // (limpa cookies/WebView por baixo) além da limpeza acima.
+      if (typeof window !== 'undefined' && (window as any).EunamanApp?.logout) {
+        console.log('[Auth] Ponte nativa EunamanApp encontrada. Acionando expurgo de cache nativo...');
+        (window as any).EunamanApp.logout();
+        return; // Retorna pois o Android cuidará do reload da URL
+      }
 
       // Tenta deslogar no Supabase client-side
       try {
