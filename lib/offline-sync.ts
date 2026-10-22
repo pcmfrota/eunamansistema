@@ -228,8 +228,8 @@ const syncTasks: Record<
   controladoria_frota: (supabase) =>
     supabase.from("controladoria_frota").select("*").order("nome", { ascending: true }),
 
-  checklist_comboio: (supabase) =>
-    supabase.from("checklist_comboio").select("*").order("created_at", { ascending: false }).limit(500),
+  checklist_frota: (supabase) =>
+    supabase.from("checklist_frota").select("*").order("created_at", { ascending: false }).limit(500),
 };
 
 /**

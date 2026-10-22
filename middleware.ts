@@ -18,7 +18,7 @@ const MODULO_PERMISSOES: Record<string, string[]> = {
   '/checklist-mecanicos':      ['admin', 'pcm', 'gestao', 'mecanico'],
   '/documentos':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
   '/controladoria-frota':      ['admin', 'pcm', 'gestao'],
-  '/checklist-comboio':        ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
+  '/checklist-frota':        ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
 }
 
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
@@ -164,11 +164,11 @@ export async function middleware(request: NextRequest) {
       }
     } catch {
       // Fallbacks locais de segurança se der erro de conexão
-      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/controladoria-frota', '/checklist-comboio'];
+      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/controladoria-frota', '/checklist-frota'];
       if (userRole === 'visitante') userPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
-      else if (userRole === 'mecanico') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos', '/checklist-comboio'];
-      else if (userRole === 'supervisor_manutencao') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos', '/checklist-comboio'];
-      else if (userRole === 'motorista') userPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-comboio'];
+      else if (userRole === 'mecanico') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos', '/checklist-frota'];
+      else if (userRole === 'supervisor_manutencao') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos', '/checklist-frota'];
+      else if (userRole === 'motorista') userPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-frota'];
       else if (userRole === 'financeiro') userPerms = ['/dashboard', '/custos'];
       else userPerms = allTabs;
     }

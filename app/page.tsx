@@ -171,9 +171,9 @@ const portalItems = [
     color: "from-indigo-500 to-blue-600 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25 dark:border-indigo-400/20"
   },
   {
-    name: "Checklist Comboio",
-    path: "/checklist-comboio",
-    desc: "Checklist de entrega/recebimento de caminhão comboio, com foto por item.",
+    name: "Checklist de Frota",
+    path: "/checklist-frota",
+    desc: "Entrada, devolução e recebimento de Comboio, Pipa, Multifuncional e Munck, com foto por item.",
     icon: ClipboardCheck,
     color: "from-teal-500 to-emerald-600 bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/25 dark:border-teal-400/20"
   },

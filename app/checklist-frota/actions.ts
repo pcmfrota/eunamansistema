@@ -3,11 +3,12 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { registrarExclusao } from "@/lib/audit-log";
-import { ItemResposta, Foto, Avaria, Assinatura } from "./checklistComboioConfig";
+import { ItemResposta, Foto, Avaria, Assinatura, FrotaKey, TipoChecklist, Resultado } from "./checklistFrotaConfig";
 
-export type ChecklistComboio = {
+export type ChecklistFrota = {
   id: string;
-  tipo_checklist: "RECEBIMENTO" | "DEVOLUCAO";
+  tipo_checklist: TipoChecklist;
+  frota_tipo: FrotaKey;
   placa: string;
   frota: string | null;
   marca_modelo: string | null;
@@ -28,6 +29,7 @@ export type ChecklistComboio = {
   avarias: Avaria[];
   assinaturas: Record<string, Assinatura>;
   observacoes_gerais: string | null;
+  resultado: Resultado | null;
   status: string;
   criado_por: string | null;
   criado_por_nome: string | null;
@@ -35,22 +37,23 @@ export type ChecklistComboio = {
   created_at?: string;
 };
 
-export async function getChecklistsComboio(): Promise<ChecklistComboio[]> {
+export async function getChecklistsFrota(): Promise<ChecklistFrota[]> {
   const supabase = createClient();
   const { data, error } = await supabase
-    .from("checklist_comboio")
+    .from("checklist_frota")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(500);
   if (error) {
-    console.error("Erro getChecklistsComboio:", error);
+    console.error("Erro getChecklistsFrota:", error);
     return [];
   }
   return data || [];
 }
 
-export async function salvarChecklistComboio(payload: {
-  tipo_checklist: "RECEBIMENTO" | "DEVOLUCAO";
+export async function salvarChecklistFrota(payload: {
+  tipo_checklist: TipoChecklist;
+  frota_tipo: FrotaKey;
   placa: string;
   frota: string | null;
   marca_modelo: string | null;
@@ -71,6 +74,7 @@ export async function salvarChecklistComboio(payload: {
   avarias: Avaria[];
   assinaturas: Record<string, Assinatura>;
   observacoes_gerais: string | null;
+  resultado: Resultado;
 }) {
   try {
     const supabase = createClient();
@@ -86,7 +90,7 @@ export async function salvarChecklistComboio(payload: {
     const filialId = cookies().get("x-user-filial")?.value || "MATRIZ";
 
     const { data, error } = await supabase
-      .from("checklist_comboio")
+      .from("checklist_frota")
       .insert({
         ...payload,
         status: "Fechado",
@@ -98,38 +102,38 @@ export async function salvarChecklistComboio(payload: {
       .single();
     if (error) return { error: error.message };
 
-    revalidatePath("/checklist-comboio");
+    revalidatePath("/checklist-frota");
     return { success: true, data };
   } catch (err: any) {
     return { error: err.message || String(err) };
   }
 }
 
-export async function excluirChecklistComboio(id: string) {
+export async function excluirChecklistFrota(id: string) {
   try {
     const supabase = createClient();
 
     let row: any = null;
     try {
-      const { data } = await supabase.from("checklist_comboio").select("*").eq("id", id).maybeSingle();
+      const { data } = await supabase.from("checklist_frota").select("*").eq("id", id).maybeSingle();
       row = data;
     } catch (err) {
-      console.warn("Falha ao buscar snapshot de checklist_comboio antes de excluir:", err);
+      console.warn("Falha ao buscar snapshot de checklist_frota antes de excluir:", err);
     }
 
-    const { error } = await supabase.from("checklist_comboio").delete().eq("id", id);
+    const { error } = await supabase.from("checklist_frota").delete().eq("id", id);
     if (error) return { error: error.message };
 
     await registrarExclusao({
       supabase,
-      modulo: "Checklist Comboio",
-      tabelaOrigem: "checklist_comboio",
+      modulo: "Checklist de Frota",
+      tabelaOrigem: "checklist_frota",
       registroId: id,
-      descricao: row ? `${row.placa} — ${row.tipo_checklist} (${row.data_checklist})` : null,
+      descricao: row ? `${row.placa} — ${row.frota_tipo}/${row.tipo_checklist} (${row.data_checklist})` : null,
       dados: row,
     });
 
-    revalidatePath("/checklist-comboio");
+    revalidatePath("/checklist-frota");
     return { success: true };
   } catch (err: any) {
     return { error: err.message || String(err) };

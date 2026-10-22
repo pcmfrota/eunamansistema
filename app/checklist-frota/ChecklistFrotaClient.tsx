@@ -3,19 +3,20 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus, X, FileText, Download, Share2, Loader2, Camera, Trash2,
-  ClipboardCheck,
+  ClipboardCheck, AlertTriangle, ShieldAlert, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
-import { ChecklistComboio, salvarChecklistComboio, excluirChecklistComboio } from "./actions";
+import { ChecklistFrota, salvarChecklistFrota, excluirChecklistFrota } from "./actions";
 import {
-  ID_FIELDS, GERAL, SIGS, SECTIONS, itemKey, criarItensVazios, criarGeralVazio,
-  Foto, ItemResposta, Avaria, Assinatura,
-} from "./checklistComboioConfig";
+  FROTAS, FrotaKey, TIPOS, TipoChecklist, ID_FIELDS, GERAL, SIGS, SECTIONS,
+  itemKey, secoesParaFrota, criarItensVazios, criarGeralVazio,
+  Foto, ItemResposta, Avaria, Assinatura, Resultado, RESULTADO_LABEL, calcularResultado,
+} from "./checklistFrotaConfig";
 
-// ── Compressão de foto (1280px / JPEG 70%, igual ao protótipo validado em campo) ──
+// ── Compressão de foto (1280px / JPEG 70%) ──────────────────────────────────
 function compress(file: File): Promise<Foto | null> {
   return new Promise(resolve => {
     const url = URL.createObjectURL(file);
@@ -43,7 +44,8 @@ async function readFiles(files: FileList | null): Promise<Foto[]> {
 }
 
 type ChecklistState = {
-  tipo: "DEVOLUCAO" | "RECEBIMENTO";
+  frotaTipo: FrotaKey;
+  tipo: TipoChecklist;
   id: Record<string, string>;
   geral: Record<number, Foto[]>;
   items: Record<string, ItemResposta>;
@@ -53,11 +55,12 @@ type ChecklistState = {
 };
 
 function estadoVazio(): ChecklistState {
-  return { tipo: "DEVOLUCAO", id: {}, geral: criarGeralVazio(), items: criarItensVazios(), avarias: [], obs: "", assinaturas: {} };
+  return { frotaTipo: "comboio", tipo: "DEVOLUCAO", id: {}, geral: criarGeralVazio(), items: criarItensVazios(), avarias: [], obs: "", assinaturas: {} };
 }
 
-function estadoDeRegistro(c: ChecklistComboio): ChecklistState {
+function estadoDeRegistro(c: ChecklistFrota): ChecklistState {
   return {
+    frotaTipo: c.frota_tipo,
     tipo: c.tipo_checklist,
     id: {
       placa: c.placa || "", frota: c.frota || "", modelo: c.marca_modelo || "", nucleo: c.nucleo || "",
@@ -76,17 +79,28 @@ function estadoDeRegistro(c: ChecklistComboio): ChecklistState {
   };
 }
 
-const TIPO_LABEL: Record<string, string> = { RECEBIMENTO: "Recebimento", DEVOLUCAO: "Devolução" };
-const TIPO_BADGE: Record<string, string> = {
-  RECEBIMENTO: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  DEVOLUCAO: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+const TIPO_LABEL: Record<string, string> = { ENTRADA: "Entrada", DEVOLUCAO: "Devolução", RECEBIMENTO: "Recebimento" };
+const RESULTADO_COLOR: Record<Resultado, string> = {
+  LIBERADO: "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
+  RESSALVAS: "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
+  INTERDITADO: "bg-red-50 border-red-400 text-red-700 dark:bg-red-900/20 dark:text-red-400",
+};
+const RESULTADO_ICON: Record<Resultado, any> = { LIBERADO: ShieldCheck, RESSALVAS: AlertTriangle, INTERDITADO: ShieldAlert };
+
+// Mapeia a frota (chave minúscula do config) pro valor usado na coluna `tipo` de
+// equipamentos (cadastro de Base de Frotas), pra filtrar a lista de placas sugeridas.
+const FROTA_PARA_TIPO_EQUIPAMENTO: Record<FrotaKey, string> = {
+  comboio: "COMBOIO", pipa: "PIPA", multifuncional: "MULTIFUNCIONAL", munck: "MUNCK",
 };
 
-// ── PDF customizado (jsPDF) — mesmo layout/cores do protótipo validado em campo ──
+// ── PDF customizado (jsPDF) ───────────────────────────────────────────────────
 const COLORS: Record<string, [number, number, number]> = {
   C: [30, 122, 70], N: [30, 122, 70], NC: [194, 50, 31], F: [194, 50, 31], NA: [110, 120, 114], M: [180, 130, 0],
 };
 const LABEL: Record<string, string> = { C: "C", NC: "NC", NA: "NA", N: "Normal", M: "Meia vida", F: "Fim de vida" };
+const RESULT_COLOR_PDF: Record<Resultado, [number, number, number]> = {
+  LIBERADO: [30, 122, 70], RESSALVAS: [180, 130, 0], INTERDITADO: [194, 50, 31],
+};
 const BRAND: [number, number, number] = [30, 90, 60];
 
 function fmtDataBr(d: string) {
@@ -95,7 +109,7 @@ function fmtDataBr(d: string) {
   return dd && m && a ? `${dd}/${m}/${a}` : d;
 }
 
-async function buildPDF(S: ChecklistState): Promise<any> {
+async function buildPDF(S: ChecklistState, resultado: Resultado): Promise<any> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = 210, M = 12, CW = W - 2 * M, BOTTOM = 284;
@@ -127,14 +141,24 @@ async function buildPDF(S: ChecklistState): Promise<any> {
     if (col) y += rowH + 1;
   }
 
+  const secoes = secoesParaFrota(S.frotaTipo, S.tipo);
+
   // header
   doc.setFillColor(...BRAND); doc.rect(0, 0, W, 24, "F");
   doc.setFillColor(242, 183, 5); doc.rect(0, 24, W, 1.6, "F");
   doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-  doc.text(`Checklist de ${TIPO_LABEL[S.tipo].toLowerCase()} - Caminhao comboio`, M, 11);
+  doc.text(`Checklist de ${TIPO_LABEL[S.tipo].toLowerCase()} - ${FROTAS[S.frotaTipo]}`, M, 11);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10);
   doc.text(`Placa ${S.id.placa || "-"}   |   Data ${fmtDataBr(S.id.data)}${S.id.hora ? " " + S.id.hora : ""}   |   Mecanico ${S.id.mecanico || "-"}`, M, 18);
   y = 32; doc.setTextColor(23, 34, 28);
+
+  // resultado
+  const rc = RESULT_COLOR_PDF[resultado];
+  ensure(12);
+  doc.setFillColor(...rc); doc.roundedRect(M, y, CW, 10, 1.5, 1.5, "F");
+  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(`RESULTADO: ${RESULTADO_LABEL[resultado].toUpperCase()}`, M + CW / 2, y + 6.5, { align: "center" });
+  y += 15; doc.setTextColor(23, 34, 28);
 
   // identificação
   section("Identificacao");
@@ -153,7 +177,7 @@ async function buildPDF(S: ChecklistState): Promise<any> {
 
   // resumo
   let c = 0, nc = 0, na = 0, sem = 0;
-  SECTIONS.forEach((s, si) => { if (s.tire) return; s.items.forEach((_, ii) => { const v = S.items[itemKey(si, ii)]?.s; if (v === "C") c++; else if (v === "NC") nc++; else if (v === "NA") na++; else sem++; }); });
+  secoes.forEach(({ sec, itens }) => { if (sec.tire) return; itens.forEach(it => { const v = S.items[itemKey(sec.t, it.t)]?.s; if (v === "C") c++; else if (v === "NC") nc++; else if (v === "NA") na++; else sem++; }); });
   y += 2; ensure(14);
   const boxes: [string, number, [number, number, number]][] = [["Conforme", c, COLORS.C], ["Nao conforme", nc, COLORS.NC], ["Nao se aplica", na, COLORS.NA], ["Sem resposta", sem, [150, 150, 150]]];
   const bw = (CW - 9) / 4;
@@ -174,30 +198,33 @@ async function buildPDF(S: ChecklistState): Promise<any> {
   }
 
   // seções de itens
-  SECTIONS.forEach((sec, si) => {
+  secoes.forEach(({ sec, itens }) => {
     section(sec.t);
-    sec.items.forEach((name, ii) => {
-      const it = S.items[itemKey(si, ii)] || { s: "", obs: "", photos: [] };
-      const lbl = (sec.tire ? "Pneu " : `${si + 1}.${ii + 1}  `) + name;
+    itens.forEach(it => {
+      const key = itemKey(sec.t, it.t);
+      const resp = S.items[key] || { s: "", obs: "", reparado: false, photos: [] };
+      const lbl = (it.critical ? "[CRITICO] " : "") + it.t;
       doc.setFontSize(9.5); doc.setFont("helvetica", "normal");
       const lines = doc.splitTextToSize(lbl, CW - 34);
-      const obsLines = it.obs ? doc.splitTextToSize("Obs: " + it.obs, CW - 34) : [];
+      let obsTxt = resp.obs ? "Obs: " + resp.obs : "";
+      if ((resp.s === "NC" || resp.s === "F") && resp.reparado) obsTxt += (obsTxt ? " " : "") + "[REPARADO]";
+      const obsLines = obsTxt ? doc.splitTextToSize(obsTxt, CW - 34) : [];
       const h = Math.max(lines.length, 1) * 4.4 + obsLines.length * 4.2 + 2.6;
       ensure(h);
       doc.setTextColor(23, 34, 28); doc.text(lines, M, y + 3.6);
-      const v = it.s; const col2 = v ? COLORS[v] : [160, 160, 160] as [number, number, number];
+      const v = resp.s; const col2 = v ? COLORS[v] : [160, 160, 160] as [number, number, number];
       doc.setFillColor(...col2); doc.roundedRect(W - M - 28, y, 28, 5.6, 1, 1, "F");
       doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
       doc.text(v ? LABEL[v] : "sem resposta", W - M - 14, y + 3.9, { align: "center" });
       if (obsLines.length) {
-        const red = v === "NC" || v === "F";
+        const red = (v === "NC" || v === "F") && !resp.reparado;
         doc.setFont("helvetica", "italic"); doc.setFontSize(9);
         doc.setTextColor(red ? 194 : 91, red ? 50 : 106, red ? 31 : 97);
         doc.text(obsLines, M, y + 3.6 + lines.length * 4.4);
       }
       y += h;
       doc.setDrawColor(213, 220, 215); doc.setLineWidth(0.2); doc.line(M, y - 1, W - M, y - 1);
-      if (it.photos?.length) { y += 1; photoGrid(it.photos.map(p => ({ p })), 4); }
+      if (resp.photos?.length) { y += 1; photoGrid(resp.photos.map(p => ({ p })), 4); }
     });
     y += 3;
   });
@@ -226,8 +253,8 @@ async function buildPDF(S: ChecklistState): Promise<any> {
     if (scol === 0) ensure(SH + 13);
     const x = M + scol * (colW + 10);
     if (sig?.dataUrl) {
-      let w = colW * 0.85, ih = w; // assume roughly square canvas ratio fallback
-      doc.addImage(sig.dataUrl, "PNG", x, y + SH - Math.min(ih, SH), w, Math.min(ih, SH));
+      const w = colW * 0.85;
+      doc.addImage(sig.dataUrl, "PNG", x, y + SH - Math.min(w, SH), w, Math.min(w, SH));
     }
     doc.setDrawColor(23, 34, 28); doc.setLineWidth(0.3); doc.line(x, y + SH + 1, x + colW, y + SH + 1);
     doc.setFontSize(8.5); doc.setFont("helvetica", "bold"); doc.setTextColor(23, 34, 28); doc.text(s.p, x, y + SH + 5);
@@ -247,7 +274,7 @@ async function buildPDF(S: ChecklistState): Promise<any> {
   return doc;
 }
 
-// ── Assinatura por toque/mouse (canvas) ──────────────────────────────────────
+// ── Assinatura por toque/mouse ────────────────────────────────────────────────
 function SignaturePad({ value, onChange }: { value: string | null; onChange: (dataUrl: string | null) => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -320,7 +347,6 @@ function SignaturePad({ value, onChange }: { value: string | null; onChange: (da
   );
 }
 
-// ── Slot de múltiplas fotos (usado em itens, fotos gerais e avarias) ─────────
 function FotoMultiSlot({ photos, onAdd, onRemove, onExpand, readOnly }: {
   photos: Foto[]; onAdd?: (files: FileList | null) => void; onRemove?: (i: number) => void; onExpand: (d: string) => void; readOnly?: boolean;
 }) {
@@ -344,14 +370,14 @@ function FotoMultiSlot({ photos, onAdd, onRemove, onExpand, readOnly }: {
   );
 }
 
-export default function ChecklistComboioClient({
+export default function ChecklistFrotaClient({
   isVisitante, initialChecklists, equipamentos,
-}: { isVisitante: boolean; initialChecklists: ChecklistComboio[]; equipamentos: any[] }) {
+}: { isVisitante: boolean; initialChecklists: ChecklistFrota[]; equipamentos: any[] }) {
   const { isOnline } = useOffline();
-  const [checklists, setChecklists] = useState<ChecklistComboio[]>(initialChecklists);
+  const [checklists, setChecklists] = useState<ChecklistFrota[]>(initialChecklists);
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [viewChecklist, setViewChecklist] = useState<ChecklistComboio | null>(null);
+  const [viewChecklist, setViewChecklist] = useState<ChecklistFrota | null>(null);
   const [exportandoPdf, setExportandoPdf] = useState<"download" | "share" | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
@@ -360,8 +386,9 @@ export default function ChecklistComboioClient({
   const [S, setS] = useState<ChecklistState>(estadoVazio());
 
   const setId = (k: string, v: string) => setS(prev => ({ ...prev, id: { ...prev.id, [k]: k === "placa" ? v.toUpperCase() : v } }));
-  const setItemStatus = (key: string, v: string) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], s: prev.items[key].s === v ? "" : v } } }));
+  const setItemStatus = (key: string, v: string) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], s: prev.items[key].s === v ? "" : v, reparado: prev.items[key].s === v ? false : prev.items[key].reparado } } }));
   const setItemObs = (key: string, v: string) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], obs: v } } }));
+  const setItemReparado = (key: string, v: boolean) => setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], reparado: v } } }));
   const addItemFotos = async (key: string, files: FileList | null) => {
     const novas = await readFiles(files);
     setS(prev => ({ ...prev, items: { ...prev.items, [key]: { ...prev.items[key], photos: [...prev.items[key].photos, ...novas] } } }));
@@ -385,17 +412,37 @@ export default function ChecklistComboioClient({
 
   const setAssinatura = (k: string, dataUrl: string | null) => setS(prev => ({ ...prev, assinaturas: { ...prev.assinaturas, [k]: { nome: prev.assinaturas[k]?.nome || "", matricula: prev.assinaturas[k]?.matricula || "", dataUrl } } }));
 
+  const marcarPendentesComoC = (secaoTitulo: string, itens: { t: string }[], tire: boolean) => {
+    setS(prev => {
+      const novos = { ...prev.items };
+      itens.forEach(it => {
+        const key = itemKey(secaoTitulo, it.t);
+        if (!novos[key]?.s) novos[key] = { ...novos[key], s: tire ? "N" : "C" };
+      });
+      return { ...prev, items: novos };
+    });
+  };
+
+  const equipamentosFiltrados = useMemo(
+    () => equipamentos.filter(e => e.tipo === FROTA_PARA_TIPO_EQUIPAMENTO[S.frotaTipo]),
+    [equipamentos, S.frotaTipo]
+  );
+
   const handlePlacaChange = (val: string) => {
     setId("placa", val);
     const eq = equipamentos.find(e => e.placa?.toLowerCase() === val.toLowerCase());
     if (eq) { setId("nucleo", eq.local || eq.area || eq.modulo || ""); setId("modelo", eq.modelo || ""); }
   };
 
+  const secoesAtuais = useMemo(() => secoesParaFrota(S.frotaTipo, S.tipo), [S.frotaTipo, S.tipo]);
+
   const progresso = useMemo(() => {
     let t = 0, n = 0;
-    SECTIONS.forEach((sec, si) => { t += sec.items.length; sec.items.forEach((_, ii) => { if (S.items[itemKey(si, ii)]?.s) n++; }); });
+    secoesAtuais.forEach(({ sec, itens }) => { t += itens.length; itens.forEach(it => { if (S.items[itemKey(sec.t, it.t)]?.s) n++; }); });
     return { n, t };
-  }, [S.items]);
+  }, [secoesAtuais, S.items]);
+
+  const resultadoAtual = useMemo(() => calcularResultado(S.frotaTipo, S.tipo, S.items), [S.frotaTipo, S.tipo, S.items]);
 
   const abrirNovo = () => { setS(estadoVazio()); setErroMsg(null); setModalOpen(true); };
 
@@ -403,12 +450,15 @@ export default function ChecklistComboioClient({
     setErroMsg(null);
     const faltando = ID_FIELDS.filter(f => f.req && !S.id[f.k]?.trim()).map(f => f.l);
     if (faltando.length) { setErroMsg("Preencha: " + faltando.join(", ") + "."); return; }
-    const ncSemObs = Object.values(S.items).filter(it => (it.s === "NC" || it.s === "F") && !it.obs?.trim());
+    const ncSemObs: string[] = [];
+    secoesAtuais.forEach(({ sec, itens }) => itens.forEach(it => {
+      const r = S.items[itemKey(sec.t, it.t)];
+      if ((r?.s === "NC" || r?.s === "F") && !r.obs?.trim()) ncSemObs.push(it.t);
+    }));
     if (ncSemObs.length) { setErroMsg(`Há ${ncSemObs.length} item(ns) com problema sem descrição. Escreva o que foi encontrado antes de salvar.`); return; }
 
     setLoading(true);
     try {
-      // Garante nome/matrícula dentro de cada assinatura (vêm de S.id pros 2 primeiros papéis)
       const assinaturasFinal: Record<string, Assinatura> = {};
       SIGS.forEach(sig => {
         assinaturasFinal[sig.k] = {
@@ -420,6 +470,7 @@ export default function ChecklistComboioClient({
 
       const payload = {
         tipo_checklist: S.tipo,
+        frota_tipo: S.frotaTipo,
         placa: S.id.placa,
         frota: S.id.frota || null,
         marca_modelo: S.id.modelo || null,
@@ -440,24 +491,25 @@ export default function ChecklistComboioClient({
         avarias: S.avarias,
         assinaturas: assinaturasFinal,
         observacoes_gerais: S.obs || null,
+        resultado: resultadoAtual,
       };
 
       if (isOnline) {
-        const res = await salvarChecklistComboio(payload);
+        const res = await salvarChecklistFrota(payload);
         if (res && "error" in res) throw new Error(res.error);
         const saved = (res as any).data;
         setChecklists(prev => [saved, ...prev]);
-        await localDb.put("checklist_comboio", saved);
+        await localDb.put("checklist_frota", saved);
       } else {
-        const tempId = `temp_cc_${Date.now()}`;
+        const tempId = `temp_cf_${Date.now()}`;
         const newItem = { id: tempId, ...payload, status: "Fechado", filial_id: "MATRIZ", _isPendingSync: true };
-        await localDb.put("checklist_comboio", newItem);
-        await localDb.addToQueue("checklist_comboio", "create", payload);
+        await localDb.put("checklist_frota", newItem);
+        await localDb.addToQueue("checklist_frota", "create", payload);
         setChecklists(prev => [newItem as any, ...prev]);
         alert("✅ Checklist salvo localmente! Sincronizará automaticamente quando restabelecer conexão.");
       }
 
-      window.dispatchEvent(new CustomEvent("offline-db-updated-checklist_comboio"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-checklist_frota"));
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
       setModalOpen(false);
     } catch (err: any) {
@@ -473,29 +525,30 @@ export default function ChecklistComboioClient({
     setDeletingId(null);
     try {
       if (isOnline) {
-        const res = await excluirChecklistComboio(id);
+        const res = await excluirChecklistFrota(id);
         if (res && "error" in res) { alert(res.error); return; }
-        await localDb.delete("checklist_comboio", id);
+        await localDb.delete("checklist_frota", id);
       } else {
-        await localDb.delete("checklist_comboio", id);
-        await localDb.addToQueue("checklist_comboio", "delete", { id });
+        await localDb.delete("checklist_frota", id);
+        await localDb.addToQueue("checklist_frota", "delete", { id });
       }
       setChecklists(prev => prev.filter(c => c.id !== id));
-      window.dispatchEvent(new CustomEvent("offline-db-updated-checklist_comboio"));
+      window.dispatchEvent(new CustomEvent("offline-db-updated-checklist_frota"));
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
     } catch (err: any) {
       alert("Erro ao excluir: " + (err.message || String(err)));
     }
   };
 
-  const handleExportPDF = async (checklist: ChecklistComboio, modo: "download" | "share") => {
+  const handleExportPDF = async (checklist: ChecklistFrota, modo: "download" | "share") => {
     setExportandoPdf(modo);
     try {
       const estado = estadoDeRegistro(checklist);
-      const doc = await buildPDF(estado);
+      const resultado = checklist.resultado || calcularResultado(estado.frotaTipo, estado.tipo, estado.items);
+      const doc = await buildPDF(estado, resultado);
       const blob: Blob = doc.output("blob");
-      const filename = `Checklist_${TIPO_LABEL[checklist.tipo_checklist].replace("ç", "c").replace("ã", "a")}_${checklist.placa}_${checklist.data_checklist}.pdf`;
-      await salvarOuCompartilharBlob(blob, filename, `Checklist Comboio — ${checklist.placa}`, `Checklist de ${TIPO_LABEL[checklist.tipo_checklist]} (Comboio) da placa ${checklist.placa}`, modo);
+      const filename = `Checklist_${TIPO_LABEL[checklist.tipo_checklist]}_${FROTAS[checklist.frota_tipo]}_${checklist.placa}_${checklist.data_checklist}.pdf`.replace(/ç/g, "c").replace(/ã/g, "a");
+      await salvarOuCompartilharBlob(blob, filename, `Checklist — ${checklist.placa}`, `Checklist de ${TIPO_LABEL[checklist.tipo_checklist]} (${FROTAS[checklist.frota_tipo]}) da placa ${checklist.placa}`, modo);
     } catch (err: any) {
       alert("Erro ao gerar o PDF: " + (err.message || String(err)));
     } finally {
@@ -503,25 +556,23 @@ export default function ChecklistComboioClient({
     }
   };
 
-  // ── Render de item (checklist em preenchimento, ou leitura de um salvo) ────
-  const renderItemLive = (si: number, ii: number) => {
-    const sec = SECTIONS[si];
-    const key = itemKey(si, ii);
-    const it = S.items[key];
+  const renderItemLive = (sec: { t: string; tire?: boolean }, it: { t: string; critical?: boolean }) => {
+    const key = itemKey(sec.t, it.t);
+    const resp = S.items[key] || { s: "", obs: "", reparado: false, photos: [] };
     const vals = sec.tire ? ["N", "M", "F"] : ["C", "NC", "NA"];
-    const needObs = it.s === "NC" || it.s === "F";
+    const problema = resp.s === "NC" || resp.s === "F";
     return (
       <div key={key} className="border-t border-zinc-100 dark:border-zinc-800 py-3 first:border-t-0">
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="flex-1 min-w-[160px] text-sm font-medium dark:text-zinc-200">
-            {!sec.tire && <b className="text-zinc-400 dark:text-zinc-500 mr-1">{si + 1}.{ii + 1}</b>}
-            {sec.items[ii]}
+          <span className="flex-1 min-w-[160px] text-sm font-medium dark:text-zinc-200 flex items-center gap-1.5">
+            {it.critical && <AlertTriangle size={13} className="text-red-500 shrink-0" />}
+            {it.t}
           </span>
           <div className="flex gap-1.5">
             {vals.map(v => (
               <button key={v} type="button" onClick={() => setItemStatus(key, v)} className={cn(
                 "min-w-[44px] h-9 rounded-lg border-2 text-xs font-bold transition-colors",
-                it.s === v
+                resp.s === v
                   ? v === "NC" || v === "F" ? "bg-red-50 border-red-500 text-red-600 dark:bg-red-900/20"
                   : v === "NA" || v === "M" ? "bg-zinc-100 border-zinc-400 text-zinc-600 dark:bg-zinc-800"
                   : "bg-emerald-50 border-emerald-500 text-emerald-600 dark:bg-emerald-900/20"
@@ -530,33 +581,47 @@ export default function ChecklistComboioClient({
             ))}
           </div>
         </div>
-        {(it.s || it.obs) && (
+        {(resp.s || resp.obs) && (
           <input
-            type="text" value={it.obs} onChange={e => setItemObs(key, e.target.value)}
-            placeholder={needObs ? "Descreva o problema (obrigatório)" : "Observação"}
+            type="text" value={resp.obs} onChange={e => setItemObs(key, e.target.value)}
+            placeholder={problema ? "Descreva o problema (obrigatório)" : "Observação"}
             className={cn("mt-2 w-full text-xs rounded-lg border px-3 py-2 outline-none bg-white dark:bg-zinc-950",
-              needObs && !it.obs ? "border-red-400 bg-red-50 dark:bg-red-900/10" : "border-zinc-200 dark:border-zinc-700")}
+              problema && !resp.obs ? "border-red-400 bg-red-50 dark:bg-red-900/10" : "border-zinc-200 dark:border-zinc-700")}
           />
         )}
-        <FotoMultiSlot photos={it.photos} onAdd={f => addItemFotos(key, f)} onRemove={i => delItemFoto(key, i)} onExpand={setFotoExpandida} />
+        {problema && (
+          <label className="flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 cursor-pointer w-fit">
+            <input type="checkbox" checked={resp.reparado} onChange={e => setItemReparado(key, e.target.checked)} className="rounded" />
+            Reparado {it.critical && <span className="text-red-500">(crítico — sem reparo interdita o equipamento)</span>}
+          </label>
+        )}
+        <FotoMultiSlot photos={resp.photos} onAdd={f => addItemFotos(key, f)} onRemove={i => delItemFoto(key, i)} onExpand={setFotoExpandida} />
       </div>
     );
   };
 
-  const renderItemView = (si: number, ii: number, estado: ChecklistState) => {
-    const sec = SECTIONS[si];
-    const key = itemKey(si, ii);
-    const it = estado.items[key] || { s: "", obs: "", photos: [] };
-    const v = it.s;
+  const renderItemView = (sec: { t: string; tire?: boolean }, it: { t: string; critical?: boolean }, estado: ChecklistState) => {
+    const key = itemKey(sec.t, it.t);
+    const resp = estado.items[key] || { s: "", obs: "", reparado: false, photos: [] };
+    const v = resp.s;
     const color = !v ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800" : (v === "NC" || v === "F") ? "bg-red-600 text-white" : (v === "NA" || v === "M") ? "bg-zinc-500 text-white" : "bg-emerald-600 text-white";
     return (
       <div key={key} className="border-t border-zinc-100 py-2.5 first:border-t-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-zinc-700">{!sec.tire && <b className="text-zinc-400 mr-1">{si + 1}.{ii + 1}</b>}{sec.items[ii]}</span>
+          <span className="text-xs font-medium text-zinc-700 flex items-center gap-1">{it.critical && <AlertTriangle size={11} className="text-red-500" />}{it.t}</span>
           <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap", color)}>{v ? LABEL[v] : "sem resposta"}</span>
         </div>
-        {it.obs && <p className="text-[11px] text-red-600 italic mt-1">Obs: {it.obs}</p>}
-        {it.photos?.length > 0 && <FotoMultiSlot photos={it.photos} onExpand={setFotoExpandida} readOnly />}
+        {resp.obs && <p className="text-[11px] text-red-600 italic mt-1">Obs: {resp.obs}{resp.reparado ? " — REPARADO" : ""}</p>}
+        {resp.photos?.length > 0 && <FotoMultiSlot photos={resp.photos} onExpand={setFotoExpandida} readOnly />}
+      </div>
+    );
+  };
+
+  const ResultadoBanner = ({ resultado }: { resultado: Resultado }) => {
+    const Icon = RESULTADO_ICON[resultado];
+    return (
+      <div className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-bold", RESULTADO_COLOR[resultado])}>
+        <Icon size={18} /> Resultado: {RESULTADO_LABEL[resultado]}
       </div>
     );
   };
@@ -567,9 +632,9 @@ export default function ChecklistComboioClient({
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <ClipboardCheck className="text-blue-500" size={24} /> Checklist Comboio — Entrega/Recebimento
+            <ClipboardCheck className="text-blue-500" size={24} /> Checklist de Frota
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Checklist padrão de devolução e recebimento, com foto por item, fotos gerais, avarias e assinaturas</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Entrada, devolução e recebimento de Comboio, Pipa, Multifuncional e Munck — com foto por item</p>
         </div>
         {!isVisitante && (
           <button onClick={abrirNovo} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
@@ -584,21 +649,26 @@ export default function ChecklistComboioClient({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                {["Data", "Tipo", "Placa", "Núcleo", "Mecânico", "Ações"].map(h => (
+                {["Data", "Frota", "Tipo", "Placa", "Mecânico", "Resultado", "Ações"].map(h => (
                   <th key={h} className={cn("px-3 py-3 text-[11px] font-semibold text-blue-500 uppercase tracking-wider", h === "Ações" ? "text-right" : "text-left")}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
               {checklists.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum checklist encontrado</td></tr>
+                <tr><td colSpan={7} className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhum checklist encontrado</td></tr>
               ) : checklists.map(c => (
                 <tr key={c.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
                   <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{c.data_checklist?.split("-").reverse().join("/")}</td>
-                  <td className="px-3 py-2.5"><span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", TIPO_BADGE[c.tipo_checklist])}>{TIPO_LABEL[c.tipo_checklist]}</span></td>
+                  <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{FROTAS[c.frota_tipo] || c.frota_tipo}</td>
+                  <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{TIPO_LABEL[c.tipo_checklist]}</td>
                   <td className="px-3 py-2.5 font-semibold text-zinc-800 dark:text-zinc-200">{c.placa}</td>
-                  <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{c.nucleo || "-"}</td>
                   <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{c.mecanico || "-"}</td>
+                  <td className="px-3 py-2.5">
+                    {c.resultado ? (
+                      <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap", RESULTADO_COLOR[c.resultado as Resultado])}>{RESULTADO_LABEL[c.resultado as Resultado]}</span>
+                    ) : "-"}
+                  </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
                       <button title="Ver / Gerar PDF" onClick={() => setViewChecklist(c)} className="p-1.5 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><FileText size={14} /></button>
@@ -621,7 +691,7 @@ export default function ChecklistComboioClient({
           <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             <div className="p-5 border-b dark:border-zinc-800 flex justify-between items-center gap-4 bg-white dark:bg-zinc-950">
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-bold dark:text-white">Novo Checklist Comboio</h2>
+                <h2 className="text-lg font-bold dark:text-white">Novo Checklist de Frota</h2>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="h-1.5 flex-1 max-w-[200px] bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-600 transition-all" style={{ width: `${progresso.t ? progresso.n / progresso.t * 100 : 0}%` }} />
@@ -633,12 +703,21 @@ export default function ChecklistComboioClient({
             </div>
 
             <div className="overflow-y-auto p-5 space-y-6">
-              {/* Tipo + identificação */}
+              {/* Frota + Tipo + identificação */}
               <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border dark:border-zinc-800">
-                <div className="flex border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden mb-4 max-w-sm">
-                  {(["DEVOLUCAO", "RECEBIMENTO"] as const).map(t => (
-                    <button key={t} type="button" onClick={() => setS(prev => ({ ...prev, tipo: t }))} className={cn("flex-1 py-2.5 text-sm font-bold", S.tipo === t ? "bg-blue-600 text-white" : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400")}>
-                      {TIPO_LABEL[t]}
+                <p className="text-[11px] font-bold uppercase text-zinc-500 mb-1.5">Frota</p>
+                <div className="flex border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden mb-4 flex-wrap">
+                  {(Object.keys(FROTAS) as FrotaKey[]).map(k => (
+                    <button key={k} type="button" onClick={() => setS(prev => ({ ...prev, frotaTipo: k }))} className={cn("flex-1 min-w-[90px] py-2.5 text-sm font-bold", S.frotaTipo === k ? "bg-blue-600 text-white" : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400")}>
+                      {FROTAS[k]}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] font-bold uppercase text-zinc-500 mb-1.5">Tipo de checklist</p>
+                <div className="flex border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden mb-4 max-w-md">
+                  {TIPOS.map(t => (
+                    <button key={t.k} type="button" onClick={() => setS(prev => ({ ...prev, tipo: t.k }))} className={cn("flex-1 py-2.5 text-sm font-bold", S.tipo === t.k ? "bg-blue-600 text-white" : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400")}>
+                      {t.l}
                     </button>
                   ))}
                 </div>
@@ -648,8 +727,8 @@ export default function ChecklistComboioClient({
                       <label className={cn("block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1", f.req && "after:content-['_*'] after:text-red-500")}>{f.l}</label>
                       {f.k === "placa" ? (
                         <>
-                          <input list="placas-comboio" value={S.id.placa || ""} onChange={e => handlePlacaChange(e.target.value)} placeholder="ABC-1234" className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500 uppercase" />
-                          <datalist id="placas-comboio">{equipamentos.map((eq, i) => <option key={i} value={eq.placa}>{eq.placa} ({eq.local || eq.area})</option>)}</datalist>
+                          <input list="placas-frota" value={S.id.placa || ""} onChange={e => handlePlacaChange(e.target.value)} placeholder="ABC-1234" className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500 uppercase" />
+                          <datalist id="placas-frota">{equipamentosFiltrados.map((eq, i) => <option key={i} value={eq.placa}>{eq.placa} ({eq.local || eq.area})</option>)}</datalist>
                         </>
                       ) : (
                         <input type={f.type || "text"} value={S.id[f.k] || ""} onChange={e => setId(f.k, e.target.value)} className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2 text-sm dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
@@ -659,11 +738,13 @@ export default function ChecklistComboioClient({
                 </div>
               </div>
 
+              <ResultadoBanner resultado={resultadoAtual} />
+
               {/* Fotos gerais */}
               <details open className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
                 <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300">Fotos gerais do caminhão</summary>
                 <div className="p-4 pt-0">
-                  <p className="text-xs text-zinc-400 mb-3">Uma foto de cada lado, do painel com o km e do implemento.</p>
+                  <p className="text-xs text-zinc-400 mb-3">Uma foto de cada lado, do painel com o km, do horímetro e do implemento.</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {GERAL.map((g, gi) => (
                       <div key={gi} className="border border-dashed border-zinc-200 dark:border-zinc-700 rounded-lg p-3">
@@ -675,16 +756,21 @@ export default function ChecklistComboioClient({
                 </div>
               </details>
 
-              {/* Seções de itens */}
-              {SECTIONS.map((sec, si) => (
-                <details key={si} open={si === 0} className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
-                  <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+              {/* Seções de itens (filtradas por frota + tipo) */}
+              {secoesAtuais.map(({ sec, itens }, si) => (
+                <details key={sec.t} open={si === 0} className="bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-xl">
+                  <summary className="px-4 py-3 cursor-pointer font-bold text-sm text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-2">
                     <span>{sec.t}</span>
-                    <span className="text-[10px] font-bold text-zinc-400">{sec.items.filter((_, ii) => S.items[itemKey(si, ii)]?.s).length}/{sec.items.length}</span>
+                    <span className="flex items-center gap-2">
+                      <button type="button" onClick={e => { e.preventDefault(); marcarPendentesComoC(sec.t, itens, !!sec.tire); }} className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                        Marcar pendentes como {sec.tire ? "N" : "C"}
+                      </button>
+                      <span className="text-[10px] font-bold text-zinc-400">{itens.filter(it => S.items[itemKey(sec.t, it.t)]?.s).length}/{itens.length}</span>
+                    </span>
                   </summary>
                   <div className="px-4 pb-3">
                     {sec.tire && <p className="text-xs text-zinc-400 mb-1">N = normal, M = meia vida, F = fim de vida.</p>}
-                    {sec.items.map((_, ii) => renderItemLive(si, ii))}
+                    {itens.map(it => renderItemLive(sec, it))}
                   </div>
                 </details>
               ))}
@@ -746,11 +832,13 @@ export default function ChecklistComboioClient({
       {/* Visualização (histórico) */}
       {viewChecklist && (() => {
         const estado = estadoDeRegistro(viewChecklist);
+        const secoesView = secoesParaFrota(estado.frotaTipo, estado.tipo);
+        const resultado = viewChecklist.resultado as Resultado || calcularResultado(estado.frotaTipo, estado.tipo, estado.items);
         return (
           <div className="fixed inset-0 z-[100] flex justify-center bg-zinc-100 dark:bg-zinc-950 overflow-y-auto">
             <div className="w-full max-w-3xl bg-white p-6 min-h-screen shadow-xl relative">
               <div className="flex justify-between items-start gap-3 flex-wrap mb-4 sticky top-0 bg-white pb-3 z-10">
-                <h1 className="text-lg font-black uppercase text-zinc-900">Checklist de {TIPO_LABEL[estado.tipo].toLowerCase()} — {estado.id.placa}</h1>
+                <h1 className="text-lg font-black uppercase text-zinc-900">Checklist de {TIPO_LABEL[estado.tipo].toLowerCase()} — {FROTAS[estado.frotaTipo]} {estado.id.placa}</h1>
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => handleExportPDF(viewChecklist, "download")} disabled={!!exportandoPdf} className="px-3 py-2 bg-blue-600 text-white rounded font-bold text-xs shadow hover:bg-blue-700 flex items-center gap-1.5 disabled:opacity-60">
                     <Download size={14} /> {exportandoPdf === "download" ? "Gerando..." : "Baixar PDF"}
@@ -761,6 +849,8 @@ export default function ChecklistComboioClient({
                   <button onClick={() => setViewChecklist(null)} className="p-2 bg-zinc-200 text-zinc-600 rounded hover:bg-zinc-300 shadow"><X size={18} /></button>
                 </div>
               </div>
+
+              <div className="mb-4"><ResultadoBanner resultado={resultado} /></div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5 p-3 border rounded bg-zinc-50 border-zinc-200 text-zinc-800 text-xs">
                 {ID_FIELDS.filter(f => f.k !== "data" && f.k !== "hora").map(f => (
@@ -783,10 +873,10 @@ export default function ChecklistComboioClient({
                 </div>
               )}
 
-              {SECTIONS.map((sec, si) => (
-                <div key={si} className="mb-5">
+              {secoesView.map(({ sec, itens }) => (
+                <div key={sec.t} className="mb-5">
                   <h3 className="font-bold bg-zinc-200 p-1.5 px-2 text-xs uppercase mb-1">{sec.t}</h3>
-                  {sec.items.map((_, ii) => renderItemView(si, ii, estado))}
+                  {itens.map(it => renderItemView(sec, it, estado))}
                 </div>
               ))}
 
