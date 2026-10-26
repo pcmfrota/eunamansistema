@@ -522,45 +522,45 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                 const isDateNull = !item.cnh_validade;
                 const dias = isDateNull ? null : calcularDias(item.cnh_validade as string);
                 return (
-                  <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
-                    <td className="px-3 py-2.5 font-mono text-[12px] text-zinc-500">{item.matricula || "-"}</td>
-                    <td className="px-3 py-2.5 font-semibold text-zinc-800 dark:text-zinc-200">{item.nome}</td>
-                    <td className="px-3 py-2.5 font-mono text-[11px] text-zinc-500">{item.cpf || "-"}</td>
-                    <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{item.cargo || "-"}</td>
-                    <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400">{item.local || "-"}</td>
-                    <td className="px-3 py-2.5 text-zinc-600 dark:text-zinc-400 text-[11px]">{item.numero_cartao || "-"}</td>
-                    <td className="px-3 py-2.5"><SimNaoBadge value={item.cartao_ativo} /></td>
-                    <td className="px-3 py-2.5">
+                  <tr key={item.id} className="odd:bg-white even:bg-zinc-50/60 dark:odd:bg-zinc-950 dark:even:bg-zinc-900/30 hover:bg-blue-50/50 dark:hover:bg-zinc-900 transition-colors">
+                    <td className="px-3 py-3 text-sm text-zinc-500 dark:text-zinc-500 tabular-nums">{item.matricula || "-"}</td>
+                    <td className="px-3 py-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.nome}</td>
+                    <td className="px-3 py-3 text-sm text-zinc-500 dark:text-zinc-500 tabular-nums">{item.cpf || "-"}</td>
+                    <td className="px-3 py-3 text-sm text-zinc-600 dark:text-zinc-400">{item.cargo || "-"}</td>
+                    <td className="px-3 py-3 text-sm text-zinc-600 dark:text-zinc-400">{item.local || "-"}</td>
+                    <td className="px-3 py-3 text-sm text-zinc-600 dark:text-zinc-400 tabular-nums">{item.numero_cartao || "-"}</td>
+                    <td className="px-3 py-3"><SimNaoBadge value={item.cartao_ativo} /></td>
+                    <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-zinc-500">{formatarData(item.cnh_validade)}</span>
+                        <span className="text-sm text-zinc-500 dark:text-zinc-500 tabular-nums">{formatarData(item.cnh_validade)}</span>
                         {getCnhBadge(dias)}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-3">
                       {item.cnh_anexo_url ? (
-                        <div className="flex items-center gap-2">
-                          <a href={item.cnh_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-bold flex items-center gap-1"><Eye size={12} /> Ver</a>
-                          <a href={item.cnh_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-blue-600 text-[10px] font-bold flex items-center gap-1"><Download size={12} /> Baixar</a>
+                        <div className="flex items-center gap-3">
+                          <a href={item.cnh_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-xs font-semibold flex items-center gap-1"><Eye size={13} /> Ver</a>
+                          <a href={item.cnh_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-500 hover:text-blue-600 text-xs font-semibold flex items-center gap-1"><Download size={13} /> Baixar</a>
                         </div>
-                      ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
+                      ) : <span className="text-zinc-400 dark:text-zinc-600 text-xs">Sem anexo</span>}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-3">
                       {item.termos_anexo_url ? (
-                        <div className="flex items-center gap-2">
-                          <a href={item.termos_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-bold flex items-center gap-1"><Eye size={12} /> Ver</a>
-                          <a href={item.termos_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-blue-600 text-[10px] font-bold flex items-center gap-1"><Download size={12} /> Baixar</a>
+                        <div className="flex items-center gap-3">
+                          <a href={item.termos_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-xs font-semibold flex items-center gap-1"><Eye size={13} /> Ver</a>
+                          <a href={item.termos_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-500 hover:text-blue-600 text-xs font-semibold flex items-center gap-1"><Download size={13} /> Baixar</a>
                         </div>
-                      ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
+                      ) : <span className="text-zinc-400 dark:text-zinc-600 text-xs">Sem anexo</span>}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-3">
                       {item.curso_direcao_segura_anexo_url ? (
-                        <div className="flex items-center gap-2">
-                          <a href={item.curso_direcao_segura_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-bold flex items-center gap-1"><Eye size={12} /> Ver</a>
-                          <a href={item.curso_direcao_segura_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-blue-600 text-[10px] font-bold flex items-center gap-1"><Download size={12} /> Baixar</a>
+                        <div className="flex items-center gap-3">
+                          <a href={item.curso_direcao_segura_anexo_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-xs font-semibold flex items-center gap-1"><Eye size={13} /> Ver</a>
+                          <a href={item.curso_direcao_segura_anexo_url} download target="_blank" rel="noreferrer" className="text-zinc-500 hover:text-blue-600 text-xs font-semibold flex items-center gap-1"><Download size={13} /> Baixar</a>
                         </div>
-                      ) : <span className="text-zinc-400 text-[10px]">Sem anexo</span>}
+                      ) : <span className="text-zinc-400 dark:text-zinc-600 text-xs">Sem anexo</span>}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-3">
                       {!isVisitante && (
                         <div className="flex items-center justify-end gap-1">
                           <button title="Editar" onClick={() => abrirEditar(item)} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
