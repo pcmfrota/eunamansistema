@@ -32,6 +32,7 @@ import {
   Wrench,
   BadgeDollarSign,
   Fuel,
+  Filter,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from './premium-loader';
@@ -69,6 +70,7 @@ const navigation = [
   { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
   { name: 'Controladoria de Gestão',  path: '/controladoria-frota',    icon: ShieldCheck },
   { name: 'Checklist de Frota',       path: '/checklist-frota',        icon: ClipboardCheck },
+  { name: 'Controle de Filtros',      path: '/controle-filtros',      icon: Filter },
   { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
   { name: 'Controle de Custos',        path: '/custos',                 icon: BadgeDollarSign },
   { name: 'Controle de Insumos',       path: '/insumos',                icon: Fuel },

@@ -29,7 +29,8 @@ import {
   BadgeDollarSign,
   Fuel,
   ShieldCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -176,6 +177,13 @@ const portalItems = [
     desc: "Entrada, devolução e recebimento de Comboio, Pipa, Multifuncional e Munck, com foto por item.",
     icon: ClipboardCheck,
     color: "from-teal-500 to-emerald-600 bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/25 dark:border-teal-400/20"
+  },
+  {
+    name: "Controle de Filtros do Implemento",
+    path: "/controle-filtros",
+    desc: "Controle de instalação e troca de filtros de Comboio, Pipa, Multifuncional, Munck e Skid.",
+    icon: Filter,
+    color: "from-sky-500 to-blue-600 bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25 dark:border-sky-400/20"
   },
   {
     name: "Controle de Custos",

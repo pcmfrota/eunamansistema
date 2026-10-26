@@ -230,6 +230,9 @@ const syncTasks: Record<
 
   checklist_frota: (supabase) =>
     supabase.from("checklist_frota").select("*").order("created_at", { ascending: false }).limit(500),
+
+  controle_filtros_implemento: (supabase) =>
+    supabase.from("controle_filtros_implemento").select("*").order("data_troca", { ascending: false }).limit(1000),
 };
 
 /**

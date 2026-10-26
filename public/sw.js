@@ -1,4 +1,4 @@
-const CACHE_NAME = "eunaman-cache-v22";
+const CACHE_NAME = "eunaman-cache-v23";
 const OFFLINE_URL = "/offline.html";
 
 // fetch() puro não tem timeout embutido: se a rede travar no meio do caminho
@@ -57,6 +57,7 @@ const PRECACHE_URLS = [
   "/insumos",
   "/controladoria-frota",
   "/checklist-frota",
+  "/controle-filtros",
 ];
 
 // Cacheia uma lista de URLs (páginas ou assets) sem deixar uma falha isolada

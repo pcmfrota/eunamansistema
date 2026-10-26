@@ -85,6 +85,11 @@ import {
 } from "@/app/checklist-frota/actions";
 
 import {
+  salvarLancamentoFiltroImplemento,
+  excluirLancamentoFiltroImplemento
+} from "@/app/controle-filtros/actions";
+
+import {
   salvarFichaMaoObra,
   excluirFichaMaoObra,
   salvarApontamento,
@@ -398,6 +403,15 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirChecklistFrota(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "controle_filtros_implemento") {
+      if (action === "create") {
+        const res = await salvarLancamentoFiltroImplemento(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirLancamentoFiltroImplemento(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }
