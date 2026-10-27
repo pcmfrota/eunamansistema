@@ -571,14 +571,16 @@ export function GraficoVeiculos({
     );
   };
 
-  // Rótulo com as duas unidades (horas em destaque, dias por baixo) sem precisar de um 2º eixo
+  // Rótulo com as duas unidades (horas em destaque + dias entre parênteses) numa única linha,
+  // sem precisar de um 2º eixo — evitar empilhar em 2 linhas, que ficava minúsculo e ilegível
+  // em barras curtas.
   const renderLabelParado = (props: any) => {
     const { x, y, width, value, index } = props;
     const dias = paradosData[index]?.dias ?? 0;
     return (
-      <text x={x + width / 2} y={y - 6} textAnchor="middle">
-        <tspan fontSize={10} fontWeight={800} fill={isDark ? "#f8fafc" : "#0f172a"}>{`${value}h`}</tspan>
-        <tspan x={x + width / 2} dy={11} fontSize={9} fontWeight={600} fill={isDark ? "#94a3b8" : "#64748b"}>{`${dias}d`}</tspan>
+      <text x={x + width / 2} y={y - 8} textAnchor="middle">
+        <tspan fontSize={12} fontWeight={800} fill={isDark ? "#f8fafc" : "#0f172a"}>{`${value}h`}</tspan>
+        <tspan dx={3} fontSize={10} fontWeight={700} fill={isDark ? "#cbd5e1" : "#475569"}>{`(${dias}d)`}</tspan>
       </text>
     );
   };
@@ -878,12 +880,12 @@ export function GraficoVeiculos({
           </div>
 
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-            <div style={{ minWidth: Math.max(300, paradosData.length * 56), width: "100%" }}>
-              <ResponsiveContainer width="100%" height={260}>
+            <div style={{ minWidth: Math.max(340, paradosData.length * 72), width: "100%" }}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart
                   data={paradosData}
-                  margin={{ top: 24, right: 10, left: 0, bottom: 50 }}
-                  barCategoryGap="18%"
+                  margin={{ top: 28, right: 10, left: 0, bottom: 50 }}
+                  barCategoryGap="22%"
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                   <XAxis
