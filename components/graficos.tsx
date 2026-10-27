@@ -495,6 +495,7 @@ export function GraficoVeiculos({
 }: GraficoVeiculosProps) {
   const [selected, setSelected] = useState<VeiculoDetalhe | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [unidadeParado, setUnidadeParado] = useState<"horas" | "dias">("horas");
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const tickColor = isDark ? "#94a3b8" : "#64748b";
@@ -571,16 +572,18 @@ export function GraficoVeiculos({
     );
   };
 
-  // Rótulo com as duas unidades (horas em destaque + dias entre parênteses) numa única linha,
-  // sem precisar de um 2º eixo — evitar empilhar em 2 linhas, que ficava minúsculo e ilegível
-  // em barras curtas.
+  // Rótulo com as duas unidades (a selecionada em destaque + a outra entre parênteses) numa
+  // única linha, sem precisar de um 2º eixo — evitar empilhar em 2 linhas, que ficava minúsculo
+  // e ilegível em barras curtas.
   const renderLabelParado = (props: any) => {
     const { x, y, width, value, index } = props;
-    const dias = paradosData[index]?.dias ?? 0;
+    const item = paradosData[index];
+    const secundario = unidadeParado === "horas" ? `${item?.dias ?? 0}d` : `${item?.horas ?? 0}h`;
+    const unidadePrincipal = unidadeParado === "horas" ? "h" : "d";
     return (
       <text x={x + width / 2} y={y - 8} textAnchor="middle">
-        <tspan fontSize={12} fontWeight={800} fill={isDark ? "#f8fafc" : "#0f172a"}>{`${value}h`}</tspan>
-        <tspan dx={3} fontSize={10} fontWeight={700} fill={isDark ? "#cbd5e1" : "#475569"}>{`(${dias}d)`}</tspan>
+        <tspan fontSize={12} fontWeight={800} fill={isDark ? "#f8fafc" : "#0f172a"}>{`${value}${unidadePrincipal}`}</tspan>
+        <tspan dx={3} fontSize={10} fontWeight={700} fill={isDark ? "#cbd5e1" : "#475569"}>{`(${secundario})`}</tspan>
       </text>
     );
   };
@@ -863,6 +866,30 @@ export function GraficoVeiculos({
                 {periodoLabel}
               </span>
             )}
+            <div className="flex items-center gap-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5 ml-auto">
+              <button
+                type="button"
+                onClick={() => setUnidadeParado("horas")}
+                className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                  unidadeParado === "horas"
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                }`}
+              >
+                Horas
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnidadeParado("dias")}
+                className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                  unidadeParado === "dias"
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                }`}
+              >
+                Dias
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-zinc-600 dark:text-zinc-500 mb-4">
             <div className="flex items-center gap-1.5">
@@ -875,7 +902,7 @@ export function GraficoVeiculos({
               <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> &lt; 90%
             </div>
             <span className="text-zinc-400 dark:text-zinc-600 text-[10px] italic">
-              Horas e dias parado por impacto mecânico (DM) no período
+              {unidadeParado === "horas" ? "Horas" : "Dias"} parado por impacto mecânico (DM) no período
             </span>
           </div>
 
@@ -902,10 +929,10 @@ export function GraficoVeiculos({
                     tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `${v}h`}
+                    tickFormatter={(v) => unidadeParado === "horas" ? `${v}h` : `${v}d`}
                   />
                   <Tooltip content={<CustomTooltipParado />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
-                  <Bar dataKey="horas" radius={[4, 4, 0, 0]} label={renderLabelParado}>
+                  <Bar dataKey={unidadeParado === "horas" ? "horas" : "dias"} radius={[4, 4, 0, 0]} label={renderLabelParado}>
                     {paradosData.map((entry, index) => (
                       <Cell key={`parado-cell-${index}`} fill={getColorDisp(entry.dispDM)} />
                     ))}
