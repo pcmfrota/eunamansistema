@@ -528,6 +528,61 @@ export function GraficoVeiculos({
     : [];
   const piorPlacasKey = piores.map(p => p.placa).join(",");
 
+  // ─── Dias e horas parado por placa, baseado no impacto da DM no período filtrado ───
+  const paradosData = tipoAvailability === "DM"
+    ? [...chartData]
+        .filter(d => (d.horasManut || 0) > 0)
+        .map(d => ({
+          placa: d.placa,
+          horas: Number((d.horasManut || 0).toFixed(1)),
+          dias: Number(((d.horasManut || 0) / 24).toFixed(1)),
+          dispDM: d.dispDM,
+          totalOS: d.totalOS,
+        }))
+        .sort((a, b) => b.horas - a.horas)
+    : [];
+
+  const CustomTooltipParado = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload;
+    return (
+      <div className="bg-white dark:bg-[#1a1f2e] rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-700 p-3 text-xs pointer-events-none">
+        <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 mb-1.5">{d.placa}</p>
+        <div className="flex flex-col gap-1 text-zinc-700 dark:text-zinc-400">
+          <p className="flex justify-between gap-4">
+            <span>Horas parado:</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.horas}h</span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span>Dias parado:</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.dias}d</span>
+          </p>
+          <div className="h-[1px] bg-zinc-200 dark:bg-zinc-700/50 my-1" />
+          <p className="flex justify-between gap-4">
+            <span>DM (Mecânica):</span>
+            <span className="font-semibold" style={{ color: getColorDisp(d.dispDM) }}>{d.dispDM}%</span>
+          </p>
+          <p className="flex justify-between gap-4">
+            <span>Total de OS:</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{d.totalOS}</span>
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Rótulo com as duas unidades (horas em destaque, dias por baixo) sem precisar de um 2º eixo
+  const renderLabelParado = (props: any) => {
+    const { x, y, width, value, index } = props;
+    const dias = paradosData[index]?.dias ?? 0;
+    return (
+      <text x={x + width / 2} y={y - 6} textAnchor="middle">
+        <tspan fontSize={10} fontWeight={800} fill={isDark ? "#f8fafc" : "#0f172a"}>{`${value}h`}</tspan>
+        <tspan x={x + width / 2} dy={11} fontSize={9} fontWeight={600} fill={isDark ? "#94a3b8" : "#64748b"}>{`${dias}d`}</tspan>
+      </text>
+    );
+  };
+
   const [descricoesPorPlaca, setDescricoesPorPlaca] = useState<Record<string, OrdemServicoResumo[]>>({});
   const [carregandoDescricoes, setCarregandoDescricoes] = useState(false);
 
@@ -792,6 +847,73 @@ export function GraficoVeiculos({
           </div>
         </div>
       </div>
+
+      {/* Dias e horas parado por caminhão, baseado no impacto da DM no mês operacional filtrado */}
+      {tipoAvailability === "DM" && paradosData.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900/40 backdrop-blur-md rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 flex flex-col shadow-sm mt-6">
+          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+            <h3 className="font-semibold text-[15px] text-zinc-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+              <Clock className="w-4 h-4 text-orange-500" />
+              Tempo Parado por Caminhão (DM)
+            </h3>
+            {periodoLabel && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
+                {periodoLabel}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-zinc-600 dark:text-zinc-500 mb-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> DM ≥ 95%
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> 90-94%
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> &lt; 90%
+            </div>
+            <span className="text-zinc-400 dark:text-zinc-600 text-[10px] italic">
+              Horas e dias parado por impacto mecânico (DM) no período
+            </span>
+          </div>
+
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <div style={{ minWidth: Math.max(300, paradosData.length * 56), width: "100%" }}>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={paradosData}
+                  margin={{ top: 24, right: 10, left: 0, bottom: 50 }}
+                  barCategoryGap="18%"
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                  <XAxis
+                    dataKey="placa"
+                    tick={{ fontSize: 10, fill: tickColor, fontWeight: 600 }}
+                    tickLine={false}
+                    axisLine={{ stroke: gridColor }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    dy={5}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `${v}h`}
+                  />
+                  <Tooltip content={<CustomTooltipParado />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+                  <Bar dataKey="horas" radius={[4, 4, 0, 0]} label={renderLabelParado}>
+                    {paradosData.map((entry, index) => (
+                      <Cell key={`parado-cell-${index}`} fill={getColorDisp(entry.dispDM)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ranking das placas que mais puxam a DM pra baixo, com a descrição das OS lançadas */}
       {tipoAvailability === "DM" && piores.length > 0 && (
