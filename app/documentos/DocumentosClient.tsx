@@ -16,10 +16,11 @@ import {
 } from "./actions";
 import { createClient } from "@/utils/supabase/client";
 import Script from "next/script";
+import { gerarPDFDocumentosVisaoGeral, gerarPDFDocumentosAba } from "./DocumentosPDF";
 
 // --- Utilitários ---
 
-function calcularDias(vencimentoStr: string) {
+export function calcularDias(vencimentoStr: string) {
   const venc = new Date(vencimentoStr + 'T00:00:00');
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
@@ -28,7 +29,7 @@ function calcularDias(vencimentoStr: string) {
   return diffDays;
 }
 
-function formatarData(dataStr: string | null | undefined) {
+export function formatarData(dataStr: string | null | undefined) {
   if (!dataStr) return "-";
   if (dataStr.includes("-")) {
     return dataStr.split('-').reverse().join('/');
@@ -74,7 +75,7 @@ type TabType = "visao_geral" | "tacografo" | "civ_cipp" | "laudo_eletromecanico"
 
 // Grupos de documentos usados na Visão Geral consolidada — uma linha por placa, com os
 // dados de cada tipo de documento lado a lado (mesmo espírito da planilha de referência).
-const GRUPOS_DOC: { key: Exclude<TabType, "visao_geral">; label: string; curto: string; temPeriodo?: boolean; temAno?: boolean }[] = [
+export const GRUPOS_DOC: { key: Exclude<TabType, "visao_geral">; label: string; curto: string; temPeriodo?: boolean; temAno?: boolean }[] = [
   { key: "tacografo", label: "Tacógrafo", curto: "Tacógrafo" },
   { key: "civ_cipp", label: "CIV/CIPP", curto: "CIV/CIPP" },
   { key: "laudo_eletromecanico", label: "Laudo Eletromecânico", curto: "L. Eletromec.", temPeriodo: true },
@@ -180,6 +181,31 @@ export default function DocumentosClient({
 
   const [isImporting, setIsImporting] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [isGerandoPdf, setIsGerandoPdf] = useState(false);
+
+  const handleExportPDF = async () => {
+    setIsGerandoPdf(true);
+    try {
+      if (activeTab === "visao_geral") {
+        await gerarPDFDocumentosVisaoGeral(buildLinhasConsolidadas(), "download");
+        return;
+      }
+
+      let data: any[] = [];
+      if (activeTab === "tacografo") data = initialTacografos;
+      if (activeTab === "civ_cipp") data = initialCivCipps;
+      if (activeTab === "laudo_eletromecanico") data = initialLaudosEletro;
+      if (activeTab === "laudo_implemento") data = initialLaudosImplemento;
+      if (activeTab === "crlve_pesados") data = initialCrlvePesados;
+      if (activeTab === "crlve_leve") data = initialCrlveLeves;
+
+      await gerarPDFDocumentosAba(data, activeTab, "download");
+    } catch (err: any) {
+      alert("Erro ao gerar PDF: " + (err.message || String(err)));
+    } finally {
+      setIsGerandoPdf(false);
+    }
+  };
 
   const handleExportExcel = () => {
     const XLSX = (window as any).XLSX;
@@ -1010,11 +1036,22 @@ export default function DocumentosClient({
               </button>
             </>
           )}
-          <button 
+          <button
             onClick={handleExportExcel}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors shadow-sm active:scale-95"
           >
             <Download size={16} /> Exportar Excel
+          </button>
+          <button
+            onClick={handleExportPDF}
+            disabled={isGerandoPdf}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/40 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shadow-sm active:scale-95",
+              isGerandoPdf && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {isGerandoPdf ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+            {isGerandoPdf ? "Gerando PDF..." : "Exportar PDF"}
           </button>
         </div>
       </div>
