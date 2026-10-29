@@ -2,6 +2,11 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Rota de debug que consulta o banco ao vivo — nunca deve ser pré-renderizada
+// estaticamente no build (se o Supabase estiver fora do ar na hora do build, isso trava
+// e derruba o build inteiro, mesmo sem relação nenhuma com o que mudou no código).
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const { data: os, error: osErr } = await supabase

@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+// Rota de manutenção que consulta/apaga no banco ao vivo — nunca deve ser pré-renderizada
+// estaticamente no build (se o Supabase estiver fora do ar na hora do build, isso trava
+// e derruba o build inteiro, mesmo sem relação nenhuma com o que mudou no código).
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const supabase = createClient(

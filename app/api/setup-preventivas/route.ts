@@ -1,6 +1,11 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
 
+// Script de setup que consulta/escreve no banco ao vivo — nunca deve ser pré-renderizado
+// estaticamente no build (se o Supabase estiver fora do ar na hora do build, isso trava
+// e derruba o build inteiro, mesmo sem relação nenhuma com o que mudou no código).
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const supabase = createClient()
 

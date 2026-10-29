@@ -22,6 +22,18 @@ export async function getBacklog(limit: number = 5000) {
   }
 }
 
+// A listagem em massa (getBacklog) não traz mais as fotos de evidência (ver
+// BACKLOG_COLUNAS_LEVES em BacklogRepository.ts) — quem abre um item específico (editar,
+// visualização rápida, ficha) busca a foto dele aqui, sob demanda.
+export async function getBacklogImagens(id: string) {
+  try {
+    const data = await BacklogService.getImagens(id);
+    return { data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 export async function upsertBacklogItem(item: any) {
   try {
     const { createClient } = await import('@/utils/supabase/server');
@@ -41,14 +53,17 @@ export async function upsertBacklogItem(item: any) {
 
     const depois = Array.isArray(data) ? data[0] : data;
     const descricao = `${depois?.frota || item.frota || 'S/ FROTA'} — ${depois?.descricao || item.descricao || ''}`;
-    await registrarHistoricoBacklog({
+    // Histórico é auditoria, não faz parte do caminho crítico de salvar — não trava a
+    // resposta ao usuário esperando 3 round-trips extras (auth, perfil, insert). A
+    // função abaixo já nunca lança erro (ver lib/backlog-historico.ts).
+    registrarHistoricoBacklog({
       supabase,
       acao: ehEdicao ? 'EDICAO' : 'CRIACAO',
       registroId: depois?.id || item.id,
       descricao,
       dadosAntes: antes,
       dadosDepois: depois,
-    });
+    }).catch(() => {});
 
     return { success: true, data };
   } catch (error: any) {

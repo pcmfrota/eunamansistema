@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Clock, Edit3, Printer } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Clock, Edit3, Printer, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import BacklogFichaModal from './BacklogFicha'
+import { getBacklogImagens } from './actions'
 
 // Mesma regra de "dias em aberto" já usada no dashboard (BacklogDashboard.tsx): conta de
 // data_evidencia (quando foi lançado) até data_conclusao (se já encerrado) ou até hoje.
@@ -29,18 +30,34 @@ export default function BacklogQuickView({
 }) {
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null)
   const [mostrarFicha, setMostrarFicha] = useState(false)
+  const [imagens, setImagens] = useState<any | null>(null)
+  const [carregandoFotos, setCarregandoFotos] = useState(false)
+
+  // As fotos saíram da listagem em massa (ver BACKLOG_COLUNAS_LEVES em
+  // BacklogRepository.ts) pra não estourar a cota de saída do Supabase — busca elas à
+  // parte só quando o usuário realmente abre esse item.
+  useEffect(() => {
+    setImagens(null)
+    if (!item?.id || String(item.id).startsWith('temp_')) return
+    setCarregandoFotos(true)
+    getBacklogImagens(item.id)
+      .then(res => { if (res?.data) setImagens(res.data) })
+      .finally(() => setCarregandoFotos(false))
+  }, [item?.id])
 
   if (!item) return null
+
+  const itemComFotos = { ...item, ...(imagens || {}) }
 
   // Prioriza as novas fotos manuais (até 2); cai pro campo legado singular usado pelo
   // fluxo de importação via WhatsApp/IA quando não há nenhuma foto manual.
   const fotos: string[] =
-    item.evidencia_imagens && item.evidencia_imagens.length > 0
-      ? item.evidencia_imagens
-      : item.evidencia_imagem
-        ? [item.evidencia_imagem]
+    itemComFotos.evidencia_imagens && itemComFotos.evidencia_imagens.length > 0
+      ? itemComFotos.evidencia_imagens
+      : itemComFotos.evidencia_imagem
+        ? [itemComFotos.evidencia_imagem]
         : []
-  const fotosConclusao: string[] = item.evidencia_imagens_conclusao || []
+  const fotosConclusao: string[] = itemComFotos.evidencia_imagens_conclusao || []
 
   const aging = calcularDias(item)
 
@@ -93,6 +110,12 @@ export default function BacklogQuickView({
               {item.descricao || '—'}
             </p>
           </div>
+
+          {carregandoFotos && (
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+              <Loader2 size={14} className="animate-spin" /> Carregando evidências...
+            </div>
+          )}
 
           {fotos.length > 0 && (
             <div>
@@ -157,7 +180,7 @@ export default function BacklogQuickView({
       </div>
 
       {mostrarFicha && (
-        <BacklogFichaModal item={item} onClose={() => setMostrarFicha(false)} />
+        <BacklogFichaModal item={itemComFotos} onClose={() => setMostrarFicha(false)} />
       )}
 
       {fotoExpandida && (

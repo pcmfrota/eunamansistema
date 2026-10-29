@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFormDraft } from '@/hooks/use-form-draft'
-import { upsertBacklogItem } from './actions'
+import { upsertBacklogItem, getBacklogImagens } from './actions'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
@@ -67,6 +67,7 @@ const initialValues = {
   situacao_rc: '', dias_abertura: '', data_programacao: '',
   status_programacao: 'Não Programado', previsao_conclusao: '',
   data_conclusao: '', delta: '', dias_resolucao: '', observacao: '',
+  evidencia_imagem: null as string | null,
   evidencia_imagens: [] as string[],
   evidencia_imagens_conclusao: [] as string[],
   sistema_cod: null as number | null,
@@ -263,6 +264,23 @@ export default function BacklogModal({
   useEffect(() => {
     if (editData) {
       setForm(editData)
+      // As fotos de evidência saíram da listagem em massa (pra não estourar a cota de
+      // saída do Supabase — ver BACKLOG_COLUNAS_LEVES) — busca elas à parte só agora que
+      // o usuário realmente abriu esse item pra editar. Se isso falhar (ex: offline), as
+      // fotos ficam de fora do `form`: o upsert não envia essas colunas e não apaga o que
+      // já está salvo (ver BacklogService.upsert, que só grava o que vem no payload).
+      if (editData.id && !String(editData.id).startsWith('temp_')) {
+        getBacklogImagens(editData.id).then(res => {
+          if (res?.data) {
+            setForm(prev => ({
+              ...prev,
+              evidencia_imagem: (res.data as any).evidencia_imagem ?? prev.evidencia_imagem,
+              evidencia_imagens: (res.data as any).evidencia_imagens ?? prev.evidencia_imagens,
+              evidencia_imagens_conclusao: (res.data as any).evidencia_imagens_conclusao ?? prev.evidencia_imagens_conclusao,
+            }))
+          }
+        }).catch(() => {})
+      }
     } else {
       // Garantir data atual se for novo e estiver vazio
       setForm(prev => (prev.data_evidencia ? prev : { ...prev, data_evidencia: getCurrentLocalDatetime() }))

@@ -1,53 +1,21 @@
-import { BacklogRepository } from '../repositories/BacklogRepository';
+import { BacklogRepository, BACKLOG_SELECT_LEVE, BACKLOG_SELECT_FOTOS } from '../repositories/BacklogRepository';
 import { BacklogItemInsert, BacklogItemUpdate } from '../models/backlog';
 
+// Mesmas colunas usadas pela listagem em massa (BACKLOG_SELECT_LEVE), mais as fotos —
+// aqui sim elas são bem-vindas, porque isso é a whitelist de ESCRITA (um upsert de um
+// item por vez), não a de leitura em massa.
 const VALID_COLUMNS = new Set([
-  'id',
-  'semana',
-  'mes',
-  'ano',
-  'data_evidencia',
-  'modulo',
-  'regiao_programa',
-  'frota',
-  'tag',
-  'tipo',
-  'descricao',
-  'origem',
-  'colaborador',
-  'criticidade',
-  'tempo_execucao',
-  'campo_base',
-  'os',
-  'material',
-  'nr_rc',
-  'nr_ordem',
-  'fornecedor',
-  'status',
-  'data_conclusao',
-  'data_programacao',
-  'status_programacao',
-  'observacao',
-  'evidencia_imagem',
-  'evidencia_imagens',
-  'evidencia_imagens_conclusao',
-  'created_at',
-  // Classificação técnica (Sistema/Subsistema/Componente) e demais campos que já
-  // existiam no banco (migração antiga) mas nunca tinham sido liberados aqui — por isso
-  // nunca eram salvos de verdade, mesmo já aparecendo no formulário.
-  'sistema_cod',
-  'subsistema_cod',
-  'componente_cod',
-  'mao_obra',
-  'detalhamento',
-  'data_rc',
-  'data_nec_material',
-  'previsao_material',
-  'situacao_rc',
-  'previsao_conclusao'
+  ...BACKLOG_SELECT_LEVE.split(', '),
+  ...BACKLOG_SELECT_FOTOS.split(', '),
 ]);
 
 export class BacklogService {
+  static async getImagens(id: string) {
+    const { data, error } = await BacklogRepository.getImagens(id);
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
   static async getAll(limit: number = 5000) {
     const { data, error } = await BacklogRepository.list(limit);
     if (error) throw new Error(error.message);
