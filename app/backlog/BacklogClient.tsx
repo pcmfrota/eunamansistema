@@ -17,12 +17,15 @@ import {
   Sparkles,
   History,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  CheckSquare,
+  Square,
+  CheckCircle2
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
-import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog, getBacklogHistorico } from './actions';
+import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog, getBacklogHistorico, encerrarBacklogsEmMassa } from './actions';
 import type { HistoricoBacklog, AcaoHistoricoBacklog } from '@/lib/backlog-historico';
 import { nomeSistema, nomeSubsistema, nomeComponente } from './classificacaoTecnica';
 import BacklogModal from './BacklogModal';
@@ -65,6 +68,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   // Gerar O.S. a partir de itens de backlog selecionados
   const [fichaOS, setFichaOS] = useState<OSFichaData | null>(null);
   const [gerandoOS, setGerandoOS] = useState(false);
+  const [fechandoSelecao, setFechandoSelecao] = useState(false);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -347,6 +351,29 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       refreshData();
     } finally {
       setGerandoOS(false);
+    }
+  };
+
+  const handleFecharSelecionados = async () => {
+    if (selectedIds.size === 0) return;
+    if (!isOnline) {
+      alert("É necessário estar online para encerrar itens do backlog.");
+      return;
+    }
+    if (!confirm(`Confirmar o encerramento de ${selectedIds.size} item(ns) do backlog?`)) return;
+
+    setFechandoSelecao(true);
+    try {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const res: any = await encerrarBacklogsEmMassa(Array.from(selectedIds), hoje);
+      if (res?.error) {
+        alert(res.error);
+        return;
+      }
+      setSelectedIds(new Set());
+      refreshData();
+    } finally {
+      setFechandoSelecao(false);
     }
   };
 
@@ -693,6 +720,25 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                   ✕ Limpar
                 </button>
               </div>
+            )}
+            {!isVisitante && (view === 'Geral' || view === 'Detalhamento') && filteredItems.length > 0 && (
+              <button
+                onClick={() => {
+                  if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
+                  else setSelectedIds(new Set(filteredItems.map(i => i.id)));
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-3.5 text-[10px] font-black uppercase tracking-widest rounded-2xl border transition-all shadow-sm",
+                  selectedIds.size === filteredItems.length
+                    ? "bg-indigo-600 text-white border-indigo-500"
+                    : "bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-indigo-500/30"
+                )}
+              >
+                {selectedIds.size === filteredItems.length
+                  ? <CheckSquare size={16} />
+                  : <Square size={16} />}
+                {selectedIds.size === filteredItems.length ? 'Tudo Selecionado' : 'Selecionar Tudo'}
+              </button>
             )}
             <button
               onClick={refreshData}
@@ -1057,6 +1103,13 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                          Selecione 1 placa p/ gerar O.S.
                        </span>
                      )}
+                     <button
+                       onClick={handleFecharSelecionados}
+                       disabled={fechandoSelecao}
+                       className="flex items-center gap-2 text-xs font-black text-emerald-400 hover:text-emerald-300 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       <CheckCircle2 size={18} /> {fechandoSelecao ? 'FECHANDO...' : 'FECHAR SELEÇÃO'}
+                     </button>
                      <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
                        <Plus size={18} className="rotate-45" /> {isAdmin ? 'EXCLUIR SELEÇÃO' : 'SOLICITAR EXCLUSÃO'}
                      </button>

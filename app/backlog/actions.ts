@@ -117,6 +117,33 @@ export async function encerrarBacklogs(ids: string[], osNumero: string, dataConc
   }
 }
 
+// Encerramento manual em massa — usado pelo botão "Fechar Selecionados" da tela de
+// Backlog Geral, quando o usuário quer encerrar itens sem vincular a uma O.S. (ao
+// contrário de `encerrarBacklogs`, que exige número de O.S.).
+export async function encerrarBacklogsEmMassa(ids: string[], dataConclusao: string) {
+  try {
+    if (!ids || ids.length === 0) return { error: 'Nenhum item selecionado.' };
+
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from('backlog')
+      .update({
+        status: 'ENCERRADO',
+        data_conclusao: dataConclusao,
+      })
+      .in('id', ids)
+      .select();
+
+    if (error) throw new Error(error.message);
+    revalidatePath('/backlog');
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 // ── Gerar O.S. a partir de itens de Backlog selecionados ────────────────────
 // Fluxo inverso ao de `encerrarBacklogs`: em vez de vincular o backlog a uma OS
 // já existente, aqui a OS nasce a partir dos itens de backlog escolhidos.
