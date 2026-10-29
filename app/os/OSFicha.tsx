@@ -58,7 +58,7 @@ function fmtDT(s: string | null | undefined) {
   return `${d}/${m}/${y} ${timePart}`;
 }
 
-function calcHoras(abertura: string, fechamento: string | null): string {
+function diffEmMinutos(abertura: string, fechamento: string | null): number {
   const agora = new Date();
   const ontem = new Date(agora);
   ontem.setDate(ontem.getDate() - 1);
@@ -68,16 +68,26 @@ function calcHoras(abertura: string, fechamento: string | null): string {
   const diff = Math.floor(
     (dFim.getTime() - new Date(abertura).getTime()) / 60000
   );
-  if (diff <= 0) return "00:00";
-  const h = Math.floor(diff / 60);
-  const min = diff % 60;
-  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  return diff > 0 ? diff : 0;
 }
 
 function formatMinutesToHms(totalMin: number): string {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Mesma duração de `formatMinutesToHms`, só que escrita por extenso (dias/horas/min) —
+// um "497:42" não deixa óbvio que são quase 21 dias parado, isso deixa.
+function formatDiasHorasMin(totalMin: number): string {
+  const dias = Math.floor(totalMin / 1440);
+  const horas = Math.floor((totalMin % 1440) / 60);
+  const min = totalMin % 60;
+  const partes: string[] = [];
+  if (dias > 0) partes.push(`${dias}d`);
+  partes.push(`${horas}h`);
+  partes.push(`${min}min`);
+  return partes.join(" ");
 }
 
 function parseLocal(dateStr: string | null): number {
@@ -305,10 +315,12 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
   }, [os]);
 
   const inicioParaCalc = os.horario_parada || os.data_abertura;
-  const horasCalc =
+  const totalMinutosTempo =
     os.horas_manutencao != null
-      ? formatMinutesToHms(Math.round(os.horas_manutencao * 60))
-      : calcHoras(inicioParaCalc, os.data_fechamento);
+      ? Math.round(os.horas_manutencao * 60)
+      : diffEmMinutos(inicioParaCalc, os.data_fechamento);
+  const horasCalc = formatMinutesToHms(totalMinutosTempo);
+  const tempoTotalCompleto = `${horasCalc} (${formatDiasHorasMin(totalMinutosTempo)})`;
 
   const placa = getPlaca(os);
 
@@ -414,7 +426,7 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
             ${os.horario_parada ? rows("Horário Real da Parada", fmtDT(os.horario_parada)) : ""}
             ${rows("Início Manutenção", fmtDT(os.data_abertura))}
             ${rows("Fechamento da O.S", fmtDT(os.data_fechamento), false, true)}
-            ${rows("Tempo Total", horasCalc, true, true)}
+            ${rows("Tempo Total", tempoTotalCompleto, true, true)}
           </div>
         </div>
 
@@ -775,7 +787,7 @@ export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaM
                     )}
                     <FP label="Início Manutenção" value={fmtDT(os.data_abertura)} />
                     <FP label="Fechamento da O.S" value={fmtDT(os.data_fechamento)} highlight={!!os.data_fechamento} />
-                    <FP label="Tempo Total" value={horasCalc} bold highlight />
+                    <FP label="Tempo Total" value={tempoTotalCompleto} bold highlight />
                   </div>
                 </div>
 
