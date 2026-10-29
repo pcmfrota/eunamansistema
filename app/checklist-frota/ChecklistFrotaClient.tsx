@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
-import { ChecklistFrota, salvarChecklistFrota, excluirChecklistFrota } from "./actions";
+import { ChecklistFrota, salvarChecklistFrota, excluirChecklistFrota, getChecklistFrotaFotos } from "./actions";
 import {
   FROTAS, FrotaKey, TIPOS, TipoChecklist, ID_FIELDS, GERAL, SIGS, SECTIONS,
   itemKey, secoesParaFrota, criarItensVazios, criarGeralVazio,
@@ -732,7 +732,17 @@ export default function ChecklistFrotaClient({
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      <button title="Ver / Gerar PDF" onClick={() => setViewChecklist(c)} className="p-1.5 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><FileText size={14} /></button>
+                      <button title="Ver / Gerar PDF" onClick={() => {
+                        setViewChecklist(c);
+                        // Fotos saíram da listagem em massa (ver lib/offline-sync.ts e
+                        // getChecklistsFrota) pra não estourar a cota de saída do Supabase —
+                        // busca elas à parte agora que o usuário abriu esse registro.
+                        getChecklistFrotaFotos(c.id).then(res => {
+                          if (res?.data) {
+                            setViewChecklist(prev => (prev && prev.id === c.id ? { ...prev, ...res.data } as ChecklistFrota : prev));
+                          }
+                        }).catch(() => {});
+                      }} className="p-1.5 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><FileText size={14} /></button>
                       {!isVisitante && (
                         <button title="Excluir" onClick={() => setDeletingId(c.id)} className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 size={14} /></button>
                       )}

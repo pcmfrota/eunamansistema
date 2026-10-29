@@ -43,7 +43,9 @@ import {
   adicionarLancamento,
   excluirLancamento,
   atualizarFicha,
-  atualizarLancamento
+  atualizarLancamento,
+  obterImagensFichaCaptacao,
+  obterFotosLancamentosCaptacao
 } from './actions';
 
 // Utility for robust UUID generation (Safe for Android WebView)
@@ -599,6 +601,38 @@ export default function CaptacaoClient({
   const [fichas, setFichas] = useState<any[]>(initialFichas);
   const [selectedFicha, setSelectedFicha] = useState<any | null>(null);
   const [showFichaPaper, setShowFichaPaper] = useState(true);
+
+  // Assinatura do supervisor (fichas_captacao) e foto de cada lançamento (lancamentos_captacao)
+  // saíram da listagem em massa (ver lib/offline-sync.ts) pra não estourar a cota de saída
+  // do Supabase — busca elas à parte sempre que uma ficha diferente é selecionada, e
+  // mescla direto nos lançamentos já carregados (editar um lançamento não apaga a foto
+  // existente porque ela já chega preenchida antes do usuário abrir a edição).
+  useEffect(() => {
+    const fichaId = selectedFicha?.id;
+    if (!fichaId || String(fichaId).startsWith('temp_') || String(fichaId).startsWith('local-')) return;
+    if (selectedFicha.assinatura_supervisor !== undefined) return;
+
+    let cancelado = false;
+    Promise.all([
+      obterImagensFichaCaptacao(fichaId),
+      obterFotosLancamentosCaptacao(fichaId),
+    ]).then(([resFicha, resLancs]) => {
+      if (cancelado) return;
+      setSelectedFicha((prev: any) => {
+        if (!prev || prev.id !== fichaId) return prev;
+        const fotosPorId = new Map((resLancs?.data || []).map((l: any) => [l.id, l.foto_ponto]));
+        return {
+          ...prev,
+          assinatura_supervisor: resFicha?.data?.assinatura_supervisor ?? prev.assinatura_supervisor ?? null,
+          lancamentos: Array.isArray(prev.lancamentos)
+            ? prev.lancamentos.map((l: any) => (fotosPorId.has(l.id) ? { ...l, foto_ponto: fotosPorId.get(l.id) } : l))
+            : prev.lancamentos,
+        };
+      });
+    }).catch(() => {});
+
+    return () => { cancelado = true; };
+  }, [selectedFicha?.id]);
   
   const [activeScreen, setActiveScreen] = useState<'home' | 'list' | 'details'>('home');
   const [isFichaModalOpen, setIsFichaModalOpen] = useState(false);

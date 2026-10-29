@@ -39,6 +39,24 @@ const parseFormData = (formData: FormData): OSInsert => ({
   numero_os: '' // Generator will handle this if empty
 })
 
+// As fotos/assinatura da OS saíram da listagem em massa (ver lib/offline-sync.ts) pra não
+// estourar a cota de saída do Supabase — quem abre uma OS específica pra editar ou ver a
+// ficha busca essas colunas aqui, sob demanda.
+export async function getOSImagens(id: string) {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('ordens_servico')
+      .select('foto_horimetro, foto_km, fotos, assinatura_mecanico')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return { data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 const extractMecanicos = (formData: FormData): string[] => {
   const mecanicos: string[] = [];
   for (let i = 1; i <= 5; i++) {

@@ -20,12 +20,14 @@ export interface FichaLubrificacao {
   checklist_geral: any[];
   calibragem: any[];
   reapertos: any[];
-  fotos_antes: string[];
-  fotos_depois: string[];
+  // Opcionais de propósito: a listagem em massa (getAll) não traz mais essas colunas (ver
+  // COLUNAS_LEVES acima) — só vêm preenchidas quando buscadas à parte via getImagens.
+  fotos_antes?: string[];
+  fotos_depois?: string[];
   gps_lat?: number | null;
   gps_lng?: number | null;
   observacoes?: string | null;
-  assinatura_mecanico: string;
+  assinatura_mecanico?: string;
   assinatura_lider?: string | null;
   status: string;
   filial_id?: string | null;
@@ -35,13 +37,19 @@ export interface FichaLubrificacao {
   equipamento?: { placa?: string; modulo?: string; tipo?: string } | null;
 }
 
+// Fotos (fotos_antes/fotos_depois) e assinaturas (assinatura_mecanico/assinatura_lider)
+// ficam de fora da listagem em massa — eram a maior fatia de base64 deste módulo, sem
+// limite de linhas, baixadas de novo a cada carregamento. Quem abre uma ficha específica
+// busca essas colunas sob demanda (ver getImagens abaixo).
+const COLUNAS_LEVES = 'id, data_registro, hora_inicio, hora_fim, equipamento_id, placa, modulo, local_servico, cliente, horimetro_inicio, horimetro_fim, mecanico_responsavel, ajudante, checklist_lubrificacao, checklist_geral, calibragem, reapertos, gps_lat, gps_lng, observacoes, status, filial_id, created_at, updated_at, deleted_at, equipamento:equipamentos(placa, modulo, tipo)';
+
 export class LubrificacaoService {
   static async getAll() {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('fichas_lubrificacao')
-        .select('*, equipamento:equipamentos(placa, modulo, tipo)')
+        .select(COLUNAS_LEVES)
         .is('deleted_at', null)
         .order('data_registro', { ascending: false });
 
@@ -49,10 +57,31 @@ export class LubrificacaoService {
         console.warn('[LubrificacaoService] Erro ao buscar do Supabase:', error.message);
         return [];
       }
-      return data || [];
+      // O parser de tipos do supabase-js não confirma que `equipamento` é uma relação
+      // "para um" sem um Database schema gerado (este projeto não tem um — ver
+      // WORKING_NOTES) quando o select vem de uma string literal em vez de '*'; em
+      // runtime o Postgres sempre devolve um objeto único aqui, nunca um array.
+      return (data || []) as unknown as FichaLubrificacao[];
     } catch (err) {
       console.error('[LubrificacaoService] Exceção ao buscar fichas:', err);
       return [];
+    }
+  }
+
+  static async getImagens(id: string) {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('fichas_lubrificacao')
+        .select('fotos_antes, fotos_depois, assinatura_mecanico, assinatura_lider')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) throw new Error(error.message);
+      return data;
+    } catch (err) {
+      console.error('[LubrificacaoService] Erro ao buscar imagens da ficha:', err);
+      return null;
     }
   }
 

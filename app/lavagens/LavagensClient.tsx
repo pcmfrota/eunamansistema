@@ -30,7 +30,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, getISOWeek, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Lavagem, saveLavagem, deleteLavagem, validarLavagem } from './actions'
+import { Lavagem, saveLavagem, deleteLavagem, validarLavagem, getLavagemImagens } from './actions'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
@@ -398,6 +398,15 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
         itens_lavados: existing.itens_lavados || [],
         tipo_frota: (existing as any).tipo_frota || tipoFrota
       })
+      // As fotos/assinatura saíram da sincronização em massa (ver lib/offline-sync.ts) pra
+      // não estourar a cota de saída do Supabase — busca elas à parte agora que o usuário
+      // abriu esse lançamento específico. Salvar não apaga o que já está salvo se isso
+      // falhar (ver saveLavagem, que só inclui o campo no upsert quando ele vem preenchido).
+      getLavagemImagens(existing.id).then(res => {
+        if (res?.data) {
+          setModalData((prev: any) => (prev.id === existing.id ? { ...prev, ...res.data } : prev))
+        }
+      }).catch(() => {})
     } else {
       setModalData({ ...BLANK_MODAL_DATA, placa, data: format(date, 'yyyy-MM-dd'), tipo_frota: tipoFrota })
     }

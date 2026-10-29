@@ -66,6 +66,24 @@ export async function getLavagens(mes: number, ano: number) {
   return data as Lavagem[]
 }
 
+// As fotos/assinatura saíram da sincronização em massa (ver lib/offline-sync.ts) pra não
+// estourar a cota de saída do Supabase — quem abre uma lavagem específica (ver detalhe,
+// editar) busca essas colunas aqui, sob demanda.
+export async function getLavagemImagens(id: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('lavagens')
+    .select('imagem_1_url, imagem_2_url, imagem_3_url, imagem_horimetro_url, assinatura_url')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching lavagem imagens:', error)
+    return { error: error.message }
+  }
+  return { data }
+}
+
 export async function getEquipamentos() {
   const supabase = createClient()
   const { data, error } = await supabase

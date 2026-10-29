@@ -9,7 +9,8 @@ import {
   excluirOrdemServico,
   excluirOrdensMassivo,
   importarOrdensServico,
-  aprovarOrdemServico
+  aprovarOrdemServico,
+  getOSImagens
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { cn } from "@/lib/utils";
@@ -308,10 +309,28 @@ export default function ControleOSClient({
     setFotoHorimetro("");
     setFotoKm("");
   };
-  const preencherFotosOS = (os: any | null) => {
+  // Fotos/assinatura saíram da listagem em massa de OS (ver lib/offline-sync.ts) pra não
+  // estourar a cota de saída do Supabase — busca elas à parte aqui, ANTES de abrir o
+  // modal de edição. Também atualiza `editingOS` (que vira `initialData` no modal) com a
+  // assinatura buscada, já que o modal só lê isso uma vez, no momento em que monta: se o
+  // modal abrisse antes dessa busca terminar, salvar a OS apagaria a assinatura existente.
+  const preencherFotosOS = async (os: any | null) => {
     setModalFotos(os?.fotos || []);
     setFotoHorimetro(os?.foto_horimetro || "");
     setFotoKm(os?.foto_km || "");
+    if (!os?.id) return;
+    try {
+      const res = await getOSImagens(os.id);
+      if (res?.data) {
+        setModalFotos(res.data.fotos || []);
+        setFotoHorimetro(res.data.foto_horimetro || "");
+        setFotoKm(res.data.foto_km || "");
+        setEditingOS(prev => (prev && prev.id === os.id ? { ...prev, ...res.data } : prev));
+      }
+    } catch {
+      // Offline ou falha de rede: segue sem as fotos buscadas — fica só o que já
+      // estava no objeto da listagem (normalmente nada, depois dessa mudança).
+    }
   };
 
   const hasCheckedActiveDraft = React.useRef(false);
@@ -609,8 +628,7 @@ export default function ControleOSClient({
       const os = initialOrdens.find(o => o.id === abrirId);
       if (os) {
         setEditingOS(os);
-        preencherFotosOS(os);
-        setShowModal(true);
+        preencherFotosOS(os).then(() => setShowModal(true));
       }
     }
 
@@ -1345,7 +1363,7 @@ export default function ControleOSClient({
                                 <Check size={14} />
                               </button>
                             )}
-                            <button title="Editar" onClick={() => { setEditingOS(os); preencherFotosOS(os); setShowModal(true); }} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                            <button title="Editar" onClick={() => { setEditingOS(os); preencherFotosOS(os).then(() => setShowModal(true)); }} className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                               <Pencil size={14} />
                             </button>
                             <button title="Excluir" onClick={() => setDeletingId(os.id)} className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
@@ -1737,8 +1755,7 @@ export default function ControleOSClient({
                 onClick={() => {
                   if (isVisitante) return;
                   setEditingOS(selectedOSActions);
-                  preencherFotosOS(selectedOSActions);
-                  setShowModal(true);
+                  preencherFotosOS(selectedOSActions).then(() => setShowModal(true));
                   setSelectedOSActions(null);
                 }}
                 disabled={isVisitante}

@@ -13,6 +13,18 @@ export async function obterFichasLubrificacao() {
   }
 }
 
+// Fotos/assinaturas saíram da listagem em massa (ver LubrificacaoService.getAll) pra não
+// estourar a cota de saída do Supabase — quem abre uma ficha específica (editar, ver
+// detalhe, duplicar, gerar PDF) busca essas colunas aqui, sob demanda.
+export async function obterImagensFichaLubrificacao(id: string) {
+  try {
+    const data = await LubrificacaoService.getImagens(id);
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message || 'Erro ao buscar imagens da ficha' };
+  }
+}
+
 export async function obterEquipamentosLubrificacao() {
   try {
     const supabase = createClient();

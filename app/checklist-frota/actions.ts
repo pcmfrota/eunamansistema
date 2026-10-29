@@ -37,18 +37,41 @@ export type ChecklistFrota = {
   created_at?: string;
 };
 
+// `fotos` (legado) e `fotos_gerais` ficam de fora da listagem em massa — são a maior
+// fatia de base64 deste módulo (várias fotos por seção, por checklist) e não têm nenhum
+// texto misturado no meio, diferente de `avarias`/`assinaturas` (que guardam descrição/
+// nome junto com a foto no mesmo jsonb, então excluir a coluna perderia informação de
+// texto — ficam como estão). Quem abre "Ver / Gerar PDF" busca `fotos`/`fotos_gerais`
+// sob demanda (ver getChecklistFrotaFotos).
+const COLUNAS_LEVES =
+  "id, tipo_checklist, empresa, placa, nucleo, mes, turno, marca_modelo, motorista, matricula_motorista, km, data_checklist, respostas, pendencias_adicionais, executante_nome, executante_mt, supervisor_nome, supervisor_mt, status, criado_por, criado_por_nome, filial_id, created_at, frota, horimetro, registradora_diesel, registradora_insumo, saldo_tanque, local, hora, mecanico, matricula_mecanico, responsavel_recebe, observacoes_gerais, frota_tipo, resultado, avarias, assinaturas";
+
 export async function getChecklistsFrota(): Promise<ChecklistFrota[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("checklist_frota")
-    .select("*")
+    .select(COLUNAS_LEVES)
     .order("created_at", { ascending: false })
     .limit(500);
   if (error) {
     console.error("Erro getChecklistsFrota:", error);
     return [];
   }
-  return data || [];
+  return (data || []) as unknown as ChecklistFrota[];
+}
+
+export async function getChecklistFrotaFotos(id: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("checklist_frota")
+    .select("fotos, fotos_gerais")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("Erro getChecklistFrotaFotos:", error);
+    return { error: error.message };
+  }
+  return { data };
 }
 
 export async function salvarChecklistFrota(payload: {

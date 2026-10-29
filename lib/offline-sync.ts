@@ -62,16 +62,21 @@ const syncTasks: Record<
       .order("ano", { ascending: true })
       .order("mes", { ascending: true }),
 
+  // Fotos (foto_horimetro, foto_km, fotos) e assinatura_mecanico ficam de fora de
+  // propósito — são base64 e essa sincronização roda no boot de TODO carregamento do
+  // app, pra TODAS as OS. Isso sozinho estava consumindo uma fatia enorme da cota de
+  // saída (egress) do Supabase. Quem abre a ficha de uma OS específica busca essas fotos
+  // à parte (ver app/os/actions.ts).
   ordens_servico: (supabase) =>
     supabase
       .from("ordens_servico")
       .select(`
         id, numero_os, placa, modulo, status, data_abertura, data_fechamento,
-        horas_manutencao, descricao, horimetro, km, foto_horimetro, foto_km,
+        horas_manutencao, descricao, horimetro, km,
         operacao_tipo, local, classe,
         foi_enviado_reserva, motivo, sistema, sub_sistema, componente,
         observacoes, horario_parada, equipamento_id, qual_reserva, horas_reserva_chegou,
-        mecanicos, assinatura_mecanico, fotos,
+        mecanicos,
         aprovado, created_by, created_by_nome, aprovado_por, aprovado_por_nome, aprovado_em,
         equipamento:equipamento_id (placa, modulo)
       `)
@@ -112,17 +117,24 @@ const syncTasks: Record<
   colaboradores: (supabase) =>
     supabase.from("colaboradores").select("*").order("nome"),
 
+  // assinatura_supervisor fica de fora — base64 sem limite de linhas. Quem abre uma ficha
+  // específica busca essa coluna à parte (ver obterImagensFichaCaptacao em app/captacao/actions.ts).
   fichas_captacao: (supabase) =>
     supabase
       .from("fichas_captacao")
-      .select("*")
+      .select("id, ano, mes, placa, motorista, processo, nucleo, supervisor_suzano, codigo, revisao, status, criado_por, created_at, filial_id, reaberta_em")
       .order("created_at", { ascending: false }),
 
+  // foto_ponto fica de fora pelo mesmo motivo (ver obterFotosLancamentosCaptacao).
   lancamentos_captacao: (supabase) =>
-    supabase.from("lancamentos_captacao").select("*"),
+    supabase.from("lancamentos_captacao").select("id, ficha_id, data, id_ponto, hora_inicial, hora_final, volume_captado, fazenda_captada, up_captacao, atividade, fazenda_atividade, up_atividade, created_at"),
 
+  // Fotos/assinatura (imagem_1/2/3_url, imagem_horimetro_url, assinatura_url) ficam de
+  // fora — base64 sem limite de linhas, rodando no boot de TODO carregamento do app. Quem
+  // abre uma lavagem específica busca essas colunas à parte (ver getLavagemImagens em
+  // app/lavagens/actions.ts).
   lavagens: (supabase) =>
-    supabase.from("lavagens").select("*"),
+    supabase.from("lavagens").select("id, placa, data, colaborador, horimetro, km, status, lavagem_realizada, observacoes, itens_lavados, tipo_frota, created_at, validated_at, registrado_por, registrado_por_nome"),
 
   prev_prog_semanal: (supabase) =>
     supabase.from("prev_prog_semanal").select("*"),
@@ -228,11 +240,18 @@ const syncTasks: Record<
   controladoria_frota: (supabase) =>
     supabase.from("controladoria_frota").select("*").order("nome", { ascending: true }),
 
+  // `fotos`/`fotos_gerais` ficam de fora — são a maior fatia de base64 deste módulo e não
+  // têm texto misturado. `avarias`/`assinaturas` ficam (guardam descrição/nome junto com a
+  // foto no mesmo jsonb — excluir perderia texto, e o volume é bem menor).
   checklist_frota: (supabase) =>
-    supabase.from("checklist_frota").select("*").order("created_at", { ascending: false }).limit(500),
+    supabase.from("checklist_frota").select("id, tipo_checklist, empresa, placa, nucleo, mes, turno, marca_modelo, motorista, matricula_motorista, km, data_checklist, respostas, pendencias_adicionais, executante_nome, executante_mt, supervisor_nome, supervisor_mt, status, criado_por, criado_por_nome, filial_id, created_at, frota, horimetro, registradora_diesel, registradora_insumo, saldo_tanque, local, hora, mecanico, matricula_mecanico, responsavel_recebe, observacoes_gerais, frota_tipo, resultado, avarias, assinaturas").order("created_at", { ascending: false }).limit(500),
 
+  // `evidencias` (fotos em base64) é a própria razão de ser da listagem (mostrada direto
+  // na tabela, sem tela de detalhe) — não dá pra excluir a coluna sem perder a feature.
+  // Mitigação possível sem redesenhar a tela: limite bem mais baixo (era 1000, custo de
+  // banda escala direto com quantidade de linhas × fotos por linha).
   controle_filtros_implemento: (supabase) =>
-    supabase.from("controle_filtros_implemento").select("*").order("data_troca", { ascending: false }).limit(1000),
+    supabase.from("controle_filtros_implemento").select("*").order("data_troca", { ascending: false }).limit(150),
 };
 
 /**

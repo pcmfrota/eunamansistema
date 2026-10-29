@@ -15,6 +15,27 @@ export async function criarFicha(data: Omit<FichaCaptacao, 'id' | 'status' | 'cr
   }
 }
 
+// Assinatura/fotos saíram da listagem em massa (ver lib/offline-sync.ts) pra não estourar
+// a cota de saída do Supabase — quem abre uma ficha específica busca essas colunas aqui,
+// sob demanda.
+export async function obterImagensFichaCaptacao(id: string) {
+  try {
+    const data = await CaptacaoService.getImagensFicha(id);
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message || "Erro ao buscar assinatura da ficha." };
+  }
+}
+
+export async function obterFotosLancamentosCaptacao(fichaId: string) {
+  try {
+    const data = await CaptacaoService.getFotosLancamentos(fichaId);
+    return { success: true, data };
+  } catch (error: any) {
+    return { error: error.message || "Erro ao buscar fotos dos lançamentos." };
+  }
+}
+
 export async function atualizarFicha(id: string, updates: Partial<FichaCaptacao>) {
   try {
     const result = await CaptacaoService.updateFicha(id, updates);

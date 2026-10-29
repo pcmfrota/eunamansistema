@@ -32,6 +32,38 @@ export class CaptacaoService {
     return data as FichaCaptacao;
   }
 
+  // Assinatura/foto saíram da listagem em massa (ver lib/offline-sync.ts) pra não estourar
+  // a cota de saída do Supabase — quem abre uma ficha específica busca essas colunas aqui,
+  // sob demanda.
+  static async getImagensFicha(id: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("fichas_captacao")
+      .select("assinatura_supervisor")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
+      console.error(`Erro ao buscar assinatura da ficha ${id}:`, error);
+      throw error;
+    }
+    return data;
+  }
+
+  static async getFotosLancamentos(fichaId: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("lancamentos_captacao")
+      .select("id, foto_ponto")
+      .eq("ficha_id", fichaId);
+
+    if (error) {
+      console.error(`Erro ao buscar fotos dos lançamentos da ficha ${fichaId}:`, error);
+      throw error;
+    }
+    return data || [];
+  }
+
   static async createFicha(ficha: Omit<FichaCaptacao, "id" | "status" | "created_at">) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();

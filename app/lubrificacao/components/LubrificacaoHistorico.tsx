@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { FichaLubrificacao } from "@/src/services/LubrificacaoService";
+import { obterImagensFichaLubrificacao } from "../actions";
 import { gerarPDFLubrificacao } from "./LubrificacaoPDF";
 import { cn } from "@/lib/utils";
 
@@ -100,15 +101,27 @@ export function LubrificacaoHistorico({
     XLSX.writeFile(wb, `Fichas_Lubrificacao_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
+  // Fotos/assinaturas saíram da listagem em massa (ver LubrificacaoService.getAll) pra não
+  // estourar a cota de saída do Supabase — busca elas à parte aqui, sob demanda.
   const handleOpenDetail = (f: FichaLubrificacao) => {
     setSelectedFicha(f);
     setModalOpen(true);
+    obterImagensFichaLubrificacao(f.id).then(res => {
+      if (res?.data) {
+        setSelectedFicha(prev => (prev && prev.id === f.id ? { ...prev, ...res.data } : prev));
+      }
+    }).catch(() => {});
   };
 
   const handleGeneratePDF = async (f: FichaLubrificacao, modo: "download" | "share" = "download") => {
     try {
       setGeneratingPdf(true);
-      await gerarPDFLubrificacao(f, modo);
+      let fichaCompleta = f;
+      try {
+        const res = await obterImagensFichaLubrificacao(f.id);
+        if (res?.data) fichaCompleta = { ...f, ...res.data };
+      } catch {}
+      await gerarPDFLubrificacao(fichaCompleta, modo);
     } catch (e) {
       alert("Erro ao gerar PDF da ficha.");
     } finally {
@@ -480,26 +493,26 @@ export function LubrificacaoHistorico({
               )}
 
               {/* Fotos de Evidências */}
-              {(selectedFicha.fotos_antes?.length > 0 || selectedFicha.fotos_depois?.length > 0) && (
+              {((selectedFicha.fotos_antes?.length ?? 0) > 0 || (selectedFicha.fotos_depois?.length ?? 0) > 0) && (
                 <div className="space-y-3">
                   <h4 className="font-black uppercase text-zinc-700 dark:text-zinc-300">Fotos de Evidências (Antes & Depois)</h4>
                   
-                  {selectedFicha.fotos_antes?.length > 0 && (
+                  {(selectedFicha.fotos_antes?.length ?? 0) > 0 && (
                     <div>
                       <span className="text-[10px] font-bold text-zinc-500 uppercase">Fotos Antes:</span>
                       <div className="flex gap-2 overflow-x-auto py-1">
-                        {selectedFicha.fotos_antes.map((src, i) => (
+                        {selectedFicha.fotos_antes?.map((src, i) => (
                           <img key={i} src={src} className="w-20 h-20 object-cover rounded-xl border" alt="Antes" />
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {selectedFicha.fotos_depois?.length > 0 && (
+                  {(selectedFicha.fotos_depois?.length ?? 0) > 0 && (
                     <div>
                       <span className="text-[10px] font-bold text-zinc-500 uppercase">Fotos Depois:</span>
                       <div className="flex gap-2 overflow-x-auto py-1">
-                        {selectedFicha.fotos_depois.map((src, i) => (
+                        {selectedFicha.fotos_depois?.map((src, i) => (
                           <img key={i} src={src} className="w-20 h-20 object-cover rounded-xl border" alt="Depois" />
                         ))}
                       </div>

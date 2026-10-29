@@ -28,7 +28,7 @@ import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { offlineMedia } from "@/lib/offline-media";
 import { FichaLubrificacao } from "@/src/services/LubrificacaoService";
-import { registrarFichaLubrificacao, atualizarFichaLubrificacao, excluirFichaLubrificacao } from "./actions";
+import { registrarFichaLubrificacao, atualizarFichaLubrificacao, excluirFichaLubrificacao, obterImagensFichaLubrificacao } from "./actions";
 import { TruckTireCalibrator, TireCalibrationItem } from "./components/TruckTireCalibrator";
 import { LubrificacaoDashboard } from "./components/LubrificacaoDashboard";
 import { LubrificacaoHistorico } from "./components/LubrificacaoHistorico";
@@ -429,7 +429,7 @@ export default function LubrificacaoClient() {
   };
 
   // Ação Editar
-  const handleEditFicha = (f: FichaLubrificacao) => {
+  const handleEditFicha = async (f: FichaLubrificacao) => {
     setEditingId(f.id);
     setHoraInicio(f.hora_inicio || "07:00");
     setHoraFim(f.hora_fim || "08:00");
@@ -447,20 +447,43 @@ export default function LubrificacaoClient() {
     if (Array.isArray(f.checklist_geral)) setChecklistGeral(f.checklist_geral);
     if (Array.isArray(f.calibragem)) setCalibragem(f.calibragem);
     if (Array.isArray(f.reapertos)) setReapertos(f.reapertos);
-    if (Array.isArray(f.fotos_antes)) setFotosAntes(f.fotos_antes);
-    if (Array.isArray(f.fotos_depois)) setFotosDepois(f.fotos_depois);
 
-    if (f.assinatura_mecanico) {
-      setSigMecanicoBase64(f.assinatura_mecanico);
-      setHasSigMecanico(true);
+    // Fotos e assinaturas saíram da listagem em massa (ver LubrificacaoService.getAll) pra
+    // não estourar a cota de saída do Supabase — o objeto `f` não traz mais esses campos.
+    // Busca aqui, à parte, ANTES de mostrar o formulário: o salvamento manda o objeto
+    // inteiro sem checar se veio vazio (ver atualizarFichaLubrificacao), então mostrar o
+    // formulário antes dessa busca terminar apagaria fotos/assinatura reais ao salvar.
+    setFotosAntes([]);
+    setFotosDepois([]);
+    setSigMecanicoBase64("");
+    setHasSigMecanico(false);
+    setSigLiderBase64("");
+    setHasSigLider(false);
+    try {
+      const res = await obterImagensFichaLubrificacao(f.id);
+      if (res?.data) {
+        if (Array.isArray(res.data.fotos_antes)) setFotosAntes(res.data.fotos_antes);
+        if (Array.isArray(res.data.fotos_depois)) setFotosDepois(res.data.fotos_depois);
+        if (res.data.assinatura_mecanico) {
+          setSigMecanicoBase64(res.data.assinatura_mecanico);
+          setHasSigMecanico(true);
+        }
+        if (res.data.assinatura_lider) {
+          setSigLiderBase64(res.data.assinatura_lider);
+          setHasSigLider(true);
+        }
+      }
+    } catch {
+      // Offline ou falha de rede: abre o formulário mesmo assim, sem as fotos/assinatura
+      // antigas — residual conhecido, igual ao resto desse fix.
     }
 
     setActiveTab("formulario");
   };
 
   // Ação Duplicar
-  const handleDuplicateFicha = (f: FichaLubrificacao) => {
-    handleEditFicha(f);
+  const handleDuplicateFicha = async (f: FichaLubrificacao) => {
+    await handleEditFicha(f);
     setEditingId(null); // Reseta o ID para criar um novo lançamento
     alert("Dados duplicados na ficha! Ajuste os horímetros e salve a nova lubrificação.");
   };

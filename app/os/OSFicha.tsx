@@ -192,8 +192,26 @@ interface OSFichaModalProps {
   pdfAction?: 'download' | 'share' | 'print' | null;
 }
 
-export default function OSFichaModal({ os, onClose, pdfAction = null }: OSFichaModalProps) {
+export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: OSFichaModalProps) {
   const [minutosDO, setMinutosDO] = useState<number | null>(null);
+  const [imagensOS, setImagensOS] = useState<Partial<OSFichaData> | null>(null);
+
+  // Fotos/assinatura saíram da listagem em massa de OS (ver lib/offline-sync.ts) pra não
+  // estourar a cota de saída do Supabase — busca elas à parte só quando a ficha é aberta.
+  useEffect(() => {
+    setImagensOS(null);
+    if (!osProp?.id) return;
+    const supabase = createClient();
+    supabase
+      .from("ordens_servico")
+      .select("foto_horimetro, foto_km, fotos, assinatura_mecanico")
+      .eq("id", osProp.id)
+      .maybeSingle()
+      .then(({ data }: { data: any }) => { if (data) setImagensOS(data as Partial<OSFichaData>); })
+      .catch(() => {});
+  }, [osProp?.id]);
+
+  const os = { ...osProp, ...(imagensOS || {}) };
 
   // Desserializa assinaturas: suporta JSON estruturado (novo), JSON array ou string simples
   const { assinaturas, sigCargos } = (() => {
