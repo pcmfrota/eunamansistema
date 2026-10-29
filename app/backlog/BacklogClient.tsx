@@ -378,21 +378,22 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [filterPlaca, setFilterPlaca] = useState("");
   const [filterModulo, setFilterModulo] = useState("");
   const [filterArea, setFilterArea] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [filterCriticidade, setFilterCriticidade] = useState("");
   const [filterDataInicio, setFilterDataInicio] = useState("");
   const [filterDataFim, setFilterDataFim] = useState("");
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
 
-  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatus || filterCriticidade || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
+  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatuses.length > 0 || filterCriticidade || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
 
   const clearFilters = () => {
     setSearch("");
     setFilterPlaca("");
     setFilterModulo("");
     setFilterArea("");
-    setFilterStatus("");
+    setFilterStatuses([]);
     setFilterCriticidade("");
     setFilterDataInicio("");
     setFilterDataFim("");
@@ -436,7 +437,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         matchArea = pInfo?.area === filterArea;
       }
 
-      const matchStatus = !filterStatus || i.status === filterStatus;
+      const matchStatus = filterStatuses.length === 0 || filterStatuses.includes(i.status);
       const matchCriticidade = !filterCriticidade || i.criticidade === filterCriticidade;
 
       let matchData = true;
@@ -474,7 +475,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
       return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade && matchData && matchMonth && matchYear;
     });
-  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatus, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas, calendario]);
+  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatuses, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas, calendario]);
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(items);
@@ -732,22 +733,69 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                 ))}
               </select>
 
-              {/* Status filter */}
-              <select
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterStatus
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+              {/* Status filter (multi-select) */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowStatusDropdown(v => !v)}
+                  className={cn(
+                    "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer w-full flex items-center justify-between gap-2",
+                    filterStatuses.length > 0
+                      ? "bg-indigo-600 text-white border-indigo-500"
+                      : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                  )}
+                >
+                  <span className="truncate">
+                    {filterStatuses.length === 0
+                      ? "📋 TODOS OS STATUS"
+                      : filterStatuses.length === 1
+                      ? filterStatuses[0]
+                      : `${filterStatuses.length} STATUS SEL.`}
+                  </span>
+                  <ChevronDown size={14} className="opacity-60 shrink-0" />
+                </button>
+
+                {showStatusDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowStatusDropdown(false)} />
+                    <div className="absolute left-0 mt-2 w-full min-w-[180px] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 shadow-2xl z-50 flex flex-col gap-2">
+                      {statusOptions.map(status => {
+                        const active = filterStatuses.includes(status);
+                        return (
+                          <label key={status} className="flex items-center gap-2.5 text-[10px] font-black text-zinc-600 dark:text-zinc-300 uppercase tracking-wider cursor-pointer hover:text-indigo-500 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={active}
+                              onChange={() => {
+                                if (active) setFilterStatuses(filterStatuses.filter(s => s !== status));
+                                else setFilterStatuses([...filterStatuses, status]);
+                              }}
+                              className="w-3.5 h-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            {status}
+                          </label>
+                        );
+                      })}
+                      <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2 mt-1 flex justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setFilterStatuses([])}
+                          className="text-[8px] font-bold text-red-500 hover:underline uppercase"
+                        >
+                          Limpar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFilterStatuses(statusOptions)}
+                          className="text-[8px] font-bold text-indigo-500 hover:underline uppercase"
+                        >
+                          Todos
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
-              >
-                <option value="">📋 TODOS OS STATUS</option>
-                {statusOptions.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              </div>
 
               {/* Criticidade filter */}
               <select
