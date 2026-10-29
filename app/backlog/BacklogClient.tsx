@@ -478,7 +478,46 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   }, [items, search, filterPlaca, filterModulo, filterArea, filterStatuses, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas, calendario]);
 
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(items);
+    const fmtData = (d: string | null | undefined) => d ? d.split('T')[0].split('-').reverse().join('/') : '';
+
+    // Nunca exportar o objeto bruto do backlog: ele carrega "evidencia_imagem" (foto em
+    // base64, às vezes centenas de KB por linha), que estoura o limite de 32.767 caracteres
+    // por célula do Excel e corrompe/trava a geração do arquivo. Monta linhas explícitas,
+    // só com os campos legíveis — e a partir do que está filtrado na tela, não tudo.
+    const exportRows = filteredItems.map(item => ({
+      'Frota': item.frota || '',
+      'Módulo': item.modulo || '',
+      'Status': item.status || '',
+      'Status Programação': item.status_programacao || '',
+      'Criticidade': item.criticidade || '',
+      'Tipo': item.tipo || '',
+      'TAG': item.tag || '',
+      'Descrição': item.descricao || '',
+      'Origem': item.origem || '',
+      'Colaborador': item.colaborador || '',
+      'Campo/Base': item.campo_base || '',
+      'Sistema': item.sistema_cod ? `${item.sistema_cod} – ${nomeSistema(Number(item.sistema_cod))}` : '',
+      'Subsistema': item.subsistema_cod ? `${item.subsistema_cod} – ${nomeSubsistema(Number(item.subsistema_cod))}` : '',
+      'Componente': item.componente_cod ? `${item.componente_cod} – ${nomeComponente(Number(item.componente_cod))}` : '',
+      'Data de Evidência': fmtData(item.data_evidencia),
+      'Nº RC': item.nr_rc || '',
+      'Situação RC': item.situacao_rc || '',
+      'Data da RC': fmtData(item.data_rc),
+      'Data Necessidade Material': fmtData(item.data_nec_material),
+      'Previsão do Material': item.previsao_material || '',
+      'Material': item.material || '',
+      'Fornecedor': item.fornecedor || '',
+      'Nº Ordem': item.nr_ordem || '',
+      'Detalhamento do Pedido': item.detalhamento || '',
+      'Previsão Programação': fmtData(item.data_programacao),
+      'Previsão Conclusão': fmtData(item.previsao_conclusao),
+      'Data de Conclusão': fmtData(item.data_conclusao),
+      'Mão de Obra': item.mao_obra || '',
+      'Tempo Estimado': item.tempo_execucao || '',
+      'Observação': item.observacao || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Backlog");
     XLSX.writeFile(wb, "EUNAMAN_Backlog.xlsx");
