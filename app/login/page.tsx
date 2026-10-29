@@ -29,10 +29,14 @@ export default function LoginPage({
     const password = formData.get('password') as string;
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Timeout de 15s na própria chamada de login — sem isso, se o servidor de
+      // autenticação do Supabase estiver lento/instável, o botão fica em "Entrando..."
+      // pra sempre, sem nenhuma mensagem de erro pro usuário tentar de novo.
+      const signInPromise = supabase.auth.signInWithPassword({ email, password });
+      const signInTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('A conexão com o servidor está demorando muito. Tente novamente.')), 15000)
+      );
+      const { data, error: signInError } = await Promise.race([signInPromise, signInTimeout]);
 
       if (signInError) throw signInError;
 
@@ -51,11 +55,24 @@ export default function LoginPage({
           userEmailBase.includes('eunaman.sistema') ||
           userEmailBase.endsWith('@eunaman.com.br');
 
-        // Busca do banco em paralelo
-        const [profileRes, permRes] = await Promise.all([
-          supabase.from('profiles').select('id, full_name, role, avatar_url, status').eq('id', user.id).maybeSingle(),
-          supabase.from('role_permissions').select('role, allowed_tabs')
-        ]);
+        // Busca do banco em paralelo, com timeout de 5s pra não travar o botão em
+        // "Entrando..." pra sempre se o banco estiver lento/instável (mesmo raciocínio já
+        // usado em components/auth-context.tsx:178-189) — sem isso, uma Suparbase lenta
+        // deixava a tela de login presa indefinidamente, sem nenhum feedback de erro.
+        let profileRes: any = null;
+        let permRes: any = null;
+        try {
+          const dbPromise = Promise.all([
+            supabase.from('profiles').select('id, full_name, role, avatar_url, status').eq('id', user.id).maybeSingle(),
+            supabase.from('role_permissions').select('role, allowed_tabs')
+          ]);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout de 5 segundos ao conectar ao banco')), 5000)
+          );
+          [profileRes, permRes] = await Promise.race([dbPromise, timeoutPromise]);
+        } catch (err) {
+          console.warn('[Login] Timeout ou erro ao buscar perfil/permissões. Seguindo com fallback:', err);
+        }
 
         // Cadastro feito pelo próprio usuário fica travado até um admin aprovar — a senha
         // já é válida no Auth, mas ninguém entra de fato enquanto status !== 'aprovado'.
@@ -109,8 +126,9 @@ export default function LoginPage({
         // Define o cookie de role temporário imediatamente no cliente para a middleware
         document.cookie = `x-user-role=${finalRole}; path=/; max-age=3600; SameSite=Lax`;
 
-        // Histórico de tentativas de acesso, visível ao admin em /tentativas-acesso.
-        await registrarTentativaLogin(email, true, undefined, user.id);
+        // Histórico de tentativas de acesso, visível ao admin em /tentativas-acesso — é só
+        // auditoria, nunca deve travar o login esperando o banco responder (não await).
+        registrarTentativaLogin(email, true, undefined, user.id).catch(() => {});
       }
 
       // 2. Aguarda até que o cookie do Supabase apareça no navegador (evitando redirecionamento prematuro sem sessão)
@@ -139,7 +157,7 @@ export default function LoginPage({
       console.error('[Login] Erro ao entrar:', err);
       const motivo = err.message || 'Credenciais inválidas ou erro ao conectar';
       setError(motivo);
-      await registrarTentativaLogin(email, false, motivo);
+      registrarTentativaLogin(email, false, motivo).catch(() => {});
       setIsSubmitting(false);
     }
   };
