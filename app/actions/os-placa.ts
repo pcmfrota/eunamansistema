@@ -187,9 +187,16 @@ export async function buscarOSporPlaca(
 
   const osCalculadas = osFiltradasData.map((os: any) => {
     let hImpactoDO = 0
-    const osStart = parseLocal(os.horario_parada || os.data_abertura)
+    const osStartRaw = parseLocal(os.horario_parada || os.data_abertura)
     // Regra D+1: se aberta, conta apenas até ontem
-    const endMec = os.data_fechamento ? parseLocal(os.data_fechamento) : ontemTime
+    const endMecRaw = os.data_fechamento ? parseLocal(os.data_fechamento) : ontemTime
+
+    // Clampa ao período selecionado: uma OS que abriu antes ou fechou depois do período
+    // só pode contribuir com o trecho que realmente caiu dentro dele — mesma regra do
+    // total agregado em app/actions/dashboard.ts (hIndispDM). Sem isso, uma OS longa que
+    // atravessa a virada do período aparece aqui com mais horas do que o total do veículo.
+    const osStart = Math.max(osStartRaw, inicioTime)
+    const endMec = Math.min(endMecRaw, fimTime)
 
     // Lógica PCM: Impacto Operacional encerra na chegada do reserva ou fim do conserto
     let osEndDO = endMec
@@ -201,8 +208,9 @@ export async function buscarOSporPlaca(
       }
     }
 
-    // Fallback para horas de manutenção se estiver zerado/nulo
-    let hMecCalculada = os.horas_manutencao || (endMec - osStart) / 3600000
+    // Horas de manutenção = apenas o trecho da OS que cai dentro do período selecionado
+    // (não o campo bruto `horas_manutencao`, que guarda a duração total da OS do início ao fim).
+    let hMecCalculada = Math.max(0, (endMec - osStart) / 3600000)
 
     if (escala && (os.data_abertura || os.horario_parada)) {
       const dIni = new Date(osStart)
