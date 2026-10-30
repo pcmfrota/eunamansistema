@@ -578,12 +578,16 @@ export function GraficoVeiculos({
   const renderLabelParado = (props: any) => {
     const { x, y, width, value, index } = props;
     const item = paradosData[index];
-    const secundario = unidadeParado === "horas" ? `${item?.dias ?? 0}d` : `${item?.horas ?? 0}h`;
+    // Arredonda o valor secundário (sem casa decimal) só no rótulo — o tooltip e os dados
+    // continuam com a precisão completa. Rótulo mais curto evita que o texto de uma barra
+    // invada o espaço da vizinha quando as duas são altas (ex: "21.1d (506.1h)" colidindo
+    // com a barra ao lado).
+    const secundario = unidadeParado === "horas" ? `${Math.round(item?.dias ?? 0)}d` : `${Math.round(item?.horas ?? 0)}h`;
     const unidadePrincipal = unidadeParado === "horas" ? "h" : "d";
     return (
       <text x={x + width / 2} y={y - 8} textAnchor="middle">
         <tspan fontSize={12} fontWeight={800} fill={isDark ? "#f8fafc" : "#0f172a"}>{`${value}${unidadePrincipal}`}</tspan>
-        <tspan dx={3} fontSize={10} fontWeight={700} fill={isDark ? "#cbd5e1" : "#475569"}>{`(${secundario})`}</tspan>
+        <tspan dx={3} fontSize={9} fontWeight={700} fill={isDark ? "#cbd5e1" : "#475569"}>{`(${secundario})`}</tspan>
       </text>
     );
   };
@@ -907,7 +911,7 @@ export function GraficoVeiculos({
           </div>
 
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-            <div style={{ minWidth: Math.max(340, paradosData.length * 72), width: "100%" }}>
+            <div style={{ minWidth: Math.max(340, paradosData.length * 95), width: "100%" }}>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart
                   data={paradosData}
