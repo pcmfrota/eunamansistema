@@ -80,6 +80,32 @@ export type DashboardData = {
   dataAtualizacao?: string;
 };
 
+// Parseia o campo "tempo_execucao" do backlog (ex: "4h 30m", "4.5h", "30m") para horas
+// decimais — mesmo parser usado em app/backlog/BacklogDashboard.tsx, duplicado aqui porque
+// aquele é client-side e esta action roda no servidor.
+function parseHorasBacklog(val: any): number {
+  if (!val) return 0;
+  const str = String(val).toLowerCase().trim();
+  if (!str) return 0;
+
+  const matchHM = str.match(/^(\d+(?:[.,]\d+)?)\s*h(?:oras?)?\s*(\d+(?:[.,]\d+)?)\s*m(?:in(?:utos?)?)?$/i);
+  if (matchHM) {
+    const h = parseFloat(matchHM[1].replace(',', '.'));
+    const m = parseFloat(matchHM[2].replace(',', '.'));
+    return (isNaN(h) ? 0 : h) + (isNaN(m) ? 0 : m / 60);
+  }
+
+  const matchM = str.match(/^(\d+(?:[.,]\d+)?)\s*m(?:in(?:utos?)?)?$/i);
+  if (matchM) {
+    const m = parseFloat(matchM[1].replace(',', '.'));
+    return isNaN(m) ? 0 : m / 60;
+  }
+
+  const cleaned = str.replace(/[^\d.,]/g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+
 // Helper para fundir intervalos de tempo sobrepostos (evita duplicidade de horas)
 function mergeTimeIntervals(intervals: Array<{ start: number, end: number }>) {
   if (intervals.length === 0) return 0;
@@ -291,8 +317,15 @@ export async function getDashboardData(filtros?: {
     queryOS = queryOS.eq('placa', filtros.placa.toUpperCase());
   }
 
-  const [osRes] = await Promise.all([queryOS]);
+  // Backlog pendente (módulo de etiquetas) — não é escopado pelo período do dashboard,
+  // de propósito: é "tudo que está em aberto agora", igual ao resto do card. Traz só as
+  // colunas necessárias pro somatório de horas estimadas (nunca as fotos de evidência).
+  let backlogQuery = supabase.from("backlog").select("status, status_programacao, tempo_execucao");
+  if (filialFiltro) backlogQuery = backlogQuery.eq('filial_id', filialFiltro);
+
+  const [osRes, backlogRes] = await Promise.all([queryOS, backlogQuery]);
   const allOSUnfiltered = osRes.data ?? [];
+  const backlogPendenteRows = backlogRes.data ?? [];
 
   const inicioTime = parseLocal(inicioFiltro);
   const fimTime = parseLocal(fimFiltro);
@@ -893,6 +926,16 @@ export async function getDashboardData(filtros?: {
   }
 
 
+  // Horas estimadas (tempo_execucao) de todas as etiquetas de backlog ainda pendentes —
+  // mesmo critério de "não encerrado" usado em app/backlog/BacklogDashboard.tsx.
+  const horasBacklogPendente = backlogPendenteRows.reduce((acc, item: any) => {
+    const statusLower = String(item.status || '').toLowerCase();
+    const progLower = String(item.status_programacao || '').toLowerCase();
+    const isEncerrado = statusLower === 'encerrada' || statusLower === 'concluída' || statusLower === 'concluido' || statusLower === 'encerrado';
+    if (isEncerrado) return acc;
+    return acc + parseHorasBacklog(item.tempo_execucao);
+  }, 0);
+
   const MESES_NOME = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   const result: DashboardData = {
@@ -905,7 +948,7 @@ export async function getDashboardData(filtros?: {
     horasManutencao: Math.round(hIndispDMTotal * 10) / 10,
     mttr,
     mtbf,
-    backlog: Math.round((allOS.filter(o => o.status === "Aberta").reduce((acc, o) => acc + (o.horas_manutencao || 0), 0) / 24) * 10) / 10,
+    backlog: Math.round((horasBacklogPendente / 24) * 10) / 10,
     totalEquipamentos: frotaFiltrada.length,
     totalVeiculosAtivos: placasFiltradas.length,
     veiculos: veiculos.sort((a, b) => a.disponibilidade - b.disponibilidade),
