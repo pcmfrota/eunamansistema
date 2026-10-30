@@ -130,7 +130,6 @@ function ChartCard({
   titleColor,
   headerExtra,
   compactHeight,
-  expandedHeight = 480,
   hasData = true,
   emptyMessage = 'Sem dados suficientes',
   scrollable = false,
@@ -144,7 +143,6 @@ function ChartCard({
   titleColor: string
   headerExtra?: React.ReactNode
   compactHeight: number
-  expandedHeight?: number
   hasData?: boolean
   emptyMessage?: string
   scrollable?: boolean
@@ -195,16 +193,20 @@ function ChartCard({
     </div>
   )
 
+  // O modal usa altura fixa em % da viewport (não pixels fixos do gráfico) e layout flex
+  // em coluna — o gráfico ocupa o espaço que sobrar depois do cabeçalho e do conteúdo
+  // acima dele (aboveChart), então tudo cabe proporcionalmente na tela sem cortar nada
+  // nem precisar rolar, em qualquer tamanho de tela.
   const modal = expanded && mounted && createPortal(
     <div
       className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={() => setExpanded(false)}
     >
       <div
-        className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-white dark:bg-[#12141c] rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 animate-in zoom-in-95 duration-150"
+        className="relative w-full max-w-6xl h-[88vh] max-h-[900px] flex flex-col bg-white dark:bg-[#12141c] rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap shrink-0">
           <div>
             <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">{title}</h3>
             {subtitle && <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">{subtitle}</p>}
@@ -221,8 +223,8 @@ function ChartCard({
             </button>
           </div>
         </div>
-        {aboveChart}
-        <div style={{ height: expandedHeight }} className="w-full">
+        {aboveChart && <div className="shrink-0">{aboveChart}</div>}
+        <div className="flex-1 min-h-0 w-full">
           {body}
         </div>
       </div>
@@ -1394,7 +1396,6 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           title="TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES"
           titleColor="border-[#0055b8]"
           compactHeight={300}
-          expandedHeight={550}
           scrollable
           minWidth={Math.max(700, trendStatusData.length * 90)}
         >
@@ -1440,7 +1441,6 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           title="BACKLOG POR TIPO DE EQUIPAMENTO"
           titleColor="border-emerald-600"
           compactHeight={320}
-          expandedHeight={550}
           headerExtra={
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
@@ -1468,7 +1468,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
                 axisLine={false}
                 tickLine={false}
-                width={90}
+                width={120}
               />
               <Tooltip
                 cursor={{ fill: 'rgba(255,255,255,0.05)' }}
@@ -1499,7 +1499,6 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           title="STATUS DO BACKLOG POR PLACA"
           titleColor="border-blue-600"
           compactHeight={320}
-          expandedHeight={550}
           scrollable
           minWidth={Math.max(700, barPlacaStackData.length * 70)}
           headerExtra={
