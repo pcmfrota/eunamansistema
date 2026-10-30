@@ -3,7 +3,12 @@
 import { useState, useMemo } from "react";
 import {
   Plus, X, Camera, Trash2, Filter, CheckCircle2, AlertTriangle, History, Loader2, List,
+  LayoutDashboard, Image as ImageIcon, Percent, Boxes,
 } from "lucide-react";
+import {
+  PieChart, Pie, Cell, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, LabelList,
+} from "recharts";
 import { cn } from "@/lib/utils";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
@@ -18,6 +23,12 @@ const TIPOS_IMPLEMENTO = ["COMBOIO", "SKID"] as const;
 const TIPO_LABEL: Record<string, string> = {
   COMBOIO: "Comboio", SKID: "Skid",
 };
+// Paleta validada (dataviz skill) — par categórico Comboio/Skid com separação segura
+// pra daltonismo (CVD ΔE >= 15 no modo normal), diferente das cores de status
+// (verde/âmbar) já usadas nos badges Instalado/Pendente desta tela.
+const TIPO_CHART_COLOR: Record<string, string> = { COMBOIO: "#2a78d6", SKID: "#1baf7a" };
+const COR_INSTALADO = "#059669";
+const COR_PENDENTE = "#f59e0b";
 
 // ── Compressão de foto (1280px / JPEG 70%) — mesmo padrão do Checklist de Frota ──
 function compress(file: File): Promise<FiltroImplementoFoto | null> {
@@ -93,7 +104,7 @@ export default function ControleFiltrosClient({
   const [lancamentos, setLancamentos] = useState<ControleFiltroImplemento[]>(initialLancamentos);
   const [modalOpen, setModalOpen] = useState(false);
   const [historicoPlaca, setHistoricoPlaca] = useState<string | null>(null);
-  const [view, setView] = useState<"planilha" | "historico">("planilha");
+  const [view, setView] = useState<"planilha" | "dashboard" | "fotos" | "historico">("planilha");
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<"TODOS" | "INSTALADO" | "PENDENTE">("TODOS");
   const [loading, setLoading] = useState(false);
@@ -145,6 +156,49 @@ export default function ControleFiltrosClient({
       .slice()
       .sort((a, b) => b.data_troca.localeCompare(a.data_troca) || (b.created_at || "").localeCompare(a.created_at || ""));
   }, [lancamentos, filtroTipo]);
+
+  const totalPendentes = linhasTodas.length - totalOk;
+  const pctInstalado = linhasTodas.length > 0 ? Math.round((totalOk / linhasTodas.length) * 100) : 0;
+
+  // Status geral (Instalado x Pendente) — respeita o filtro de tipo selecionado acima.
+  const statusPieData = useMemo(() => ([
+    { name: "Instalado", value: totalOk },
+    { name: "Pendente", value: totalPendentes },
+  ]), [totalOk, totalPendentes]);
+
+  // Comboio x Skid — sempre os dois tipos lado a lado, mesmo com o filtro de tipo ativo,
+  // já que o propósito do gráfico é justamente comparar os dois.
+  const porTipoData = useMemo(() => {
+    return TIPOS_IMPLEMENTO.map(tipo => {
+      const doTipo = equipamentosFiltro.filter(e => (e.tipo || "").toUpperCase() === tipo);
+      const instalado = doTipo.filter(e => !!ultimoPorPlaca[e.placa]).length;
+      return { tipo, label: TIPO_LABEL[tipo], instalado, pendente: doTipo.length - instalado };
+    });
+  }, [equipamentosFiltro, ultimoPorPlaca]);
+
+  // Trocas lançadas por mês (últimos 6 meses com lançamento) — respeita o filtro de tipo.
+  const trocasPorMesData = useMemo(() => {
+    const map: Record<string, number> = {};
+    historicoGeral.forEach(l => {
+      const mes = (l.data_troca || "").slice(0, 7);
+      if (!mes) return;
+      map[mes] = (map[mes] || 0) + 1;
+    });
+    const MESES_ABR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return Object.entries(map)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-6)
+      .map(([mes, qtd]) => {
+        const [ano, m] = mes.split("-");
+        return { name: `${MESES_ABR[Number(m) - 1]}/${ano.slice(2)}`, qtd };
+      });
+  }, [historicoGeral]);
+
+  // Lançamentos com evidência fotográfica — respeita o filtro de tipo.
+  const lancamentosComFoto = useMemo(
+    () => historicoGeral.filter(l => l.evidencias && l.evidencias.length > 0),
+    [historicoGeral]
+  );
 
   const abrirLancamento = (placaPreenchida?: string) => {
     setForm(formVazio(placaPreenchida));
@@ -234,7 +288,7 @@ export default function ControleFiltrosClient({
             <Filter className="text-blue-500" size={24} /> Controle de Filtros do Implemento
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            {totalOk} de {linhasTodas.length} equipamentos com filtro instalado — Comboio e Skid
+            Controle de instalação e troca do filtro absoluto — Comboio e Skid
           </p>
         </div>
         {!isVisitante && (
@@ -244,14 +298,60 @@ export default function ControleFiltrosClient({
         )}
       </div>
 
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-3 shadow-sm">
+          <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0"><Boxes size={18} /></div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate">Equipamentos</p>
+            <p className="text-xl font-black text-zinc-800 dark:text-zinc-100 leading-tight">{linhasTodas.length}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-3 shadow-sm">
+          <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0"><CheckCircle2 size={18} /></div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate">Instalados</p>
+            <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 leading-tight">{totalOk}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-3 shadow-sm">
+          <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shrink-0"><AlertTriangle size={18} /></div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate">Pendentes</p>
+            <p className="text-xl font-black text-amber-700 dark:text-amber-400 leading-tight">{totalPendentes}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-3 shadow-sm">
+          <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shrink-0"><Percent size={18} /></div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate">% Instalado</p>
+            <p className="text-xl font-black text-indigo-700 dark:text-indigo-400 leading-tight">{pctInstalado}%</p>
+          </div>
+        </div>
+      </div>
+
       {/* Abas */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 flex-wrap">
         <button
           onClick={() => setView("planilha")}
           className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
             view === "planilha" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
         >
           <List size={15} /> Planilha
+        </button>
+        <button
+          onClick={() => setView("dashboard")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
+            view === "dashboard" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
+        >
+          <LayoutDashboard size={15} /> Dashboard
+        </button>
+        <button
+          onClick={() => setView("fotos")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
+            view === "fotos" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300")}
+        >
+          <ImageIcon size={15} /> Fotos {lancamentosComFoto.length > 0 && `(${lancamentosComFoto.length})`}
         </button>
         <button
           onClick={() => setView("historico")}
@@ -332,6 +432,99 @@ export default function ControleFiltrosClient({
         <div className="px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400">{linhas.length} equipamento(s)</div>
       </div>
       </>
+      )}
+
+      {view === "dashboard" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Status Geral */}
+          <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Status Geral</h3>
+            <p className="text-[11px] text-zinc-400 mb-3">
+              Instalado x Pendente{filtroTipo !== "TODOS" ? ` — ${TIPO_LABEL[filtroTipo]}` : ""}
+            </p>
+            {linhasTodas.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-xs text-zinc-400 font-semibold uppercase tracking-wide">Sem dados</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={statusPieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}>
+                    {statusPieData.map(entry => (
+                      <Cell key={entry.name} fill={entry.name === "Instalado" ? COR_INSTALADO : COR_PENDENTE} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number, n: string) => [`${v} equip.`, n]} />
+                  <Legend verticalAlign="bottom" height={28} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Comboio x Skid */}
+          <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Comboio x Skid</h3>
+            <p className="text-[11px] text-zinc-400 mb-3">Sempre os dois tipos, mesmo com o filtro de tipo ativo</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={porTipoData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={6}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} opacity={0.5} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fontWeight: 700, fill: "#71717a" }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#71717a" }} axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Legend verticalAlign="top" align="right" height={24} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700 }} />
+                <Bar dataKey="instalado" name="Instalado" fill={COR_INSTALADO} radius={[4, 4, 0, 0]} barSize={28} />
+                <Bar dataKey="pendente" name="Pendente" fill={COR_PENDENTE} radius={[4, 4, 0, 0]} barSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Trocas por mês */}
+          <div className="lg:col-span-2 bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Trocas Lançadas por Mês</h3>
+            <p className="text-[11px] text-zinc-400 mb-3">
+              Últimos meses com lançamento{filtroTipo !== "TODOS" ? ` — ${TIPO_LABEL[filtroTipo]}` : ""}
+            </p>
+            {trocasPorMesData.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-xs text-zinc-400 font-semibold uppercase tracking-wide">Sem lançamentos</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={trocasPorMesData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} opacity={0.5} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700, fill: "#71717a" }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#71717a" }} axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="qtd" name="Trocas" fill={TIPO_CHART_COLOR.COMBOIO} radius={[4, 4, 0, 0]} barSize={32}>
+                    <LabelList dataKey="qtd" position="top" fontSize={11} fontWeight={700} fill="#52525b" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === "fotos" && (
+        <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+          {lancamentosComFoto.length === 0 ? (
+            <div className="px-4 py-16 text-center text-zinc-400 text-sm">Nenhuma evidência fotográfica encontrada</div>
+          ) : (
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {lancamentosComFoto.map(l => (
+                <div key={l.id} className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200">{l.placa}</span>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">
+                      {TIPO_LABEL[(l.tipo_equipamento || "").toUpperCase()] || l.tipo_equipamento || "-"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mb-2">
+                    {fmtDataBr(l.data_troca)}{l.observacoes ? ` · ${l.observacoes}` : ""}
+                  </p>
+                  <FotoMultiSlot photos={l.evidencias} onExpand={setFotoExpandida} readOnly />
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400">{lancamentosComFoto.length} lançamento(s) com foto</div>
+        </div>
       )}
 
       {view === "historico" && (
