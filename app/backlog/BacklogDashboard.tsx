@@ -1256,6 +1256,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         {/* Card: ETIQUETA POR CRITICIDADE */}
         <ChartCard
           title="ETIQUETA POR CRITICIDADE"
+          subtitle="Clique numa fatia para filtrar"
           titleColor="border-cyan-500"
           compactHeight={200}
           headerExtra={
@@ -1282,12 +1283,16 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 nameKey="name"
                 label={({ name, value }) => value > 0 ? `${name} ${value}` : ''}
                 labelLine={false}
+                onClick={(entry: any) => setFilterCriticidade(prev => prev === entry.name ? '' : entry.name)}
+                cursor="pointer"
               >
                 {donutData.map((entry, idx) => (
                   <Cell
                     key={idx}
                     fill={CRITICIDADE_COLORS[entry.name]?.chart || '#cbd5e1'}
-                    stroke="transparent"
+                    stroke={filterCriticidade === entry.name ? '#0f172a' : 'transparent'}
+                    strokeWidth={filterCriticidade === entry.name ? 2 : 0}
+                    cursor="pointer"
                   />
                 ))}
               </Pie>
@@ -1307,7 +1312,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </ChartCard>
 
         {/* Card: ETIQUETA POR ÁREA */}
-        <ChartCard title="ETIQUETA POR ÁREA" titleColor="border-blue-600" compactHeight={200}>
+        <ChartCard title="ETIQUETA POR ÁREA" subtitle="Clique numa barra para filtrar" titleColor="border-blue-600" compactHeight={200}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={barAreaData}
@@ -1338,17 +1343,22 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
               />
               <Bar
                 dataKey="value"
-                fill="#0055b8"
                 radius={[0, 4, 4, 0]}
                 label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                 barSize={14}
-              />
+                cursor="pointer"
+                onClick={(entry: any) => setFilterArea(prev => prev === entry.name ? '' : entry.name)}
+              >
+                {barAreaData.map((entry, idx) => (
+                  <Cell key={idx} fill="#0055b8" opacity={filterArea && filterArea !== entry.name ? 0.35 : 1} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
 
         {/* Card: ETIQUETA POR MÓDULOS */}
-        <ChartCard title="ETIQUETA POR MÓDULOS" titleColor="border-[#00a859]" compactHeight={200}>
+        <ChartCard title="ETIQUETA POR MÓDULOS" subtitle="Clique numa barra para filtrar" titleColor="border-[#00a859]" compactHeight={200}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={barModuloData}
@@ -1379,11 +1389,16 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
               />
               <Bar
                 dataKey="value"
-                fill="#00a859"
                 radius={[0, 4, 4, 0]}
                 label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                 barSize={14}
-              />
+                cursor="pointer"
+                onClick={(entry: any) => setFilterModulo(prev => prev === entry.name ? '' : entry.name)}
+              >
+                {barModuloData.map((entry, idx) => (
+                  <Cell key={idx} fill="#00a859" opacity={filterModulo && filterModulo !== entry.name ? 0.35 : 1} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -1394,6 +1409,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       <div className="grid grid-cols-1 gap-4 w-full">
         <ChartCard
           title="TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES"
+          subtitle="Clique num mês para filtrar"
           titleColor="border-[#0055b8]"
           compactHeight={300}
           scrollable
@@ -1424,11 +1440,17 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 iconSize={8}
                 wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
               />
-              <Bar dataKey="encerrado" name="Encerrado" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={22}>
+              <Bar dataKey="encerrado" name="Encerrado" radius={[4, 4, 0, 0]} barSize={22} cursor="pointer" onClick={(entry: any) => setFilterMes(prev => prev === entry.name ? '' : entry.name)}>
                 <LabelList dataKey="encerrado" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                {trendStatusData.map((entry, idx) => (
+                  <Cell key={idx} fill="#16a34a" opacity={filterMes && filterMes !== entry.name ? 0.3 : 1} />
+                ))}
               </Bar>
-              <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={22}>
+              <Bar dataKey="pendente" name="Pendente" radius={[4, 4, 0, 0]} barSize={22} cursor="pointer" onClick={(entry: any) => setFilterMes(prev => prev === entry.name ? '' : entry.name)}>
                 <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                {trendStatusData.map((entry, idx) => (
+                  <Cell key={idx} fill="#dc2626" opacity={filterMes && filterMes !== entry.name ? 0.3 : 1} />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -1439,6 +1461,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       <div className="grid grid-cols-1 gap-4 w-full">
         <ChartCard
           title="BACKLOG POR TIPO DE EQUIPAMENTO"
+          subtitle="Clique numa barra para filtrar"
           titleColor="border-emerald-600"
           compactHeight={320}
           headerExtra={
@@ -1482,11 +1505,31 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                   )
                 }}
               />
-              <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[0, 4, 4, 0]} barSize={12}>
+              <Bar
+                dataKey="concluido"
+                name="Concluído"
+                radius={[0, 4, 4, 0]}
+                barSize={12}
+                cursor="pointer"
+                onClick={(entry: any) => setFilterTipos(prev => prev.includes(entry.name) ? prev.filter(t => t !== entry.name) : [...prev, entry.name])}
+              >
                 <LabelList dataKey="concluido" position="right" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                {barTipoStackData.map((entry, idx) => (
+                  <Cell key={idx} fill="#16a34a" opacity={filterTipos.length > 0 && !filterTipos.includes(entry.name) ? 0.3 : 1} />
+                ))}
               </Bar>
-              <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[0, 4, 4, 0]} barSize={12}>
+              <Bar
+                dataKey="pendente"
+                name="Pendente"
+                radius={[0, 4, 4, 0]}
+                barSize={12}
+                cursor="pointer"
+                onClick={(entry: any) => setFilterTipos(prev => prev.includes(entry.name) ? prev.filter(t => t !== entry.name) : [...prev, entry.name])}
+              >
                 <LabelList dataKey="pendente" position="right" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                {barTipoStackData.map((entry, idx) => (
+                  <Cell key={idx} fill="#dc2626" opacity={filterTipos.length > 0 && !filterTipos.includes(entry.name) ? 0.3 : 1} />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -1497,6 +1540,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       <div className="grid grid-cols-1 gap-4 w-full">
         <ChartCard
           title="STATUS DO BACKLOG POR PLACA"
+          subtitle="Clique numa placa para filtrar"
           titleColor="border-blue-600"
           compactHeight={320}
           scrollable
@@ -1552,11 +1596,31 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 iconSize={8}
                 wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
               />
-              <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18}>
+              <Bar
+                dataKey="concluido"
+                name="Concluído"
+                radius={[4, 4, 0, 0]}
+                barSize={18}
+                cursor="pointer"
+                onClick={(entry: any) => setSearch(prev => prev === entry.name ? '' : entry.name)}
+              >
                 <LabelList dataKey="concluido" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                {barPlacaStackData.map((entry, idx) => (
+                  <Cell key={idx} fill="#16a34a" opacity={search && search !== entry.name ? 0.3 : 1} />
+                ))}
               </Bar>
-              <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={18}>
+              <Bar
+                dataKey="pendente"
+                name="Pendente"
+                radius={[4, 4, 0, 0]}
+                barSize={18}
+                cursor="pointer"
+                onClick={(entry: any) => setSearch(prev => prev === entry.name ? '' : entry.name)}
+              >
                 <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                {barPlacaStackData.map((entry, idx) => (
+                  <Cell key={idx} fill="#dc2626" opacity={search && search !== entry.name ? 0.3 : 1} />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
