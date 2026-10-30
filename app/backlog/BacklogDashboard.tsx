@@ -668,6 +668,27 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     pendentes: filtered.filter(i => i.mappedStatus !== 'ENCERRADO').length,
   }), [filtered])
 
+  // ─── HORAS DE BACKLOG PENDENTE ACUMULADAS POR PLACA (alimenta a Provisão de Impacto na DM) ───
+  const horasPorPlacaData = useMemo(() => {
+    const map: Record<string, { name: string; horasCriticas: number; horasNormais: number }> = {}
+    filtered.filter(i => i.mappedStatus !== 'ENCERRADO').forEach(item => {
+      const key = item.frota || 'SEM PLACA'
+      if (!map[key]) map[key] = { name: key, horasCriticas: 0, horasNormais: 0 }
+      const horas = parseHours(item.tempo_execucao)
+      if (item.mappedCriticidade === 'A') map[key].horasCriticas += horas
+      else map[key].horasNormais += horas
+    })
+    return Object.values(map)
+      .map(d => ({
+        ...d,
+        horasCriticas: Number(d.horasCriticas.toFixed(1)),
+        horasNormais: Number(d.horasNormais.toFixed(1)),
+        total: Number((d.horasCriticas + d.horasNormais).toFixed(1)),
+      }))
+      .filter(d => d.total > 0)
+      .sort((a, b) => b.total - a.total)
+  }, [filtered])
+
   // ─── PROG. E EXECUÇÃO / RCS ───────────────────────────────────────────────
 
   // Tempo médio (dias) entre a evidência e a data de programação, por semana da evidência.
@@ -1620,6 +1641,79 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
                 {barPlacaStackData.map((entry, idx) => (
                   <Cell key={idx} fill="#dc2626" opacity={search && search !== entry.name ? 0.3 : 1} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      {/* ─── ROW 3.7: HORAS DE BACKLOG PENDENTE ACUMULADAS POR PLACA ─── */}
+      <div className="grid grid-cols-1 gap-4 w-full">
+        <ChartCard
+          title="HORAS DE BACKLOG PENDENTE POR PLACA"
+          subtitle="Horas acumuladas em aberto (Crítica A x Normal) — clique numa placa para filtrar"
+          titleColor="border-indigo-600"
+          compactHeight={320}
+          hasData={horasPorPlacaData.length > 0}
+          scrollable
+          minWidth={Math.max(700, horasPorPlacaData.length * 70)}
+          headerExtra={
+            <span className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[8px] font-black uppercase">
+              Total {parsedBacklogHours.totalHoras.toFixed(1)}h
+            </span>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={horasPorPlacaData} margin={{ top: 20, right: 10, left: -20, bottom: 30 }} barCategoryGap="25%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+              <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={60} />
+              <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} unit="h" />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0].payload
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-red-400">{data.horasCriticas}h crít.</span> / <span className="text-amber-400">{data.horasNormais}h normal</span> = {data.total}h
+                    </div>
+                  )
+                }}
+              />
+              <Legend
+                verticalAlign="top"
+                align="right"
+                height={24}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              />
+              <Bar
+                dataKey="horasCriticas"
+                name="Crítica A"
+                stackId="horas"
+                radius={[0, 0, 0, 0]}
+                barSize={28}
+                cursor="pointer"
+                onClick={(entry: any) => setSearch(prev => prev === entry.name ? '' : entry.name)}
+              >
+                {horasPorPlacaData.map((entry, idx) => (
+                  <Cell key={idx} fill="#dc2626" opacity={search && search !== entry.name ? 0.3 : 1} />
+                ))}
+              </Bar>
+              <Bar
+                dataKey="horasNormais"
+                name="Normal"
+                stackId="horas"
+                radius={[4, 4, 0, 0]}
+                barSize={28}
+                cursor="pointer"
+                onClick={(entry: any) => setSearch(prev => prev === entry.name ? '' : entry.name)}
+              >
+                <LabelList dataKey="total" position="top" fill="#4f46e5" fontSize={10} fontWeight={900} formatter={(v: number) => `${v}h`} />
+                {horasPorPlacaData.map((entry, idx) => (
+                  <Cell key={idx} fill="#f59e0b" opacity={search && search !== entry.name ? 0.3 : 1} />
                 ))}
               </Bar>
             </BarChart>
