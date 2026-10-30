@@ -1102,8 +1102,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       </div>
 
 
-      {/* ─── ROW 3: GRÁFICOS (Criticidade, Área, Módulos, Tendência) — agrupados juntos ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 w-full">
+      {/* ─── ROW 3: GRÁFICOS (Criticidade, Área, Módulos) — agrupados juntos ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
 
         {/* Card: ETIQUETA POR CRITICIDADE */}
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
