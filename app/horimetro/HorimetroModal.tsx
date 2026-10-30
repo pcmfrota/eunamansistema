@@ -167,11 +167,11 @@ export default function HorimetroModal({
         <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 rounded-xl shadow-inner">
-              {editData ? <History size={22} /> : <Plus size={22} />}
+              {editData?.id ? <History size={22} /> : <Plus size={22} />}
             </div>
             <div>
               <h2 className="text-xl font-bold tracking-tight">
-                {editData ? 'Editar Apontamento' : 'Novo Apontamento'}
+                {editData?.id ? 'Editar Apontamento' : 'Novo Apontamento'}
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium"> Registro diário de horímetro de equipamentos </p>
             </div>

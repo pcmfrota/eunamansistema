@@ -9,7 +9,10 @@ import { PremiumLoader } from "@/components/premium-loader";
 function buildEquipamentos(raw: any[]) {
   return raw
     .filter((e) => !e.deleted_at)
-    .map((e) => ({ id: e.id, placa: e.placa, modelo: e.modelo }))
+    .map((e) => ({
+      id: e.id, placa: e.placa, modelo: e.modelo,
+      tipo: e.tipo, categoria: e.categoria, modulo: e.modulo, area: e.area, status: e.status,
+    }))
     .sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
 }
 
