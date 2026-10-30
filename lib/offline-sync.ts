@@ -88,7 +88,8 @@ const syncTasks: Record<
     supabase
       .from("preventivas")
       .select("*, equipamentos(placa, modelo, tipo, categoria, modulo)")
-      .order("data_atualizacao", { ascending: false }),
+      .order("data_atualizacao", { ascending: false })
+      .limit(1000),
 
   inspecoes_pneus: (supabase) =>
     supabase
@@ -125,16 +126,17 @@ const syncTasks: Record<
       .select("id, ano, mes, placa, motorista, processo, nucleo, supervisor_suzano, codigo, revisao, status, criado_por, created_at, filial_id, reaberta_em")
       .order("created_at", { ascending: false }),
 
-  // foto_ponto fica de fora pelo mesmo motivo (ver obterFotosLancamentosCaptacao).
+  // foto_ponto fica de fora pelo mesmo motivo (ver obterFotosLancamentosCaptacao). Sem
+  // limite nenhum antes — adicionado como prevenção (tabela de lançamentos só cresce).
   lancamentos_captacao: (supabase) =>
-    supabase.from("lancamentos_captacao").select("id, ficha_id, data, id_ponto, hora_inicial, hora_final, volume_captado, fazenda_captada, up_captacao, atividade, fazenda_atividade, up_atividade, created_at"),
+    supabase.from("lancamentos_captacao").select("id, ficha_id, data, id_ponto, hora_inicial, hora_final, volume_captado, fazenda_captada, up_captacao, atividade, fazenda_atividade, up_atividade, created_at").order("created_at", { ascending: false }).limit(3000),
 
   // Fotos/assinatura (imagem_1/2/3_url, imagem_horimetro_url, assinatura_url) ficam de
   // fora — base64 sem limite de linhas, rodando no boot de TODO carregamento do app. Quem
   // abre uma lavagem específica busca essas colunas à parte (ver getLavagemImagens em
-  // app/lavagens/actions.ts).
+  // app/lavagens/actions.ts). Limite de linhas adicionado como prevenção (registro diário).
   lavagens: (supabase) =>
-    supabase.from("lavagens").select("id, placa, data, colaborador, horimetro, km, status, lavagem_realizada, observacoes, itens_lavados, tipo_frota, created_at, validated_at, registrado_por, registrado_por_nome"),
+    supabase.from("lavagens").select("id, placa, data, colaborador, horimetro, km, status, lavagem_realizada, observacoes, itens_lavados, tipo_frota, created_at, validated_at, registrado_por, registrado_por_nome").order("created_at", { ascending: false }).limit(1000),
 
   prev_prog_semanal: (supabase) =>
     supabase.from("prev_prog_semanal").select("*"),
@@ -158,13 +160,13 @@ const syncTasks: Record<
     supabase.from("docs_crlve_leve").select("*"),
 
   checklists_mecanicos: (supabase) =>
-    supabase.from("checklists_mecanicos").select("*"),
+    supabase.from("checklists_mecanicos").select("*").order("criado_em", { ascending: false }).limit(500),
 
   fichas_mao_obra: (supabase) =>
-    supabase.from("fichas_mao_obra").select("*").order("created_at", { ascending: false }),
+    supabase.from("fichas_mao_obra").select("*").order("created_at", { ascending: false }).limit(1000),
 
   apontamentos_mao_obra: (supabase) =>
-    supabase.from("apontamentos_mao_obra").select("*").order("criado_em", { ascending: false }),
+    supabase.from("apontamentos_mao_obra").select("*").order("criado_em", { ascending: false }).limit(2000),
 
   mao_obra_catalogos: (supabase) =>
     supabase.from("mao_obra_catalogos").select("*").eq("ativo", true).order("ordem"),
@@ -172,14 +174,18 @@ const syncTasks: Record<
   mao_obra_apontamentos_catalogo: (supabase) =>
     supabase.from("mao_obra_apontamentos_catalogo").select("*").eq("ativo", true).order("codigo"),
 
+  // fotos_antes/fotos_depois/assinatura_mecanico/assinatura_lider ficam de fora — mesmo
+  // motivo das outras tabelas acima (base64, assinatura_mecanico é NOT NULL em toda linha).
+  // Essa tarefa ficou de fora da correção original por engano; corrigida agora, igual ao
+  // que já foi feito em src/services/LubrificacaoService.ts.
   fichas_lubrificacao: (supabase) =>
-    supabase.from("fichas_lubrificacao").select("*, equipamento:equipamentos(placa, modulo, tipo)").is("deleted_at", null).order("data_registro", { ascending: false }),
+    supabase.from("fichas_lubrificacao").select("id, data_registro, hora_inicio, hora_fim, equipamento_id, placa, modulo, local_servico, cliente, horimetro_inicio, horimetro_fim, mecanico_responsavel, ajudante, checklist_lubrificacao, checklist_geral, calibragem, reapertos, gps_lat, gps_lng, observacoes, status, filial_id, created_at, updated_at, deleted_at, equipamento:equipamentos(placa, modulo, tipo)").is("deleted_at", null).order("data_registro", { ascending: false }).limit(500),
 
   horimetros: (supabase) =>
-    supabase.from("horimetros").select("*, equipamentos(placa, modelo)").order("data_referencia", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("horimetros").select("*, equipamentos(placa, modelo)").order("data_referencia", { ascending: false }).order("created_at", { ascending: false }).limit(3000),
 
   afiacao: (supabase) =>
-    supabase.from("afiacao").select("*").order("created_at", { ascending: false }),
+    supabase.from("afiacao").select("*").order("created_at", { ascending: false }).limit(500),
 
   aux_afiacao: (supabase) =>
     supabase.from("aux_afiacao").select("*").order("value", { ascending: true }),
@@ -197,13 +203,13 @@ const syncTasks: Record<
     supabase.from("filiais").select("id, nome, ativo").order("id"),
 
   custos_manutencao: (supabase) =>
-    supabase.from("custos_manutencao").select("*").order("data", { ascending: false }),
+    supabase.from("custos_manutencao").select("*").order("data", { ascending: false }).limit(3000),
 
   custos_fornecedores: (supabase) =>
     supabase.from("custos_fornecedores").select("*").order("nome_fantasia", { ascending: true }),
 
   custos_parcelas: (supabase) =>
-    supabase.from("custos_parcelas").select("*").order("mes_vencimento", { ascending: true }),
+    supabase.from("custos_parcelas").select("*").order("mes_vencimento", { ascending: true }).limit(1000),
 
   // Controle de Insumos (fichas de abastecimento/recarga dos comboios) — reserva de
   // referência pro fluxo de campo funcionar o dia inteiro sem sinal (ver lib/offline-db.ts).
@@ -211,16 +217,16 @@ const syncTasks: Record<
     supabase.from("insumos_fichas_abastecimento").select("*").order("data", { ascending: false }).limit(500),
 
   insumos_ficha_insumos: (supabase) =>
-    supabase.from("insumos_ficha_insumos").select("*"),
+    supabase.from("insumos_ficha_insumos").select("*").order("created_at", { ascending: false }).limit(3000),
 
   insumos_abastecimento_linhas: (supabase) =>
-    supabase.from("insumos_abastecimento_linhas").select("*"),
+    supabase.from("insumos_abastecimento_linhas").select("*").order("created_at", { ascending: false }).limit(3000),
 
   insumos_fichas_recarga: (supabase) =>
     supabase.from("insumos_fichas_recarga").select("*").order("data", { ascending: false }).limit(500),
 
   insumos_recarga_itens: (supabase) =>
-    supabase.from("insumos_recarga_itens").select("*"),
+    supabase.from("insumos_recarga_itens").select("*").order("created_at", { ascending: false }).limit(2000),
 
   insumos_materiais: (supabase) =>
     supabase.from("insumos_materiais").select("*"),
@@ -235,7 +241,7 @@ const syncTasks: Record<
     supabase.from("insumos_maquinas_suzano").select("*"),
 
   insumos_skid_movimentos: (supabase) =>
-    supabase.from("insumos_skid_movimentos").select("*"),
+    supabase.from("insumos_skid_movimentos").select("*").order("created_at", { ascending: false }).limit(2000),
 
   controladoria_frota: (supabase) =>
     supabase.from("controladoria_frota").select("*").order("nome", { ascending: true }),

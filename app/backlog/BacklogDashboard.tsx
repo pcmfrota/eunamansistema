@@ -1439,15 +1439,15 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         <ChartCard
           title="BACKLOG POR TIPO DE EQUIPAMENTO"
           titleColor="border-emerald-600"
-          compactHeight={260}
-          expandedHeight={500}
+          compactHeight={320}
+          expandedHeight={550}
           headerExtra={
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" /> Concluído
               </span>
               <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" /> Pendente
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Pendente
               </span>
             </div>
           }
@@ -1457,6 +1457,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
               data={barTipoStackData}
               layout="vertical"
               margin={{ left: -10, right: 40, top: 10, bottom: 10 }}
+              barGap={3}
+              barCategoryGap="30%"
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
               <XAxis type="number" hide />
@@ -1475,13 +1477,17 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                   const data = payload[0].payload
                   return (
                     <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                      {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
+                      {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-red-400">{data.pendente} pend.</span>
                     </div>
                   )
                 }}
               />
-              <Bar dataKey="concluido" name="Concluído" stackId="a" fill="#16a34a" barSize={16} />
-              <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16} />
+              <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[0, 4, 4, 0]} barSize={12}>
+                <LabelList dataKey="concluido" position="right" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+              </Bar>
+              <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[0, 4, 4, 0]} barSize={12}>
+                <LabelList dataKey="pendente" position="right" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
