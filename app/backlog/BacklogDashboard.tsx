@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell, Legend, LabelList
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
@@ -423,24 +423,17 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       .map(([name, value]) => ({ name, value }))
   }, [filtered])
 
-  // Trend Column Chart: Tendência de Etiquetas (Month to month)
-  const trendData = useMemo(() => {
-    const map: Record<string, number> = {}
-    MONTHS_PT.forEach(m => { map[m] = 0 })
+  // Tendência Mensal: Encerradas x Pendentes, mês a mês, ano inteiro
+  const trendStatusData = useMemo(() => {
+    const map: Record<string, { name: string; encerrado: number; pendente: number }> = {}
+    MONTHS_PT.forEach(m => { map[m] = { name: m, encerrado: 0, pendente: 0 } })
     filtered.forEach(i => {
       if (map[i.mappedMonth] !== undefined) {
-        map[i.mappedMonth]++
+        if (i.mappedStatus === 'ENCERRADO') map[i.mappedMonth].encerrado++
+        else map[i.mappedMonth].pendente++
       }
     })
-    // Filter out months with 0 if they are after the latest active month to make the chart clean
-    let lastActiveIdx = 0
-    MONTHS_PT.forEach((m, idx) => {
-      if (map[m] > 0) lastActiveIdx = idx
-    })
-    return MONTHS_PT.slice(0, lastActiveIdx + 1).map(name => ({
-      name,
-      value: map[name]
-    }))
+    return MONTHS_PT.map(name => map[name])
   }, [filtered])
 
   // Aggregate statistics per mechanic/colaborador
@@ -609,58 +602,6 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     'NÃO ATENDE': '#dc2626',
     'SEM PREVISÃO': '#ca8a04',
     'SEM REQUISIÇÃO': '#64748b',
-  }
-
-  // Recharts Custom vertical bar label containing count and MoM percentage change pill
-  const renderCustomBarLabel = (props: any) => {
-    const { x, y, width, height, index, value } = props
-    if (value === 0) return null
-
-    let momLabel = ''
-    let isUp = false
-    if (index > 0) {
-      const prevVal = trendData[index - 1].value
-      if (prevVal > 0) {
-        const pct = ((value - prevVal) / prevVal) * 100
-        isUp = pct >= 0
-        momLabel = `${isUp ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%`
-      }
-    }
-
-    return (
-      <g>
-        {/* Count inside bar */}
-        <text x={x + width / 2} y={y + 30} fill="#ffffff" fontSize={11} fontWeight={800} textAnchor="middle">
-          {value}
-        </text>
-
-        {/* MoM % Badge above the column */}
-        {momLabel && (
-          <g>
-            <rect
-              x={x + width / 2 - 25}
-              y={y - 25}
-              width={50}
-              height={16}
-              rx={4}
-              fill={isUp ? '#fde8e8' : '#eafaf1'}
-              stroke={isUp ? '#fecaca' : '#bbf7d0'}
-              strokeWidth={1}
-            />
-            <text
-              x={x + width / 2}
-              y={y - 13}
-              fill={isUp ? '#e74c3c' : '#2ecc71'}
-              fontSize={8}
-              fontWeight={900}
-              textAnchor="middle"
-            >
-              {momLabel}
-            </text>
-          </g>
-        )}
-      </g>
-    )
   }
 
   const selectedPeriod = useMemo(() => {
@@ -1317,49 +1258,53 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           </div>
         </div>
 
-        {/* Card: TENDÊNCIA DE ETIQUETAS */}
+      </div>
+
+      {/* ─── ROW 3.4: TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES (ano inteiro, largo) ─── */}
+      <div className="grid grid-cols-1 gap-4 w-full">
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="border-l-4 border-[#0055b8] pl-3 mb-6">
+          <div className="border-l-4 border-[#0055b8] pl-3 mb-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              TENDÊNCIA DE ETIQUETAS
+              TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES
             </h3>
           </div>
 
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={trendData}
-                margin={{ top: 30, bottom: 5, left: -20, right: 20 }}
-                barSize={60}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis hide />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0]
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        {data.name}: <span className="text-blue-400">{data.value}</span>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar
-                  dataKey="value"
-                  fill="#0055b8"
-                  radius={[4, 4, 0, 0]}
-                  label={renderCustomBarLabel}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="w-full overflow-x-auto custom-scrollbar">
+            <div className="h-[300px]" style={{ minWidth: Math.max(700, trendStatusData.length * 90) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trendStatusData} margin={{ top: 10, right: 10, left: -20, bottom: 10 }} barGap={4} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null
+                      const data = payload[0].payload
+                      return (
+                        <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                          {data.name}: <span className="text-emerald-400">{data.encerrado} encerr.</span> / <span className="text-red-400">{data.pendente} pend.</span>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    height={24}
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                  />
+                  <Bar dataKey="encerrado" name="Encerrado" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={22}>
+                    <LabelList dataKey="encerrado" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                  </Bar>
+                  <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={22}>
+                    <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </div>
@@ -1477,8 +1422,12 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                     iconSize={8}
                     wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
                   />
-                  <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18} />
-                  <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={18} />
+                  <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18}>
+                    <LabelList dataKey="concluido" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                  </Bar>
+                  <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={18}>
+                    <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
