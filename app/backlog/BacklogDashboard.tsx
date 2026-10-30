@@ -506,7 +506,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     return Object.values(map).sort((a, b) => (b.concluido + b.pendente) - (a.concluido + a.pendente))
   }, [filtered])
 
-  // ─── STATUS DO BACKLOG POR PLACA (Concluído x Pendente empilhado, top 25) ───
+  // ─── STATUS DO BACKLOG POR PLACA (Concluído x Pendente lado a lado, todas as placas) ───
   const barPlacaStackData = useMemo(() => {
     const map: Record<string, { name: string; concluido: number; pendente: number }> = {}
     filtered.forEach(i => {
@@ -517,13 +517,14 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     })
     return Object.values(map)
       .sort((a, b) => (b.concluido + b.pendente) - (a.concluido + a.pendente))
-      .slice(0, 25)
   }, [filtered])
 
   const placaResumo = useMemo(() => ({
     total: filtered.length,
     critA: filtered.filter(i => i.mappedCriticidade === 'A').length,
     critB: filtered.filter(i => i.mappedCriticidade === 'B').length,
+    concluidas: filtered.filter(i => i.mappedStatus === 'ENCERRADO').length,
+    pendentes: filtered.filter(i => i.mappedStatus !== 'ENCERRADO').length,
   }), [filtered])
 
   // ─── PROG. E EXECUÇÃO / RCS ───────────────────────────────────────────────
@@ -1363,8 +1364,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </div>
       </div>
 
-      {/* ─── ROW 3.5: BACKLOG POR TIPO / POR PLACA (Concluído x Pendente) ─── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 w-full">
+      {/* ─── ROW 3.5: BACKLOG POR TIPO DE EQUIPAMENTO ─── */}
+      <div className="grid grid-cols-1 gap-4 w-full">
         {/* Card: BACKLOG POR TIPO DE EQUIPAMENTO */}
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between border-l-4 border-emerald-600 pl-3 mb-4">
@@ -1415,41 +1416,55 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
-        {/* Card: STATUS DO BACKLOG POR PLACA */}
+      {/* ─── ROW 3.6: STATUS DO BACKLOG POR PLACA (Concluído x Pendente lado a lado) ─── */}
+      <div className="grid grid-cols-1 gap-4 w-full">
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between border-l-4 border-blue-600 pl-3 mb-4 flex-wrap gap-2">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
               STATUS DO BACKLOG POR PLACA
             </h3>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[8px] font-black uppercase">Total {placaResumo.total}</span>
+              <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[8px] font-black uppercase">Concluídas {placaResumo.concluidas}</span>
+              <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[8px] font-black uppercase">Pendentes {placaResumo.pendentes}</span>
               <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[8px] font-black uppercase">Crit. A {placaResumo.critA}</span>
               <span className="px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 text-[8px] font-black uppercase">Crit. B {placaResumo.critB}</span>
             </div>
           </div>
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barPlacaStackData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={60} />
-                <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0].payload
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="concluido" name="Concluído" stackId="a" fill="#16a34a" barSize={14} />
-                <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={14} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="w-full overflow-x-auto custom-scrollbar">
+            <div className="h-[320px]" style={{ minWidth: Math.max(700, barPlacaStackData.length * 70) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barPlacaStackData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }} barGap={4} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={60} />
+                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null
+                      const data = payload[0].payload
+                      return (
+                        <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                          {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    height={24}
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                  />
+                  <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18} />
+                  <Bar dataKey="pendente" name="Pendente" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </div>
