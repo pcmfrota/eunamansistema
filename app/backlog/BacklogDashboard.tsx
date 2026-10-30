@@ -1427,12 +1427,29 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </h3>
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[8px] font-black uppercase">Total {placaResumo.total}</span>
-              <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[8px] font-black uppercase">Concluídas {placaResumo.concluidas}</span>
-              <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[8px] font-black uppercase">Pendentes {placaResumo.pendentes}</span>
               <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[8px] font-black uppercase">Crit. A {placaResumo.critA}</span>
               <span className="px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 text-[8px] font-black uppercase">Crit. B {placaResumo.critB}</span>
             </div>
           </div>
+
+          {/* Destaque grande de Concluídas x Pendentes, acima do gráfico */}
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
+              <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Concluídas</p>
+                <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none mt-1">{placaResumo.concluidas}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40">
+              <span className="w-3 h-3 rounded-full bg-red-600 shrink-0" />
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Pendentes</p>
+                <p className="text-2xl font-black text-red-700 dark:text-red-400 leading-none mt-1">{placaResumo.pendentes}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="w-full overflow-x-auto custom-scrollbar">
             <div className="h-[320px]" style={{ minWidth: Math.max(700, barPlacaStackData.length * 70) }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -1447,7 +1464,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                       const data = payload[0].payload
                       return (
                         <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                          {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
+                          {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-red-400">{data.pendente} pend.</span>
                         </div>
                       )
                     }}
@@ -1461,7 +1478,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                     wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
                   />
                   <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18} />
-                  <Bar dataKey="pendente" name="Pendente" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={18} />
+                  <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
