@@ -1,13 +1,15 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LabelList
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
-  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw, Clock
+  ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw, Clock,
+  Maximize2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { mesAnoOperacional } from '@/lib/calendario-suzano'
@@ -118,6 +120,141 @@ function formatAIMarkdown(text: string) {
   });
 }
 
+// Cartão de gráfico com botão de expandir (tela cheia) — definido fora do componente
+// principal de propósito: se ficasse dentro, seria recriado a cada render e o React
+// desmontaria/remontaria o modal, perdendo o estado de "expandido" a cada atualização
+// dos dados do dashboard.
+function ChartCard({
+  title,
+  subtitle,
+  titleColor,
+  headerExtra,
+  compactHeight,
+  expandedHeight = 480,
+  hasData = true,
+  emptyMessage = 'Sem dados suficientes',
+  scrollable = false,
+  minWidth,
+  aboveChart,
+  bare = false,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  titleColor: string
+  headerExtra?: React.ReactNode
+  compactHeight: number
+  expandedHeight?: number
+  hasData?: boolean
+  emptyMessage?: string
+  scrollable?: boolean
+  minWidth?: number
+  aboveChart?: React.ReactNode
+  // Pula a casca do cartão (fundo/borda/padding) — usado quando o gráfico já está
+  // dentro de outro cartão maior (ex: o painel de Mecânicos, que tem gráfico + lista
+  // lado a lado dentro do mesmo cartão).
+  bare?: boolean
+  children: React.ReactNode
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    if (!expanded) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [expanded])
+
+  const body = !hasData ? (
+    <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{emptyMessage}</div>
+  ) : scrollable ? (
+    <div className="w-full h-full overflow-x-auto custom-scrollbar">
+      <div className="h-full" style={{ minWidth }}>{children}</div>
+    </div>
+  ) : children
+
+  const header = (
+    <div className={cn('flex items-center justify-between border-l-4 pl-3 mb-4 flex-wrap gap-2', titleColor)}>
+      <div>
+        <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">{title}</h3>
+        {subtitle && <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {headerExtra}
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors shrink-0"
+          title="Expandir gráfico"
+        >
+          <Maximize2 size={14} />
+        </button>
+      </div>
+    </div>
+  )
+
+  const modal = expanded && mounted && createPortal(
+    <div
+      className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={() => setExpanded(false)}
+    >
+      <div
+        className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-white dark:bg-[#12141c] rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">{title}</h3>
+            {subtitle && <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">{subtitle}</p>}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {headerExtra}
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+              title="Fechar"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        {aboveChart}
+        <div style={{ height: expandedHeight }} className="w-full">
+          {body}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+
+  if (bare) {
+    return (
+      <>
+        {header}
+        {aboveChart}
+        <div style={{ height: compactHeight }} className="w-full">
+          {body}
+        </div>
+        {modal}
+      </>
+    )
+  }
+
+  return (
+    <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+      {header}
+      {aboveChart}
+      <div style={{ height: compactHeight }} className="w-full">
+        {body}
+      </div>
+      {modal}
+    </div>
+  )
+}
+
 export default function BacklogDashboard({ items, placas, calendario = [], onEdit, onDelete, onQuickView }: Props) {
   const currentPeriod = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -161,6 +298,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const itemsPerPage = 10
 
   const [filterMecanico, setFilterMecanico] = useState('')
+  const [mecanicosExpanded, setMecanicosExpanded] = useState(false)
+  const [mecanicosMounted, setMecanicosMounted] = useState(false)
+  useEffect(() => { setMecanicosMounted(true) }, [])
   const [filterDataInicio, setFilterDataInicio] = useState('')
   const [filterDataFim, setFilterDataFim] = useState('')
   const [filterOrigens, setFilterOrigens] = useState<string[]>([])
@@ -194,6 +334,11 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       // 3. Find equipment area registered in "base de frotas"
       const eq = placasMap.get(item.frota)
       const mappedArea = String(eq?.area || item.campo_base || 'REPOSIÇÃO').toUpperCase()
+
+      // 3b. Tipo de equipamento: toda placa cadastrada tem um tipo na Base de Frota — usa
+      // ele por prioridade, só cai pro campo solto do próprio backlog (quase sempre vazio,
+      // e era por isso que o gráfico "Backlog por Tipo" mostrava quase tudo como "N/A").
+      const mappedTipo = String(eq?.tipo || item.tipo || 'N/A').toUpperCase().trim() || 'N/A'
 
       // 4. Mapped month and year (período operacional Suzano, não mês civil)
       let mappedMonth = 'janeiro'
@@ -232,6 +377,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         mappedStatus,
         mappedCriticidade,
         mappedArea,
+        mappedTipo,
         mappedMonth,
         mappedYear,
         diasAberto,
@@ -258,7 +404,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       if (i.mappedYear) anos.add(i.mappedYear)
       if (i.colaborador) mecanicos.add(i.colaborador)
       if (i.origem) origens.add(String(i.origem).toUpperCase().trim())
-      if (i.tipo) tipos.add(String(i.tipo).toUpperCase().trim())
+      if (i.mappedTipo) tipos.add(i.mappedTipo)
     })
 
     return {
@@ -300,7 +446,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       if (filterOrigens.length > 0 && !filterOrigens.includes(String(item.origem || '').toUpperCase().trim())) return false
 
       // 6e. Tipo (multi-select)
-      if (filterTipos.length > 0 && !filterTipos.includes(String(item.tipo || '').toUpperCase().trim())) return false
+      if (filterTipos.length > 0 && !filterTipos.includes(item.mappedTipo)) return false
 
       // 6b. Date Range Filter
       if (filterDataInicio || filterDataFim) {
@@ -491,7 +637,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const barTipoStackData = useMemo(() => {
     const map: Record<string, { name: string; concluido: number; pendente: number }> = {}
     filtered.forEach(i => {
-      const key = String(i.tipo || 'N/A').toUpperCase().trim() || 'N/A'
+      const key = i.mappedTipo
       if (!map[key]) map[key] = { name: key, concluido: 0, pendente: 0 }
       if (i.mappedStatus === 'ENCERRADO') map[key].concluido++
       else map[key].pendente++
@@ -573,7 +719,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     filtered.forEach(i => {
       const dias = diasEntreDatas(i.data_evidencia, i.data_rc)
       if (dias === null) return
-      const key = String(i.tipo || 'N/A').toUpperCase().trim() || 'N/A'
+      const key = i.mappedTipo
       if (!acc[key]) acc[key] = { soma: 0, qtd: 0 }
       acc[key].soma += dias
       acc[key].qtd++
@@ -1106,12 +1252,12 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
 
         {/* Card: ETIQUETA POR CRITICIDADE */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="border-l-4 border-cyan-500 pl-3 mb-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              ETIQUETA POR CRITICIDADE
-            </h3>
-            <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2">
+        <ChartCard
+          title="ETIQUETA POR CRITICIDADE"
+          titleColor="border-cyan-500"
+          compactHeight={200}
+          headerExtra={
+            <div className="flex flex-wrap gap-x-2 gap-y-1">
               {Object.entries(CRITICIDADE_COLORS).map(([name, col]) => (
                 <span key={name} className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: col.chart }} />
@@ -1119,204 +1265,183 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 </span>
               ))}
             </div>
-          </div>
-
-          <div className="h-[200px] w-full relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={donutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, value }) => value > 0 ? `${name} ${value}` : ''}
-                  labelLine={false}
-                >
-                  {donutData.map((entry, idx) => (
-                    <Cell
-                      key={idx}
-                      fill={CRITICIDADE_COLORS[entry.name]?.chart || '#cbd5e1'}
-                      stroke="transparent"
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0]
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        CRITICIDADE {data.name}: <span className="text-cyan-400">{data.value}</span>
-                      </div>
-                    )
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={donutData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={70}
+                paddingAngle={3}
+                dataKey="value"
+                nameKey="name"
+                label={({ name, value }) => value > 0 ? `${name} ${value}` : ''}
+                labelLine={false}
+              >
+                {donutData.map((entry, idx) => (
+                  <Cell
+                    key={idx}
+                    fill={CRITICIDADE_COLORS[entry.name]?.chart || '#cbd5e1'}
+                    stroke="transparent"
+                  />
+                ))}
+              </Pie>
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0]
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      CRITICIDADE {data.name}: <span className="text-cyan-400">{data.value}</span>
+                    </div>
+                  )
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
         {/* Card: ETIQUETA POR ÁREA */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="border-l-4 border-blue-600 pl-3 mb-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              ETIQUETA POR ÁREA
-            </h3>
-          </div>
-
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={barAreaData}
-                layout="vertical"
-                margin={{ left: -10, right: 30, top: 10, bottom: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
-                <XAxis type="number" hide />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={110}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0]
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        {data.name}: <span className="text-blue-400">{data.value}</span>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar
-                  dataKey="value"
-                  fill="#0055b8"
-                  radius={[0, 4, 4, 0]}
-                  label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
-                  barSize={14}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <ChartCard title="ETIQUETA POR ÁREA" titleColor="border-blue-600" compactHeight={200}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={barAreaData}
+              layout="vertical"
+              margin={{ left: -10, right: 30, top: 10, bottom: 10 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+              <XAxis type="number" hide />
+              <YAxis
+                dataKey="name"
+                type="category"
+                tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
+                axisLine={false}
+                tickLine={false}
+                width={110}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0]
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-blue-400">{data.value}</span>
+                    </div>
+                  )
+                }}
+              />
+              <Bar
+                dataKey="value"
+                fill="#0055b8"
+                radius={[0, 4, 4, 0]}
+                label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                barSize={14}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
         {/* Card: ETIQUETA POR MÓDULOS */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="border-l-4 border-[#00a859] pl-3 mb-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              ETIQUETA POR MÓDULOS
-            </h3>
-          </div>
-
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={barModuloData}
-                layout="vertical"
-                margin={{ left: -10, right: 30, top: 10, bottom: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
-                <XAxis type="number" hide />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={110}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0]
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        {data.name}: <span className="text-[#00a859]">{data.value}</span>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar
-                  dataKey="value"
-                  fill="#00a859"
-                  radius={[0, 4, 4, 0]}
-                  label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
-                  barSize={14}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <ChartCard title="ETIQUETA POR MÓDULOS" titleColor="border-[#00a859]" compactHeight={200}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={barModuloData}
+              layout="vertical"
+              margin={{ left: -10, right: 30, top: 10, bottom: 10 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+              <XAxis type="number" hide />
+              <YAxis
+                dataKey="name"
+                type="category"
+                tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
+                axisLine={false}
+                tickLine={false}
+                width={110}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0]
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-[#00a859]">{data.value}</span>
+                    </div>
+                  )
+                }}
+              />
+              <Bar
+                dataKey="value"
+                fill="#00a859"
+                radius={[0, 4, 4, 0]}
+                label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                barSize={14}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
       </div>
 
       {/* ─── ROW 3.4: TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES (ano inteiro, largo) ─── */}
       <div className="grid grid-cols-1 gap-4 w-full">
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="border-l-4 border-[#0055b8] pl-3 mb-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES
-            </h3>
-          </div>
-
-          <div className="w-full overflow-x-auto custom-scrollbar">
-            <div className="h-[300px]" style={{ minWidth: Math.max(700, trendStatusData.length * 90) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trendStatusData} margin={{ top: 10, right: 10, left: -20, bottom: 10 }} barGap={4} barCategoryGap="25%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload?.length) return null
-                      const data = payload[0].payload
-                      return (
-                        <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                          {data.name}: <span className="text-emerald-400">{data.encerrado} encerr.</span> / <span className="text-red-400">{data.pendente} pend.</span>
-                        </div>
-                      )
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="top"
-                    align="right"
-                    height={24}
-                    iconType="circle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                  />
-                  <Bar dataKey="encerrado" name="Encerrado" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={22}>
-                    <LabelList dataKey="encerrado" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
-                  </Bar>
-                  <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={22}>
-                    <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+        <ChartCard
+          title="TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES"
+          titleColor="border-[#0055b8]"
+          compactHeight={300}
+          expandedHeight={550}
+          scrollable
+          minWidth={Math.max(700, trendStatusData.length * 90)}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={trendStatusData} margin={{ top: 10, right: 10, left: -20, bottom: 10 }} barGap={4} barCategoryGap="25%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+              <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0].payload
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-emerald-400">{data.encerrado} encerr.</span> / <span className="text-red-400">{data.pendente} pend.</span>
+                    </div>
+                  )
+                }}
+              />
+              <Legend
+                verticalAlign="top"
+                align="right"
+                height={24}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              />
+              <Bar dataKey="encerrado" name="Encerrado" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={22}>
+                <LabelList dataKey="encerrado" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+              </Bar>
+              <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={22}>
+                <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
       </div>
 
       {/* ─── ROW 3.5: BACKLOG POR TIPO DE EQUIPAMENTO ─── */}
       <div className="grid grid-cols-1 gap-4 w-full">
-        {/* Card: BACKLOG POR TIPO DE EQUIPAMENTO */}
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between border-l-4 border-emerald-600 pl-3 mb-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              BACKLOG POR TIPO DE EQUIPAMENTO
-            </h3>
+        <ChartCard
+          title="BACKLOG POR TIPO DE EQUIPAMENTO"
+          titleColor="border-emerald-600"
+          compactHeight={260}
+          expandedHeight={500}
+          headerExtra={
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" /> Concluído
@@ -1325,114 +1450,112 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" /> Pendente
               </span>
             </div>
-          </div>
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={barTipoStackData}
-                layout="vertical"
-                margin={{ left: -10, right: 40, top: 10, bottom: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
-                <XAxis type="number" hide />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={90}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0].payload
-                    return (
-                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                        {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="concluido" name="Concluído" stackId="a" fill="#16a34a" barSize={16} />
-                <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={barTipoStackData}
+              layout="vertical"
+              margin={{ left: -10, right: 40, top: 10, bottom: 10 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+              <XAxis type="number" hide />
+              <YAxis
+                dataKey="name"
+                type="category"
+                tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
+                axisLine={false}
+                tickLine={false}
+                width={90}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0].payload
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-zinc-300">{data.pendente} pend.</span>
+                    </div>
+                  )
+                }}
+              />
+              <Bar dataKey="concluido" name="Concluído" stackId="a" fill="#16a34a" barSize={16} />
+              <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
       </div>
 
       {/* ─── ROW 3.6: STATUS DO BACKLOG POR PLACA (Concluído x Pendente lado a lado) ─── */}
       <div className="grid grid-cols-1 gap-4 w-full">
-        <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between border-l-4 border-blue-600 pl-3 mb-4 flex-wrap gap-2">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              STATUS DO BACKLOG POR PLACA
-            </h3>
+        <ChartCard
+          title="STATUS DO BACKLOG POR PLACA"
+          titleColor="border-blue-600"
+          compactHeight={320}
+          expandedHeight={550}
+          scrollable
+          minWidth={Math.max(700, barPlacaStackData.length * 70)}
+          headerExtra={
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[8px] font-black uppercase">Total {placaResumo.total}</span>
               <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[8px] font-black uppercase">Crit. A {placaResumo.critA}</span>
               <span className="px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 text-[8px] font-black uppercase">Crit. B {placaResumo.critB}</span>
             </div>
-          </div>
-
-          {/* Destaque grande de Concluídas x Pendentes, acima do gráfico */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
-              <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Concluídas</p>
-                <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none mt-1">{placaResumo.concluidas}</p>
+          }
+          aboveChart={
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
+                <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Concluídas</p>
+                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none mt-1">{placaResumo.concluidas}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40">
+                <span className="w-3 h-3 rounded-full bg-red-600 shrink-0" />
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Pendentes</p>
+                  <p className="text-2xl font-black text-red-700 dark:text-red-400 leading-none mt-1">{placaResumo.pendentes}</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40">
-              <span className="w-3 h-3 rounded-full bg-red-600 shrink-0" />
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Pendentes</p>
-                <p className="text-2xl font-black text-red-700 dark:text-red-400 leading-none mt-1">{placaResumo.pendentes}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full overflow-x-auto custom-scrollbar">
-            <div className="h-[320px]" style={{ minWidth: Math.max(700, barPlacaStackData.length * 70) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barPlacaStackData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }} barGap={4} barCategoryGap="25%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={60} />
-                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload?.length) return null
-                      const data = payload[0].payload
-                      return (
-                        <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                          {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-red-400">{data.pendente} pend.</span>
-                        </div>
-                      )
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="top"
-                    align="right"
-                    height={24}
-                    iconType="circle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                  />
-                  <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18}>
-                    <LabelList dataKey="concluido" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
-                  </Bar>
-                  <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={18}>
-                    <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={barPlacaStackData} margin={{ top: 10, right: 10, left: -20, bottom: 30 }} barGap={4} barCategoryGap="25%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+              <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={60} />
+              <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0].payload
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-emerald-400">{data.concluido} concl.</span> / <span className="text-red-400">{data.pendente} pend.</span>
+                    </div>
+                  )
+                }}
+              />
+              <Legend
+                verticalAlign="top"
+                align="right"
+                height={24}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              />
+              <Bar dataKey="concluido" name="Concluído" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={18}>
+                <LabelList dataKey="concluido" position="top" fill="#16a34a" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+              </Bar>
+              <Bar dataKey="pendente" name="Pendente" fill="#dc2626" radius={[4, 4, 0, 0]} barSize={18}>
+                <LabelList dataKey="pendente" position="top" fill="#dc2626" fontSize={10} fontWeight={900} formatter={(v: number) => v > 0 ? v : ''} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
       </div>
 
       {/* ─── ROW 4: DETALHAMENTO DO BACKLOG ─────────────────────────────────────────── */}
@@ -1593,103 +1716,154 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       </div>
 
       {/* ─── ROW 5: MECÂNICOS ─────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-4 w-full">
-        <div className="flex items-center justify-between border-l-4 border-indigo-600 pl-3">
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-              DISTRIBUIÇÃO DE ETIQUETAS POR MECÂNICO
-            </h3>
-            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
-              Visão de Pendentes, Programados e Encerrados
-            </p>
-          </div>
-          {filterMecanico && (
-            <button
-              onClick={() => setFilterMecanico('')}
-              className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest border border-red-500/20 px-3 py-1 rounded-xl bg-red-500/5 transition-colors"
-            >
-              ✕ Limpar Filtro
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Gráfico Recharts de Barras Empilhadas */}
-          <div className="lg:col-span-2 h-[320px] bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={topMechanicChartData}
-                margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                  content={({ active, payload }: any) => {
-                    if (!active || !payload?.length) return null
-                    const data = payload[0].payload
-                    return (
-                      <div className="bg-zinc-950/95 text-white p-4 rounded-2xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider flex flex-col gap-1.5 shadow-2xl">
-                        <span className="text-indigo-400 border-b border-zinc-800 pb-1 mb-1 font-extrabold">{data.name}</span>
-                        <span className="flex items-center justify-between gap-4">Pendentes: <span className="text-yellow-400 font-extrabold">{data.pendente}</span></span>
-                        <span className="flex items-center justify-between gap-4">Programados: <span className="text-green-400 font-extrabold">{data.programado}</span></span>
-                        <span className="flex items-center justify-between gap-4">Encerrados: <span className="text-zinc-400 font-extrabold">{data.encerrado}</span></span>
-                        <span className="flex items-center justify-between gap-4 text-orange-400 border-t border-zinc-800 pt-1 mt-1 font-extrabold">Média Aging: <span>{data.avgAging} dias</span></span>
-                      </div>
-                    )
-                  }}
-                />
-                <Legend
-                  verticalAlign="top"
-                  height={36}
-                  wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}
-                />
-                <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#ca8a04" />
-                <Bar dataKey="programado" name="Programado" stackId="a" fill="#16a34a" />
-                <Bar dataKey="encerrado" name="Encerrado" stackId="a" fill="#475569" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Listagem de cards de mecânicos */}
-          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
-            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Selecione para Filtrar</span>
-            {mechanicStats.map(s => {
-              const isSelected = filterMecanico === s.name;
-              return (
-                <div
-                  key={s.name}
-                  onClick={() => setFilterMecanico(isSelected ? '' : s.name)}
-                  className={cn(
-                    "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between hover:scale-[1.02] shadow-sm select-none",
-                    isSelected
-                      ? "bg-indigo-600 border-indigo-500 text-white shadow-indigo-600/20"
-                      : "bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-150 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300"
-                  )}
+      {(() => {
+        const mecanicosGrid = (chartHeight: number) => (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Gráfico Recharts de Barras Empilhadas */}
+            <div className="lg:col-span-2 bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-150 dark:border-zinc-900 rounded-2xl p-4" style={{ height: chartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={topMechanicChartData}
+                  margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
                 >
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-tight">{s.name}</p>
-                    <p className={cn("text-[8px] font-bold mt-0.5", isSelected ? "text-indigo-200" : "text-zinc-400")}>
-                      Média de Pendências: <span className="font-extrabold">{s.avgAging} dias em aberto</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", isSelected ? "bg-white/10 text-white" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500")}>
-                      Total: {s.total}
-                    </span>
-                    <div className="flex gap-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title={`Pendentes: ${s.pendente}`} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" title={`Programados: ${s.programado}`} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500" title={`Encerrados: ${s.encerrado}`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                  <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null
+                      const data = payload[0].payload
+                      return (
+                        <div className="bg-zinc-950/95 text-white p-4 rounded-2xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider flex flex-col gap-1.5 shadow-2xl">
+                          <span className="text-indigo-400 border-b border-zinc-800 pb-1 mb-1 font-extrabold">{data.name}</span>
+                          <span className="flex items-center justify-between gap-4">Pendentes: <span className="text-yellow-400 font-extrabold">{data.pendente}</span></span>
+                          <span className="flex items-center justify-between gap-4">Programados: <span className="text-green-400 font-extrabold">{data.programado}</span></span>
+                          <span className="flex items-center justify-between gap-4">Encerrados: <span className="text-zinc-400 font-extrabold">{data.encerrado}</span></span>
+                          <span className="flex items-center justify-between gap-4 text-orange-400 border-t border-zinc-800 pt-1 mt-1 font-extrabold">Média Aging: <span>{data.avgAging} dias</span></span>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    height={36}
+                    wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  />
+                  <Bar dataKey="pendente" name="Pendente" stackId="a" fill="#ca8a04" />
+                  <Bar dataKey="programado" name="Programado" stackId="a" fill="#16a34a" />
+                  <Bar dataKey="encerrado" name="Encerrado" stackId="a" fill="#475569" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Listagem de cards de mecânicos */}
+            <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-1" style={{ maxHeight: chartHeight }}>
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Selecione para Filtrar</span>
+              {mechanicStats.map(s => {
+                const isSelected = filterMecanico === s.name;
+                return (
+                  <div
+                    key={s.name}
+                    onClick={() => setFilterMecanico(isSelected ? '' : s.name)}
+                    className={cn(
+                      "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between hover:scale-[1.02] shadow-sm select-none",
+                      isSelected
+                        ? "bg-indigo-600 border-indigo-500 text-white shadow-indigo-600/20"
+                        : "bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-150 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300"
+                    )}
+                  >
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-tight">{s.name}</p>
+                      <p className={cn("text-[8px] font-bold mt-0.5", isSelected ? "text-indigo-200" : "text-zinc-400")}>
+                        Média de Pendências: <span className="font-extrabold">{s.avgAging} dias em aberto</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", isSelected ? "bg-white/10 text-white" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500")}>
+                        Total: {s.total}
+                      </span>
+                      <div className="flex gap-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title={`Pendentes: ${s.pendente}`} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" title={`Programados: ${s.programado}`} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" title={`Encerrados: ${s.encerrado}`} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
-      </div>
+        )
+
+        return (
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-4 w-full">
+            <div className="flex items-center justify-between border-l-4 border-indigo-600 pl-3 flex-wrap gap-2">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                  DISTRIBUIÇÃO DE ETIQUETAS POR MECÂNICO
+                </h3>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                  Visão de Pendentes, Programados e Encerrados
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {filterMecanico && (
+                  <button
+                    onClick={() => setFilterMecanico('')}
+                    className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest border border-red-500/20 px-3 py-1 rounded-xl bg-red-500/5 transition-colors"
+                  >
+                    ✕ Limpar Filtro
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setMecanicosExpanded(true)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors shrink-0"
+                  title="Expandir"
+                >
+                  <Maximize2 size={14} />
+                </button>
+              </div>
+            </div>
+
+            {mecanicosGrid(320)}
+
+            {mecanicosExpanded && mecanicosMounted && createPortal(
+              <div
+                className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+                onClick={() => setMecanicosExpanded(false)}
+              >
+                <div
+                  className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-white dark:bg-[#12141c] rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 animate-in zoom-in-95 duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+                        DISTRIBUIÇÃO DE ETIQUETAS POR MECÂNICO
+                      </h3>
+                      <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">
+                        Visão de Pendentes, Programados e Encerrados
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMecanicosExpanded(false)}
+                      className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                      title="Fechar"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  {mecanicosGrid(500)}
+                </div>
+              </div>,
+              document.body
+            )}
+          </div>
+        )
+      })()}
 
       {/* ─── PROVISÃO DE DISPONIBILIDADE MECÂNICA (DM) & ASSISTENTE DE IA ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full animate-in fade-in duration-700">
@@ -1803,200 +1977,170 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
           {/* Card: TEMPO MÉDIO P/ PROG. MANUTENÇÃO */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-            <div className="border-l-4 border-indigo-600 pl-3 mb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                TEMPO MÉDIO P/ PROG. MANUTENÇÃO
-              </h3>
-              <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Dias entre evidência e programação, por semana</p>
-            </div>
-            <div className="h-[220px] w-full">
-              {tempoMedioProgPorSemana.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={tempoMedioProgPorSemana} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                    <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} interval={Math.ceil(tempoMedioProgPorSemana.length / 15)} />
-                    <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                      content={({ active, payload }: any) => {
-                        if (!active || !payload?.length) return null
-                        const data = payload[0].payload
-                        return (
-                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                            {data.name}: <span className="text-indigo-400">{data.value} dias</span>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
-              )}
-            </div>
-          </div>
+          <ChartCard
+            title="TEMPO MÉDIO P/ PROG. MANUTENÇÃO"
+            subtitle="Dias entre evidência e programação, por semana"
+            titleColor="border-indigo-600"
+            compactHeight={220}
+            hasData={tempoMedioProgPorSemana.length > 0}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tempoMedioProgPorSemana} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} interval={Math.ceil(tempoMedioProgPorSemana.length / 15)} />
+                <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-indigo-400">{data.value} dias</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
 
           {/* Card: TEMPO MÉDIO RESOLUÇÃO */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-            <div className="border-l-4 border-rose-600 pl-3 mb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                TEMPO MÉDIO RESOLUÇÃO
-              </h3>
-              <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Dias entre evidência e conclusão, por semana</p>
-            </div>
-            <div className="h-[220px] w-full">
-              {tempoMedioResolucaoPorSemana.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={tempoMedioResolucaoPorSemana} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
-                    <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} interval={Math.ceil(tempoMedioResolucaoPorSemana.length / 15)} />
-                    <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                      content={({ active, payload }: any) => {
-                        if (!active || !payload?.length) return null
-                        const data = payload[0].payload
-                        return (
-                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                            {data.name}: <span className="text-rose-400">{data.value} dias</span>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Bar dataKey="value" fill="#e11d48" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
-              )}
-            </div>
-          </div>
+          <ChartCard
+            title="TEMPO MÉDIO RESOLUÇÃO"
+            subtitle="Dias entre evidência e conclusão, por semana"
+            titleColor="border-rose-600"
+            compactHeight={220}
+            hasData={tempoMedioResolucaoPorSemana.length > 0}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tempoMedioResolucaoPorSemana} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.1} />
+                <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 8, fontWeight: 900 }} axisLine={false} tickLine={false} interval={Math.ceil(tempoMedioResolucaoPorSemana.length / 15)} />
+                <YAxis tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-rose-400">{data.value} dias</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="value" fill="#e11d48" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
           {/* Card: TIPO DE PEDIDO */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-            <div className="border-l-4 border-amber-500 pl-3 mb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                TIPO DE PEDIDO
-              </h3>
-            </div>
-            <div className="h-[200px] w-full relative flex items-center justify-center">
-              {tipoPedidoPieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={tipoPedidoPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={70}
-                      paddingAngle={3}
-                      dataKey="value"
-                      nameKey="name"
-                      label={({ value }) => value}
-                      labelLine={false}
-                    >
-                      {tipoPedidoPieData.map((entry, idx) => (
-                        <Cell key={idx} fill={TIPO_PEDIDO_COLORS[entry.name] || '#cbd5e1'} stroke="transparent" />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      content={({ active, payload }: any) => {
-                        if (!active || !payload?.length) return null
-                        const data = payload[0]
-                        return (
-                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                            {data.name}: <span className="text-amber-400">{data.value}</span>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
-              )}
-            </div>
-          </div>
+          <ChartCard
+            title="TIPO DE PEDIDO"
+            titleColor="border-amber-500"
+            compactHeight={200}
+            hasData={tipoPedidoPieData.length > 0}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={tipoPedidoPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={70}
+                  paddingAngle={3}
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ value }) => value}
+                  labelLine={false}
+                >
+                  {tipoPedidoPieData.map((entry, idx) => (
+                    <Cell key={idx} fill={TIPO_PEDIDO_COLORS[entry.name] || '#cbd5e1'} stroke="transparent" />
+                  ))}
+                </Pie>
+                <Tooltip
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0]
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-amber-400">{data.value}</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartCard>
 
           {/* Card: TEMPO MÉDIO P/ ABERTURA DE REQUISIÇÃO */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-            <div className="border-l-4 border-cyan-600 pl-3 mb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                TEMPO MÉDIO P/ ABERTURA DE REQUISIÇÃO
-              </h3>
-              <p className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Dias entre evidência e Data da RC, por tipo</p>
-            </div>
-            <div className="h-[200px] w-full">
-              {tempoMedioAberturaReqData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={tempoMedioAberturaReqData} layout="vertical" margin={{ left: -10, right: 30, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} width={80} />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                      content={({ active, payload }: any) => {
-                        if (!active || !payload?.length) return null
-                        const data = payload[0].payload
-                        return (
-                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                            {data.name}: <span className="text-cyan-400">{data.value} dias</span>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Bar dataKey="value" fill="#0891b2" radius={[0, 4, 4, 0]} barSize={14} label={{ position: 'right', fill: '#71717a', fontSize: 9, fontWeight: 900 }} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
-              )}
-            </div>
-          </div>
+          <ChartCard
+            title="TEMPO MÉDIO P/ ABERTURA DE REQUISIÇÃO"
+            subtitle="Dias entre evidência e Data da RC, por tipo"
+            titleColor="border-cyan-600"
+            compactHeight={200}
+            hasData={tempoMedioAberturaReqData.length > 0}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tempoMedioAberturaReqData} layout="vertical" margin={{ left: -10, right: 30, top: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} width={80} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-cyan-400">{data.value} dias</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="value" fill="#0891b2" radius={[0, 4, 4, 0]} barSize={14} label={{ position: 'right', fill: '#71717a', fontSize: 9, fontWeight: 900 }} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
 
           {/* Card: SITUAÇÃO R.C */}
-          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-            <div className="border-l-4 border-emerald-600 pl-3 mb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
-                SITUAÇÃO R.C
-              </h3>
-            </div>
-            <div className="h-[200px] w-full">
-              {situacaoRcData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={situacaoRcData} layout="vertical" margin={{ left: -10, right: 40, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} width={95} />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                      content={({ active, payload }: any) => {
-                        if (!active || !payload?.length) return null
-                        const data = payload[0].payload
-                        return (
-                          <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
-                            {data.name}: <span className="text-emerald-400">{data.value}</span>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}>
-                      {situacaoRcData.map((entry, idx) => (
-                        <Cell key={idx} fill={SITUACAO_RC_COLORS[entry.name] || '#94a3b8'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sem dados suficientes</div>
-              )}
-            </div>
-          </div>
+          <ChartCard
+            title="SITUAÇÃO R.C"
+            titleColor="border-emerald-600"
+            compactHeight={200}
+            hasData={situacaoRcData.length > 0}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={situacaoRcData} layout="vertical" margin={{ left: -10, right: 40, top: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }} axisLine={false} tickLine={false} width={95} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null
+                    const data = payload[0].payload
+                    return (
+                      <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                        {data.name}: <span className="text-emerald-400">{data.value}</span>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16} label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}>
+                  {situacaoRcData.map((entry, idx) => (
+                    <Cell key={idx} fill={SITUACAO_RC_COLORS[entry.name] || '#94a3b8'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
         </div>
       </div>
 
