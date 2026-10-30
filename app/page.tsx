@@ -181,7 +181,7 @@ const portalItems = [
   {
     name: "Controle de Filtros do Implemento",
     path: "/controle-filtros",
-    desc: "Controle de instalação e troca de filtros de Comboio, Pipa, Multifuncional, Munck e Skid.",
+    desc: "Controle de instalação e troca de filtro absoluto de Comboio e Skid.",
     icon: Filter,
     color: "from-sky-500 to-blue-600 bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25 dark:border-sky-400/20"
   },

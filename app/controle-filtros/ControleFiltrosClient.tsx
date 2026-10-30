@@ -12,9 +12,11 @@ import {
   salvarLancamentoFiltroImplemento, excluirLancamentoFiltroImplemento,
 } from "./actions";
 
-const TIPOS_IMPLEMENTO = ["COMBOIO", "PIPA", "MULTIFUNCIONAL", "MUNCK", "SKID"] as const;
+// Filtro absoluto (combustível) só existe fisicamente em Comboio e Skid — os demais
+// tipos de implemento (Pipa, Multifuncional, Munck) não têm esse componente.
+const TIPOS_IMPLEMENTO = ["COMBOIO", "SKID"] as const;
 const TIPO_LABEL: Record<string, string> = {
-  COMBOIO: "Comboio", PIPA: "Pipa", MULTIFUNCIONAL: "Multifuncional", MUNCK: "Munck", SKID: "Skid",
+  COMBOIO: "Comboio", SKID: "Skid",
 };
 
 // ── Compressão de foto (1280px / JPEG 70%) — mesmo padrão do Checklist de Frota ──
@@ -232,7 +234,7 @@ export default function ControleFiltrosClient({
             <Filter className="text-blue-500" size={24} /> Controle de Filtros do Implemento
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            {totalOk} de {linhasTodas.length} equipamentos com filtro instalado — Comboio, Pipa, Multifuncional, Munck e Skid
+            {totalOk} de {linhasTodas.length} equipamentos com filtro instalado — Comboio e Skid
           </p>
         </div>
         {!isVisitante && (
