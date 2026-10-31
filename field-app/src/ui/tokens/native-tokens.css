@@ -1,0 +1,35 @@
+/* Fase 3 — tokens de interação do design nativo (preto/âmbar).
+   Importado em main.tsx DEPOIS de index.css (que continua existindo só de
+   base/reset — não mexe nas cores de marca web --eu-green-*). A partir daqui,
+   tudo que é UI nativa nova (AppShell, BottomNav, BottomSheet, etc.) usa estes
+   tokens, extraídos das 2 telas que já tinham a identidade certa
+   (LoginScreen.tsx / MenuScreen.tsx: bg-zinc-950 + amber-500/600). */
+:root {
+  /* Paleta canônica (mesmos tons já em uso, não inventa tom novo) */
+  --native-bg: #09090b;             /* zinc-950 */
+  --native-surface: #18181b;        /* zinc-900 */
+  --native-border: #27272a;         /* zinc-800 */
+  --native-text: #fafafa;           /* zinc-50 */
+  --native-text-muted: #71717a;     /* zinc-500 */
+  --native-accent: #d97706;         /* amber-600 — ação/interativo */
+  --native-accent-strong: #b45309;  /* amber-700 — active/pressed */
+
+  /* Cores de status são reservadas e distintas da cor de ação/marca (sempre
+     com ícone+label, nunca só cor) — ver nota no plano sobre ambiguidade
+     entre "âmbar de ação" e "âmbar de pendente". */
+  --native-status-pending: #fbbf24; /* amber-400 */
+  --native-status-ok: #10b981;      /* emerald-500 */
+  --native-status-critical: #ef4444;/* red-500 */
+
+  /* Interação / layout nativo */
+  --tap-min: 44px;
+  --radius-sheet-top: 20px;
+  --nav-bar-height: 64px;
+  --app-bar-height: 52px;
+
+  /* Safe-area (notch / gestos) — exige viewport-fit=cover no HTML */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}

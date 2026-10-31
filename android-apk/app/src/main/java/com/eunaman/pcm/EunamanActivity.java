@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.ConnectivityManager;
@@ -42,6 +43,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.view.WindowCompat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -99,6 +101,17 @@ public class EunamanActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
+        // Edge-to-edge (Fase 3 do plano de redesenho nativo): com targetSdk 36 (Android 15+)
+        // isso ja eh forcado pelo sistema, mas setamos explicito aqui pra ter o MESMO
+        // comportamento em todas as versoes suportadas (minSdk 21) — sem isso, em versoes
+        // antigas o WebView fica recuado pelas barras de sistema em vez de desenhar atras
+        // delas, o que quebraria o calculo de env(safe-area-inset-*) que o CSS do field-app
+        // depende pra nao esconder conteudo. As barras ficam transparentes pra o conteudo
+        // aparecer atras delas de verdade; o padding real vem do safe-area no CSS.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
         webView      = findViewById(R.id.webview);
         progressBar  = findViewById(R.id.loading_progress);
         splashScreen = findViewById(R.id.splash_screen);
@@ -112,7 +125,7 @@ public class EunamanActivity extends AppCompatActivity {
                     // nenhuma pagina carregada. Sem isso, a splash nativa ficaria presa pra
                     // sempre porque nenhuma navegacao chega a acontecer.
                     Log.w(TAG, "restoreState() falhou, carregando URL inicial do zero.");
-                    webView.loadUrl(getString(R.string.launch_url));
+                    webView.loadUrl(getString(R.string.field_app_url));
                 } else {
                     // restoreState() eh o caminho de "reabrir o app depois do Android matar o
                     // processo em segundo plano por falta de memoria" — o caso mais comum de
@@ -126,9 +139,12 @@ public class EunamanActivity extends AppCompatActivity {
             } else {
                 // Se o app foi aberto por um link externo (ex: e-mail de redefinição de senha,
                 // que usa App Links para abrir direto no app), carrega essa URL específica.
-                // Caso contrário (abertura normal pelo ícone), carrega a tela inicial padrão.
+                // Caso contrário (abertura normal pelo ícone), carrega o app de campo embutido
+                // por padrão (Fase 3 do redesenho nativo) — o site ao vivo (launch_url) agora
+                // só é alcançado explicitamente via EunamanApp.openLiveSite() ("Módulos de
+                // Escritório" no Menu).
                 String deepLinkUrl = extractDeepLinkUrl(getIntent());
-                webView.loadUrl(deepLinkUrl != null ? deepLinkUrl : getString(R.string.launch_url));
+                webView.loadUrl(deepLinkUrl != null ? deepLinkUrl : getString(R.string.field_app_url));
             }
         }
     }
@@ -155,9 +171,7 @@ public class EunamanActivity extends AppCompatActivity {
     public void onBackPressed() {
         // No site ao vivo (módulos de escritório, aberto via EunamanApp.openLiveSite()),
         // o botão voltar do Android navega pelo histórico normal do WebView primeiro; só
-        // quando não há mais pra onde voltar é que volta pro app de campo embutido. No
-        // app de campo (SPA, sem histórico de navegação real do WebView) o botão voltar
-        // deve ser tratado pela própria SPA (ex: React Router), não aqui.
+        // quando não há mais pra onde voltar é que volta pro app de campo embutido.
         if (estaNoSiteAoVivo) {
             if (webView != null && webView.canGoBack()) {
                 webView.goBack();
@@ -165,6 +179,15 @@ public class EunamanActivity extends AppCompatActivity {
                 estaNoSiteAoVivo = false;
                 webView.loadUrl(getString(R.string.field_app_url));
             }
+            return;
+        }
+        // App de campo embutido (Fase 3 do redesenho nativo): o HashRouter (React Router)
+        // grava historico de navegacao real dentro do proprio WebView, entao
+        // webView.canGoBack()/goBack() ja navegam pela pilha de rotas da SPA exatamente
+        // como no modo site-ao-vivo acima. So minimiza o app quando ja esta na raiz da
+        // pilha (ex: tela de Menu, sem nenhuma rota anterior no historico).
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
             return;
         }
         super.onBackPressed();
@@ -600,7 +623,10 @@ public class EunamanActivity extends AppCompatActivity {
             WebStorage.getInstance().deleteAllData();
             runOnUiThread(() -> {
                 webView.clearCache(true);
-                webView.loadUrl(getString(R.string.launch_url));
+                // Logout sempre volta pro app de campo (home padrão, Fase 3) — nunca pro
+                // site ao vivo, mesmo que o logout tenha sido disparado de lá.
+                estaNoSiteAoVivo = false;
+                webView.loadUrl(getString(R.string.field_app_url));
                 isLoggingOut = false;
             });
         });
@@ -683,7 +709,9 @@ public class EunamanActivity extends AppCompatActivity {
                 WebStorage.getInstance().deleteAllData();
                 CookieManager.getInstance().removeAllCookies(null);
                 Toast.makeText(EunamanActivity.this, "Lixo de sistema removido. Reiniciando...", Toast.LENGTH_LONG).show();
-                webView.loadUrl(getString(R.string.launch_url));
+                // Recarrega o mesmo modo em que o usuario estava (site ao vivo ou app de
+                // campo embutido), em vez de sempre voltar pro site ao vivo.
+                webView.loadUrl(estaNoSiteAoVivo ? getString(R.string.launch_url) : getString(R.string.field_app_url));
             });
         }
 

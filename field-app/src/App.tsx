@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
-import { ChevronLeft } from "lucide-react";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/components/auth-context";
 import { OfflineProvider } from "@/components/offline-provider";
+import { ToastProvider } from "./ui/primitives/Toast";
+import { AppShell } from "./ui/primitives/AppShell";
 import { LoginScreen } from "./screens/LoginScreen";
 import { MenuScreen } from "./screens/MenuScreen";
 import { EquipamentosScreen } from "./screens/EquipamentosScreen";
@@ -10,25 +11,8 @@ import BacklogPage from "./modules/backlog/BacklogPage";
 import CaptacaoPage from "./modules/captacao/CaptacaoPage";
 import MaoDeObraPage from "./modules/mao-de-obra/MaoDeObraPage";
 
-type Tela = "menu" | "pneus" | "backlog" | "captacao" | "mao-de-obra" | "equipamentos";
-
-function ComVoltar({ onVoltar, children }: { onVoltar: () => void; children: ReactNode }) {
-  return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-3">
-        <button onClick={onVoltar} className="flex items-center gap-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-300">
-          <ChevronLeft size={16} /> Menu
-        </button>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 function Conteudo() {
   const { user, loading } = useAuth();
-  const [tela, setTela] = useState<Tela>("menu");
-  const voltarAoMenu = () => setTela("menu");
 
   if (loading) {
     return (
@@ -40,50 +24,31 @@ function Conteudo() {
 
   if (!user) return <LoginScreen />;
 
-  if (tela === "pneus") {
-    return (
-      <ComVoltar onVoltar={voltarAoMenu}>
-        <PneusPage />
-      </ComVoltar>
-    );
-  }
-
-  if (tela === "backlog") {
-    return (
-      <ComVoltar onVoltar={voltarAoMenu}>
-        <BacklogPage />
-      </ComVoltar>
-    );
-  }
-
-  if (tela === "captacao") {
-    return (
-      <ComVoltar onVoltar={voltarAoMenu}>
-        <CaptacaoPage />
-      </ComVoltar>
-    );
-  }
-
-  if (tela === "mao-de-obra") {
-    return (
-      <ComVoltar onVoltar={voltarAoMenu}>
-        <MaoDeObraPage />
-      </ComVoltar>
-    );
-  }
-
-  if (tela === "equipamentos") {
-    return <EquipamentosScreen onVoltar={voltarAoMenu} />;
-  }
-
-  return <MenuScreen onSelecionar={(chave) => setTela(chave as Tela)} />;
+  return (
+    <AppShell>
+      <Routes>
+        <Route path="/" element={<Navigate to="/menu" replace />} />
+        <Route path="/menu" element={<MenuScreen />} />
+        <Route path="/pneus" element={<PneusPage />} />
+        <Route path="/backlog" element={<BacklogPage />} />
+        <Route path="/captacao" element={<CaptacaoPage />} />
+        <Route path="/mao-de-obra" element={<MaoDeObraPage />} />
+        <Route path="/equipamentos" element={<EquipamentosScreen />} />
+        <Route path="*" element={<Navigate to="/menu" replace />} />
+      </Routes>
+    </AppShell>
+  );
 }
 
 export function App() {
   return (
     <AuthProvider>
       <OfflineProvider>
-        <Conteudo />
+        <ToastProvider>
+          <HashRouter>
+            <Conteudo />
+          </HashRouter>
+        </ToastProvider>
       </OfflineProvider>
     </AuthProvider>
   );
