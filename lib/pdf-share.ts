@@ -1,11 +1,15 @@
-// Compartilhado por todo módulo que gera uma ficha em PDF — via html2pdf.js (carregado
-// globalmente como window.html2pdf) OU já com um Blob pronto (ex: jsPDF direto, como o
-// módulo de Lubrificação usa) — extrai o padrão de "baixar" e "baixar e compartilhar o
-// arquivo de verdade" que só existia no Controle de OS, pra ficar disponível em qualquer
-// ficha do sistema, inclusive offline/no app Android.
+// Compartilhado por todo módulo que gera uma ficha em PDF a partir de um elemento HTML (via
+// html2canvas + jsPDF, importados como dependência normal do bundle, sem depender de CDN em
+// runtime) OU já com um Blob pronto (ex: jsPDF direto, como o módulo de Lubrificação usa) —
+// extrai o padrão de "baixar" e "baixar e compartilhar o arquivo de verdade" que só existia
+// no Controle de OS, pra ficar disponível em qualquer ficha do sistema, inclusive offline/no
+// app Android.
 //
 // Sempre salva o arquivo primeiro (download no navegador, ou pela ponte nativa do app) antes
 // de tentar abrir o menu de compartilhamento do sistema — nunca compartilha sem ter salvo.
+
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 type PdfOpt = {
   margin?: number[];
@@ -98,10 +102,27 @@ export async function salvarOuCompartilharBlob(
   }
 }
 
+// Normaliza o array de margem no mesmo formato que o antigo html2pdf.js aceitava:
+// 1 valor (todos os lados), 2 ([vertical, horizontal]) ou 4 ([topo, direita, baixo, esquerda]).
+function normalizarMargem(margin: number[] = [0, 0, 0, 0]) {
+  if (margin.length === 2) {
+    const [vertical, horizontal] = margin;
+    return { top: vertical, right: horizontal, bottom: vertical, left: horizontal };
+  }
+  if (margin.length >= 4) {
+    const [top, right, bottom, left] = margin;
+    return { top, right, bottom, left };
+  }
+  const [all = 0] = margin;
+  return { top: all, right: all, bottom: all, left: all };
+}
+
 /**
- * Gera o PDF a partir de um elemento HTML (via html2pdf.js) e baixa e/ou compartilha o
- * arquivo de verdade. `modo: 'download'` só salva; `modo: 'share'` salva e também tenta
- * abrir o menu de compartilhamento do sistema (WhatsApp etc.) com o PDF anexado.
+ * Gera o PDF a partir de um elemento HTML (via html2canvas + jsPDF) e baixa e/ou compartilha
+ * o arquivo de verdade. `modo: 'download'` só salva; `modo: 'share'` salva e também tenta
+ * abrir o menu de compartilhamento do sistema (WhatsApp etc.) com o PDF anexado. Mesmo
+ * algoritmo de paginação (fatiar a imagem renderizada em várias páginas) já usado em
+ * `field-app/src/modules/pneus/pdfBoletim.ts`, generalizado pra respeitar margem.
  */
 export async function baixarOuCompartilharPdf(
   element: HTMLElement,
@@ -111,15 +132,44 @@ export async function baixarOuCompartilharPdf(
   modo: "download" | "share",
   opt: PdfOpt = {}
 ): Promise<void> {
-  if (typeof window === "undefined" || !(window as any).html2pdf) {
-    alert("Aguarde o carregamento do gerador de PDF e tente novamente.");
-    return;
-  }
+  const fullOpt = { ...DEFAULT_OPT, ...opt };
+  const margem = normalizarMargem(fullOpt.margin);
+  const imageType = fullOpt.image?.type === "png" ? "png" : "jpeg";
+  const imageQuality = fullOpt.image?.quality ?? 0.92;
 
   try {
-    const fullOpt = { ...DEFAULT_OPT, ...opt, filename };
-    const worker = (window as any).html2pdf().set(fullOpt).from(element);
-    const blob: Blob = await worker.toPdf().output("blob");
+    const canvas = await html2canvas(element, {
+      backgroundColor: "#ffffff",
+      ...fullOpt.html2canvas,
+    });
+
+    const pdf = new jsPDF({
+      orientation: fullOpt.jsPDF?.orientation ?? "portrait",
+      unit: fullOpt.jsPDF?.unit ?? "mm",
+      format: fullOpt.jsPDF?.format ?? "a4",
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const usableWidth = pageWidth - margem.left - margem.right;
+    const usableHeight = pageHeight - margem.top - margem.bottom;
+    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+    const imgData = canvas.toDataURL(`image/${imageType}`, imageQuality);
+    const formato = imageType.toUpperCase();
+
+    let heightLeft = imgHeight;
+    let position = margem.top;
+    pdf.addImage(imgData, formato, margem.left, position, usableWidth, imgHeight);
+    heightLeft -= usableHeight;
+
+    while (heightLeft > 0) {
+      position = margem.top - (imgHeight - heightLeft);
+      pdf.addPage();
+      pdf.addImage(imgData, formato, margem.left, position, usableWidth, imgHeight);
+      heightLeft -= usableHeight;
+    }
+
+    const blob: Blob = pdf.output("blob");
     await salvarOuCompartilharBlob(blob, filename, shareTitle, shareText, modo);
   } catch (err) {
     console.error("Erro ao gerar PDF:", err);
@@ -127,11 +177,7 @@ export async function baixarOuCompartilharPdf(
   }
 }
 
-// Pré-carrega o html2pdf.js via CDN, se ainda não estiver carregado — mesmo script usado
-// em todos os módulos que geram ficha em PDF a partir de um elemento HTML.
-export function preCarregarHtml2Pdf() {
-  if (typeof window === "undefined" || (window as any).html2pdf) return;
-  const script = document.createElement("script");
-  script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-  document.head.appendChild(script);
-}
+// Antes o html2pdf.js precisava ser pré-carregado via CDN; agora html2canvas/jsPDF são
+// importados como dependência normal do bundle, então não há mais nada pra pré-carregar.
+// Mantido como no-op só pra não quebrar os call sites existentes que ainda chamam isso.
+export function preCarregarHtml2Pdf() {}

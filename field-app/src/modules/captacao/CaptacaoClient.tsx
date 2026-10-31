@@ -8,6 +8,7 @@
 // desta fase. Único comportamento corrigido aqui (não cosmético): o bug de editar um
 // lançamento offline usando o entity/action errado — ver o comentário no próprio local.
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { createPortal } from 'react-dom';
 import { 
   Plus, 
@@ -1018,12 +1019,6 @@ export default function CaptacaoClient({
   };
 
   const handleExportExcel = () => {
-    const XLSX = (window as any).XLSX;
-    if (!XLSX) {
-      alert("Biblioteca Excel ainda carregando...");
-      return;
-    }
-
     if (!selectedFicha) return;
 
     // Build array of arrays (AOA) for the sheet
@@ -1112,11 +1107,6 @@ export default function CaptacaoClient({
   };
 
   const handleExportPDF = (modo: "download" | "share" = "download") => {
-    if (!(window as any).html2pdf) {
-      alert("Biblioteca PDF ainda carregando...");
-      return;
-    }
-
     setIsExporting(true);
 
     const element = document.getElementById("ficha-captacao-print");
@@ -1233,24 +1223,6 @@ export default function CaptacaoClient({
 
   // Listener to sync completed removido para evitar loop infinito de reloads.
   // A atualização dos dados locais após o sync já é tratada reativamente no pai (page.tsx).
-
-  // Load sheetjs and html2pdf scripts dynamically
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (!(window as any).XLSX) {
-        const script = document.createElement("script");
-        script.src = "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js";
-        document.body.appendChild(script);
-      }
-      if (!(window as any).html2pdf) {
-        const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-        document.body.appendChild(script);
-      }
-    }
-  }, []);
-
-
 
   // Filtered Fichas list
   const filteredFichas = useMemo(() => {

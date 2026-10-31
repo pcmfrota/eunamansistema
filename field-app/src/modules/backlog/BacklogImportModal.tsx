@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import { 
+import React, { useState, useRef } from 'react'
+import * as XLSX from 'xlsx'
+import {
   X, 
   Upload, 
   FileSpreadsheet, 
@@ -22,26 +23,12 @@ export default function BacklogImportModal({ isOpen, onClose }: { isOpen: boolea
   const [fileName, setFileName] = useState("")
   const [result, setResult] = useState<any>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [XLSX, setXLSX] = useState<any>(null)
-
-  useEffect(() => {
-    if (isOpen && !XLSX) {
-      if ((window as any).XLSX) {
-        setXLSX((window as any).XLSX)
-      } else {
-        const script = document.createElement("script")
-        script.src = "https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"
-        script.onload = () => setXLSX((window as any).XLSX)
-        document.head.appendChild(script)
-      }
-    }
-  }, [isOpen, XLSX])
 
   if (!isOpen) return null
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !XLSX) return
+    if (!file) return
 
     setParsing(true)
     setFileName(file.name)

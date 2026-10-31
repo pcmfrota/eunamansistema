@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, Eye, ArrowLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { registrarInspecaoCompleta, atualizarInspecao, excluirInspecao, excluirInspecoesMassivo } from "./actions";
@@ -157,20 +158,6 @@ export default function PneusClient({
   const [selectedSchematic, setSelectedSchematic] = useState<Inspecao | null>(null);
   // Boletim aberto na pré-visualização da ficha (ver antes de baixar o PDF).
   const [previewInspecao, setPreviewInspecao] = useState<Inspecao | null>(null);
-
-  // Pré-carrega SheetJS via CDN para Export e Import
-  useEffect(() => {
-    if (!(window as any).XLSX) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js";
-      document.head.appendChild(script);
-    }
-    if (!(window as any).html2pdf) {
-      const script2 = document.createElement("script");
-      script2.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      document.head.appendChild(script2);
-    }
-  }, []);
 
   // ── Batch Actions ──
   const toggleSelect = (id: string) => {
@@ -488,11 +475,7 @@ export default function PneusClient({
 
 
   const exportExcel = () => {
-    const XLSXLib = (window as any).XLSX;
-    if (!XLSXLib) {
-      alert('Aguarde o carregamento da biblioteca Excel e tente novamente.');
-      return;
-    }
+    const XLSXLib = XLSX;
     const rows = inspecoes.map(i => ({
       Placa: i.equipamentos?.placa, Data: fmtDate(i.data_inspecao), Km: i.km_atual, Condicao: CONDICAO_LABEL[calcCondicaoPneu(i)],
       DE: i.de, DD: i.dd, TEI: i.tei, TEE: i.tee, TDI: i.tdi, TDE: i.tde, ESTEPE: i.estepe

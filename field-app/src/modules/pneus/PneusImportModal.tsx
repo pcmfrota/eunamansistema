@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { 
+import * as XLSX from 'xlsx'
+import {
   X, 
   Upload, 
   FileSpreadsheet, 
@@ -85,19 +86,6 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
   const [result, setResult] = useState<any>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // SheetJS lazy load logic — DEVE ficar antes de qualquer return condicional
-  const [XLSX, setXLSX] = useState<any>(null)
-  useEffect(() => {
-    if ((window as any).XLSX) {
-      setXLSX((window as any).XLSX)
-    } else {
-      const script = document.createElement("script")
-      script.src = "https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"
-      script.onload = () => setXLSX((window as any).XLSX)
-      document.head.appendChild(script)
-    }
-  }, [])
-
   useEffect(() => {
     if (!isOpen) {
       setRows([])
@@ -137,7 +125,7 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !XLSX) return
+    if (!file) return
 
     setParsing(true)
     setFileName(file.name)
@@ -181,7 +169,6 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
   }
 
   const downloadTemplate = () => {
-    if (!XLSX) return
     const ws = XLSX.utils.json_to_sheet([
       { 'Placa': 'ABC1234', 'Data': '2024-03-20', 'Km': 15000, 'DE': 12, 'DE (D)': 12, 'DE (E)': 11, 'DD': 12, 'Condicao': 'BOM', 'Obs': 'Nova' }
     ])

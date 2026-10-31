@@ -75,9 +75,6 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
   const [gerandoPdf, setGerandoPdf] = useState<"download" | "share" | null>(null);
 
   const downloadReportPDF = async (modo: "download" | "share" = "download") => {
-    if (!(window as any).html2pdf) {
-      alert("Aguarde o carregamento do gerador de PDF."); return;
-    }
     const element = document.getElementById("ai-report-content");
     if (!element) return;
 
