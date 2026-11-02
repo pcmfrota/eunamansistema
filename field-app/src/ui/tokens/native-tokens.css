@@ -27,7 +27,14 @@
   --nav-bar-height: 64px;
   --app-bar-height: 52px;
 
-  /* Safe-area (notch / gestos) — exige viewport-fit=cover no HTML */
+  /* Safe-area (notch / gestos) — exige viewport-fit=cover no HTML. Isto e so o FALLBACK
+     inicial (antes do app nativo rodar JS): o Android WebView (Chromium) so preenche
+     env(safe-area-inset-*) a partir de DISPLAY CUTOUT, nao a partir da altura generica da
+     status/navigation bar como o Safari faz no iOS — por isso, assim que a pagina carrega,
+     EunamanActivity.java injeta o valor real (calculado via WindowInsetsCompat) direto em
+     document.documentElement.style, que tem prioridade sobre esta regra. Fora do WebView
+     Android (ex.: abrir o field-app num navegador comum pra debugar), so o valor de env()
+     se aplica. */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);

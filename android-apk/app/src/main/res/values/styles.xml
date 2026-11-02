@@ -6,5 +6,11 @@
         <item name="android:navigationBarColor">@color/colorPrimary</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+        <!-- Deixa o conteudo (WebView) desenhar ate embaixo de cutout/punch-hole em telas
+             "infinitas" (edge-to-edge real), complementando o setDecorFitsSystemWindows(false)
+             feito em EunamanActivity — sem isso, em alguns aparelhos a area do cutout fica
+             reservada/preta mesmo com os insets corretos calculados em codigo. Ignorado
+             graciosamente em API &lt; 28. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>

@@ -38,12 +38,16 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -83,8 +87,20 @@ public class EunamanActivity extends AppCompatActivity {
 
     private boolean isLoggingOut = false;
     // true quando o WebView está no site ao vivo (módulos de escritório) em vez do app
-    // de campo embutido — usado só pelo botão voltar do Android (onBackPressed).
+    // de campo embutido — usado só pela navegação de voltar (handleBackNavigation).
     private boolean estaNoSiteAoVivo = false;
+
+    // Safe-area real do aparelho (status bar / barra de gestos / cutout), em dp — convertida
+    // de WindowInsetsCompat (pixels fisicos) e injetada como CSS custom properties no
+    // documento (document.documentElement.style), porque o Android WebView (Chromium) so
+    // preenche env(safe-area-inset-*) a partir de DISPLAY CUTOUT, nao a partir da altura
+    // generica da status/navigation bar como o Safari faz no iOS — sem essa injecao nativa,
+    // env(safe-area-inset-top) fica 0 em aparelhos sem notch/cutout mesmo em edge-to-edge,
+    // e a AppBar do field-app (que depende de --safe-top) fica atras da status bar.
+    private float safeAreaTopDp = 0f;
+    private float safeAreaRightDp = 0f;
+    private float safeAreaBottomDp = 0f;
+    private float safeAreaLeftDp = 0f;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
     private String pendingPhotoDataUrl = null;
@@ -111,6 +127,20 @@ public class EunamanActivity extends AppCompatActivity {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+        // Navegacao de voltar via OnBackPressedDispatcher (API moderna do AndroidX, funciona
+        // com o gesto preditivo de voltar do Android 13+/targetSdk 36 em TODOS os fabricantes).
+        // Substitui o override antigo de onBackPressed(): com gesto de borda (sem botao fisico
+        // nem software visivel — "tela infinita"), alguns aparelhos so entregam o gesto de
+        // voltar atraves deste dispatcher quando o app declara enableOnBackInvokedCallback no
+        // Manifest (ja adicionado) e registra o callback aqui, em vez de depender so do
+        // override legado de Activity#onBackPressed().
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                handleBackNavigation();
+            }
+        });
 
         webView      = findViewById(R.id.webview);
         progressBar  = findViewById(R.id.loading_progress);
@@ -149,6 +179,17 @@ public class EunamanActivity extends AppCompatActivity {
         }
     }
 
+    /** Injeta a safe-area nativa (dp) como CSS custom properties no documento carregado. */
+    private void aplicarSafeAreaNoWebView() {
+        if (webView == null) return;
+        String js = "(function(){var s=document.documentElement.style;"
+                + "s.setProperty('--safe-top','" + safeAreaTopDp + "px');"
+                + "s.setProperty('--safe-right','" + safeAreaRightDp + "px');"
+                + "s.setProperty('--safe-bottom','" + safeAreaBottomDp + "px');"
+                + "s.setProperty('--safe-left','" + safeAreaLeftDp + "px');})();";
+        webView.evaluateJavascript(js, null);
+    }
+
     private void armWatchdogAposRestoreState() {
         watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
         final String urlRestaurada = webView.getUrl();
@@ -167,11 +208,14 @@ public class EunamanActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    @Override
-    public void onBackPressed() {
+    /**
+     * Logica compartilhada de "voltar" — invocada pelo OnBackPressedCallback registrado em
+     * onCreate() (gesto de borda / predictive back / botao fisico, todos passam por aqui).
+     */
+    private void handleBackNavigation() {
         // No site ao vivo (módulos de escritório, aberto via EunamanApp.openLiveSite()),
-        // o botão voltar do Android navega pelo histórico normal do WebView primeiro; só
-        // quando não há mais pra onde voltar é que volta pro app de campo embutido.
+        // a navegação de voltar segue o histórico normal do WebView primeiro; só quando não
+        // há mais pra onde voltar é que volta pro app de campo embutido.
         if (estaNoSiteAoVivo) {
             if (webView != null && webView.canGoBack()) {
                 webView.goBack();
@@ -190,7 +234,10 @@ public class EunamanActivity extends AppCompatActivity {
             webView.goBack();
             return;
         }
-        super.onBackPressed();
+        // Raiz da pilha: minimiza (como o botao Home) em vez de finish(), preservando a
+        // sessao/estado do WebView em memoria — reabrir pelo icone volta exatamente de onde
+        // parou, sem recarregar a splash nem reautenticar.
+        moveTaskToBack(false);
     }
 
     @Override
@@ -269,6 +316,22 @@ public class EunamanActivity extends AppCompatActivity {
         
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
+        // Despacha a safe-area real (status bar / barra de gestos / cutout) pro CSS do
+        // field-app — ver comentario dos campos safeArea*Dp acima sobre por que env(
+        // safe-area-inset-*) sozinho nao basta no Android WebView.
+        ViewCompat.setOnApplyWindowInsetsListener(webView, (v, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            float density = getResources().getDisplayMetrics().density;
+            safeAreaTopDp = bars.top / density;
+            safeAreaRightDp = bars.right / density;
+            safeAreaBottomDp = bars.bottom / density;
+            safeAreaLeftDp = bars.left / density;
+            aplicarSafeAreaNoWebView();
+            return windowInsets;
+        });
+        ViewCompat.requestApplyInsets(webView);
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -296,6 +359,12 @@ public class EunamanActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 watchdogHandler.removeCallbacks(pageLoadWatchdogRunnable);
+
+                // Toda navegacao/reload reseta o documento (perde o inline style injetado
+                // anteriormente) — reaplica a safe-area ja conhecida assim que a pagina carrega,
+                // sem esperar um novo evento de WindowInsets (que so dispara de novo em
+                // rotacao/mudanca real de inset).
+                aplicarSafeAreaNoWebView();
 
                 // Sincronização agressiva de cookies (Grava a sessão no disco físico)
                 new Thread(() -> CookieManager.getInstance().flush()).start();
