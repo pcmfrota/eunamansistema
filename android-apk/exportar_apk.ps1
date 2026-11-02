@@ -8,6 +8,30 @@ if (Test-Path $asJdk) {
     $env:PATH = "$asJdk\bin;" + $env:PATH
 }
 
+# Rebuilda o field-app e sincroniza o bundle pros assets do Android ANTES de empacotar o
+# APK. Sem isso, o Gradle empacota silenciosamente o que já estiver em
+# app/src/main/assets/field-app (podendo ficar dias/semanas desatualizado em relação ao
+# código-fonte de field-app/, já que nada mais faz essa cópia automaticamente).
+Write-Host "Buildando field-app (Vite)..." -ForegroundColor Cyan
+Push-Location ../field-app
+npm run build
+$fieldAppBuildOk = $?
+Pop-Location
+
+if (-not $fieldAppBuildOk) {
+    Write-Host "Erro ao buildar o field-app. Abortando (APK NAO foi gerado com bundle desatualizado)." -ForegroundColor Red
+    exit 1
+}
+
+$assetsDest = "app/src/main/assets/field-app"
+if (Test-Path $assetsDest) {
+    Remove-Item "$assetsDest/*" -Recurse -Force
+} else {
+    New-Item -ItemType Directory -Path $assetsDest | Out-Null
+}
+Copy-Item "../field-app/dist/*" $assetsDest -Recurse -Force
+Write-Host "Assets do field-app sincronizados em $assetsDest" -ForegroundColor Cyan
+
 ./gradlew assembleRelease
 
 if ($?) {
