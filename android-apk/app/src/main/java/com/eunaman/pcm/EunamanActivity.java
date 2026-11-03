@@ -101,6 +101,14 @@ public class EunamanActivity extends AppCompatActivity {
     private float safeAreaRightDp = 0f;
     private float safeAreaBottomDp = 0f;
     private float safeAreaLeftDp = 0f;
+    // Altura real do teclado (dp) -- exposta pro JS (window.__eunamanKeyboardHeight) porque
+    // document.documentElement.clientHeight/window.innerHeight/visualViewport.height NÃO
+    // encolhem quando o teclado abre nesta arquitetura (confirmado em log real de device:
+    // os três ficam constantes com o teclado aberto ou fechado) -- só o padding nativo da
+    // WebView muda. Sem esse valor exposto, nenhum componente web consegue calcular "esse
+    // elemento está escondido atrás do teclado?" corretamente, porque todas as APIs de
+    // viewport do próprio Chromium mentem nesse cenário.
+    private float keyboardHeightDp = 0f;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
     private String pendingPhotoDataUrl = null;
@@ -186,7 +194,10 @@ public class EunamanActivity extends AppCompatActivity {
                 + "s.setProperty('--safe-top','" + safeAreaTopDp + "px');"
                 + "s.setProperty('--safe-right','" + safeAreaRightDp + "px');"
                 + "s.setProperty('--safe-bottom','" + safeAreaBottomDp + "px');"
-                + "s.setProperty('--safe-left','" + safeAreaLeftDp + "px');})();";
+                + "s.setProperty('--safe-left','" + safeAreaLeftDp + "px');"
+                + "s.setProperty('--keyboard-height','" + keyboardHeightDp + "px');"
+                + "window.__eunamanKeyboardHeight=" + keyboardHeightDp + ";"
+                + "window.dispatchEvent(new CustomEvent('eunaman:keyboard-height-changed',{detail:" + keyboardHeightDp + "}));})();";
         webView.evaluateJavascript(js, null);
     }
 
@@ -327,17 +338,24 @@ public class EunamanActivity extends AppCompatActivity {
             safeAreaRightDp = bars.right / density;
             safeAreaBottomDp = bars.bottom / density;
             safeAreaLeftDp = bars.left / density;
-            aplicarSafeAreaNoWebView();
 
             // android:windowSoftInputMode="adjustResize" para de funcionar sozinho quando a
             // janela e edge-to-edge (WindowCompat.setDecorFitsSystemWindows(false) acima) --
             // o Android nao encolhe mais a WebView quando o teclado abre, entao o Chromium
             // nunca faz scroll do campo focado pra cima do teclado, e o teclado cobre o que
             // o usuario esta digitando. Reproduzimos o adjustResize na mao aplicando o inset
-            // do IME como padding nativo da WebView: encolhe a area visivel quando o teclado
-            // aparece (reflow real da pagina) e volta a 0 quando ele fecha.
+            // do IME como padding nativo da WebView: encolhe a area DESENHADA quando o
+            // teclado aparece. IMPORTANTE (confirmado com log real no device): isso NAO faz
+            // document.documentElement.clientHeight/innerHeight/visualViewport.height
+            // encolherem -- os tres continuam reportando a altura total, sem teclado, mesmo
+            // com o padding nativo aplicado. Ou seja, nenhuma logica JS baseada em "isso
+            // esta dentro do viewport?" (scrollIntoView, media queries, etc.) sabe que o
+            // teclado existe. Por isso expomos keyboardHeightDp pro JS (abaixo) em vez de
+            // confiar em qualquer API de viewport do proprio Chromium.
             int imeBottom = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            keyboardHeightDp = imeBottom / density;
             v.setPadding(0, 0, 0, imeBottom);
+            aplicarSafeAreaNoWebView();
             return windowInsets;
         });
         ViewCompat.requestApplyInsets(webView);

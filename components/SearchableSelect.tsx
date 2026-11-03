@@ -26,6 +26,8 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
   const [adicionando, setAdicionando] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollAncestorRef = useRef<HTMLElement | null>(null);
 
   const selectedOption = options.find(opt => opt.value === value);
 
@@ -39,16 +41,82 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // O painel é position:absolute logo abaixo do campo — se o campo estiver perto do fim
-  // da área rolável (comum em formulários mobile com teclado aberto, que já encolhe a
-  // área visível), o painel abre fora da tela sem rolar automaticamente até ele.
+  // O painel é position:absolute logo abaixo do campo — se o campo estiver perto do fim da
+  // área rolável (comum com o teclado aberto), o painel abre fora da área visível de verdade
+  // na tela. scrollIntoView NÃO resolve isso aqui: confirmado com log real de device que
+  // document.documentElement.clientHeight / window.innerHeight / visualViewport.height
+  // continuam reportando a altura TOTAL da tela mesmo com o teclado aberto (o teclado, no
+  // Android WebView deste app, é aplicado como padding nativo na WebView — ver
+  // EunamanActivity.java —, não como resize real do layout viewport que o Chromium
+  // reconheça). Ou seja, pro próprio navegador, o campo "já está visível" mesmo quando o
+  // teclado físico está desenhado por cima dele — nenhuma API de viewport do Chromium sabe
+  // que o teclado existe nesse cenário. Por isso calculamos a visibilidade na mão usando a
+  // altura real do teclado que o nativo expõe (window.__eunamanKeyboardHeight, em "px" ==
+  // dp).
+  //
+  // Isso sozinho ainda não basta — confirmado com log real de device: quando a lista
+  // filtrada encolhe (poucos resultados pra "ana", por ex.), o container rolável não TEM
+  // altura de conteúdo suficiente pra rolar até a posição calculada — scrollTop trava no
+  // máximo possível, abaixo do necessário, e o campo continua atrás do teclado por mais
+  // que o cálculo esteja certo. É exatamente o "a tela não rola mais, já chegou no limite"
+  // relatado. Por isso, enquanto o dropdown estiver aberto, garantimos um respiro extra
+  // (padding-bottom = altura do teclado) no container rolável — isso cria espaço real pra
+  // rolar até o campo, independente de quanto a lista filtrada encolher.
   useEffect(() => {
     if (!isOpen) return;
-    const t = setTimeout(() => {
-      panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }, 50);
-    return () => clearTimeout(t);
+    const el = inputRef.current;
+    if (!el) return;
+    let ancestral: HTMLElement | null = el.parentElement;
+    while (ancestral) {
+      const estilo = getComputedStyle(ancestral);
+      if ((estilo.overflowY === "auto" || estilo.overflowY === "scroll") && ancestral.scrollHeight > ancestral.clientHeight) break;
+      ancestral = ancestral.parentElement;
+    }
+    scrollAncestorRef.current = ancestral;
+    if (!ancestral) return;
+    const paddingOriginal = ancestral.style.paddingBottom;
+    const aplicarRespiro = () => {
+      const kb = (window as any).__eunamanKeyboardHeight || 0;
+      ancestral!.style.paddingBottom = kb > 0 ? `${kb + 24}px` : paddingOriginal;
+    };
+    aplicarRespiro();
+    window.addEventListener("eunaman:keyboard-height-changed", aplicarRespiro);
+    return () => {
+      window.removeEventListener("eunaman:keyboard-height-changed", aplicarRespiro);
+      ancestral!.style.paddingBottom = paddingOriginal;
+      scrollAncestorRef.current = null;
+    };
   }, [isOpen]);
+
+  // Corrige a posição do campo a cada mudança (abrir, teclado, ou texto digitado — a lista
+  // filtrada muda de altura a cada letra, o que pode empurrar o campo de novo). Um poll
+  // curto é necessário porque o WebView às vezes tenta reposicionar o foco sozinho, sem
+  // saber do teclado, brigando com uma correção única feita só uma vez.
+  useEffect(() => {
+    if (!isOpen) return;
+    const rolarAteOCampo = () => {
+      const el = inputRef.current;
+      const ancestral = scrollAncestorRef.current;
+      if (!el || !ancestral) return;
+      const kb = (window as any).__eunamanKeyboardHeight || 0;
+      const rect = el.getBoundingClientRect();
+      const limiteVisivel = window.innerHeight - kb;
+      const quantoEsconde = rect.bottom - limiteVisivel;
+      if (quantoEsconde <= 0) return;
+      ancestral.scrollTop += quantoEsconde + 16; // +16px de folga visual
+    };
+    let tentativas = 0;
+    const intervalo = setInterval(() => {
+      rolarAteOCampo();
+      tentativas++;
+      if (tentativas >= 15) clearInterval(intervalo); // ~1.5s de correção ativa
+    }, 100);
+    window.addEventListener("eunaman:keyboard-height-changed", rolarAteOCampo);
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener("eunaman:keyboard-height-changed", rolarAteOCampo);
+    };
+  }, [isOpen, searchTerm]);
 
   const filteredOptions = options.filter(opt => 
     opt.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -77,6 +145,7 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
           <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 flex items-center gap-2">
              <Search size={14} className="text-zinc-400" />
              <input
+               ref={inputRef}
                type="text"
                className="w-full bg-transparent text-sm font-medium outline-none text-zinc-800 dark:text-zinc-200"
                placeholder="Pesquisar..."
