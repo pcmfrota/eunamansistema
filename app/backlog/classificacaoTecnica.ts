@@ -202,22 +202,18 @@ export const REGIAO_PROGRAMACAO_SUGESTOES = [
   "PROGRAMAR NA BASE",
 ]
 
+// Lista padronizada (substitui a lista antiga, mais longa) — "AG. REQUISIÇÃO" é o valor
+// padrão automático ao lançar um item novo no backlog (ver initialValues em BacklogModal.tsx).
 export const DETALHAMENTO_PEDIDO_SUGESTOES = [
-  "AGUARDANDO PAGAMENTO",
-  "LIBERADO FORNECEDOR",
-  "RECEBIDO ALMOXARIFADO",
-  "RETIRADO ALMOXARIFADO",
-  "SERVIÇO/BASE",
-  "AGUARDANDO AVALIAÇÃO DA MANUTENÇÃO",
-  "AGUARDANDO COMPRADOR",
-  "AGUARDANDO FORNECEDOR",
-  "AGUARDANDO REFERÊNCIA",
-  "AGUARDANDO PROGRAMAÇÃO",
+  "AG. PAGAMENTO",
+  "AG. COTAÇÃO",
+  "EM COTAÇÃO",
+  "AG. PEÇA",
+  "AG. MÃO DE OBRA",
+  "CONCLUIDO",
   "SEM PROGRAMAÇÃO",
   "EM ANDAMENTO",
-  "ATENDIDO",
-  "ESTOQUE",
-  "FALTOU ITEM NA REQUISIÇÃO",
+  "AG. REQUISIÇÃO",
 ]
 
 // ── Cálculos auxiliares (só exibidos — nunca sobrescrevem o que o usuário decide) ──

@@ -53,7 +53,7 @@ const initialValues = {
   frota: '', tag: '', tipo: '', descricao: '', origem: '',
   colaborador: '',
   tempo_execucao: '', campo_base: '', os: '', material: '',
-  nr_rc: '', nr_ordem: '', fornecedor: '', detalhamento: '',
+  nr_rc: '', nr_ordem: '', fornecedor: '', detalhamento: 'AG. REQUISIÇÃO',
   data_rc: '', data_nec_material: '', previsao_material: '',
   situacao_rc: '', dias_abertura: '', data_programacao: '',
   status_programacao: 'Não Programado', previsao_conclusao: '',
