@@ -62,6 +62,20 @@ import {
   salvarChecklistMecanico,
   excluirChecklistMecanico,
 } from "../modules/checklist-mecanicos/actions";
+import {
+  criarOrdemServico,
+  atualizarOrdemServico,
+  atualizarStatusOS,
+  aprovarOrdemServico,
+  excluirOrdemServico,
+} from "../modules/os/actions";
+
+// Mapeia número de OS temporário (criado offline, "OS-OFF-...") -> número real gerado pelo
+// servidor, assim como o app principal faz (lib/offline-actions.ts) — útil pra qualquer tela
+// que precise exibir/referenciar o número real assim que ele existir (a convenção "OS-OFF-"
+// em si também é obrigatória: lib/offline-sync.ts já usa esse prefixo, compartilhado com o
+// app principal, pra não apagar um registro otimista ainda não sincronizado).
+const tempToRealOSMap: Record<string, string> = {};
 
 // Mapeia id temporário de ficha de Insumos -> id real gerado pelo servidor, assim como
 // o app principal faz (lib/offline-actions.ts) — necessário porque linhas/cabeçalho/
@@ -105,8 +119,11 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
     else if (entity === "backlog") {
       if (action === "create" || action === "update") {
         // Remapeamento de OS temporária (OS-OFF-...) pro número real: deixado só por
-        // compatibilidade de formato com o payload do app principal — nunca dispara de
-        // verdade aqui, já que o módulo OS ainda não foi portado pro field-app (ver plano).
+        // compatibilidade de formato com o payload do app principal — o módulo OS já foi
+        // portado (Fase 6), mas a criação de OS no field-app não tem o seletor "vincular
+        // backlogs pendentes" do NovoModal.tsx original (fora de escopo, ver
+        // field-app/src/modules/os/OSClient.tsx), então nenhum item de backlog daqui chega
+        // a ser enfileirado com um número de OS temporário — isso nunca dispara de verdade.
         const tempOS = payload.os;
         if (tempOS && typeof tempOS === "string" && tempOS.startsWith("OS-OFF-")) {
           const realOSNum = typeof window !== "undefined" ? localStorage.getItem(`sync_os_map_${tempOS}`) : null;
@@ -257,6 +274,39 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
     else if (entity === "insumos_fichas_recarga") {
       if (action === "create") {
         const res = await criarRecargaFinalizada(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "os") {
+      if (action === "create") {
+        const tempNum = payload.temp_numero_os; // Número temporário, se houver
+        const formData = deserializeToFormData(payload);
+        const res = await criarOrdemServico(formData);
+        if (res && "error" in res) throw new Error(res.error);
+
+        if (tempNum && res && (res as any).numero_os) {
+          const realNum = (res as any).numero_os;
+          tempToRealOSMap[tempNum] = realNum;
+          if (typeof window !== "undefined") {
+            localStorage.setItem(`sync_os_map_${tempNum}`, realNum);
+          }
+        }
+      } else if (action === "update") {
+        const { id, ...data } = payload;
+        const formData = deserializeToFormData(data);
+        const res = await atualizarOrdemServico(id, formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update_status") {
+        const { id, status } = payload;
+        const res = await atualizarStatusOS(id, status);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "approve") {
+        const { id } = payload;
+        const res = await aprovarOrdemServico(id);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirOrdemServico(payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

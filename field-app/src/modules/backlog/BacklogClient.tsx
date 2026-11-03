@@ -2,10 +2,11 @@
 "use client";
 
 // Port de app/backlog/BacklogClient.tsx pro app de campo, redesenhado na Fase 5 pro
-// design nativo (ver plano). Duas features fora do escopo original (Fase 2), mantidas
-// fora aqui também — ver comentário em ./actions.ts pro motivo de cada uma:
-// - "Gerar O.S." a partir de itens selecionados (dependia do módulo OS, não portado).
+// design nativo (ver plano). Uma feature fora do escopo original (Fase 2), mantida fora
+// aqui também — ver comentário em ./actions.ts pro motivo:
 // - "Lançar via Print" (BacklogAIImportModal, usa extrairPendenciasBacklogIA / Gemini).
+// "Gerar O.S." a partir de itens selecionados FOI portada (Fase 6, módulo OS) — ver botão
+// "Gerar OS" na barra de seleção em massa abaixo.
 import React, { useState, useEffect } from 'react';
 import {
   Upload,
@@ -17,10 +18,11 @@ import {
   Layers,
   ShieldAlert,
   BarChart3,
+  Hammer,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
-import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog } from './actions';
+import { getBacklog, deleteBacklogItems, gerarOSDeBacklog, getSolicitacoesExclusaoBacklog } from './actions';
 import BacklogModal from './BacklogModal';
 import BacklogTable from './BacklogTable';
 import BacklogImportModal from './BacklogImportModal';
@@ -287,6 +289,28 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     setSelectedIds(new Set());
   };
 
+  const [gerandoOS, setGerandoOS] = useState(false);
+  const handleGerarOS = async () => {
+    if (selectedIds.size === 0 || gerandoOS) return;
+    if (!isOnline) {
+      toast.show("É necessário estar online para gerar uma Ordem de Serviço.", "error");
+      return;
+    }
+    setGerandoOS(true);
+    try {
+      const res = await gerarOSDeBacklog(Array.from(selectedIds));
+      if (res?.error) {
+        toast.show(res.error, "error");
+        return;
+      }
+      toast.show(`OS ${res.data?.numero_os || ''} gerada com sucesso.`, "success");
+      setSelectedIds(new Set());
+      await refreshData();
+    } finally {
+      setGerandoOS(false);
+    }
+  };
+
   const currentPeriod = React.useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
@@ -528,6 +552,9 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
             </div>
             <span className="text-[10px] font-black text-zinc-300 uppercase">Selecionados</span>
           </div>
+          <button onClick={handleGerarOS} disabled={gerandoOS} className="flex items-center gap-1 text-xs font-black text-sky-400 uppercase disabled:opacity-50">
+            <Hammer size={13} /> {gerandoOS ? 'Gerando...' : 'Gerar OS'}
+          </button>
           <button onClick={handleBatchDelete} className="text-xs font-black text-red-400 uppercase">
             {isAdmin ? 'Excluir' : 'Solicitar'}
           </button>

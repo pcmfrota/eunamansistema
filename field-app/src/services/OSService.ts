@@ -1,9 +1,12 @@
-// Cópia MÍNIMA de src/services/OSService.ts (app principal) — só createOS (zod + insert
-// simples, sem service-role key), usado pela cascata do Checklist Mecânico. Ver nota em
-// field-app/src/repositories/OSRepository.ts.
+// Cópia de src/services/OSService.ts (app principal) — CRUD completo (Fase 6: módulo OS
+// portado pro field-app). `createOS` já existia antes disso, criado pra cascata do Checklist
+// Mecânico (ver field-app/src/modules/checklist-mecanicos/actions.ts) — mantido como estava.
+// Sem `importOS` (importação de planilha é só Escritório/Web) nem `deleteBulk` (sem seleção
+// em massa no field-app, ações são item a item — ver field-app/src/modules/os/OSClient.tsx).
 import { z } from 'zod';
 import { OSRepository } from '../repositories/OSRepository';
-import { OSInsert } from '../models/os';
+import { OSInsert, OSUpdate } from '../models/os';
+import { getCurrentLocalDatetime } from '../utils/dateUtils';
 
 function generateOSNumber(): string {
   return `OS-${Date.now()}`;
@@ -70,5 +73,36 @@ export class OSService {
     return records && records.length > 0
       ? { success: true, data: records[0] }
       : { success: true };
+  }
+
+  static async updateOS(id: string, data: OSUpdate) {
+    if (data.status === 'Fechada' || (data.status as any) === 'Concluída') {
+      // Só define data_fechamento automaticamente se o formulário não enviou uma
+      if (!data.data_fechamento) {
+        data.data_fechamento = getCurrentLocalDatetime();
+      }
+      data.status = 'Fechada';
+    }
+
+    // Se numero_os vier vazio (ex: edição que limpou o campo), gerar automaticamente
+    if ('numero_os' in data && (!data.numero_os || (data.numero_os as string).trim() === '')) {
+      data.numero_os = generateOSNumber();
+    }
+
+    const partialSchema = OSSchema.partial();
+    const validated = partialSchema.parse(data);
+
+    const { data: records, error } = await OSRepository.update(id, validated as OSUpdate);
+    if (error) throw new Error(error.message);
+
+    return records && records.length > 0
+      ? { success: true, data: records[0] }
+      : { success: true };
+  }
+
+  static async deleteOS(id: string) {
+    const { error } = await OSRepository.delete(id);
+    if (error) throw new Error(error.message);
+    return { success: true };
   }
 }

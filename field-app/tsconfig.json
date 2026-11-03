@@ -25,6 +25,7 @@
       "@/src/services/PreventivaService": ["./src/services/PreventivaService.ts"],
       "@/src/services/HorimetroService": ["./src/services/HorimetroService.ts"],
       "@/src/services/OSService": ["./src/services/OSService.ts"],
+      "@/src/repositories/OSRepository": ["./src/repositories/OSRepository.ts"],
       "@/app/checklist-mecanicos/checklistConfig": ["../app/checklist-mecanicos/checklistConfig.ts"],
       "@/lib/*": ["../lib/*"],
       "@/components/*": ["../components/*"],

@@ -1,15 +1,19 @@
 // Port de app/backlog/actions.ts pro app de campo — sem "use server"/revalidatePath.
 //
 // FORA DO ESCOPO desta fase (não portadas, propositalmente):
-// - gerarOSDeBacklog: depende de OSRepository/OSService (módulo OS ainda não portado
-//   pro field-app). "Gerar O.S." continua só no site ao vivo por enquanto.
 // - extrairPendenciasBacklogIA / lancarBacklogsExtraidos: usam GEMINI_API_KEY (chave de
 //   servidor) — mesmo motivo já documentado no plano pra notificarPapeis (OS). Teria que
 //   vazar a chave no app ou chamar um endpoint do site ao vivo; nenhum dos dois é o padrão
 //   usado aqui. BacklogAIImportModal.tsx (que usa essas duas) não foi portado.
 // - syncRolePermissions: bootstrap administrativo pontual, não é parte do fluxo de uso
 //   normal do módulo.
+//
+// gerarOSDeBacklog FOI portada (Fase 6, módulo OS) — ver field-app/src/modules/backlog/
+// BacklogClient.tsx (botão "Gerar OS" na barra de seleção em massa).
 import { BacklogService } from '@/src/services/BacklogService';
+import { OSService } from '@/src/services/OSService';
+import { OSRepository } from '@/src/repositories/OSRepository';
+import { OSInsert } from '@/src/models/os';
 import { getUserFilial } from '@/utils/filial';
 import { registrarExclusao } from '@/lib/audit-log';
 
@@ -44,6 +48,101 @@ export async function importarBacklog(rows: any[]) {
   try {
     const result = await BacklogService.import(rows);
     return result;
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// Gera uma única OS (status Aberta) a partir de um ou mais itens de backlog selecionados
+// (todos precisam ser da mesma placa) e vincula esses itens à OS gerada (status PROGRAMADO,
+// os: numero_os) — eles encerram sozinhos depois, quando a OS for fechada (ver
+// closeLinkedBacklogs em field-app/src/modules/os/actions.ts). Precisa estar online (lê/
+// grava em várias tabelas em sequência; sem fila offline dedicada pra esse fluxo).
+export async function gerarOSDeBacklog(ids: string[]) {
+  try {
+    if (!ids || ids.length === 0) return { error: 'Nenhum item selecionado.' };
+
+    const { createClient } = await import('@/utils/supabase/client');
+    const supabase = createClient();
+
+    const { data: backlogItems, error: fetchError } = await supabase
+      .from('backlog')
+      .select('*')
+      .in('id', ids);
+    if (fetchError) throw new Error(fetchError.message);
+
+    const usaveis = (backlogItems || []).filter((item: any) => {
+      const st = String(item.status || '').toUpperCase().trim();
+      return st !== 'ENCERRADO' && st !== 'CONCLUIDO' && st !== 'CONCLUÍDO' && st !== 'ENCERRADA';
+    });
+    if (usaveis.length === 0) {
+      return { error: 'Os itens selecionados já estão encerrados.' };
+    }
+
+    const placas = new Set(usaveis.map((i: any) => String(i.frota || '').toUpperCase().trim()).filter(Boolean));
+    if (placas.size === 0) {
+      return { error: 'Os itens selecionados não têm placa/frota definida.' };
+    }
+    if (placas.size > 1) {
+      return { error: 'Selecione itens de uma única placa para gerar a O.S.' };
+    }
+    const placa = Array.from(placas)[0] as string;
+
+    const { data: equipamentos, error: eqError } = await OSRepository.getEquipamentos();
+    if (eqError) throw new Error(eqError.message);
+    const equipamento = (equipamentos || []).find((e: any) => String(e.placa || '').toUpperCase().trim() === placa);
+    if (!equipamento) {
+      return { error: `A placa ${placa} não está cadastrada em Equipamentos.` };
+    }
+
+    const descricao = usaveis
+      .map((i: any) => String(i.descricao || '').trim().replace(/\.+$/, ''))
+      .filter(Boolean)
+      .join('. ') + '.';
+
+    const { data: { user } } = await supabase.auth.getUser();
+    let userRole = 'visitante';
+    let filialId = 'MATRIZ';
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, filial_id')
+        .eq('id', user.id)
+        .single();
+      if (profile) {
+        userRole = profile.role;
+        filialId = profile.filial_id || 'MATRIZ';
+      }
+    }
+
+    const { getCurrentLocalDatetime } = await import('../../utils/dateUtils');
+    const payload: OSInsert = {
+      numero_os: OSService.generateOSNumber(),
+      equipamento_id: equipamento.id,
+      placa,
+      modulo: equipamento.modulo || usaveis[0].modulo || null,
+      status: 'Aberta',
+      data_abertura: getCurrentLocalDatetime(),
+      classe: 'CORRETIVA',
+      foi_enviado_reserva: false,
+      descricao,
+      aprovado: userRole !== 'mecanico',
+    } as OSInsert;
+    (payload as any).filial_id = filialId;
+
+    const result = await OSService.createOS(payload);
+    if (!result.success || !result.data) {
+      return { error: 'Falha ao criar a Ordem de Serviço.' };
+    }
+
+    const idsUsados = usaveis.map((i: any) => i.id);
+    const { error: linkError } = await supabase
+      .from('backlog')
+      .update({ status: 'PROGRAMADO', os: result.data.numero_os })
+      .in('id', idsUsados);
+    if (linkError) throw new Error(linkError.message);
+
+    return { success: true, data: result.data };
   } catch (error: any) {
     return { error: error.message };
   }

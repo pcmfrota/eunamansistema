@@ -14,6 +14,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/preventivas": "Preventivas",
   "/lubrificacao": "Lubrificação",
   "/checklist-mecanicos": "Checklist Mecânico",
+  "/os": "Ordens de Serviço",
   "/equipamentos": "Equipamentos (teste)",
 };
 
