@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth-context";
-import { Fuel, Truck, Circle, ListChecks, Droplets, Clock, Globe } from "lucide-react";
+import { Fuel, Truck, Circle, ListChecks, Droplets, Clock, Globe, Gauge } from "lucide-react";
 
 const MODULOS: { chave: string; nome: string; icone: typeof Circle; cor: string }[] = [
   { chave: "pneus", nome: "Boletim de Pneus", icone: Circle, cor: "text-red-500 bg-red-500/10" },
@@ -8,6 +8,7 @@ const MODULOS: { chave: string; nome: string; icone: typeof Circle; cor: string 
   { chave: "captacao", nome: "Captação de Água", icone: Droplets, cor: "text-blue-500 bg-blue-500/10" },
   { chave: "mao-de-obra", nome: "Mão de Obra", icone: Clock, cor: "text-violet-500 bg-violet-500/10" },
   { chave: "lavagens", nome: "Lavagens", icone: Droplets, cor: "text-cyan-500 bg-cyan-500/10" },
+  { chave: "preventivas", nome: "Preventivas", icone: Gauge, cor: "text-orange-500 bg-orange-500/10" },
   { chave: "equipamentos", nome: "Equipamentos (teste)", icone: Truck, cor: "text-zinc-400 bg-zinc-500/10" },
 ];
 

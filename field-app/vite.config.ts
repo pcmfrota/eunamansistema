@@ -37,6 +37,11 @@ export default defineConfig({
       // por baixo) — cópia local troca só esse import (ver field-app/src/services/).
       { find: "@/src/services/CaptacaoService", replacement: path.resolve(__dirname, "src/services/CaptacaoService.ts") },
       { find: "@/src/services/BacklogService", replacement: path.resolve(__dirname, "src/services/BacklogService.ts") },
+      // Preventivas (Fase 6): PreventivaService/HorimetroService só chamam repositórios
+      // por baixo (sem import direto de supabase/server) — cópias locais trocam só os
+      // repositórios que consomem (ver field-app/src/repositories/).
+      { find: "@/src/services/PreventivaService", replacement: path.resolve(__dirname, "src/services/PreventivaService.ts") },
+      { find: "@/src/services/HorimetroService", replacement: path.resolve(__dirname, "src/services/HorimetroService.ts") },
       // Resto de lib/ e components/ é puro TypeScript sem nada do Next.js — reaproveita
       // direto do repo principal, sem copiar.
       { find: "@/lib", replacement: path.resolve(__dirname, "../lib") },

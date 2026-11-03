@@ -38,6 +38,12 @@ import {
   saveLavagem,
   deleteLavagem,
 } from "../modules/lavagens/actions";
+import {
+  criarPreventiva,
+  excluirPreventiva,
+  atualizarPreventiva,
+  registrarHorimetro,
+} from "../modules/preventivas/actions";
 
 export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   const { entity, action, payload } = item;
@@ -142,6 +148,29 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await deleteLavagem(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "preventiva") {
+      if (action === "create") {
+        const formData = deserializeToFormData(payload);
+        const res = await criarPreventiva(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirPreventiva(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...data } = payload;
+        const res = await atualizarPreventiva(id, data);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "horimetro") {
+      if (action === "register") {
+        const formData = deserializeToFormData(payload);
+        const res = await registrarHorimetro(formData);
         if (res && "error" in res) throw new Error(res.error);
       }
     }
