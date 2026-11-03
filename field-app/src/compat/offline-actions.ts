@@ -44,6 +44,11 @@ import {
   atualizarPreventiva,
   registrarHorimetro,
 } from "../modules/preventivas/actions";
+import {
+  registrarFichaLubrificacao,
+  atualizarFichaLubrificacao,
+  excluirFichaLubrificacao,
+} from "../modules/lubrificacao/actions";
 
 export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   const { entity, action, payload } = item;
@@ -171,6 +176,20 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
       if (action === "register") {
         const formData = deserializeToFormData(payload);
         const res = await registrarHorimetro(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "ficha_lubrificacao" || entity === "lubrificacao") {
+      if (action === "create") {
+        const res = await registrarFichaLubrificacao(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "update") {
+        const { id, ...updates } = payload;
+        const res = await atualizarFichaLubrificacao(id || payload.id, updates);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirFichaLubrificacao(payload.id || payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }
