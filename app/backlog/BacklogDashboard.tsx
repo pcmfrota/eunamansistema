@@ -247,7 +247,7 @@ function ChartCard({
   }
 
   return (
-    <div data-pdf-block className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+    <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
       {header}
       {aboveChart}
       <div style={{ height: compactHeight }} className="w-full">
@@ -310,7 +310,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         'Dashboard do Backlog',
         `Dashboard do Backlog — ${filterMes}/${filterAno}`,
         'download',
-        { jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' }, avoidBreakSelector: '[data-pdf-block]' }
+        { jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' }, adaptPageToContent: true }
       )
     } finally {
       setGerandoPdf(false)
@@ -1267,7 +1267,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       </div>
 
       {/* ─── ROW 2: FILA DE CARDS DE KPI ─────────────────────────────────────────── */}
-      <div data-pdf-block className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full">
         {/* Card: CONCLUÍDAS */}
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex items-stretch gap-4 relative overflow-hidden shadow-sm">
           <div className="w-1.5 bg-blue-600 rounded-full shrink-0" />
@@ -1826,7 +1826,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       </div>
 
       {/* ─── ROW 4: DETALHAMENTO DO BACKLOG ─────────────────────────────────────────── */}
-      <div data-pdf-block className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden flex flex-col w-full">
+      <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden flex flex-col w-full">
         <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
             DETALHAMENTO DO BACKLOG
@@ -2081,7 +2081,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         )
 
         return (
-          <div data-pdf-block className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-4 w-full">
+          <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col gap-4 w-full">
             <div className="flex items-center justify-between border-l-4 border-indigo-600 pl-3 flex-wrap gap-2">
               <div>
                 <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
@@ -2152,7 +2152,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       {/* ─── PROVISÃO DE DISPONIBILIDADE MECÂNICA (DM) & ASSISTENTE DE IA ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full animate-in fade-in duration-700">
         {/* Coluna 1: Métricas de Provisão (DM) */}
-        <div data-pdf-block className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex flex-col justify-between shadow-sm">
+        <div className="lg:col-span-1 bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 flex flex-col justify-between shadow-sm">
           <div>
             <div className="border-l-4 border-indigo-500 pl-3 mb-4">
               <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
@@ -2209,7 +2209,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
         </div>
 
         {/* Coluna 2: Assistente de IA EUNAMAN */}
-        <div data-pdf-block className="lg:col-span-2 bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+        <div className="lg:col-span-2 bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
           <div className="absolute -right-24 -top-24 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl" />
 
           <div>
