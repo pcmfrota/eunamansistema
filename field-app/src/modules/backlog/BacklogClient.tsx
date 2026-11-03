@@ -1,16 +1,13 @@
 // @ts-nocheck
 "use client";
 
-// Port de app/backlog/BacklogClient.tsx pro app de campo. Duas features FORA DO ESCOPO
-// desta fase, removidas aqui (ver comentário em ./actions.ts pro motivo de cada uma):
-// - "Gerar O.S." a partir de itens selecionados (dependia de OSFichaModal/@/app/os/OSFicha
-//   e de gerarOSDeBacklog, que por sua vez depende do módulo OS, ainda não portado).
+// Port de app/backlog/BacklogClient.tsx pro app de campo, redesenhado na Fase 5 pro
+// design nativo (ver plano). Duas features fora do escopo original (Fase 2), mantidas
+// fora aqui também — ver comentário em ./actions.ts pro motivo de cada uma:
+// - "Gerar O.S." a partir de itens selecionados (dependia do módulo OS, não portado).
 // - "Lançar via Print" (BacklogAIImportModal, usa extrairPendenciasBacklogIA / Gemini).
-// Resto idêntico ao original, incluindo um erro de tipo pré-existente lá (confirmado via
-// `npx tsc --noEmit` no app principal) que o tsc mais rigoroso do field-app bloquearia.
 import React, { useState, useEffect } from 'react';
 import {
-  FileText,
   Upload,
   Download,
   Plus,
@@ -19,11 +16,8 @@ import {
   RefreshCcw,
   Layers,
   ShieldAlert,
-  ArrowRight,
-  Database,
   BarChart3,
 } from 'lucide-react';
-import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
 import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog } from './actions';
@@ -37,6 +31,12 @@ import { PremiumLoader } from '@/components/premium-loader';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 import { mesAnoOperacional } from '@/lib/calendario-suzano';
+import { Card } from '../../ui/primitives/ListRow';
+import { SegmentedTabs } from '../../ui/primitives/SegmentedTabs';
+import { BottomSheet } from '../../ui/primitives/BottomSheet';
+import { ConfirmDialog } from '../../ui/primitives/ConfirmDialog';
+import { Fab } from '../../ui/primitives/Fab';
+import { useToast } from '../../ui/primitives/Toast';
 
 type Placa = {
   id: string;
@@ -50,10 +50,13 @@ type Placa = {
 };
 type Colaborador = { id: string; nome: string };
 
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
 export default function BacklogClient({ placas, colaboradores, calendario = [] }: { placas: Placa[], colaboradores: Colaborador[], calendario?: any[] }) {
   const { profile, isAdmin } = useAuth();
   const isVisitante = profile?.role === 'visitante';
   const { isOnline } = useOffline();
+  const toast = useToast();
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,12 +64,14 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'Geral' | 'Dashboard' | 'Detalhamento' | 'Solicitacoes'>('Dashboard');
 
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [filtrosOpen, setFiltrosOpen] = useState(false);
 
-  // Solicitação de Exclusão (usuários não-admin) + Aba de revisão (admin)
+  // Confirmação de exclusão (item único ou seleção em massa)
+  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
+
   const [deleteRequestItems, setDeleteRequestItems] = useState<any[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
   const [solicitacoesLoading, setSolicitacoesLoading] = useState(false);
@@ -93,7 +98,6 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     }
   }, [isAdmin, isOnline, loadSolicitacoes]);
 
-  // Search State
   const [search, setSearch] = useState("");
 
   const [localPlacas, setLocalPlacas] = useState<Placa[]>(placas || []);
@@ -142,7 +146,6 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   }, [colaboradores, isOnline]);
 
   const refreshData = async () => {
-    // 1. Carrega dados locais do IndexedDB imediatamente
     let dbData: any[] = [];
     try {
       dbData = await localDb.getAll("backlog");
@@ -152,10 +155,8 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     const hasCache = dbData && dbData.length > 0;
 
     if (!hasCache) {
-      // Sem cache: mostra o loader de tela cheia
       setLoading(true);
     } else {
-      // Com cache: exibe o cache instantaneamente e desativa o loader de tela cheia
       dbData.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
       setItems(dbData);
       setLoading(false);
@@ -207,7 +208,6 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         if (active) {
           data.sort((a, b) => new Date(b.data_evidencia || 0).getTime() - new Date(a.data_evidencia || 0).getTime());
           setItems(data);
-          // Se temos dados locais carregados, garantimos que o loader de tela cheia suma
           if (data.length > 0) {
             setLoading(false);
           }
@@ -239,7 +239,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         await localDb.deleteMany("backlog", idsArray);
         window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
       } else {
-        alert(res.error);
+        toast.show(res.error, "error");
       }
     } else {
       await localDb.deleteMany("backlog", idsArray);
@@ -249,29 +249,28 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     // Administrador exclui diretamente; os demais perfis precisam solicitar a exclusão
     // e aguardar a aprovação do administrador (aba "Solicitação de Exclusão").
     if (!isAdmin) {
       if (!isOnline) {
-        alert("É necessário estar online para solicitar a exclusão de um item do backlog.");
+        toast.show("É necessário estar online para solicitar a exclusão de um item do backlog.", "error");
         return;
       }
       const item = items.find(i => i.id === id);
       setDeleteRequestItems(item ? [item] : [{ id }]);
       return;
     }
-    if (!confirm("Confirmar exclusão definitiva deste item?")) return;
-    await performDelete([id]);
+    setPendingDelete([id]);
   };
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (selectedIds.size === 0) return;
     const idsArray = Array.from(selectedIds);
 
     if (!isAdmin) {
       if (!isOnline) {
-        alert("É necessário estar online para solicitar a exclusão de itens do backlog.");
+        toast.show("É necessário estar online para solicitar a exclusão de itens do backlog.", "error");
         return;
       }
       const selectedItems = items.filter(i => idsArray.includes(i.id));
@@ -279,41 +278,26 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       return;
     }
 
-    if (!confirm(`Confirmar exclusão de ${selectedIds.size} itens?`)) return;
-    await performDelete(idsArray);
-    setSelectedIds(new Set());
+    setPendingDelete(idsArray);
   };
 
-  const selectedItems = React.useMemo(
-    () => items.filter(i => selectedIds.has(i.id)),
-    [items, selectedIds]
-  );
+  const confirmPendingDelete = async () => {
+    if (!pendingDelete) return;
+    await performDelete(pendingDelete);
+    setSelectedIds(new Set());
+  };
 
   const currentPeriod = React.useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) return period;
-
     const now = new Date();
-    return {
-      ano: now.getFullYear(),
-      mes: now.getMonth() + 1
-    };
+    return { ano: now.getFullYear(), mes: now.getMonth() + 1 };
   }, [calendario]);
 
-  const defaultMonthName = React.useMemo(() => {
-    const months = [
-      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
-    ];
-    return months[Number(currentPeriod.mes) - 1] || 'janeiro';
-  }, [currentPeriod]);
+  const defaultMonthName = React.useMemo(() => MESES[Number(currentPeriod.mes) - 1] || 'janeiro', [currentPeriod]);
+  const defaultYearString = React.useMemo(() => String(currentPeriod.ano), [currentPeriod]);
 
-  const defaultYearString = React.useMemo(() => {
-    return String(currentPeriod.ano);
-  }, [currentPeriod]);
-
-  // Filter States
   const [filterPlaca, setFilterPlaca] = useState("");
   const [filterModulo, setFilterModulo] = useState("");
   const [filterArea, setFilterArea] = useState("");
@@ -324,10 +308,9 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
 
-  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatus || filterCriticidade || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
+  const hasActiveFilters = !!(filterPlaca || filterModulo || filterArea || filterStatus || filterCriticidade || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString);
 
   const clearFilters = () => {
-    setSearch("");
     setFilterPlaca("");
     setFilterModulo("");
     setFilterArea("");
@@ -339,7 +322,6 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     setFilterAno("");
   };
 
-  // Dynamic options from data - MEMOIZED
   const placaOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort(), [items]);
   const areaOptions = React.useMemo(() => Array.from(new Set(localPlacas.map(p => p.area).filter(Boolean))).sort(), [localPlacas]);
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
@@ -399,12 +381,8 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         itemMonth = periodo.mes;
         itemYear = periodo.ano;
       } else if (i.mes) {
-        const months = [
-          'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-          'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
-        ];
         const mIdx = parseInt(i.mes) - 1;
-        if (mIdx >= 0 && mIdx < 12) itemMonth = months[mIdx];
+        if (mIdx >= 0 && mIdx < 12) itemMonth = MESES[mIdx];
         if (i.ano) itemYear = String(i.ano);
       }
 
@@ -420,342 +398,232 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Backlog");
     XLSX.writeFile(wb, "EUNAMAN_Backlog.xlsx");
+    toast.show("Planilha exportada.", "success");
   };
 
+  const selectCls = "w-full px-3 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-100 outline-none";
+  const labelCls = "block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1.5";
+
+  const dataOntem = new Date(new Date().setDate(new Date().getDate() - 1)).toLocaleDateString('pt-BR');
+
   return (
-    <div className="p-3 md:p-5 flex flex-col gap-4 w-full h-full animate-in fade-in duration-700">
-
-      {/* Premium Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-zinc-950 p-4 md:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl relative overflow-hidden group">
-         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] rounded-full -mr-32 -mt-32 group-hover:bg-indigo-500/10 transition-all duration-700" />
-
-         <div className="flex items-center gap-6 relative z-10">
-            <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-2xl shadow-indigo-500/40 scale-100 group-hover:scale-105 transition-all">
-              <Layers size={24} />
-            </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 uppercase italic">Backlog Geral</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-black flex items-center gap-2 tracking-widest mt-1">
-                 <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                 PCM • PLANEJAMENTO E CONTROLE
-                 <span className="ml-2 text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                    Dados até: {new Date(new Date().setDate(new Date().getDate() - 1)).toLocaleDateString('pt-BR')} (D+1)
-                 </span>
-              </p>
-            </div>
-         </div>
-
-         <div className="flex items-center gap-3 relative z-10 flex-wrap">
-            <button
-              onClick={exportToExcel}
-              className="flex items-center gap-2.5 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm"
-            >
-               <Download size={18} /> Exportar
-            </button>
-            {!isVisitante ? (
-              <>
-                <button
-                  onClick={() => setIsImportOpen(true)}
-                  className="flex items-center gap-2.5 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm"
-                >
-                   <Upload size={18} /> Importar
-                </button>
-                <button
-                  onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
-                  className="flex items-center gap-2.5 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-500/30 transition-all active:scale-95 group"
-                >
-                   <Plus size={20} className="group-hover:rotate-90 transition-transform duration-500" />
-                   Adicionar Item
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 px-6 py-3.5 bg-zinc-100 dark:bg-zinc-900 rounded-2xl text-zinc-500 text-[10px] font-black border border-zinc-200 dark:border-zinc-800 shadow-inner uppercase tracking-widest">
-                 <ShieldAlert size={18} className="text-indigo-500" />
-                 Modo de Leitura
-              </div>
-            )}
-         </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3">
-        {/* Row 1: View tabs + refresh */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex gap-2 p-1.5 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-sm">
-            {(['Geral', 'Dashboard', 'Detalhamento', 'Solicitacoes'] as const)
-              .filter(v => v !== 'Solicitacoes' || isAdmin)
-              .map(v => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={cn(
-                  "px-6 py-2 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all flex items-center gap-1.5",
-                  view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-lg" : "text-zinc-400 hover:text-zinc-600"
-                )}
-              >
-                {v === 'Dashboard' && <BarChart3 size={12} />}
-                {v === 'Solicitacoes' && <ShieldAlert size={12} />}
-                {v === 'Solicitacoes' ? 'Solicitação de Exclusão' : v}
-                {v === 'Solicitacoes' && pendentesCount > 0 && (
-                  <span className="px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[8px] leading-none">{pendentesCount}</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl">
-                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">
-                  {filteredItems.length} resultado{filteredItems.length !== 1 ? 's' : ''}
-                </span>
-                <button
-                  onClick={clearFilters}
-                  className="text-[9px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest transition-colors ml-1"
-                >
-                  ✕ Limpar
-                </button>
-              </div>
-            )}
-            <button
-              onClick={refreshData}
-              className="p-3.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-400 hover:text-indigo-600 hover:border-indigo-500/30 transition-all shadow-sm active:rotate-180 duration-500"
-              disabled={loading || isRefreshing}
-            >
-              <RefreshCcw size={20} className={loading || isRefreshing ? "animate-spin" : ""} />
-            </button>
-          </div>
+    <div className="p-4 space-y-4 pb-28">
+      {/* Cabeçalho compacto */}
+      <Card className="p-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Layers size={12} className="text-indigo-500" /> PCM · Planejamento e Controle
+          </p>
+          <p className="text-[10px] font-bold text-emerald-400 mt-1">Dados até {dataOntem} (D+1)</p>
         </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={exportToExcel}
+            aria-label="Exportar"
+            className="flex items-center justify-center rounded-xl text-zinc-400 active:bg-zinc-800"
+            style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+          >
+            <Download size={18} />
+          </button>
+          {!isVisitante && (
+            <button
+              onClick={() => setIsImportOpen(true)}
+              aria-label="Importar"
+              className="flex items-center justify-center rounded-xl text-zinc-400 active:bg-zinc-800"
+              style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+            >
+              <Upload size={18} />
+            </button>
+          )}
+          <button
+            onClick={refreshData}
+            disabled={loading || isRefreshing}
+            aria-label="Atualizar"
+            className="flex items-center justify-center rounded-xl text-zinc-400 active:bg-zinc-800 disabled:opacity-40"
+            style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+          >
+            <RefreshCcw size={18} className={loading || isRefreshing ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </Card>
 
-        {/* Row 2: Search + Filters */}
-        {(view === 'Geral' || view === 'Detalhamento') && (
-          <div className="flex flex-col gap-4">
-            {/* Search Input (Full Width) */}
-            <div className="relative group w-full">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-              <input
-                type="text"
-                placeholder="BUSCAR POR FROTA OU DESCRIÇÃO..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-12 pr-6 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
-              />
-            </div>
+      {isVisitante && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 rounded-xl text-zinc-400 text-[10px] font-black border border-zinc-800 uppercase tracking-widest">
+          <ShieldAlert size={15} className="text-indigo-500" /> Modo de Leitura
+        </div>
+      )}
 
-            {/* Filters Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              {/* Placa filter */}
-              <select
-                value={filterPlaca}
-                onChange={e => setFilterPlaca(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterPlaca
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">🚛 TODAS AS PLACAS</option>
-                {placaOptions.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+      <SegmentedTabs
+        items={[
+          { key: 'Dashboard', label: 'Dashboard' },
+          { key: 'Geral', label: 'Geral' },
+          { key: 'Detalhamento', label: 'Detalhamento' },
+          ...(isAdmin ? [{ key: 'Solicitacoes', label: `Exclusões${pendentesCount > 0 ? ` (${pendentesCount})` : ''}` }] : []),
+        ]}
+        value={view}
+        onChange={(v) => setView(v as any)}
+      />
 
-              {/* Módulo filter */}
-              <select
-                value={filterModulo}
-                onChange={e => setFilterModulo(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterModulo
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">📍 TODOS OS MÓDULOS</option>
-                {moduloOptions.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-
-              {/* Área filter */}
-              <select
-                value={filterArea}
-                onChange={e => setFilterArea(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterArea
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">🏢 TODAS AS ÁREAS</option>
-                {areaOptions.map(a => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-
-              {/* Status filter */}
-              <select
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterStatus
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">📋 TODOS OS STATUS</option>
-                {statusOptions.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-
-              {/* Criticidade filter */}
-              <select
-                value={filterCriticidade}
-                onChange={e => setFilterCriticidade(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterCriticidade
-                    ? "bg-orange-600 text-white border-orange-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">⚠️ TODA CRITICIDADE</option>
-                {criticidadeOptions.map(c => (
-                  <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>
-                ))}
-              </select>
-
-              {/* Mês filter */}
-              <select
-                value={filterMes}
-                onChange={e => setFilterMes(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterMes
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">📅 TODOS OS MESES</option>
-                {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'].map(m => (
-                  <option key={m} value={m}>{m.toUpperCase()}</option>
-                ))}
-              </select>
-
-              {/* Ano filter */}
-              <select
-                value={filterAno}
-                onChange={e => setFilterAno(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterAno
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">📅 TODOS OS ANOS</option>
-                {anoOptions.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-
-              {/* Data Início */}
-              <div className="flex items-center justify-between gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm w-full">
-                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">De:</span>
-                <input
-                  type="date"
-                  value={filterDataInicio}
-                  onChange={e => setFilterDataInicio(e.target.value)}
-                  className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer w-full text-right"
-                />
-              </div>
-
-              {/* Data Fim */}
-              <div className="flex items-center justify-between gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 shadow-sm w-full">
-                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Até:</span>
-                <input
-                  type="date"
-                  value={filterDataFim}
-                  onChange={e => setFilterDataFim(e.target.value)}
-                  className="bg-transparent text-xs font-black text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer w-full text-right"
-                />
-              </div>
-            </div>
+      {(view === 'Geral' || view === 'Detalhamento') && (
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Buscar por frota ou descrição..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-100 outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-zinc-600"
+              style={{ minHeight: "var(--tap-min)" }}
+            />
           </div>
-        )}
-      </div>
+          <button
+            onClick={() => setFiltrosOpen(true)}
+            aria-label="Filtros"
+            className="relative shrink-0 flex items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 active:bg-zinc-800"
+            style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+          >
+            <Filter size={18} />
+            {hasActiveFilters && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500" />}
+          </button>
+        </div>
+      )}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center min-h-[400px] py-20 bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800">
+        <div className="flex flex-col items-center justify-center min-h-[300px] py-16">
           <PremiumLoader type="squares-sequential" text="Carregando Backlog" subtext="Calculando aging e criticidades..." />
         </div>
       ) : view === 'Dashboard' ? (
-        /* Dashboard View */
         <BacklogDashboard items={items} placas={localPlacas} calendario={calendario} onEdit={handleEdit} onDelete={handleDelete} />
       ) : view === 'Solicitacoes' ? (
-        /* Solicitações de Exclusão (somente administrador) */
         <BacklogSolicitacoesExclusao requests={solicitacoes} loading={solicitacoesLoading} onRefresh={loadSolicitacoes} />
       ) : (
-        <>
-          {/* Multi-Select Floating Bar */}
-          {selectedIds.size > 0 && !isVisitante && (
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 duration-500">
-               <div className="flex items-center gap-6 px-10 py-5 bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-                  <div className="flex items-center gap-3 pr-6 border-r border-white/10">
-                     <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20">
-                        {selectedIds.size}
-                     </div>
-                     <div className="text-left">
-                        <p className="text-[10px] font-black text-white uppercase tracking-widest">Selecionados</p>
-                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Ações em massa habilitadas</p>
-                     </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                     <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
-                       <Plus size={18} className="rotate-45" /> {isAdmin ? 'EXCLUIR SELEÇÃO' : 'SOLICITAR EXCLUSÃO'}
-                     </button>
-                     <button onClick={() => setSelectedIds(new Set())} className="text-xs font-black text-zinc-400 hover:text-white transition-colors uppercase tracking-widest">
-                       LIMPAR
-                     </button>
-                  </div>
-               </div>
-            </div>
-          )}
-
-          {/* Main Table Content */}
-          <div className="flex-1 min-h-[400px]">
-            <BacklogTable
-              items={filteredItems}
-              selectedIds={selectedIds}
-              onToggleSelect={(id) => {
-                const next = new Set(selectedIds);
-                if (next.has(id)) next.delete(id); else next.add(id);
-                setSelectedIds(next);
-              }}
-              onToggleSelectAll={() => {
-                if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
-                else setSelectedIds(new Set(filteredItems.map(i => i.id)));
-              }}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              view={view as 'Geral' | 'Detalhamento'}
-            />
-          </div>
-        </>
+        <BacklogTable
+          items={filteredItems}
+          selectedIds={selectedIds}
+          onToggleSelect={(id) => {
+            const next = new Set(selectedIds);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            setSelectedIds(next);
+          }}
+          onToggleSelectAll={() => {
+            if (selectedIds.size === filteredItems.length) setSelectedIds(new Set());
+            else setSelectedIds(new Set(filteredItems.map(i => i.id)));
+          }}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          view={view as 'Geral' | 'Detalhamento'}
+        />
       )}
 
-      {/* Global Persistence Notice */}
-      <div className="flex items-center justify-center p-6 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-3xl border border-zinc-200 dark:border-zinc-800 border-dashed">
-         <div className="flex items-center gap-3 text-zinc-400">
-            <Database size={16} />
-            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Dados Sincronizados com Supabase Cloud EUNAMAN</span>
-            <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-         </div>
-      </div>
+      {/* Barra de seleção em massa — fixa acima da barra de navegação */}
+      {selectedIds.size > 0 && !isVisitante && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 px-5 py-3 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl"
+          style={{ bottom: "calc(var(--nav-bar-height) + var(--safe-bottom) + 12px)" }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-white text-xs">
+              {selectedIds.size}
+            </div>
+            <span className="text-[10px] font-black text-zinc-300 uppercase">Selecionados</span>
+          </div>
+          <button onClick={handleBatchDelete} className="text-xs font-black text-red-400 uppercase">
+            {isAdmin ? 'Excluir' : 'Solicitar'}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="text-xs font-black text-zinc-400 uppercase">
+            Limpar
+          </button>
+        </div>
+      )}
+
+      {/* Ação principal */}
+      {(view === 'Geral' || view === 'Detalhamento') && !isVisitante && (
+        <Fab onClick={() => { setEditingItem(null); setIsModalOpen(true); }} icon={<Plus size={20} />} label="Adicionar" />
+      )}
+
+      {/* Filtros */}
+      <BottomSheet open={filtrosOpen} onClose={() => setFiltrosOpen(false)} title="Filtros">
+        <div className="space-y-3 pb-2">
+          <div>
+            <label className={labelCls}>Placa</label>
+            <select value={filterPlaca} onChange={e => setFilterPlaca(e.target.value)} className={selectCls}>
+              <option value="">Todas as placas</option>
+              {placaOptions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Módulo</label>
+            <select value={filterModulo} onChange={e => setFilterModulo(e.target.value)} className={selectCls}>
+              <option value="">Todos os módulos</option>
+              {moduloOptions.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Área</label>
+            <select value={filterArea} onChange={e => setFilterArea(e.target.value)} className={selectCls}>
+              <option value="">Todas as áreas</option>
+              {areaOptions.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Status</label>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={selectCls}>
+              <option value="">Todos os status</option>
+              {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Criticidade</label>
+            <select value={filterCriticidade} onChange={e => setFilterCriticidade(e.target.value)} className={selectCls}>
+              <option value="">Toda criticidade</option>
+              {criticidadeOptions.map(c => <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Mês</label>
+              <select value={filterMes} onChange={e => setFilterMes(e.target.value)} className={selectCls}>
+                <option value="">Todos</option>
+                {MESES.map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Ano</label>
+              <select value={filterAno} onChange={e => setFilterAno(e.target.value)} className={selectCls}>
+                <option value="">Todos</option>
+                {anoOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>De</label>
+              <input type="date" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} className={selectCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Até</label>
+              <input type="date" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} className={selectCls} />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={clearFilters}
+              className="flex-1 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 active:bg-zinc-700"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              Limpar
+            </button>
+            <button
+              onClick={() => setFiltrosOpen(false)}
+              className="flex-1 rounded-xl text-xs font-black text-white bg-indigo-600 active:bg-indigo-700"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       {/* Modals */}
       <BacklogModal
@@ -776,6 +644,16 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
         items={deleteRequestItems || []}
         onClose={() => { setDeleteRequestItems(null); setSelectedIds(new Set()); }}
         onSubmitted={() => { setSelectedIds(new Set()); loadSolicitacoes(); }}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmPendingDelete}
+        title={pendingDelete && pendingDelete.length > 1 ? `Excluir ${pendingDelete.length} itens?` : "Excluir item do backlog?"}
+        description="Essa exclusão é definitiva."
+        confirmLabel="Excluir"
+        destructive
       />
     </div>
   );
