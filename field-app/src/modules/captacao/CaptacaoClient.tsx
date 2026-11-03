@@ -33,7 +33,9 @@ import {
   WifiOff,
   FileSpreadsheet,
   Download,
-  Pencil
+  Pencil,
+  MoreVertical,
+  PenLine
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -53,6 +55,13 @@ import {
   atualizarFicha,
   atualizarLancamento
 } from './actions';
+import { Card, ListRow } from '../../ui/primitives/ListRow';
+import { BottomSheet } from '../../ui/primitives/BottomSheet';
+import { ActionSheet, type ActionSheetItem } from '../../ui/primitives/ActionSheet';
+import { ConfirmDialog } from '../../ui/primitives/ConfirmDialog';
+import { Fab } from '../../ui/primitives/Fab';
+import { StatTile } from '../../ui/primitives/StatTile';
+import { useToast } from '../../ui/primitives/Toast';
 
 // Utility for robust UUID generation (Safe for Android WebView)
 const generateId = () => {
@@ -616,6 +625,20 @@ export default function CaptacaoClient({
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
   const [editingLancamentoId, setEditingLancamentoId] = useState<string | null>(null);
 
+  // Fase 5 (design nativo): substitui window.confirm/alert por ConfirmDialog/Toast, e o
+  // antigo stack vertical de ~9 botões (um por ação da ficha) por um ActionSheet behind
+  // "⋮ Mais ações" — "Adicionar Linha" (ação mais usada) continua sempre visível, como Fab.
+  const toast = useToast();
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    description?: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+  const [isFichaActionsOpen, setIsFichaActionsOpen] = useState(false);
+  const [actionLancamentoId, setActionLancamentoId] = useState<string | null>(null);
+
   // Determine current active Suzano operational period
   const currentPeriod = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -817,26 +840,11 @@ export default function CaptacaoClient({
     }
   }, [isLancamentoModalOpen, selectedFicha, calendario]);
 
-  // Sincronizar o activeScreen com o histórico do navegador (botão voltar do celular)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.history.replaceState({ screen: 'home' }, '');
-
-      const handlePopState = (event: PopStateEvent) => {
-        const state = event.state;
-        if (state && state.screen) {
-          setActiveScreen(state.screen);
-        } else {
-          setActiveScreen('home');
-        }
-      };
-
-      window.addEventListener('popstate', handlePopState);
-      return () => {
-        window.removeEventListener('popstate', handlePopState);
-      };
-    }
-  }, []);
+  // Fase 5 (design nativo): a navegação entre home/list/details agora é só
+  // setActiveScreen(...) direto (igual aos outros módulos) — o antigo mecanismo de
+  // window.history.pushState/popstate (usado antes de existir HashRouter de verdade)
+  // foi removido daqui pra não brigar com o botão físico de voltar do Android, que hoje
+  // já navega via webView.canGoBack()/goBack() no nível do app inteiro.
 
   // Limpar a Ficha selecionada quando voltar das telas de detalhes
   useEffect(() => {
@@ -959,7 +967,7 @@ export default function CaptacaoClient({
     blank.width = canvas.width;
     blank.height = canvas.height;
     if (canvas.toDataURL() === blank.toDataURL()) {
-      alert("Por favor, faça a assinatura antes de salvar.");
+      toast.show("Por favor, faça a assinatura antes de salvar.", "error");
       return;
     }
 
@@ -970,9 +978,9 @@ export default function CaptacaoClient({
       if (res.success && res.data) {
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? { ...f, assinatura_supervisor: base64Signature } : f));
         setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: base64Signature }));
-        alert("Assinatura do supervisor salva com sucesso!");
+        toast.show("Assinatura do supervisor salva com sucesso!", "success");
       } else {
-        alert("Erro ao salvar assinatura: " + res.error);
+        toast.show("Erro ao salvar assinatura: " + res.error, "error");
       }
     } else {
       const dbFicha = await localDb.get('fichas_captacao', selectedFicha.id);
@@ -984,7 +992,7 @@ export default function CaptacaoClient({
         
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? updated : f));
         setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: base64Signature }));
-        alert("Assinatura do supervisor salva com sucesso (Offline)!");
+        toast.show("Assinatura do supervisor salva com sucesso (Offline)!", "success");
       }
     }
 
@@ -999,9 +1007,9 @@ export default function CaptacaoClient({
       if (res.success && res.data) {
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? { ...f, assinatura_supervisor: null } : f));
         setSelectedFicha(prev => ({ ...prev, ...res.data, assinatura_supervisor: null }));
-        alert("Assinatura do supervisor removida com sucesso!");
+        toast.show("Assinatura do supervisor removida com sucesso!", "success");
       } else if (res.error) {
-        alert("Erro ao remover assinatura: " + res.error);
+        toast.show("Erro ao remover assinatura: " + res.error, "error");
       }
     } else {
       const dbFicha = await localDb.get('fichas_captacao', selectedFicha.id);
@@ -1013,7 +1021,7 @@ export default function CaptacaoClient({
         
         setFichas(prev => prev.map(f => f.id === selectedFicha.id ? updated : f));
         setSelectedFicha(prev => ({ ...prev, assinatura_supervisor: null }));
-        alert("Assinatura do supervisor removida com sucesso (Offline)!");
+        toast.show("Assinatura do supervisor removida com sucesso (Offline)!", "success");
       }
     }
   };
@@ -1098,11 +1106,11 @@ export default function CaptacaoClient({
         (window as any).EunamanApp.saveBase64File(excelBase64, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       } catch (err: any) {
         console.error("Erro ao gerar Excel para App:", err);
-        alert("Erro ao salvar Excel: " + err.message);
+        toast.show("Erro ao salvar Excel: " + err.message, "error");
       }
     } else {
       XLSX.writeFile(workbook, filename);
-      alert("Planilha Excel gerada e baixada com sucesso!");
+      toast.show("Planilha Excel gerada e baixada com sucesso!", "success");
     }
   };
 
@@ -1111,7 +1119,7 @@ export default function CaptacaoClient({
 
     const element = document.getElementById("ficha-captacao-print");
     if (!element) {
-      alert("Erro ao localizar elemento da ficha.");
+      toast.show("Erro ao localizar elemento da ficha.", "error");
       setIsExporting(false);
       return;
     }
@@ -1132,7 +1140,7 @@ export default function CaptacaoClient({
               modo,
               { image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }
             );
-            if (modo === "download") alert("Ficha em PDF gerada e baixada com sucesso!");
+            if (modo === "download") toast.show("Ficha em PDF gerada e baixada com sucesso!", "success");
           } finally {
             setIsExporting(false);
           }
@@ -1254,7 +1262,7 @@ export default function CaptacaoClient({
     const finalMotorista = newFichaData.motorista === 'custom' ? newFichaData.motoristaCustom.trim() : newFichaData.motorista;
 
     if (!finalPlaca || !finalMotorista) {
-      alert('Placa e Motorista são obrigatórios!');
+      toast.show('Placa e Motorista são obrigatórios!', "error");
       return;
     }
 
@@ -1271,7 +1279,7 @@ export default function CaptacaoClient({
     );
 
     if (exists) {
-      alert(`Já existe uma ficha cadastrada para a placa ${finalPlaca} no período de ${getMonthName(finalMes)} / ${finalAno}!`);
+      toast.show(`Já existe uma ficha cadastrada para a placa ${finalPlaca} no período de ${getMonthName(finalMes)} / ${finalAno}!`, "error");
       return;
     }
 
@@ -1307,9 +1315,6 @@ export default function CaptacaoClient({
       setSelectedFicha({ ...offlineFicha, lancamentos: [] });
       setShowFichaPaper(false);
       setViewMode('suzano');
-      if (typeof window !== 'undefined') {
-        window.history.pushState({ screen: 'details' }, '', '#details');
-      }
       setActiveScreen('details');
       setIsFichaModalOpen(false);
       // Reset form
@@ -1337,9 +1342,6 @@ export default function CaptacaoClient({
           setSelectedFicha({ ...res.data, lancamentos: [] });
           setShowFichaPaper(false);
           setViewMode('suzano');
-          if (typeof window !== 'undefined') {
-            window.history.pushState({ screen: 'details' }, '', '#details');
-          }
           setActiveScreen('details');
           setIsFichaModalOpen(false);
           // Reset form
@@ -1368,7 +1370,7 @@ export default function CaptacaoClient({
       try {
         await saveOffline();
       } catch (dbErr) {
-        alert('Erro ao salvar localmente: ' + err.message);
+        toast.show('Erro ao salvar localmente: ' + err.message, "error");
       }
     } finally {
       setIsSavingFicha(false);
@@ -1389,9 +1391,9 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
         }
-        alert("Ficha fechada com sucesso!");
+        toast.show("Ficha fechada com sucesso!", "success");
       } else {
-        alert('Erro ao fechar ficha: ' + res.error);
+        toast.show('Erro ao fechar ficha: ' + res.error, "error");
       }
     } else {
       // Offline close
@@ -1406,7 +1408,7 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(prev => ({ ...prev, status: 'Fechada' }));
         }
-        alert("Ficha fechada com sucesso (Offline)!");
+        toast.show("Ficha fechada com sucesso (Offline)!", "success");
       }
     }
   };
@@ -1416,14 +1418,13 @@ export default function CaptacaoClient({
   // servidor pra trava automática por período não reaplicar assim que a ficha for lida.
   const handleReabrirFicha = async (id: string) => {
     if (!isOnline) {
-      alert("Reabrir uma ficha requer conexão com a internet.");
+      toast.show("Reabrir uma ficha requer conexão com a internet.", "error");
       return;
     }
-    if (!window.confirm("Reabrir esta ficha para lançar um registro que ficou faltando?")) return;
 
     const res = await reabrirFicha(id);
     if (!res.success) {
-      alert('Erro ao reabrir ficha: ' + res.error);
+      toast.show('Erro ao reabrir ficha: ' + res.error, "error");
       return;
     }
 
@@ -1436,7 +1437,7 @@ export default function CaptacaoClient({
     if (selectedFicha?.id === id) {
       setSelectedFicha((prev: any) => ({ ...prev, status: 'Aberta', reaberta_em: reabertaEm }));
     }
-    alert("Ficha reaberta com sucesso!");
+    toast.show("Ficha reaberta com sucesso!", "success");
   };
 
   // Handle Deleting a Ficha
@@ -1449,10 +1450,10 @@ export default function CaptacaoClient({
         if (selectedFicha?.id === id) {
           setSelectedFicha(null);
         }
-        alert("Ficha excluída com sucesso!");
+        toast.show("Ficha excluída com sucesso!", "success");
         window.location.reload();
       } else {
-        alert('Erro ao excluir: ' + res.error);
+        toast.show('Erro ao excluir: ' + res.error, "error");
       }
     } else {
       await localDb.delete('fichas_captacao', id);
@@ -1470,7 +1471,7 @@ export default function CaptacaoClient({
       if (selectedFicha?.id === id) {
         setSelectedFicha(null);
       }
-      alert("Ficha excluída com sucesso (Offline)!");
+      toast.show("Ficha excluída com sucesso (Offline)!", "success");
       window.location.reload();
     }
   };
@@ -1482,14 +1483,14 @@ export default function CaptacaoClient({
 
     const volumeNum = parseFloat(newLancamentoData.volume_captado);
     if (isNaN(volumeNum) || volumeNum <= 0) {
-      alert('Volume captado deve ser um número válido maior que 0.');
+      toast.show('Volume captado deve ser um número válido maior que 0.', "error");
       return;
     }
 
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
     if (period) {
       if (newLancamentoData.data < period.data_inicio || newLancamentoData.data > period.data_fim) {
-        alert(`A data do lançamento deve estar dentro do período operacional da ficha: de ${safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a ${safeFormatDate(period.data_fim, 'dd/MM/yyyy')}`);
+        toast.show(`A data do lançamento deve estar dentro do período operacional da ficha: de ${safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a ${safeFormatDate(period.data_fim, 'dd/MM/yyyy')}`, "error");
         return;
       }
     }
@@ -1534,7 +1535,7 @@ export default function CaptacaoClient({
           lancamentos: [...(prev.lancamentos || []), offlineRow]
         };
       });
-      alert("Lançamento adicionado com sucesso (Offline)!");
+      toast.show("Lançamento adicionado com sucesso (Offline)!", "success");
     };
 
     const updateOffline = async () => {
@@ -1569,7 +1570,7 @@ export default function CaptacaoClient({
           lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updatedRow : l)
         };
       });
-      alert("Lançamento atualizado com sucesso (Offline)!");
+      toast.show("Lançamento atualizado com sucesso (Offline)!", "success");
     };
 
     try {
@@ -1595,7 +1596,7 @@ export default function CaptacaoClient({
               lancamentos: prev.lancamentos.map((l: any) => l.id === editingLancamentoId ? updated : l)
             };
           });
-          alert("Lançamento atualizado com sucesso!");
+          toast.show("Lançamento atualizado com sucesso!", "success");
           } else {
             console.warn("[Captacao] Falha ao atualizar online, tentando offline...", res?.error);
             await updateOffline();
@@ -1622,7 +1623,7 @@ export default function CaptacaoClient({
               lancamentos: [...(prev.lancamentos || []), added]
             };
           });
-          alert("Lançamento adicionado com sucesso!");
+          toast.show("Lançamento adicionado com sucesso!", "success");
           } else {
             console.warn("[Captacao] Falha ao adicionar online, tentando offline...", res?.error);
             await addOffline();
@@ -1637,7 +1638,7 @@ export default function CaptacaoClient({
         if (editingLancamentoId) await updateOffline();
         else await addOffline();
       } catch (e) {
-        alert("Erro crítico ao salvar lançamento.");
+        toast.show("Erro crítico ao salvar lançamento.", "error");
       }
     }
 
@@ -1661,8 +1662,6 @@ export default function CaptacaoClient({
 
   // Handle Deleting a Launch row
   const handleDeleteLancamento = async (id: string) => {
-    if (!window.confirm('Deseja realmente remover este lançamento da ficha?')) return;
-
     if (isOnline) {
       const res = await excluirLancamento(id);
       if (res.success) {
@@ -1677,9 +1676,9 @@ export default function CaptacaoClient({
           ...prev,
           lancamentos: prev.lancamentos.filter((l: any) => l.id !== id)
         }));
-        alert("Lançamento excluído com sucesso!");
+        toast.show("Lançamento excluído com sucesso!", "success");
       } else {
-        alert('Erro ao excluir: ' + res.error);
+        toast.show('Erro ao excluir: ' + res.error, "error");
       }
     } else {
       // Offline delete
@@ -1697,7 +1696,7 @@ export default function CaptacaoClient({
         ...prev,
         lancamentos: prev.lancamentos.filter((l: any) => l.id !== id)
       }));
-      alert("Lançamento excluído com sucesso (Offline)!");
+      toast.show("Lançamento excluído com sucesso (Offline)!", "success");
     }
   };
 
@@ -1708,17 +1707,17 @@ export default function CaptacaoClient({
   }, [selectedFicha]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)] lg:h-screen bg-transparent text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
+    <div className="flex flex-col min-h-screen bg-zinc-950 text-zinc-50 font-sans">
       {isExporting && (
-        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md text-zinc-900 dark:text-white select-none">
+        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white select-none">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
             <h3 className="font-bold text-lg tracking-wide">Gerando PDF da Ficha...</h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Preparando o arquivo para download</p>
+            <p className="text-sm text-zinc-400">Preparando o arquivo para download</p>
           </div>
         </div>
       )}
-      
+
       {/* Printable Sheet View - ONLY VISIBLE ON PRINT */}
       {selectedFicha && (
         <div className="hidden print:block">
@@ -1726,258 +1725,126 @@ export default function CaptacaoClient({
         </div>
       )}
 
-      {/* Screen layout */}
-      <header className="p-4 landscape:py-2.5 landscape:px-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shrink-0 select-none print:hidden">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <h1 className="text-lg font-black tracking-tighter flex items-center gap-2 text-zinc-900 dark:text-white">
-            <span className="p-2 bg-gradient-to-tr from-blue-600 to-cyan-500 rounded-xl shadow-md text-white flex items-center justify-center shrink-0">
-              <svg className="w-[18px] h-[18px] filter drop-shadow-sm" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="currentColor" />
-                <ellipse cx="9.5" cy="9.5" rx="1.5" ry="2.5" transform="rotate(-30 9.5 9.5)" fill="#ffffff" opacity="0.65" />
-              </svg>
-            </span>
-            CAPTAÇÃO DE ÁGUA
-          </h1>
-          <span className="bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
-            <Clock size={12} />
-            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{(!selectedPeriodFilter || selectedPeriodFilter === 'Todos') ? 'TODOS' : `${getMonthName(selectedPeriodFilter.mes)} / ${selectedPeriodFilter.ano}`}</span>
-          </span>
-          {selectedPeriodFilter !== 'Todos' && (() => {
-            const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedPeriodFilter.mes && p.ano === selectedPeriodFilter.ano) : null;
-            if (!period) return null;
-            return (
-              <span className="bg-blue-50 dark:bg-blue-950/30 border border-blue-150 dark:border-blue-900/50 text-[10px] text-blue-750 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold shadow-sm flex items-center gap-1.5">
-                <Calendar size={12} className="text-blue-500" />
-                Período: <span className="font-extrabold">{safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a {safeFormatDate(period.data_fim, 'dd/MM/yyyy')}</span>
-              </span>
-            );
-          })()}
-        </div>
-      </header>
+      {/* Main Content Area */}
+      <main className="flex-1 print:hidden flex flex-col relative">
 
-      {/* Main Content Area: Flow Wizard steps */}
-      <main className="flex-1 overflow-hidden print:hidden flex flex-col relative">
-        
-        {/* STEP 1: HOME */}
+        {/* HUB: lista de módulos da tela (igual ao padrão nativo dos outros módulos) */}
         {activeScreen === 'home' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-4xl mx-auto w-full select-none animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="text-center mb-10">
-              <div className="relative inline-flex items-center justify-center p-6 bg-gradient-to-tr from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-[2rem] text-blue-600 dark:text-blue-400 mb-5 shadow-lg shadow-blue-500/5 backdrop-blur-sm group hover:scale-105 hover:border-blue-500/40 hover:shadow-blue-500/10 transition-all duration-500">
-                {/* Glow ring */}
-                <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-tr from-blue-500/20 to-cyan-500/20 blur-xl opacity-75 group-hover:opacity-100 transition-opacity animate-pulse" />
-                
-                {/* Ripple animation rings */}
-                <div className="absolute w-24 h-24 rounded-full border border-blue-500/25 animate-ping opacity-45 pointer-events-none" />
-                <div className="absolute w-28 h-28 rounded-full border border-cyan-500/15 animate-[ping_2s_infinite] opacity-35 pointer-events-none" />
-
-                {/* Modern water SVG */}
-                <svg className="w-16 h-16 relative z-10 filter drop-shadow-md" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="modernWaterGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" stopColor="#2563eb" />
-                      <stop offset="40%" stopColor="#06b6d4" />
-                      <stop offset="100%" stopColor="#3b82f6" />
-                    </linearGradient>
-                    <linearGradient id="innerShine" x1="12" y1="3" x2="12" y2="21" gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
-                      <stop offset="45%" stopColor="#ffffff" stopOpacity="0.15" />
-                      <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  
-                  {/* Outer glow drop */}
-                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="url(#modernWaterGrad)" />
-                  
-                  {/* Inner shine path for 3D feeling */}
-                  <path d="M12 4.5c2.3 2.3 3.5 4.2 3.5 6s-1.2 3-3.5 3-3.5-1.2-3.5-3 1.2-3.7 3.5-6z" fill="url(#innerShine)" opacity="0.4" />
-                  
-                  {/* Small bright specular highlight */}
-                  <ellipse cx="9.5" cy="9.5" rx="1.5" ry="2.5" transform="rotate(-30 9.5 9.5)" fill="#ffffff" opacity="0.8" />
-                  <circle cx="8" cy="13" r="0.8" fill="#ffffff" opacity="0.6" />
-                </svg>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-950 dark:text-white uppercase">Captação de Água</h2>
-              <p className="text-xs text-zinc-650 dark:text-zinc-400 font-bold uppercase tracking-wider mt-2">
-                Selecione uma etapa do processo para iniciar
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
-              {/* Card 1: Fichas Operacionais */}
-              <div 
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.history.pushState({ screen: 'list' }, '', '#list');
-                  }
-                  setActiveScreen('list');
-                }}
-                className={cn(
-                  "bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-white/95 dark:hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300",
-                  profile?.role === 'visitante' ? "col-span-2 max-w-md mx-auto w-full" : ""
-                )}
-              >
-                <div className="w-14 h-14 bg-emerald-600/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <FileText size={24} />
-                </div>
-                <h3 className="font-extrabold text-zinc-900 dark:text-white text-md uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                  Fichas Operacionais <span className="ml-1 group-hover:translate-x-1 inline-block transition-transform">➔</span>
-                </h3>
-                <p className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
-                  Visualizar e lançar dados nas fichas existentes ({fichas.length} ativas)
-                </p>
-              </div>
-
-              {/* Card 2: Nova Ficha */}
-              {profile?.role !== 'visitante' && (
-                <div 
-                  onClick={() => setIsFichaModalOpen(true)}
-                  className="bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-3xl p-6 flex flex-col items-center text-center cursor-pointer group hover:bg-white/95 dark:hover:bg-zinc-900/60 shadow-xl hover:shadow-blue-600/5 transition-all duration-300"
-                >
-                  <div className="w-14 h-14 bg-blue-600/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <Plus size={24} />
-                  </div>
-                  <h3 className="font-extrabold text-zinc-900 dark:text-white text-md uppercase tracking-wider group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Nova Ficha</h3>
-                  <p className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-2 font-bold uppercase tracking-wide max-w-[200px]">
-                    Criar nova ficha de controle de captação de água para o período ativo
-                  </p>
-                </div>
-              )}
-            </div>
+          <div className="p-4 space-y-2 pb-24">
+            <ListRow
+              icon={<FileText size={18} />}
+              title="Fichas Operacionais"
+              subtitle={`Visualizar e lançar dados (${fichas.length} ativas)`}
+              onClick={() => setActiveScreen('list')}
+            />
+            {profile?.role !== 'visitante' && (
+              <ListRow
+                icon={<Plus size={18} />}
+                title="Nova Ficha"
+                subtitle="Criar ficha de captação para o período ativo"
+                onClick={() => setIsFichaModalOpen(true)}
+              />
+            )}
           </div>
         )}
 
-        {/* STEP 2: LIST OF FICHAS */}
+        {/* LISTA DE FICHAS OPERACIONAIS */}
         {activeScreen === 'list' && (
-          <div className="flex-1 flex flex-col p-4 overflow-hidden animate-in fade-in duration-200">
-            <div className="mb-4">
-              <button 
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.history.back();
-                  } else {
-                    setActiveScreen('home');
-                  }
-                }} 
-                className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors bg-white/80 hover:bg-white dark:bg-zinc-900 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800"
+          <div className="flex flex-col h-full">
+            <div className="sticky top-0 z-10 flex items-center gap-1 px-2 py-2 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
+              <button
+                onClick={() => setActiveScreen('home')}
+                aria-label="Voltar"
+                className="flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+                style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
               >
-                <ArrowLeft size={14} /> Voltar para o Início
+                <ArrowLeft size={20} />
               </button>
+              <h2 className="flex-1 text-sm font-black text-zinc-50 truncate">
+                Fichas Operacionais ({filteredFichas.length})
+              </h2>
             </div>
 
-            <div className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full space-y-4 pr-1 custom-scrollbar">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-                <h2 className="text-md font-black text-zinc-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-                  📋 Fichas Operacionais ({filteredFichas.length})
-                </h2>
-                
-                {/* Search & Filters */}
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
-                    <input 
-                      type="text" 
-                      placeholder="Buscar motorista/placa..." 
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full sm:w-44 text-zinc-900 dark:text-white font-mono"
-                    />
-                  </div>
- 
-                  <select
-                    value={selectedPeriodFilter === 'Todos' ? 'Todos' : `${selectedPeriodFilter.ano}-${selectedPeriodFilter.mes}`}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'Todos') {
-                        setSelectedPeriodFilter('Todos');
-                      } else {
-                        const [ano, mes] = val.split('-').map(Number);
-                        setSelectedPeriodFilter({ ano, mes });
-                      }
-                    }}
-                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
-                  >
-                    <option value="Todos">TODOS OS MESES</option>
-                    {periodOptions.map(opt => (
-                      <option key={`${opt.ano}-${opt.mes}`} value={`${opt.ano}-${opt.mes}`}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
-                  >
-                    <option value="Todas">TODAS AS FICHAS</option>
-                    <option value="Aberta">ABERTAS</option>
-                    <option value="Fechada">FECHADAS</option>
-                  </select>
-                </div>
+            <div className="p-4 space-y-3 pb-24">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar motorista/placa..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 text-sm text-zinc-50 placeholder:text-zinc-500 outline-none focus:border-amber-600"
+                  style={{ minHeight: "var(--tap-min)" }}
+                />
               </div>
- 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+
+              <div className="flex gap-2">
+                <select
+                  value={selectedPeriodFilter === 'Todos' ? 'Todos' : `${selectedPeriodFilter.ano}-${selectedPeriodFilter.mes}`}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'Todos') {
+                      setSelectedPeriodFilter('Todos');
+                    } else {
+                      const [ano, mes] = val.split('-').map(Number);
+                      setSelectedPeriodFilter({ ano, mes });
+                    }
+                  }}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 text-xs font-bold text-zinc-300 outline-none"
+                  style={{ minHeight: "var(--tap-min)" }}
+                >
+                  <option value="Todos">TODOS OS MESES</option>
+                  {periodOptions.map(opt => (
+                    <option key={`${opt.ano}-${opt.mes}`} value={`${opt.ano}-${opt.mes}`}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 text-xs font-bold text-zinc-300 outline-none"
+                  style={{ minHeight: "var(--tap-min)" }}
+                >
+                  <option value="Todas">TODAS AS FICHAS</option>
+                  <option value="Aberta">ABERTAS</option>
+                  <option value="Fechada">FECHADAS</option>
+                </select>
+              </div>
+
+              <div className="space-y-2 pt-1">
                 {filteredFichas.length > 0 ? (
                   filteredFichas.map(f => {
                     const locked = isFichaLocked(f);
                     const launchesCount = f.lancamentos?.length || 0;
- 
+                    const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === f.mes && p.ano === f.ano) : null;
                     return (
-                      <div
+                      <ListRow
                         key={f.id}
-                        onClick={() => { 
-                          setSelectedFicha(f); 
-                          if (typeof window !== 'undefined') {
-                            window.history.pushState({ screen: 'details' }, '', '#details');
-                          }
-                          setActiveScreen('details'); 
-                          setViewMode('suzano'); 
-                          setShowFichaPaper(true); 
+                        title={f.placa}
+                        subtitle={`${f.motorista} · ${f.processo}`}
+                        meta={`${getMonthName(f.mes)} ${f.ano}${period ? ` · ${safeFormatDate(period.data_inicio, 'dd/MM')} a ${safeFormatDate(period.data_fim, 'dd/MM')}` : ''} · ${launchesCount} captações`}
+                        badge={
+                          <span className={cn(
+                            "px-2 py-0.5 text-[9px] font-black uppercase rounded-md",
+                            locked ? "bg-zinc-800 text-zinc-400" : "bg-emerald-500/20 text-emerald-400"
+                          )}>
+                            {locked ? 'Fechada' : 'Aberta'}
+                          </span>
+                        }
+                        icon={<Droplets size={18} />}
+                        onClick={() => {
+                          setSelectedFicha(f);
+                          setActiveScreen('details');
+                          setViewMode('suzano');
+                          setShowFichaPaper(true);
                         }}
-                        className="p-5 bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500/80 rounded-2xl transition-all duration-300 cursor-pointer flex flex-col gap-4 shadow-lg group relative overflow-hidden"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-extrabold text-zinc-900 dark:text-white text-md tracking-tight leading-none group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
-                              {f.placa}
-                            </h3>
-                            <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mt-2.5 flex items-center gap-1">
-                              👤 {f.motorista}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5">
-                            <span className={cn(
-                              "px-2 py-1 text-[8px] font-black uppercase rounded-md shadow-sm border",
-                              locked 
-                                ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500" 
-                                : "bg-emerald-500/20 border-emerald-900/30 text-emerald-450 dark:text-emerald-400"
-                            )}>
-                              {locked ? 'Fechada' : 'Aberta'}
-                            </span>
-                            <span className="text-[9px] text-zinc-500 dark:text-zinc-500 font-bold uppercase bg-zinc-50 dark:bg-zinc-950/40 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 flex flex-col items-end">
-                              <span>{getMonthName(f.mes)} {f.ano}</span>
-                              {(() => {
-                                const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === f.mes && p.ano === f.ano) : null;
-                                if (!period) return null;
-                                return (
-                                  <span className="text-[8px] text-blue-600 dark:text-blue-400 font-extrabold mt-0.5 normal-case tracking-normal">
-                                    {safeFormatDate(period.data_inicio, 'dd/MM')} a {safeFormatDate(period.data_fim, 'dd/MM')}
-                                  </span>
-                                );
-                              })()}
-                            </span>
-                          </div>
-                        </div>
- 
-                        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex justify-between items-center text-[10px] text-zinc-650 dark:text-zinc-400">
-                          <span>{f.processo}</span>
-                          <span className="font-bold text-zinc-800 dark:text-zinc-300">{launchesCount} captações</span>
-                        </div>
-                      </div>
+                      />
                     );
                   })
                 ) : (
-                  <div className="col-span-2 text-center py-16 bg-white/40 dark:bg-zinc-900/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                  <div className="text-center py-16 bg-zinc-900 border border-zinc-800 rounded-2xl">
                     <p className="text-xs text-zinc-500 italic">Nenhuma ficha operacional encontrada.</p>
                   </div>
                 )}
@@ -1986,397 +1853,111 @@ export default function CaptacaoClient({
           </div>
         )}
 
-        {/* STEP 3: FICHA DETAILS */}
+        {/* DETALHE DA FICHA */}
         {activeScreen === 'details' && selectedFicha && (
-          <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden animate-in fade-in duration-200">
-            <div className="p-4 landscape:py-2.5 landscape:px-4 bg-white/50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-900 flex items-center justify-between gap-4 shrink-0">
-              <button 
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.history.back();
-                  } else {
-                    setSelectedFicha(null);
-                    setActiveScreen('list');
-                  }
-                }} 
-                className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors bg-white hover:bg-zinc-50 dark:bg-zinc-900 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
+          <div className="flex flex-col h-full">
+            <div className="sticky top-0 z-10 flex items-center gap-1 px-2 py-2 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
+              <button
+                onClick={() => { setSelectedFicha(null); setActiveScreen('list'); }}
+                aria-label="Voltar"
+                className="flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+                style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
               >
-                <ArrowLeft size={14} /> Voltar para as Fichas
+                <ArrowLeft size={20} />
+              </button>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm font-black text-zinc-50 truncate">{selectedFicha.placa}</h2>
+                <p className="text-[10px] text-zinc-500 truncate">{selectedFicha.motorista} · {selectedFicha.processo}</p>
+              </div>
+              <button
+                onClick={() => setIsFichaActionsOpen(true)}
+                aria-label="Mais ações"
+                className="flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+                style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+              >
+                <MoreVertical size={20} />
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden bg-zinc-900/10">
-              {/* Left Panel: Sidebar containing title and vertical button stack */}
-              <div className="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800 p-4 bg-white/70 dark:bg-zinc-900/50 flex flex-col gap-4 overflow-y-auto">
-                <div className="flex flex-col gap-1 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                  <h2 className="text-md font-black text-zinc-900 dark:text-white leading-none uppercase tracking-wide">
-                    FICHA: {selectedFicha.placa}
-                  </h2>
-                  <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-1.5 uppercase font-bold tracking-widest leading-none">
-                    MOTORISTA: {selectedFicha.motorista} | PROCESSO: {selectedFicha.processo} | NÚCLEO: {selectedFicha.nucleo}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-2.5">
-                  {/* 1. Adicionar linha */}
-                  {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("Deseja realmente adicionar uma linha?")) {
-                          setIsLancamentoModalOpen(true);
-                        }
-                      }}
-                      className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full uppercase tracking-wider"
-                    >
-                      <span>ADICIONAR LINHA</span>
-                    </button>
-                  )}
-
-                  {/* 2. Ver ficha */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Deseja realmente ver a ficha?")) {
-                        setIsFichaExpanded(true);
-                        setZoomScale(1.0);
-                        alert("Visualização da ficha aberta com sucesso!");
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg hover:shadow-blue-600/10 active:scale-95 transition-all w-full text-xs uppercase tracking-wider"
-                  >
-                    <span>VER FICHA</span>
-                  </button>
-
-                  {/* 3. Assinar supervisor */}
-                  {profile?.role !== 'visitante' && (
-                    selectedFicha.assinatura_supervisor ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Deseja realmente remover a assinatura do supervisor?")) {
-                            handleRemoveSignature();
-                          }
-                        }}
-                        className="px-4 py-3.5 bg-white hover:bg-red-50 dark:bg-zinc-955 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-red-500 dark:text-red-400 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow w-full uppercase tracking-wider"
-                      >
-                        <span>REMOVER ASSINATURA</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Deseja realmente assinar como supervisor?")) {
-                            setShowSignaturePad(true);
-                            setTimeout(() => {
-                              const canvas = sigCanvasRef.current;
-                              if (canvas) {
-                                const ctx = canvas.getContext('2d');
-                                ctx?.clearRect(0, 0, canvas.width, canvas.height);
-                              }
-                            }, 50);
-                          }
-                        }}
-                        className="px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10 active:scale-95 transition-all w-full uppercase tracking-wider"
-                      >
-                        <span>ASSINAR SUPERVISOR</span>
-                      </button>
-                    )
-                  )}
-
-                  {/* 4. Fecha mês */}
-                  {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("Deseja realmente fechar o mês?")) {
-                          handleCloseFicha(selectedFicha.id);
-                        }
-                      }}
-                      className="px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-700 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow w-full uppercase tracking-wider"
-                    >
-                      <span>FECHA MÊS</span>
-                    </button>
-                  )}
-
-                  {/* 4b. Reabrir ficha (mês já fechado ou virado) — faltou lançar algo */}
-                  {isFichaLocked(selectedFicha) && (profile?.role === 'admin' || profile?.role === 'pcm' || profile?.role === 'gestao') && (
-                    <button
-                      type="button"
-                      onClick={() => handleReabrirFicha(selectedFicha.id)}
-                      className="flex items-center justify-center gap-2 px-4 py-3.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-2xl text-amber-700 dark:text-amber-400 font-black text-xs transition-all active:scale-95 shadow w-full uppercase tracking-wider"
-                    >
-                      <span>REABRIR FICHA</span>
-                    </button>
-                  )}
-
-                  {/* 5. Excluir ficha */}
-                  {(profile?.role === 'admin' || profile?.role === 'pcm' || profile?.role === 'gestao') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("Deseja realmente excluir a ficha?")) {
-                          handleDeleteFicha(selectedFicha.id);
-                        }
-                      }}
-                      className="p-3.5 bg-white hover:bg-red-50 dark:bg-zinc-955 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-900 rounded-2xl text-zinc-550 hover:text-red-500 transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-black uppercase tracking-wider"
-                    >
-                      <span>EXCLUIR FICHA</span>
-                    </button>
-                  )}
-
-                  {/* 6. Baixar pdf */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Deseja realmente baixar o PDF?")) {
-                        handleExportPDF("download");
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
-                  >
-                    <span>BAIXAR PDF</span>
-                  </button>
-
-                  {/* 6b. Compartilhar pdf (WhatsApp etc.) */}
-                  <button
-                    type="button"
-                    onClick={() => handleExportPDF("share")}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-emerald-600 hover:bg-emerald-700 rounded-2xl border border-emerald-600 text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
-                  >
-                    <span>COMPARTILHAR PDF</span>
-                  </button>
-
-                  {/* 7. Baixar excel */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Deseja realmente baixar o Excel?")) {
-                        handleExportExcel();
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-4 py-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white font-extrabold text-xs transition-all shadow w-full uppercase tracking-wider"
-                  >
-                    <span>BAIXAR EXCEL</span>
-                  </button>
-
-                  {/* 8. Imprimir ficha */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Deseja realmente imprimir a ficha?")) {
-                        window.print();
-                        alert("Impressão iniciada com sucesso!");
-                      }
-                    }}
-                    className="p-3.5 bg-white hover:bg-zinc-100 dark:bg-zinc-955 dark:hover:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-zinc-650 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all flex items-center justify-center gap-2 shadow w-full text-xs font-extrabold uppercase tracking-wider"
-                  >
-                    <span>IMPRIMIR FICHA</span>
-                  </button>
-                </div>
+            <div className="flex-1 p-4 space-y-4 pb-24">
+              <div className="grid grid-cols-3 gap-3">
+                <StatTile icon={Droplets} label="Captações" value={selectedFicha.lancamentos?.length || 0} accent="amber" />
+                <StatTile icon={Droplets} label="Volume total" value={`${totalVolume.toLocaleString('pt-BR')} L`} accent="emerald" />
+                <StatTile icon={Calendar} label="Mês operacional" value={`${getMonthName(selectedFicha.mes)} ${selectedFicha.ano}`} accent="zinc" />
               </div>
-              
-              {/* View area */}
-              <div className="flex-1 overflow-x-auto overflow-y-visible lg:overflow-auto p-4 md:p-6 custom-scrollbar bg-zinc-100/10 dark:bg-zinc-950/20">
-                <div className="space-y-6 max-w-5xl mx-auto">
-                  
-                  {/* Header metrics card */}
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
-                      <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">CAPTAÇÕES</p>
-                      <p className="text-2xl font-black text-zinc-900 dark:text-white">{selectedFicha.lancamentos?.length || 0}</p>
-                    </div>
-                    <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl col-span-2 shadow-sm">
-                      <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">VOLUME TOTAL CAPTADO</p>
-                      <p className="text-2xl font-black text-blue-600 dark:text-blue-500">
-                        {totalVolume.toLocaleString('pt-BR')} <span className="text-sm text-zinc-500 dark:text-zinc-400 font-bold">LITROS</span>
-                      </p>
-                    </div>
-                    <div className="bg-white/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
-                      <p className="text-[10px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1.5">MÊS OPERACIONAL</p>
-                      <p className="text-lg font-black text-zinc-900 dark:text-white uppercase mt-0.5">{getMonthName(selectedFicha.mes)} {selectedFicha.ano}</p>
-                    </div>
-                  </div>
 
-                  {/* Detailed list rows */}
-                  <div className="space-y-4">
-                    {selectedFicha.lancamentos && selectedFicha.lancamentos.length > 0 ? (
-                      [...selectedFicha.lancamentos].sort((a: any, b: any) => b.data.localeCompare(a.data) || b.created_at?.localeCompare(a.created_at)).map((row: any) => (
-                        <div 
-                          key={row.id}
-                          className="bg-white/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row gap-5 justify-between items-start md:items-center hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-lg"
-                        >
-                          <div className="flex-1 grid grid-cols-2 lg:grid-cols-5 gap-y-4 gap-x-6 text-xs text-zinc-700 dark:text-zinc-300">
-                            
-                            {/* Group 1: Time */}
-                            <div>
-                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">DATA E HORA</span>
-                              <span className="font-extrabold text-zinc-900 dark:text-white text-sm">
-                                {safeFormatDate(row.data, 'dd/MM/yyyy')}
-                              </span>
-                              <span className="block text-zinc-550 dark:text-zinc-400 font-bold mt-1 tracking-tight">
-                                ⏱️ {row.hora_inicial} - {row.hora_final}
-                              </span>
-                            </div>
-
-                            {/* Group 2: Point & Volume */}
-                            <div>
-                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">PONTO / OUTORGA</span>
-                              {row.foto_ponto ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setActivePhoto(row.foto_ponto)}
-                                  className="px-2 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-lg font-mono font-bold text-xs tracking-wide transition-all shadow-sm flex items-center justify-center gap-1 hover:scale-105 active:scale-95"
-                                >
-                                  📷 {row.id_ponto}
-                                </button>
-                              ) : (
-                                <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{row.id_ponto}</span>
-                              )}
-                              <span className="block text-blue-600 dark:text-blue-400 font-black text-sm mt-1">
-                                💧 {Number(row.volume_captado).toLocaleString('pt-BR')} Litros
-                              </span>
-                            </div>
-
-                            {/* Group 3: Capture Location */}
-                            <div>
-                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">FAZENDA / UP CAPTAÇÃO</span>
-                              <span className="font-bold text-zinc-900 dark:text-white uppercase leading-none">{row.fazenda_captada}</span>
-                              <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">UP: {row.up_captacao}</span>
-                            </div>
-
-                            {/* Group 4: Activity Location */}
-                            <div>
-                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">ATIVIDADE / DESTINO</span>
-                              <span className="font-bold text-zinc-900 dark:text-white leading-none">{row.atividade}</span>
-                              <span className="block text-zinc-550 dark:text-zinc-400 mt-1.5 font-bold font-mono">
-                                {row.fazenda_atividade} / UP {row.up_atividade}
-                              </span>
-                            </div>
-
-                            {/* Group 5: Creator metadata */}
-                            <div>
-                              <span className="block text-[9px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-widest mb-1">METADADOS</span>
-                              <span className="block text-zinc-500 font-bold font-mono text-[9px] leading-tight">
-                                Ref: {row.id.substring(0, 8)}
-                              </span>
-                              <span className="block text-zinc-550 text-[9px] font-bold mt-1">
-                                Registrado em: {safeFormatDate(row.created_at, 'dd/MM HH:mm')}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Evidence Photo / Image Thumbnail */}
-                          <div className="flex items-center gap-3 shrink-0">
-                            {row.foto_ponto ? (
-                              <div 
-                                onClick={() => setActivePhoto(row.foto_ponto)}
-                                className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden relative cursor-zoom-in group shadow-md"
+              {/* Lançamentos */}
+              <div className="space-y-2">
+                {selectedFicha.lancamentos && selectedFicha.lancamentos.length > 0 ? (
+                  [...selectedFicha.lancamentos].sort((a: any, b: any) => b.data.localeCompare(a.data) || b.created_at?.localeCompare(a.created_at)).map((row: any) => {
+                    const podeEditar = profile?.role !== 'visitante' && (!isFichaLocked(selectedFicha) || ['admin', 'pcm', 'gestao'].includes(profile?.role || ''));
+                    return (
+                      <ListRow
+                        key={row.id}
+                        icon={row.foto_ponto ? undefined : <Camera size={18} />}
+                        title={`${safeFormatDate(row.data, 'dd/MM/yyyy')} · ${row.id_ponto}`}
+                        subtitle={`${row.fazenda_captada} → ${row.atividade} (${row.fazenda_atividade})`}
+                        meta={`${Number(row.volume_captado).toLocaleString('pt-BR')} L · ${row.hora_inicial}-${row.hora_final}`}
+                        onClick={row.foto_ponto ? () => setActivePhoto(row.foto_ponto) : undefined}
+                        rightSlot={
+                          <div className="flex items-center gap-2 shrink-0">
+                            {row.foto_ponto && (
+                              <img
+                                src={row.foto_ponto}
+                                onClick={(e) => { e.stopPropagation(); setActivePhoto(row.foto_ponto); }}
+                                className="w-11 h-11 rounded-lg object-cover border border-zinc-800"
+                                alt="Ponto"
+                              />
+                            )}
+                            {podeEditar && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setActionLancamentoId(row.id); }}
+                                aria-label="Mais ações do lançamento"
+                                className="flex items-center justify-center rounded-xl text-zinc-400 active:bg-zinc-800"
+                                style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
                               >
-                                <img src={row.foto_ponto} className="w-full h-full object-cover transition-transform group-hover:scale-115" alt="Ponto" />
-                                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                                  <Eye size={12} className="text-white animate-pulse" />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="w-16 h-16 rounded-xl border border-zinc-200 dark:border-zinc-850/50 bg-zinc-100 dark:bg-zinc-955 flex flex-col items-center justify-center text-zinc-655 dark:text-zinc-650">
-                                <Camera size={18} strokeWidth={1.5} />
-                                <span className="text-[8px] font-black tracking-tighter uppercase mt-1">Sem Foto</span>
-                              </div>
-                            )}
-
-                            {/* Botões de ação: editar (admin pode editar mesmo em ficha fechada) e excluir */}
-                            {profile?.role !== 'visitante' && (
-                              <div className="flex flex-col gap-2">
-                                {/* Editar: disponível sempre para admin/pcm/gestao, e em ficha aberta para outros */}
-                                {(!isFichaLocked(selectedFicha) || ['admin', 'pcm', 'gestao'].includes(profile?.role || '')) && (
-                                  <button
-                                    onClick={() => {
-                                      setEditingLancamentoId(row.id);
-                                      setNewLancamentoData({
-                                        data: row.data,
-                                        id_ponto: row.id_ponto,
-                                        hora_inicial: row.hora_inicial,
-                                        hora_final: row.hora_final,
-                                        volume_captado: String(row.volume_captado),
-                                        fazenda_captada: row.fazenda_captada,
-                                        up_captacao: row.up_captacao,
-                                        atividade: row.atividade,
-                                        fazenda_atividade: row.fazenda_atividade,
-                                        up_atividade: row.up_atividade,
-                                        foto_ponto: row.foto_ponto
-                                      });
-                                      setIsLancamentoModalOpen(true);
-                                    }}
-                                    className="px-3 py-2 bg-white dark:bg-zinc-950 hover:bg-blue-50 dark:hover:bg-blue-950/30 border border-zinc-200 dark:border-zinc-800 hover:border-blue-400 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-blue-600 transition-all flex items-center justify-center gap-1.5 shadow text-[9px] font-black uppercase tracking-wide"
-                                    title="Editar Lançamento"
-                                  >
-                                    <Pencil size={12} />
-                                    <span>EDITAR</span>
-                                  </button>
-                                )}
-                                {/* Excluir: apenas em ficha aberta ou para admin */}
-                                {(!isFichaLocked(selectedFicha) || ['admin', 'pcm', 'gestao'].includes(profile?.role || '')) && (
-                                  <button
-                                    onClick={() => { if(confirm('Excluir registro permanentemente?')) { handleDeleteLancamento(row.id); window.location.reload(); }}}
-                                    className="px-3 py-2 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-950/20 border border-zinc-200 dark:border-zinc-800 hover:border-red-400 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center gap-1.5 shadow text-[9px] font-black uppercase tracking-wide"
-                                    title="Remover Lançamento"
-                                  >
-                                    <Trash2 size={12} />
-                                    <span>EXCLUIR</span>
-                                  </button>
-                                )}
-                              </div>
+                                <MoreVertical size={18} />
+                              </button>
                             )}
                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-16 bg-white/40 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-850 rounded-2xl">
-                        <p className="text-xs text-zinc-550 dark:text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
-                      </div>
-                    )}
+                        }
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-16 bg-zinc-900 border border-zinc-800 rounded-2xl">
+                    <p className="text-xs text-zinc-500 italic">Nenhum lançamento registrado nesta ficha.</p>
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* Elemento oculto no layout mas ativo no DOM para impressão/PDF */}
-                <div className={cn(
-                  "absolute pointer-events-none -z-50 print:static print:opacity-100 print:pointer-events-auto bg-white text-zinc-950",
-                  isExporting ? "opacity-100 left-0 top-0" : "opacity-0 -left-[9999px]"
-                )}>
-                  <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0 bg-white text-zinc-955">
-                    {renderPaperFicha(selectedFicha, setActivePhoto, calendario)}
-                  </div>
+              {/* Elemento oculto no layout mas ativo no DOM para impressão/PDF */}
+              <div className={cn(
+                "fixed pointer-events-none -z-50 print:static print:opacity-100 print:pointer-events-auto bg-white text-zinc-950",
+                isExporting ? "opacity-100 left-0 top-0" : "opacity-0 -left-[9999px]"
+              )}>
+                <div id="ficha-captacao-print" className="min-w-[1080px] w-[1080px] shrink-0 bg-white text-zinc-955">
+                  {renderPaperFicha(selectedFicha, setActivePhoto, calendario)}
                 </div>
               </div>
             </div>
+
+            {!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' && (
+              <Fab icon={<Plus size={20} />} label="Adicionar" onClick={() => setIsLancamentoModalOpen(true)} />
+            )}
           </div>
         )}
       </main>
 
       {/* ─── MODAL: NOVA FICHA OPERACIONAL ─── */}
-      {isFichaModalOpen && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setIsFichaModalOpen(false)} />
-          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <form onSubmit={handleCreateFicha}>
-              <div className="p-6 border-b border-zinc-200 dark:border-zinc-850 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/40">
-                <div>
-                  <h2 className="text-md font-black text-zinc-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
-                    <span className="p-1 bg-blue-600 rounded text-white"><Plus size={14} /></span>
-                    Nova Ficha de Captação
-                  </h2>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-                    Suzano Mês Operacional: {getMonthName(currentPeriod.mes)} {currentPeriod.ano} ({safeFormatDate(currentPeriod.data_inicio, 'dd/MM/yyyy')} a {safeFormatDate(currentPeriod.data_fim, 'dd/MM/yyyy')})
-                  </p>
-                </div>
-                <button type="button" onClick={() => setIsFichaModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-500 transition-colors">
-                  <X size={16} />
-                </button>
-              </div>
+      <BottomSheet open={isFichaModalOpen} onClose={() => setIsFichaModalOpen(false)} title="Nova Ficha de Captação" fullHeight>
+        <form onSubmit={handleCreateFicha} className="flex flex-col h-full">
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-3">
+            Suzano Mês Operacional: {getMonthName(currentPeriod.mes)} {currentPeriod.ano} ({safeFormatDate(currentPeriod.data_inicio, 'dd/MM/yyyy')} a {safeFormatDate(currentPeriod.data_fim, 'dd/MM/yyyy')})
+          </p>
 
-              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                
+          <div className="flex-1 space-y-4">
+
                 {/* Mês/Período Operacional Select */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Mês / Período Operacional</label>
@@ -2500,60 +2081,48 @@ export default function CaptacaoClient({
 
               </div>
 
-              <div className="p-6 border-t border-zinc-200 dark:border-zinc-855 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" disabled={isSavingFicha} onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors disabled:opacity-50">
-                  CANCELAR
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSavingFicha}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/10 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  {isSavingFicha ? (
-                    <>
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      SALVANDO...
-                    </>
-                  ) : (
-                    'CRIAR FICHA'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-4">
+              <button type="button" disabled={isSavingFicha} onClick={() => setIsFichaModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-zinc-400 active:text-white transition-colors disabled:opacity-50">
+                CANCELAR
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingFicha}
+                className="px-6 py-2.5 bg-amber-600 active:bg-amber-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                {isSavingFicha ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    SALVANDO...
+                  </>
+                ) : (
+                  'CRIAR FICHA'
+                )}
+              </button>
+            </div>
+        </form>
+      </BottomSheet>
 
       {/* ─── MODAL: ADICIONAR OU EDITAR LANÇAMENTO (LINHA) ─── */}
-      {isLancamentoModalOpen && selectedFicha && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setIsLancamentoModalOpen(false); setEditingLancamentoId(null); }} />
-          <div className="relative bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <form onSubmit={handleAddLancamento}>
-              <div className="p-6 border-b border-zinc-200 dark:border-zinc-855 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/40">
-                <div>
-                  <h2 className="text-md font-black text-zinc-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
-                    <span className={`p-1 rounded text-white ${editingLancamentoId ? 'bg-blue-600' : 'bg-emerald-600'}`}>
-                      {editingLancamentoId ? <Pencil size={14} /> : <Plus size={14} />}
-                    </span>
-                    {editingLancamentoId ? '✏️ Editar Lançamento' : 'Adicionar Lançamento'}
-                  </h2>
-                  <p className="text-[10px] text-zinc-550 dark:text-zinc-400 font-bold uppercase tracking-wider mt-1">
-                    Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
-                    {(() => {
-                      const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
-                      if (!period) return null;
-                      return ` (${safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a ${safeFormatDate(period.data_fim, 'dd/MM/yyyy')})`;
-                    })()}
-                  </p>
-                </div>
-                <button type="button" onClick={() => setIsLancamentoModalOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-850 rounded-xl text-zinc-550 transition-colors">
-                  <X size={16} />
-                </button>
-              </div>
+      <BottomSheet
+        open={isLancamentoModalOpen && !!selectedFicha}
+        onClose={() => { setIsLancamentoModalOpen(false); setEditingLancamentoId(null); }}
+        title={editingLancamentoId ? 'Editar Lançamento' : 'Adicionar Lançamento'}
+        fullHeight
+      >
+        {selectedFicha && (
+        <form onSubmit={handleAddLancamento} className="flex flex-col h-full">
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-3">
+            Caminhão: {selectedFicha.placa} | Operação: {getMonthName(selectedFicha.mes)} {selectedFicha.ano}
+            {(() => {
+              const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
+              if (!period) return null;
+              return ` (${safeFormatDate(period.data_inicio, 'dd/MM/yyyy')} a ${safeFormatDate(period.data_fim, 'dd/MM/yyyy')})`;
+            })()}
+          </p>
 
-              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar grid grid-cols-2 gap-x-4">
-                
+          <div className="flex-1 space-y-4 grid grid-cols-2 gap-x-4">
+
                 {/* Data */}
                 <div className="space-y-1.5 col-span-2">
                   <label className="text-[10px] font-black text-zinc-550 dark:text-zinc-500 uppercase tracking-wider">Data do Lançamento</label>
@@ -2718,18 +2287,18 @@ export default function CaptacaoClient({
 
               </div>
 
-              <div className="p-6 border-t border-zinc-200 dark:border-zinc-850 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-3xl">
-                <button type="button" onClick={() => { setIsLancamentoModalOpen(false); setEditingLancamentoId(null); }} className="px-5 py-2.5 text-xs font-bold text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
-                  CANCELAR
-                </button>
-                <button type="submit" className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-600/10 active:scale-95 transition-all">
-                  {editingLancamentoId ? 'ATUALIZAR CAPTAÇÃO' : 'SALVAR CAPTAÇÃO'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800 mt-4">
+              <button type="button" onClick={() => { setIsLancamentoModalOpen(false); setEditingLancamentoId(null); }} className="px-5 py-2.5 text-xs font-bold text-zinc-400 active:text-white transition-colors">
+                CANCELAR
+              </button>
+              <button type="submit" className="px-6 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-lg active:scale-95 transition-all">
+                {editingLancamentoId ? 'ATUALIZAR CAPTAÇÃO' : 'SALVAR CAPTAÇÃO'}
+              </button>
+            </div>
+        </form>
+        )}
+      </BottomSheet>
+
 
       {/* ─── MODAL DE DETALHE FOTO EVIDÊNCIA ─── */}
       {activePhoto && (
@@ -2755,68 +2324,182 @@ export default function CaptacaoClient({
       )}
 
       {/* ─── MODAL DE ASSINATURA DIGITAL (SUPERVISOR SUZANO) ─── */}
-      {showSignaturePad && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5 animate-in zoom-in-95 duration-200">
-            <div>
-              <h3 className="font-black text-zinc-900 dark:text-white text-lg tracking-wider uppercase">
-                Assinatura do Supervisor
-              </h3>
-              <p className="text-[10px] text-zinc-550 dark:text-zinc-500 font-bold uppercase tracking-wide mt-1">
-                Assine com o dedo ou mouse no quadro abaixo
-              </p>
-            </div>
+      <BottomSheet open={showSignaturePad} onClose={() => { setShowSignaturePad(false); setIsDrawingSig(false); }} title="Assinatura do Supervisor">
+        <div className="flex flex-col gap-4">
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
+            Assine com o dedo no quadro abaixo
+          </p>
 
-            {/* Canvas Area */}
-            <div className="relative border border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl overflow-hidden h-[180px] flex items-center justify-center">
-              <canvas
-                ref={sigCanvasRef}
-                width={340}
-                height={176}
-                onMouseDown={startDrawingSig}
-                onMouseMove={drawSig}
-                onMouseUp={stopDrawingSig}
-                onMouseLeave={stopDrawingSig}
-                onTouchStart={startDrawingSig}
-                onTouchMove={(e) => {
-                  if (e.cancelable) e.preventDefault();
-                  drawSig(e);
-                }}
-                onTouchEnd={stopDrawingSig}
-                className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
-              />
-            </div>
+          <div className="relative border border-dashed border-zinc-700 bg-zinc-900 rounded-2xl overflow-hidden h-[180px] flex items-center justify-center">
+            <canvas
+              ref={sigCanvasRef}
+              width={340}
+              height={176}
+              onMouseDown={startDrawingSig}
+              onMouseMove={drawSig}
+              onMouseUp={stopDrawingSig}
+              onMouseLeave={stopDrawingSig}
+              onTouchStart={startDrawingSig}
+              onTouchMove={(e) => {
+                if (e.cancelable) e.preventDefault();
+                drawSig(e);
+              }}
+              onTouchEnd={stopDrawingSig}
+              className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+            />
+          </div>
 
-            {/* Actions */}
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSignaturePad(false);
-                  setIsDrawingSig(false);
-                }}
-                className="px-4 py-2.5 text-xs font-bold rounded-xl text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              >
-                CANCELAR
-              </button>
-              <button
-                type="button"
-                onClick={clearSigCanvas}
-                className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-200 dark:border-red-955 text-red-650 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 transition-all uppercase"
-              >
-                LIMPAR
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveSignature}
-                className="px-5 py-2.5 text-xs font-black rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-lg shadow-blue-600/10 uppercase"
-              >
-                CONFIRMAR
-              </button>
-            </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowSignaturePad(false); setIsDrawingSig(false); }}
+              className="px-4 py-2.5 text-xs font-bold rounded-xl text-zinc-400 active:text-white transition-colors"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              CANCELAR
+            </button>
+            <button
+              type="button"
+              onClick={clearSigCanvas}
+              className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-900 text-red-400 active:bg-red-950/30 transition-all uppercase"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              LIMPAR
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveSignature}
+              className="px-5 py-2.5 text-xs font-black rounded-xl bg-amber-600 active:bg-amber-700 text-white transition-all shadow-lg uppercase"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              CONFIRMAR
+            </button>
           </div>
         </div>
+      </BottomSheet>
+
+      {/* ─── MAIS AÇÕES DA FICHA (era um stack vertical de ~9 botões no sidebar) ─── */}
+      {selectedFicha && (
+        <ActionSheet
+          open={isFichaActionsOpen}
+          onClose={() => setIsFichaActionsOpen(false)}
+          title={`Ficha ${selectedFicha.placa}`}
+          items={[
+            {
+              key: "ver",
+              label: "Ver Ficha",
+              icon: Eye,
+              onSelect: () => {
+                setConfirmAction({
+                  title: "Ver ficha",
+                  description: "Deseja realmente ver a ficha?",
+                  onConfirm: () => { setIsFichaExpanded(true); setZoomScale(1.0); toast.show("Visualização da ficha aberta.", "success"); },
+                });
+              },
+            },
+            ...(profile?.role !== 'visitante' ? [
+              selectedFicha.assinatura_supervisor
+                ? { key: "assinatura", label: "Remover Assinatura", icon: PenLine, destructive: true, onSelect: () => {
+                    setConfirmAction({ title: "Remover assinatura", description: "Deseja realmente remover a assinatura do supervisor?", destructive: true, onConfirm: handleRemoveSignature });
+                  } } as ActionSheetItem
+                : { key: "assinatura", label: "Assinar Supervisor", icon: PenLine, onSelect: () => {
+                    setConfirmAction({ title: "Assinar como supervisor", description: "Deseja realmente assinar como supervisor?", onConfirm: () => {
+                      setShowSignaturePad(true);
+                      setTimeout(() => {
+                        const canvas = sigCanvasRef.current;
+                        if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+                      }, 50);
+                    } });
+                  } } as ActionSheetItem,
+            ] : []),
+            ...(!isFichaLocked(selectedFicha) && profile?.role !== 'visitante' ? [{
+              key: "fechar", label: "Fechar Mês", icon: Lock, onSelect: () => {
+                setConfirmAction({ title: "Fechar mês", description: "Deseja realmente fechar o mês?", onConfirm: () => handleCloseFicha(selectedFicha.id) });
+              },
+            } as ActionSheetItem] : []),
+            ...(isFichaLocked(selectedFicha) && ['admin', 'pcm', 'gestao'].includes(profile?.role || '') ? [{
+              key: "reabrir", label: "Reabrir Ficha", icon: Unlock, onSelect: () => {
+                setConfirmAction({ title: "Reabrir ficha", description: "Reabrir esta ficha para lançar um registro que ficou faltando?", onConfirm: () => handleReabrirFicha(selectedFicha.id) });
+              },
+            } as ActionSheetItem] : []),
+            {
+              key: "pdf", label: "Baixar PDF", icon: Download, onSelect: () => {
+                setConfirmAction({ title: "Baixar PDF", description: "Deseja realmente baixar o PDF?", onConfirm: () => handleExportPDF("download") });
+              },
+            },
+            { key: "pdf-share", label: "Compartilhar PDF", icon: FileText, onSelect: () => handleExportPDF("share") },
+            {
+              key: "excel", label: "Baixar Excel", icon: FileSpreadsheet, onSelect: () => {
+                setConfirmAction({ title: "Baixar Excel", description: "Deseja realmente baixar o Excel?", onConfirm: handleExportExcel });
+              },
+            },
+            {
+              key: "imprimir", label: "Imprimir Ficha", icon: Printer, onSelect: () => {
+                setConfirmAction({ title: "Imprimir ficha", description: "Deseja realmente imprimir a ficha?", onConfirm: () => { window.print(); toast.show("Impressão iniciada.", "success"); } });
+              },
+            },
+            ...(['admin', 'pcm', 'gestao'].includes(profile?.role || '') ? [{
+              key: "excluir", label: "Excluir Ficha", icon: Trash2, destructive: true, onSelect: () => {
+                setConfirmAction({ title: "Excluir ficha", description: "Essa ação não pode ser desfeita.", destructive: true, confirmLabel: "Excluir", onConfirm: () => handleDeleteFicha(selectedFicha.id) });
+              },
+            } as ActionSheetItem] : []),
+          ]}
+        />
       )}
+
+      {/* ─── AÇÕES DO LANÇAMENTO (editar / excluir) ─── */}
+      {selectedFicha && (() => {
+        const row = selectedFicha.lancamentos?.find((l: any) => l.id === actionLancamentoId);
+        return (
+          <ActionSheet
+            open={!!row}
+            onClose={() => setActionLancamentoId(null)}
+            title="Lançamento"
+            items={row ? [
+              {
+                key: "editar", label: "Editar", icon: Pencil, onSelect: () => {
+                  setEditingLancamentoId(row.id);
+                  setNewLancamentoData({
+                    data: row.data,
+                    id_ponto: row.id_ponto,
+                    hora_inicial: row.hora_inicial,
+                    hora_final: row.hora_final,
+                    volume_captado: String(row.volume_captado),
+                    fazenda_captada: row.fazenda_captada,
+                    up_captacao: row.up_captacao,
+                    atividade: row.atividade,
+                    fazenda_atividade: row.fazenda_atividade,
+                    up_atividade: row.up_atividade,
+                    foto_ponto: row.foto_ponto,
+                  });
+                  setIsLancamentoModalOpen(true);
+                },
+              },
+              {
+                key: "excluir", label: "Excluir", icon: Trash2, destructive: true, onSelect: () => {
+                  setConfirmAction({
+                    title: "Excluir lançamento",
+                    description: "Excluir registro permanentemente?",
+                    destructive: true,
+                    confirmLabel: "Excluir",
+                    onConfirm: () => { handleDeleteLancamento(row.id); window.location.reload(); },
+                  });
+                },
+              },
+            ] : []}
+          />
+        );
+      })()}
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => confirmAction?.onConfirm()}
+        title={confirmAction?.title || ""}
+        description={confirmAction?.description}
+        confirmLabel={confirmAction?.confirmLabel}
+        destructive={confirmAction?.destructive}
+      />
 
       {/* ─── FULLSCREEN EXPANDED FICHA VIEW ─── */}
       {isFichaExpanded && selectedFicha && mounted && typeof document !== 'undefined' && createPortal(
