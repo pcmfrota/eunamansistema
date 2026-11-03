@@ -26,11 +26,20 @@ export function setupKeyboardAwareScroll() {
   let intervalo: ReturnType<typeof setInterval> | null = null;
   let kbHandlerAtual: (() => void) | null = null;
 
+  // Importante: NÃO exige scrollHeight > clientHeight aqui. Um formulário curto o
+  // suficiente pra caber sem rolar ANTES do teclado abrir (ex: wizard do Backlog com só
+  // Data/Criticidade/Tipo/Colaborador/Origem) tem overflow:auto mas ainda não excedeu o
+  // container no instante exato do foco — exigir "já estar estourando" fazia a busca
+  // falhar silenciosamente bem nesses casos (confirmado por relato real do usuário: TIPO
+  // e TAG, ambos em formulários curtos, ficavam cobertos pelo teclado mesmo com esta
+  // correção ativa). Basta achar o ancestral com overflow-y:auto/scroll — uma vez que o
+  // padding-bottom extra for aplicado, ele passa a overflow de verdade; se não precisar,
+  // "scrollTop +=" nele é inofensivo.
   function encontrarAncestralRolavel(el: HTMLElement): HTMLElement | null {
     let node: HTMLElement | null = el.parentElement;
     while (node) {
       const estilo = getComputedStyle(node);
-      if ((estilo.overflowY === "auto" || estilo.overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
+      if (estilo.overflowY === "auto" || estilo.overflowY === "scroll") {
         return node;
       }
       node = node.parentElement;
