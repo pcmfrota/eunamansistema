@@ -14,7 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { mesAnoOperacional } from '@/lib/calendario-suzano'
 import { MultiSelect } from '@/components/MultiSelect'
-import { calcularTipoPedido } from './classificacaoTecnica'
+import { calcularTipoPedido, DETALHAMENTO_PEDIDO_SUGESTOES } from './classificacaoTecnica'
 import { baixarOuCompartilharPdf } from '@/lib/pdf-share'
 
 interface Props {
@@ -1827,13 +1827,26 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
       {/* ─── ROW 4: DETALHAMENTO DO BACKLOG ─────────────────────────────────────────── */}
       <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-sm overflow-hidden flex flex-col w-full">
-        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
             DETALHAMENTO DO BACKLOG
           </h3>
-          <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
-            {filtered.length} itens listados
-          </span>
+          <div className="flex items-center gap-3">
+            {/* Filtro rápido por Detalhamento do Pedido, direto acima da tabela — o mesmo
+                campo também filtra ao clicar numa barra do gráfico "Etiqueta por
+                Detalhamento do Pedido" (compartilham o estado filterDetalhamento). */}
+            <select
+              value={filterDetalhamento}
+              onChange={e => setFilterDetalhamento(e.target.value)}
+              className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#1e2028] text-zinc-600 dark:text-zinc-300"
+            >
+              <option value="">Detalhamento: Todos</option>
+              {DETALHAMENTO_PEDIDO_SUGESTOES.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
+              {filtered.length} itens listados
+            </span>
+          </div>
         </div>
 
         <div className="overflow-x-auto custom-scrollbar max-h-[360px]">
@@ -1845,6 +1858,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 <th className="px-4 py-3">Motivo do Status</th>
                 <th className="px-4 py-3 text-center">Criticidade</th>
                 <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3">Detalhamento do Pedido</th>
                 <th className="px-4 py-3 text-center">Abertura</th>
                 <th className="px-4 py-3 text-center">Fechamento</th>
                 <th className="px-4 py-3 text-right">Dias Fechado</th>
@@ -1856,7 +1870,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-zinc-400 font-bold uppercase tracking-widest italic">
+                  <td colSpan={12} className="px-4 py-12 text-center text-zinc-400 font-bold uppercase tracking-widest italic">
                     Nenhum backlog correspondente aos filtros ativos.
                   </td>
                 </tr>
@@ -1906,6 +1920,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                         <span className={cn("px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest", statColor.bg, statColor.text)}>
                           {item.mappedStatus}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 max-w-[180px] truncate text-zinc-600 dark:text-zinc-400 font-bold">
+                        {item.detalhamento || '—'}
                       </td>
                       <td className="px-4 py-3 text-center text-zinc-500 dark:text-zinc-400 font-bold font-mono whitespace-nowrap">
                         {item.data_evidencia ? item.data_evidencia.split('T')[0].split('-').reverse().join('/') : '—'}
