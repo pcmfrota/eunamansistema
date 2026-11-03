@@ -14,13 +14,14 @@ import MaoDeObraPage from "./modules/mao-de-obra/MaoDeObraPage";
 import LavagensPage from "./modules/lavagens/LavagensPage";
 import PreventivasPage from "./modules/preventivas/PreventivasPage";
 import LubrificacaoPage from "./modules/lubrificacao/LubrificacaoPage";
+import InsumosPage from "./modules/insumos/InsumosPage";
 
 // Rotas que valem a pena restaurar quando o app reabre sem hash nenhum na URL (ex: depois
 // que o Android mata o processo em segundo plano e o WebView força um reload do zero —
 // nesse caminho o restoreState() nativo nem sempre preserva o hash de fato, então sem isso
 // o usuário sempre cai de volta no Menu em vez de continuar de onde parou).
 const LAST_ROUTE_KEY = "field-app:last-route";
-const ROTAS_RESTAURAVEIS = ["/pneus", "/backlog", "/captacao", "/mao-de-obra", "/lavagens", "/preventivas", "/lubrificacao", "/equipamentos"];
+const ROTAS_RESTAURAVEIS = ["/pneus", "/backlog", "/captacao", "/mao-de-obra", "/lavagens", "/preventivas", "/lubrificacao", "/insumos", "/equipamentos"];
 
 function lerUltimaRota(): string {
   try {
@@ -69,6 +70,7 @@ function Conteudo() {
         <Route path="/lavagens" element={<LavagensPage />} />
         <Route path="/preventivas" element={<PreventivasPage />} />
         <Route path="/lubrificacao" element={<LubrificacaoPage />} />
+        <Route path="/insumos" element={<InsumosPage />} />
         <Route path="/equipamentos" element={<EquipamentosScreen />} />
         <Route path="*" element={<Navigate to="/menu" replace />} />
       </Routes>

@@ -49,6 +49,26 @@ import {
   atualizarFichaLubrificacao,
   excluirFichaLubrificacao,
 } from "../modules/lubrificacao/actions";
+import {
+  abrirOuCriarFicha,
+  atualizarCabecalhoFicha,
+  atualizarFichaInsumo,
+  finalizarFicha,
+  salvarLinhaAbastecimento,
+  excluirLinhaAbastecimento,
+  criarRecargaFinalizada,
+} from "../modules/insumos/actions";
+
+// Mapeia id temporário de ficha de Insumos -> id real gerado pelo servidor, assim como
+// o app principal faz (lib/offline-actions.ts) — necessário porque linhas/cabeçalho/
+// fechamento enfileirados depois na mesma ficha referenciam esse id antes dele existir.
+const tempToRealFichaMapInsumos: Record<string, string> = {};
+
+function resolveFichaIdInsumos(id: string): string {
+  if (!id || !id.startsWith("temp_")) return id;
+  const mapeado = tempToRealFichaMapInsumos[id] || (typeof window !== "undefined" ? localStorage.getItem(`sync_ficha_insumos_map_${id}`) : null);
+  return mapeado || id;
+}
 
 export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   const { entity, action, payload } = item;
@@ -190,6 +210,49 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirFichaLubrificacao(payload.id || payload);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_fichas_abastecimento") {
+      if (action === "abrir_ficha") {
+        const { tempId, equipamentoId } = payload;
+        const res = await abrirOuCriarFicha(equipamentoId);
+        if (res.error || !res.ficha) throw new Error(res.error || "Falha ao abrir ficha de abastecimento.");
+        const realId = res.ficha.ficha.id;
+        tempToRealFichaMapInsumos[tempId] = realId;
+        if (typeof window !== "undefined") localStorage.setItem(`sync_ficha_insumos_map_${tempId}`, realId);
+      } else if (action === "atualizar_cabecalho") {
+        const fichaId = resolveFichaIdInsumos(payload.fichaId);
+        const res = await atualizarCabecalhoFicha(fichaId, payload.patch);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "atualizar_insumo") {
+        const fichaId = resolveFichaIdInsumos(payload.fichaId);
+        const res = await atualizarFichaInsumo(fichaId, payload.insumoTipo, payload.patch);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "finalizar") {
+        const fichaId = resolveFichaIdInsumos(payload.fichaId);
+        const res = await finalizarFicha(fichaId, payload.fechamento);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_abastecimento_linhas") {
+      const fichaId = resolveFichaIdInsumos(payload.fichaId);
+      if (action === "salvar_linha") {
+        const linha = { ...payload.linha };
+        if (typeof linha.id === "string" && linha.id.startsWith("temp_")) delete linha.id;
+        const res = await salvarLinhaAbastecimento(fichaId, linha);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "excluir_linha") {
+        const res = await excluirLinhaAbastecimento(payload.linhaId, fichaId);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "insumos_fichas_recarga") {
+      if (action === "create") {
+        const res = await criarRecargaFinalizada(payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

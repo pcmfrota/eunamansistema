@@ -10,6 +10,7 @@ const MODULOS: { chave: string; nome: string; icone: typeof Circle; cor: string 
   { chave: "lavagens", nome: "Lavagens", icone: Droplets, cor: "text-cyan-500 bg-cyan-500/10" },
   { chave: "preventivas", nome: "Preventivas", icone: Gauge, cor: "text-orange-500 bg-orange-500/10" },
   { chave: "lubrificacao", nome: "Lubrificação", icone: Wrench, cor: "text-lime-500 bg-lime-500/10" },
+  { chave: "insumos", nome: "Insumos", icone: Fuel, cor: "text-amber-500 bg-amber-500/10" },
   { chave: "equipamentos", nome: "Equipamentos (teste)", icone: Truck, cor: "text-zinc-400 bg-zinc-500/10" },
 ];
 
