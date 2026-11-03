@@ -58,6 +58,10 @@ import {
   excluirLinhaAbastecimento,
   criarRecargaFinalizada,
 } from "../modules/insumos/actions";
+import {
+  salvarChecklistMecanico,
+  excluirChecklistMecanico,
+} from "../modules/checklist-mecanicos/actions";
 
 // Mapeia id temporário de ficha de Insumos -> id real gerado pelo servidor, assim como
 // o app principal faz (lib/offline-actions.ts) — necessário porque linhas/cabeçalho/
@@ -253,6 +257,17 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
     else if (entity === "insumos_fichas_recarga") {
       if (action === "create") {
         const res = await criarRecargaFinalizada(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "checklists_mecanicos") {
+      if (action === "create") {
+        const formData = deserializeToFormData(payload);
+        const res = await salvarChecklistMecanico(formData);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirChecklistMecanico(payload);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

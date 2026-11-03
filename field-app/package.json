@@ -18,7 +18,8 @@
     "react-dom": "^18",
     "react-router-dom": "^7.18.5",
     "recharts": "^2.10.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/react": "^18",

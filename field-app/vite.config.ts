@@ -42,6 +42,12 @@ export default defineConfig({
       // repositórios que consomem (ver field-app/src/repositories/).
       { find: "@/src/services/PreventivaService", replacement: path.resolve(__dirname, "src/services/PreventivaService.ts") },
       { find: "@/src/services/HorimetroService", replacement: path.resolve(__dirname, "src/services/HorimetroService.ts") },
+      // Checklist-Mecânicos (Fase 6): OSService client-side mínimo (só createOS, ver
+      // field-app/src/services/OSService.ts) usado pela cascata ao fechar um checklist.
+      { find: "@/src/services/OSService", replacement: path.resolve(__dirname, "src/services/OSService.ts") },
+      // checklistConfig.ts é puro dado/função (grupos/itens do formulário por tipo de
+      // caminhão) sem nada do Next.js — reaproveita direto de app/ em vez de duplicar.
+      { find: "@/app/checklist-mecanicos/checklistConfig", replacement: path.resolve(__dirname, "../app/checklist-mecanicos/checklistConfig.ts") },
       // Resto de lib/ e components/ é puro TypeScript sem nada do Next.js — reaproveita
       // direto do repo principal, sem copiar.
       { find: "@/lib", replacement: path.resolve(__dirname, "../lib") },

@@ -13,6 +13,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/lavagens": "Lavagens",
   "/preventivas": "Preventivas",
   "/lubrificacao": "Lubrificação",
+  "/checklist-mecanicos": "Checklist Mecânico",
   "/equipamentos": "Equipamentos (teste)",
 };
 
