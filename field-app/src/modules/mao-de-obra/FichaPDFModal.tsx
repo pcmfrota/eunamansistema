@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { X, Printer, Share2, Send, Mail, Clock, FileDown, Loader2 } from "lucide-react";
+import { Printer, Share2, Send, Mail, Clock, FileDown, Loader2 } from "lucide-react";
 import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
 import { baixarOuCompartilharPdf, preCarregarHtml2Pdf } from "@/lib/pdf-share";
+import { BottomSheet } from "../../ui/primitives/BottomSheet";
 
 export type AtividadeJornada = {
   id: string;
@@ -145,8 +145,8 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
     }
   };
 
-  return createPortal(
-    <>
+  return (
+    <BottomSheet open={!!ficha} onClose={onClose} title={`${ficha.numero_ficha} · ${ficha.status}`} fullHeight>
       {/* Visualização de Impressão Nativa (CSS @media print) */}
       <style>{`
         @media print {
@@ -172,65 +172,52 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
         }
       `}</style>
 
-      <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-start p-2 sm:p-6 overflow-y-auto no-print">
-        {/* Barra Superior de Ações */}
-        <div className="sticky top-0 z-50 flex items-center justify-between w-full max-w-4xl bg-slate-900/90 text-white p-3 sm:p-4 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur-md mb-4 gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-sm sm:text-base text-emerald-400">
-              {ficha.numero_ficha}
-            </span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              {ficha.status}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
-            >
-              <Printer size={15} />
-              <span>Imprimir</span>
-            </button>
-            <button
-              onClick={() => gerarPdfFicha("download")}
-              disabled={gerandoPdf !== null}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
-            >
-              {gerandoPdf === "baixar" ? <Loader2 size={15} className="animate-spin" /> : <FileDown size={15} />}
-              <span>Baixar PDF</span>
-            </button>
-            <button
-              onClick={() => gerarPdfFicha("share")}
-              disabled={gerandoPdf !== null}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition shadow active:scale-95"
-            >
-              {gerandoPdf === "compartilhar" ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
-              <span>Compartilhar PDF</span>
-            </button>
-            <button
-              onClick={handleWhatsApp}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
-              title="Manda só um resumo em texto, sem a ficha em PDF anexada"
-            >
-              <Send size={15} />
-              <span>Resumo (texto)</span>
-            </button>
-            <button
-              onClick={handleEmail}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition border border-slate-700 active:scale-95"
-            >
-              <Mail size={15} />
-              <span>E-mail</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
+      {/* Barra de Ações — rolagem horizontal, cabe em qualquer largura de celular */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-3 no-print">
+        <button
+          onClick={handlePrint}
+          className="shrink-0 flex items-center gap-1.5 px-3 bg-zinc-800 active:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl border border-zinc-700"
+          style={{ minHeight: "var(--tap-min)" }}
+        >
+          <Printer size={15} />
+          <span>Imprimir</span>
+        </button>
+        <button
+          onClick={() => gerarPdfFicha("download")}
+          disabled={gerandoPdf !== null}
+          className="shrink-0 flex items-center gap-1.5 px-3 bg-emerald-600 active:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow"
+          style={{ minHeight: "var(--tap-min)" }}
+        >
+          {gerandoPdf === "baixar" ? <Loader2 size={15} className="animate-spin" /> : <FileDown size={15} />}
+          <span>Baixar PDF</span>
+        </button>
+        <button
+          onClick={() => gerarPdfFicha("share")}
+          disabled={gerandoPdf !== null}
+          className="shrink-0 flex items-center gap-1.5 px-3 bg-green-600 active:bg-green-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow"
+          style={{ minHeight: "var(--tap-min)" }}
+        >
+          {gerandoPdf === "compartilhar" ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
+          <span>Compartilhar PDF</span>
+        </button>
+        <button
+          onClick={handleWhatsApp}
+          className="shrink-0 flex items-center gap-1.5 px-3 bg-zinc-800 active:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl border border-zinc-700"
+          title="Manda só um resumo em texto, sem a ficha em PDF anexada"
+          style={{ minHeight: "var(--tap-min)" }}
+        >
+          <Send size={15} />
+          <span>Resumo</span>
+        </button>
+        <button
+          onClick={handleEmail}
+          className="shrink-0 flex items-center gap-1.5 px-3 bg-zinc-800 active:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl border border-zinc-700"
+          style={{ minHeight: "var(--tap-min)" }}
+        >
+          <Mail size={15} />
+          <span>E-mail</span>
+        </button>
+      </div>
 
         {/* Documento Impresso / Visualização da Ficha */}
         <div
@@ -384,8 +371,6 @@ export default function FichaPDFModal({ ficha, apontamentos, onClose }: FichaPDF
             Documento gerado automaticamente pelo Sistema EUNAMAN em {new Date().toLocaleString("pt-BR")} · Versão 1.0
           </div>
         </div>
-      </div>
-    </>,
-    document.body
+    </BottomSheet>
   );
 }

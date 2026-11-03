@@ -1,10 +1,12 @@
-import type { ComponentType } from "react";
+import type { ElementType } from "react";
 import { BottomSheet } from "./BottomSheet";
 
 export type ActionSheetItem = {
   key: string;
   label: string;
-  icon?: ComponentType<{ size?: number }>;
+  // ElementType, não ComponentType<{size}> — ver nota em StatTile.tsx sobre a
+  // incompatibilidade de propTypes com ícones reais do lucide-react.
+  icon?: ElementType;
   destructive?: boolean;
   onSelect: () => void;
 };

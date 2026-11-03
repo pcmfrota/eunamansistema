@@ -107,10 +107,10 @@ function SecaoCategoria({
   };
 
   return (
-    <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-      <h3 className="text-xs font-extrabold uppercase text-slate-700 dark:text-slate-300">{label}</h3>
+    <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+      <h3 className="text-xs font-extrabold uppercase text-zinc-300">{label}</h3>
       <div className="flex flex-wrap gap-1.5 min-h-[24px]">
-        {itens.length === 0 && <span className="text-xs text-slate-400 italic">Nenhum item cadastrado.</span>}
+        {itens.length === 0 && <span className="text-xs text-zinc-500 italic">Nenhum item cadastrado.</span>}
         {itens.map(item => (
           editingId === item.id ? (
             <input
@@ -123,29 +123,31 @@ function SecaoCategoria({
                 if (e.key === "Escape") setEditingId(null);
               }}
               onBlur={() => handleSalvarEdicao(item)}
-              className="w-32 px-2 py-1 rounded-lg border-2 border-emerald-400 bg-white dark:bg-slate-950 text-[11px] font-bold outline-none"
+              className="w-32 px-2 rounded-lg border-2 border-amber-500 bg-zinc-950 text-zinc-100 text-[11px] font-bold outline-none"
+              style={{ minHeight: "var(--tap-min)" }}
             />
           ) : (
             <span
               key={item.id}
-              className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold"
+              className="flex items-center gap-1 pl-2.5 pr-1.5 bg-zinc-800 text-zinc-200 rounded-lg text-[11px] font-bold"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               {item.valor}
               <button
                 type="button"
                 onClick={() => { setEditingId(item.id); setEditValue(item.valor); }}
                 title="Editar"
-                className="p-0.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                className="p-1.5 text-zinc-500 active:text-blue-400"
               >
-                <Pencil size={10} />
+                <Pencil size={12} />
               </button>
               <button
                 type="button"
                 onClick={() => handleExcluir(item)}
                 title="Excluir"
-                className="p-0.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                className="p-1.5 text-zinc-500 active:text-red-400"
               >
-                <X size={12} />
+                <X size={14} />
               </button>
             </span>
           )
@@ -158,13 +160,15 @@ function SecaoCategoria({
           onChange={e => setNovoValor(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleAdicionar()}
           placeholder="Adicionar novo item..."
-          className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500"
+          className="flex-1 px-3 rounded-lg border border-zinc-800 bg-zinc-800 text-zinc-100 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-zinc-600"
+          style={{ minHeight: "var(--tap-min)" }}
         />
         <button
           type="button"
           disabled={salvando}
           onClick={handleAdicionar}
-          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow disabled:opacity-60 shrink-0"
+          className="px-3.5 bg-amber-600 active:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow disabled:opacity-60 shrink-0"
+          style={{ minHeight: "var(--tap-min)" }}
         >
           <Plus size={13} /> Adicionar
         </button>
@@ -228,29 +232,29 @@ function ApontamentoChip({
 
   if (editing) {
     return (
-      <span className="flex items-center gap-1 p-1 rounded-lg border-2 border-emerald-400 bg-white dark:bg-slate-950">
+      <span className="flex items-center gap-1 p-1 rounded-lg border-2 border-amber-500 bg-zinc-950">
         <input
           autoFocus
           value={codigo}
           onChange={e => setCodigo(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setEditing(false); }}
-          className="w-12 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-[10px] font-bold outline-none"
+          className="w-12 px-1 py-1.5 rounded border border-zinc-700 bg-transparent text-zinc-100 text-[10px] font-bold outline-none"
         />
         <input
           value={descricao}
           onChange={e => setDescricao(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") handleSalvar(); if (e.key === "Escape") setEditing(false); }}
-          className="w-28 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-[10px] font-bold outline-none"
+          className="w-28 px-1 py-1.5 rounded border border-zinc-700 bg-transparent text-zinc-100 text-[10px] font-bold outline-none"
         />
         <select
           value={produtivo ? "1" : "0"}
           onChange={e => setProdutivo(e.target.value === "1")}
-          className="px-1 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-[10px] font-bold outline-none"
+          className="px-1 py-1.5 rounded border border-zinc-700 bg-transparent text-zinc-100 text-[10px] font-bold outline-none"
         >
           <option value="1">🟢</option>
           <option value="0">🟠</option>
         </select>
-        <button type="button" onClick={handleSalvar} className="p-0.5 text-emerald-600" title="Salvar">✓</button>
+        <button type="button" onClick={handleSalvar} className="p-1.5 text-emerald-400" title="Salvar">✓</button>
       </span>
     );
   }
@@ -259,16 +263,17 @@ function ApontamentoChip({
     <span
       className={
         color === "indigo"
-          ? "flex items-center gap-1 pl-2 pr-1 py-1 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-[10px] font-bold"
-          : "flex items-center gap-1 pl-2 pr-1 py-1 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 rounded-lg text-[10px] font-bold"
+          ? "flex items-center gap-1 pl-2 pr-1 bg-indigo-950/30 text-indigo-300 rounded-lg text-[10px] font-bold"
+          : "flex items-center gap-1 pl-2 pr-1 bg-orange-950/30 text-orange-300 rounded-lg text-[10px] font-bold"
       }
+      style={{ minHeight: "var(--tap-min)" }}
     >
       {item.codigo} · {item.descricao}
-      <button type="button" onClick={() => setEditing(true)} title="Editar" className="p-0.5 opacity-60 hover:opacity-100 transition-opacity">
-        <Pencil size={10} />
+      <button type="button" onClick={() => setEditing(true)} title="Editar" className="p-1.5 opacity-60 active:opacity-100">
+        <Pencil size={11} />
       </button>
-      <button type="button" onClick={handleExcluir} title="Excluir" className="p-0.5 opacity-60 hover:opacity-100 hover:text-red-600 transition-colors">
-        <X size={11} />
+      <button type="button" onClick={handleExcluir} title="Excluir" className="p-1.5 opacity-60 active:opacity-100 active:text-red-400">
+        <X size={13} />
       </button>
     </span>
   );
@@ -317,25 +322,25 @@ function SecaoApontamentos({
   };
 
   return (
-    <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-      <h3 className="text-xs font-extrabold uppercase text-slate-700 dark:text-slate-300">
+    <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+      <h3 className="text-xs font-extrabold uppercase text-zinc-300">
         Apontamentos (Produtivo / Improdutivo)
       </h3>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="space-y-3">
         <div className="space-y-1.5">
-          <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">🟢 Produtivo</span>
+          <span className="text-[10px] font-black uppercase text-indigo-400">🟢 Produtivo</span>
           <div className="flex flex-wrap gap-1.5">
-            {produtivos.length === 0 && <span className="text-xs text-slate-400 italic">Nenhum item.</span>}
+            {produtivos.length === 0 && <span className="text-xs text-zinc-500 italic">Nenhum item.</span>}
             {produtivos.map(item => (
               <ApontamentoChip key={item.id} item={item} color="indigo" onAdicionado={onAdicionado} onRemovido={onRemovido} />
             ))}
           </div>
         </div>
         <div className="space-y-1.5">
-          <span className="text-[10px] font-black uppercase text-orange-600 dark:text-orange-400">🟠 Improdutivo</span>
+          <span className="text-[10px] font-black uppercase text-orange-400">🟠 Improdutivo</span>
           <div className="flex flex-wrap gap-1.5">
-            {improdutivos.length === 0 && <span className="text-xs text-slate-400 italic">Nenhum item.</span>}
+            {improdutivos.length === 0 && <span className="text-xs text-zinc-500 italic">Nenhum item.</span>}
             {improdutivos.map(item => (
               <ApontamentoChip key={item.id} item={item} color="orange" onAdicionado={onAdicionado} onRemovido={onRemovido} />
             ))}
@@ -343,13 +348,14 @@ function SecaoApontamentos({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center pt-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-zinc-800">
         <input
           type="text"
           value={novoCodigo}
           onChange={e => setNovoCodigo(e.target.value)}
           placeholder="Código (ex: 217)"
-          className="w-28 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-24 px-3 rounded-lg border border-zinc-800 bg-zinc-800 text-zinc-100 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-zinc-600"
+          style={{ minHeight: "var(--tap-min)" }}
         />
         <input
           type="text"
@@ -357,12 +363,14 @@ function SecaoApontamentos({
           onChange={e => setNovaDescricao(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleAdicionar()}
           placeholder="Descrição (ex: ABASTECER)"
-          className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500"
+          className="flex-1 min-w-[140px] px-3 rounded-lg border border-zinc-800 bg-zinc-800 text-zinc-100 text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-zinc-600"
+          style={{ minHeight: "var(--tap-min)" }}
         />
         <select
           value={novoProdutivo ? "1" : "0"}
           onChange={e => setNovoProdutivo(e.target.value === "1")}
-          className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
+          className="px-3 rounded-lg border border-zinc-800 bg-zinc-800 text-zinc-100 text-xs font-semibold"
+          style={{ minHeight: "var(--tap-min)" }}
         >
           <option value="1">🟢 Produtivo</option>
           <option value="0">🟠 Improdutivo</option>
@@ -371,7 +379,8 @@ function SecaoApontamentos({
           type="button"
           disabled={salvando}
           onClick={handleAdicionar}
-          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow disabled:opacity-60"
+          className="px-3.5 bg-amber-600 active:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow disabled:opacity-60"
+          style={{ minHeight: "var(--tap-min)" }}
         >
           <Plus size={13} /> Adicionar
         </button>
@@ -390,11 +399,11 @@ export default function MaoDeObraCatalogos({
 }: Props) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-slate-500">
+      <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-zinc-500">
         <Layers size={15} /> Catálogos — adicione, edite ou remova os itens que aparecem nas listas do formulário
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-4">
         {CATEGORIAS.map(cat => (
           <SecaoCategoria
             key={cat.key}

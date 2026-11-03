@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 
 const ACCENT_CLASS: Record<"amber" | "emerald" | "red" | "zinc", string> = {
   amber: "text-amber-500 bg-amber-500/10",
@@ -13,7 +13,12 @@ export function StatTile({
   value,
   accent = "amber",
 }: {
-  icon: ComponentType<{ size?: number; className?: string }>;
+  // ElementType (não ComponentType<{size}>) de propósito: o tipo de ícone real do
+  // lucide-react (LucideIcon) é incompatível por variância de `propTypes` com
+  // ComponentType<{size?: number}> em TS strict — confirmado na Fase 5 (toda tela nova
+  // que passa um ícone lucide pra uma prop ComponentType<...> quebra o tsc). ElementType
+  // aceita qualquer componente real sem essa fricção.
+  icon: ElementType;
   label: string;
   value: ReactNode;
   accent?: "amber" | "emerald" | "red" | "zinc";

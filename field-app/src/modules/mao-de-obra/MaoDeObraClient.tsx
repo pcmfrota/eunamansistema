@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
 import {
   Wrench,
   Plus,
@@ -18,11 +17,10 @@ import {
   Pencil,
   RefreshCcw,
   Lock,
-  X,
-  Save,
   Layers,
-  ArrowLeft,
-  MoreVertical
+  ChevronLeft,
+  MoreVertical,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
@@ -34,6 +32,14 @@ import { salvarFichaMaoObra, excluirFichaMaoObra, duplicarFichaMaoObra, reabrirJ
 import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
 import MaoDeObraDashboard from "./MaoDeObraDashboard";
 import MaoDeObraCatalogos from "./MaoDeObraCatalogos";
+import { ListRow, Card } from "../../ui/primitives/ListRow";
+import { BottomSheet } from "../../ui/primitives/BottomSheet";
+import { ActionSheet, ActionSheetItem } from "../../ui/primitives/ActionSheet";
+import { ConfirmDialog } from "../../ui/primitives/ConfirmDialog";
+import { StatTile } from "../../ui/primitives/StatTile";
+import { EmptyState } from "../../ui/primitives/EmptyState";
+import { Fab } from "../../ui/primitives/Fab";
+import { useToast } from "../../ui/primitives/Toast";
 
 interface MaoDeObraClientProps {
   initialFichas: FichaMaoObraItem[];
@@ -107,6 +113,11 @@ function somarMinutos(lista: AtividadeJornada[]): number {
   return Number((totalMinutos / 60).toFixed(2));
 }
 
+type PendingConfirm =
+  | { kind: "excluir-atividade"; id: string }
+  | { kind: "excluir-ficha"; id: string; numero: string }
+  | { kind: "reabrir-ficha"; id: string };
+
 export default function MaoDeObraClient({
   initialFichas,
   initialApontamentos,
@@ -119,13 +130,13 @@ export default function MaoDeObraClient({
 }: MaoDeObraClientProps) {
   const { profile, user } = useAuth();
   const { isOnline } = useOffline();
+  const toast = useToast();
   const isAdmin = profile?.role === "admin" || userRole === "admin";
 
   const [activeTab, setActiveTab] = useState<"menu" | "form" | "historico" | "dashboard" | "catalogos">("menu");
-  const [openMenuFichaId, setOpenMenuFichaId] = useState<string | null>(null);
-  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const [showFiltros, setShowFiltros] = useState(false);
+  const [actionSheetFichaId, setActionSheetFichaId] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [filtrosOpen, setFiltrosOpen] = useState(false);
   const [fichas, setFichas] = useState<FichaMaoObraItem[]>(initialFichas || []);
   const [apontamentos, setApontamentos] = useState<AtividadeJornada[]>(initialApontamentos || []);
   const [catalogos, setCatalogos] = useState<any[]>(initialCatalogos || []);
@@ -140,30 +151,6 @@ export default function MaoDeObraClient({
   useEffect(() => { setApontamentos(initialApontamentos || []); }, [initialApontamentos]);
   useEffect(() => { setCatalogos(initialCatalogos || []); }, [initialCatalogos]);
   useEffect(() => { setApontamentosCatalogo(initialApontamentosCatalogo || []); }, [initialApontamentosCatalogo]);
-
-  useEffect(() => { setMounted(true); }, []);
-
-  const fecharMenuFicha = () => {
-    setOpenMenuFichaId(null);
-    setMenuAnchorRect(null);
-  };
-
-  // Fecha o menu flutuante de ações do Histórico ao pressionar Esc, rolar a página
-  // ou redimensionar a janela — nesses casos a posição ancorada à linha fica desatualizada.
-  useEffect(() => {
-    if (!openMenuFichaId) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") fecharMenuFicha();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("scroll", fecharMenuFicha, true);
-    window.addEventListener("resize", fecharMenuFicha);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("scroll", fecharMenuFicha, true);
-      window.removeEventListener("resize", fecharMenuFicha);
-    };
-  }, [openMenuFichaId]);
 
   // Estados do Formulário (Jornada do Dia)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -197,6 +184,8 @@ export default function MaoDeObraClient({
   const [filtroSupervisor, setFiltroSupervisor] = useState("");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
+
+  const filtrosAtivos = [filtroMecanico, filtroPlaca, filtroCategoria, filtroSupervisor, filtroDataInicio, filtroDataFim].filter(Boolean).length;
 
   const autoLoadedRef = useRef(false);
 
@@ -379,11 +368,11 @@ export default function MaoDeObraClient({
   // Salvar cabeçalho da Jornada (Offline-First)
   const handleSaveFicha = async (finalizar = false) => {
     if (!mecanicoNome.trim()) {
-      alert("Por favor, preencha o Nome do Colaborador.");
+      toast.show("Preencha o Nome do Colaborador.", "error");
       return;
     }
     if (finalizar && apontamentosDaJornada.length === 0) {
-      alert("Adicione ao menos uma atividade antes de finalizar a jornada.");
+      toast.show("Adicione ao menos uma atividade antes de finalizar a jornada.", "error");
       return;
     }
 
@@ -437,7 +426,7 @@ export default function MaoDeObraClient({
       }
 
       setStatusFicha(nextStatus);
-      alert(finalizar ? "✅ Jornada Finalizada com sucesso!" : "💾 Rascunho salvo!");
+      toast.show(finalizar ? "Jornada finalizada com sucesso!" : "Rascunho salvo!", "success");
 
       if (finalizar) {
         setSelectedFichaForPDF(updatedFicha);
@@ -445,7 +434,7 @@ export default function MaoDeObraClient({
       }
     } catch (err: any) {
       console.error("Erro no armazenamento local da ficha:", err);
-      alert(`Erro ao gravar dados no dispositivo: ${err?.message || String(err)}`);
+      toast.show(`Erro ao gravar dados no dispositivo: ${err?.message || String(err)}`, "error");
     }
   };
 
@@ -493,7 +482,7 @@ export default function MaoDeObraClient({
 
   const handleNovaAtividade = () => {
     if (!mecanicoNome.trim()) {
-      alert("Preencha o Nome do Colaborador antes de apontar atividades.");
+      toast.show("Preencha o Nome do Colaborador antes de apontar atividades.", "error");
       return;
     }
     setDraftAtividade({
@@ -556,15 +545,15 @@ export default function MaoDeObraClient({
   const handleRegistrarAtividade = async () => {
     if (!draftAtividade) return;
     if (!draftAtividade.apontamento_codigo) {
-      alert("Selecione o apontamento (o que está sendo feito).");
+      toast.show("Selecione o apontamento (o que está sendo feito).", "error");
       return;
     }
     if (!draftAtividade.hora_inicio) {
-      alert("Informe pelo menos o horário de início da atividade.");
+      toast.show("Informe pelo menos o horário de início da atividade.", "error");
       return;
     }
     if (conflitoDraft) {
-      alert(`Esse horário sobrepõe "${conflitoDraft.tipo_atividade}" (${conflitoDraft.hora_inicio} → ${conflitoDraft.hora_fim}). Ajuste o horário antes de registrar.`);
+      toast.show(`Esse horário sobrepõe "${conflitoDraft.tipo_atividade}" (${conflitoDraft.hora_inicio} → ${conflitoDraft.hora_fim}).`, "error");
       return;
     }
 
@@ -610,13 +599,13 @@ export default function MaoDeObraClient({
       }
 
       setDraftAtividade(null);
+      toast.show("Atividade registrada!", "success");
     } finally {
       setSavingAtividade(false);
     }
   };
 
   const handleExcluirAtividade = async (id: string) => {
-    if (!confirm("Remover este apontamento?")) return;
     try {
       await localDb.delete("apontamentos_mao_obra", id);
       setApontamentos(prev => prev.filter(a => a.id !== id));
@@ -635,7 +624,6 @@ export default function MaoDeObraClient({
 
   // Excluir Jornada
   const handleDeleteFicha = async (id: string) => {
-    if (!confirm("Deseja realmente excluir este apontamento de mão de obra? Todas as atividades registradas nele também serão removidas.")) return;
     try {
       await localDb.delete("fichas_mao_obra", id);
       setFichas(prev => prev.filter(f => f.id !== id));
@@ -643,6 +631,7 @@ export default function MaoDeObraClient({
       if (isOnline) {
         await excluirFichaMaoObra(id);
       }
+      toast.show("Jornada excluída.", "success");
     } catch (err) {
       console.error("Erro ao excluir ficha:", err);
     }
@@ -656,7 +645,7 @@ export default function MaoDeObraClient({
         if (res.success && res.data) {
           await localDb.put("fichas_mao_obra", res.data);
           setFichas(prev => [res.data, ...prev]);
-          alert("Jornada duplicada com sucesso!");
+          toast.show("Jornada duplicada com sucesso!", "success");
         }
       } else {
         const target = fichas.find(f => f.id === id);
@@ -671,7 +660,7 @@ export default function MaoDeObraClient({
           };
           await localDb.put("fichas_mao_obra", dup);
           setFichas(prev => [dup, ...prev]);
-          alert("Jornada duplicada offline com sucesso!");
+          toast.show("Jornada duplicada offline com sucesso!", "success");
         }
       }
     } catch (err) {
@@ -682,13 +671,12 @@ export default function MaoDeObraClient({
   // Reabrir Jornada finalizada (admin)
   const handleReabrirJornada = async (id: string) => {
     if (!isOnline) {
-      alert("Reabrir uma jornada requer conexão com a internet.");
+      toast.show("Reabrir uma jornada requer conexão com a internet.", "error");
       return;
     }
-    if (!confirm("Reabrir esta jornada para edição?")) return;
     const res = await reabrirJornada(id);
     if ("error" in res && res.error) {
-      alert(res.error);
+      toast.show(res.error, "error");
       return;
     }
     const alvo = fichas.find(f => f.id === id);
@@ -740,741 +728,487 @@ export default function MaoDeObraClient({
     });
   }, [fichasVisiveis, apontamentos, filtroMecanico, filtroPlaca, filtroCategoria, filtroSupervisor, filtroDataInicio, filtroDataFim]);
 
-  const inputCls = "w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed";
+  const fichaDoActionSheet = useMemo(
+    () => fichasFiltradas.find(f => f.id === actionSheetFichaId) || null,
+    [fichasFiltradas, actionSheetFichaId]
+  );
+
+  const actionSheetItems: ActionSheetItem[] = useMemo(() => {
+    if (!fichaDoActionSheet) return [];
+    const f = fichaDoActionSheet;
+    const items: ActionSheetItem[] = [
+      { key: "ver", label: "Ver / Imprimir", icon: Printer, onSelect: () => setSelectedFichaForPDF(f) },
+      { key: "editar", label: "Editar", icon: Pencil, onSelect: () => handleEditFicha(f) },
+      { key: "duplicar", label: "Duplicar", icon: Copy, onSelect: () => handleDuplicateFicha(f.id) }
+    ];
+    if (isAdmin && f.status === "Finalizado") {
+      items.push({ key: "reabrir", label: "Reabrir Jornada", icon: RefreshCcw, onSelect: () => setPendingConfirm({ kind: "reabrir-ficha", id: f.id }) });
+    }
+    if (isAdmin) {
+      items.push({ key: "excluir", label: "Excluir", icon: Trash2, destructive: true, onSelect: () => setPendingConfirm({ kind: "excluir-ficha", id: f.id, numero: f.numero_ficha }) });
+    }
+    return items;
+  }, [fichaDoActionSheet, isAdmin]);
+
+  const inputCls = "w-full px-3.5 py-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 text-sm font-semibold focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed placeholder:text-zinc-600";
+  const labelCls = "block text-xs font-bold text-zinc-400 mb-1.5";
+
+  const subTelaTitulo =
+    activeTab === "form" ? "Apontamento do Dia" :
+    activeTab === "historico" ? "Histórico" :
+    activeTab === "dashboard" ? "Dashboard" :
+    activeTab === "catalogos" ? "Catálogos" : "";
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-3 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
-      {/* ─── CABEÇALHO DO MÓDULO ─── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md flex items-center justify-center font-black">
-            <Wrench size={24} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">
-                EUNAMAN
-              </span>
-              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-bold text-slate-500">
-                PWA Offline
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight">
-              Apontamento Diário de Mão de Obra
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Cada atividade é registrada na hora — vários colaboradores podem apontar ao mesmo tempo, cada um pelo próprio celular.
-            </p>
-          </div>
-        </div>
-
-        {/* Voltar ao menu — só aparece quando já está dentro de uma seção */}
-        {activeTab !== "menu" && (
-          <button
-            onClick={() => setActiveTab("menu")}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-extrabold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors"
-          >
-            <ArrowLeft size={15} />
-            <span>Voltar</span>
-          </button>
-        )}
-      </div>
-
+    <div className="min-h-full">
       {/* ─── MENU DE CARDS (TELA INICIAL DO MÓDULO) ─── */}
       {activeTab === "menu" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button
+        <div className="p-4 space-y-2.5">
+          <ListRow
+            icon={<PenTool size={18} />}
+            title="Apontamento do Dia"
+            subtitle="Registrar atividades da jornada"
             onClick={() => setActiveTab("form")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
-          >
-            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
-              <PenTool size={22} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight">Apontamento do Dia</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Registrar atividades da jornada</p>
-            </div>
-          </button>
-
-          <button
+          />
+          <ListRow
+            icon={<FileText size={18} />}
+            title={`Histórico (${fichasVisiveis.length})`}
+            subtitle="Ver e editar jornadas lançadas"
             onClick={() => setActiveTab("historico")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
-          >
-            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
-              <FileText size={22} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight">Histórico ({fichasVisiveis.length})</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ver e editar jornadas lançadas</p>
-            </div>
-          </button>
-
-          <button
+          />
+          <ListRow
+            icon={<BarChart2 size={18} />}
+            title="Dashboard"
+            subtitle="Gráficos e indicadores"
             onClick={() => setActiveTab("dashboard")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
+          />
+          {isAdmin && (
+            <ListRow
+              icon={<Layers size={18} />}
+              title="Catálogos"
+              subtitle="Gerenciar listas do formulário"
+              onClick={() => setActiveTab("catalogos")}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ─── SUB-TELAS (com cabeçalho local de volta ao menu do módulo) ─── */}
+      {activeTab !== "menu" && (
+        <>
+          <div
+            className="sticky top-0 z-10 flex items-center gap-1 px-2 py-2 bg-zinc-950/95 backdrop-blur border-b border-zinc-800"
           >
-            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
-              <BarChart2 size={22} />
+            <button
+              onClick={() => setActiveTab("menu")}
+              aria-label="Voltar ao menu de Mão de Obra"
+              className="flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+              style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <h2 className="flex-1 text-sm font-black text-zinc-50">{subTelaTitulo}</h2>
+            {activeTab === "historico" && (
+              <button
+                onClick={() => setFiltrosOpen(true)}
+                aria-label="Filtros"
+                className="relative flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+                style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
+              >
+                <Filter size={18} />
+                {filtrosAtivos > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
+                )}
+              </button>
+            )}
+          </div>
+
+          <div className="p-4 space-y-4 pb-24">
+            {/* ─── APONTAMENTO DO DIA ─── */}
+            {activeTab === "form" && (
+              <>
+                <Card className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-base font-black text-amber-500">{numeroFicha}</span>
+                    <span className={cn(
+                      "text-[10px] px-2.5 py-1 rounded-full font-black uppercase",
+                      statusFicha === "Finalizado" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
+                    )}>
+                      {statusFicha}
+                    </span>
+                  </div>
+
+                  {!canEdit && (
+                    <div className="p-3 bg-zinc-800/60 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 flex items-center justify-between gap-3 flex-wrap">
+                      <span className="flex items-center gap-2"><Lock size={14} /> Jornada finalizada — somente leitura.</span>
+                      {isAdmin && editingId && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingConfirm({ kind: "reabrir-ficha", id: editingId })}
+                          className="px-3 py-2 bg-zinc-700 active:bg-zinc-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+                          style={{ minHeight: "var(--tap-min)" }}
+                        >
+                          <RefreshCcw size={13} /> Reabrir Jornada
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className={labelCls}>Nome do Colaborador *</label>
+                      <SearchableSelect options={colaboradorOptions} value={mecanicoNome} onChange={setMecanicoNome} disabled={!canEdit} placeholder="Selecione o colaborador..." />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Matrícula</label>
+                      <input type="text" disabled={!canEdit} value={mecanicoMatricula} onChange={e => setMecanicoMatricula(e.target.value)} placeholder="Ex: MEC-1234" className={inputCls} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Equipe / Turno</label>
+                        <SearchableSelect options={equipeOptions} value={equipe} onChange={setEquipe} disabled={!canEdit} placeholder="Turno..." />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Supervisor</label>
+                        <SearchableSelect options={supervisorOptions} value={supervisor} onChange={setSupervisor} disabled={!canEdit} placeholder="Supervisor..." />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Módulo</label>
+                        <SearchableSelect options={moduloOptions} value={modulo} onChange={setModulo} disabled={!canEdit} placeholder="Módulo..." />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Frente de Trabalho</label>
+                        <SearchableSelect options={frenteTrabalhoOptions} value={frenteTrabalho} onChange={setFrenteTrabalho} disabled={!canEdit} placeholder="Frente..." />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Data</label>
+                      <input type="date" disabled={!canEdit} value={dataJornada} onChange={e => setDataJornada(e.target.value)} className={inputCls} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Início da Jornada</label>
+                        <input type="time" disabled={!canEdit} value={horaInicioJornada} onChange={e => setHoraInicioJornada(e.target.value)} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Fim da Jornada</label>
+                        <input type="time" disabled={!canEdit} value={horaFimJornada} onChange={e => setHoraFimJornada(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+                  </div>
+                  {editingId && (
+                    <p className="text-[10px] text-zinc-500 font-semibold flex items-center gap-1.5">
+                      <RefreshCcw size={11} /> Jornada em aberto — pode ser retomada de qualquer celular com o mesmo nome, na mesma data.
+                    </p>
+                  )}
+                </Card>
+
+                {mecanicoNome.trim() && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <StatTile icon={Clock} label="Total" value={`${tempoTotalHorasCalculado}h`} accent="zinc" />
+                      <StatTile icon={CheckCircle2} label="Produtivo" value={`${tempoProdutivoCalculado}h`} accent="emerald" />
+                      <StatTile icon={AlertCircle} label="Ocioso" value={`${tempoOciosoCalculado}h`} accent="amber" />
+                    </div>
+
+                    {tempoNaoApontadoCalculado > 0 && (
+                      <div className="p-3 bg-red-950/30 border border-red-900/40 rounded-xl text-xs font-bold text-red-400 flex items-center gap-2">
+                        <AlertCircle size={14} className="shrink-0" />
+                        {tempoNaoApontadoCalculado}h da jornada ainda sem nenhuma atividade apontada.
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-extrabold uppercase text-zinc-400">Atividades do Dia</h3>
+                      {apontamentosDaJornada.length === 0 && (
+                        <EmptyState icon={Clock} title="Nenhuma atividade apontada ainda" />
+                      )}
+                      {apontamentosDaJornada.map(atv => (
+                        <div
+                          key={atv.id}
+                          className={cn(
+                            "p-3 rounded-2xl border flex items-start gap-3",
+                            (atv.produtivo ?? isAtividadeProdutiva(atv.tipo_atividade))
+                              ? "bg-emerald-950/20 border-emerald-900/40"
+                              : "bg-amber-950/20 border-amber-900/40"
+                          )}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {atv.apontamento_codigo && <span className="text-[9px] font-mono font-black text-zinc-500">#{atv.apontamento_codigo}</span>}
+                              <span className="text-xs font-black text-zinc-100">{atv.tipo_atividade}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                              {atv.tipo_manutencao && <span className="text-[9px] font-bold text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded uppercase">{atv.tipo_manutencao}</span>}
+                              {atv.placa && <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">{atv.placa}</span>}
+                              <span className="text-[10px] font-bold text-zinc-500">{atv.hora_inicio || "—"} → {atv.hora_fim || "—"} ({formatMinutos(atv.tempo_gasto_minutos)})</span>
+                            </div>
+                            {atv.descricao && <p className="text-[11px] text-zinc-400 mt-1">{atv.descricao}</p>}
+                          </div>
+                          {canEdit && (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button type="button" onClick={() => handleEditarAtividade(atv)} className="p-2 text-zinc-400 active:bg-zinc-800 rounded-lg" style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}>
+                                <Pencil size={15} />
+                              </button>
+                              <button type="button" onClick={() => setPendingConfirm({ kind: "excluir-atividade", id: atv.id })} className="p-2 text-zinc-400 active:bg-red-950/40 active:text-red-400 rounded-lg" style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}>
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label className={labelCls}>Observações Gerais</label>
+                      <textarea
+                        rows={3}
+                        disabled={!canEdit}
+                        value={observacoes}
+                        onChange={e => setObservacoes(e.target.value)}
+                        placeholder="Ex: Peça indisponível no estoque, aguardando autorização do supervisor..."
+                        className={inputCls}
+                      />
+                    </div>
+
+                    {canEdit && (
+                      <div className="flex flex-col gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveFicha(true)}
+                          className="w-full rounded-xl text-sm font-black text-white bg-emerald-600 active:bg-emerald-700 flex items-center justify-center gap-2"
+                          style={{ minHeight: "var(--tap-min)" }}
+                        >
+                          <CheckCircle2 size={16} /> Finalizar Jornada
+                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveFicha(false)}
+                            className="flex-1 rounded-xl text-xs font-black text-white bg-amber-600 active:bg-amber-700"
+                            style={{ minHeight: "var(--tap-min)" }}
+                          >
+                            Salvar Cabeçalho
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetForm}
+                            className="flex-1 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 active:bg-zinc-700"
+                            style={{ minHeight: "var(--tap-min)" }}
+                          >
+                            Nova Jornada
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ─── HISTÓRICO ─── */}
+            {activeTab === "historico" && (
+              <div className="space-y-2">
+                {fichasFiltradas.length === 0 && (
+                  <EmptyState icon={FileText} title="Nenhum apontamento de mão de obra encontrado" />
+                )}
+                {fichasFiltradas.map(f => {
+                  const qtdAtividades = apontamentos.filter(a => a.jornada_id === f.id).length;
+                  return (
+                    <ListRow
+                      key={f.id}
+                      title={`${f.numero_ficha} · ${f.mecanico_nome}`}
+                      subtitle={`${(f.data_jornada || f.created_at?.split("T")[0] || "").split("-").reverse().join("/")} · ${qtdAtividades} ativ. · Total ${f.tempo_total_horas || 0}h`}
+                      badge={
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0",
+                          f.status === "Finalizado" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
+                        )}>
+                          {f.status}
+                        </span>
+                      }
+                      onClick={() => setActionSheetFichaId(f.id)}
+                      rightSlot={<MoreVertical size={18} className="text-zinc-500" />}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ─── DASHBOARD ─── */}
+            {activeTab === "dashboard" && (
+              <MaoDeObraDashboard fichas={fichas} apontamentos={apontamentos} colaboradores={colaboradores} calendario={calendario} />
+            )}
+
+            {/* ─── CATÁLOGOS (ADMIN) ─── */}
+            {activeTab === "catalogos" && isAdmin && (
+              <MaoDeObraCatalogos
+                catalogos={catalogos}
+                apontamentosCatalogo={apontamentosCatalogo}
+                onCatalogoAdicionado={item => setCatalogos(prev => [...prev.filter(c => c.id !== item.id), item])}
+                onCatalogoRemovido={id => setCatalogos(prev => prev.filter(c => c.id !== id))}
+                onApontamentoAdicionado={item => setApontamentosCatalogo(prev => [...prev.filter(c => c.id !== item.id), item])}
+                onApontamentoRemovido={id => setApontamentosCatalogo(prev => prev.filter(c => c.id !== id))}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* FAB — apontar nova atividade (só na aba do formulário, com colaborador identificado) */}
+      {activeTab === "form" && mecanicoNome.trim() && canEdit && (
+        <Fab onClick={handleNovaAtividade} icon={<Plus size={20} />} label="Apontar" />
+      )}
+
+      {/* BOTTOM SHEET — rascunho da atividade sendo apontada */}
+      <BottomSheet open={!!draftAtividade} onClose={handleCancelarDraft} title="Apontar Atividade">
+        {draftAtividade && (
+          <div className="space-y-3 pb-2">
+            <div>
+              <label className={labelCls}>Categoria (Tipo de Manutenção)</label>
+              <SearchableSelect options={tipoManutencaoOptions} value={draftAtividade.tipo_manutencao || ""} onChange={v => updateDraftCampo("tipo_manutencao", v)} placeholder="— Não aplicável —" />
             </div>
             <div>
-              <h3 className="text-sm font-black uppercase tracking-tight">Dashboard</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Gráficos e indicadores</p>
+              <label className={labelCls}>Apontamento (Produtivo / Improdutivo) *</label>
+              <SearchableSelect options={apontamentoOptions} value={draftAtividade.apontamento_codigo || ""} onChange={handleSelecionarApontamento} placeholder="Selecione o que está sendo feito..." />
             </div>
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab("catalogos")}
-              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition-all text-left"
-            >
-              <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md">
-                <Layers size={22} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-tight">Catálogos</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Gerenciar listas do formulário</p>
-              </div>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ─── ABA 1: APONTAMENTO DO DIA (NOVO OU CONTINUAÇÃO) ─── */}
-      {activeTab === "form" && (
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-8">
-          {/* Topo do Formulário: Ficha Número & Live Status */}
-          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4 gap-2 flex-wrap">
-            <div className="flex items-center gap-3">
-              <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                {numeroFicha}
-              </span>
-              <span className={cn(
-                "text-xs px-2.5 py-1 rounded-md font-extrabold",
-                statusFicha === "Finalizado"
-                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-              )}>
-                {statusFicha}
-              </span>
+            <div>
+              <label className={labelCls}>Placa (opcional)</label>
+              <SearchableSelect options={placaOptions} value={draftAtividade.placa || ""} onChange={v => updateDraftCampo("placa", v)} placeholder="— Nenhuma —" />
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-2">
-              <Clock size={14} />
-              <span>{new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+            <div>
+              <label className={labelCls}>Observação (opcional)</label>
+              <input type="text" value={draftAtividade.descricao} onChange={e => updateDraftCampo("descricao", e.target.value)} placeholder="Detalhe extra sobre a atividade..." className={inputCls} />
             </div>
-          </div>
-
-          {!canEdit && (
-            <div className="p-3 bg-slate-100 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between gap-3 flex-wrap">
-              <span className="flex items-center gap-2"><Lock size={14} /> Jornada finalizada — somente leitura.</span>
-              {isAdmin && editingId && (
-                <button
-                  type="button"
-                  onClick={() => handleReabrirJornada(editingId)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
-                >
-                  <RefreshCcw size={13} /> Reabrir Jornada
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Seção 1: Dados do Colaborador */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-extrabold uppercase text-slate-800 dark:text-slate-200 border-l-4 border-emerald-500 pl-3">
-              👨‍🔧 1. Dados do Colaborador e da Jornada
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Colaborador <span className="text-red-500">*</span>
-                </label>
-                <SearchableSelect
-                  options={colaboradorOptions}
-                  value={mecanicoNome}
-                  onChange={setMecanicoNome}
-                  disabled={!canEdit}
-                  placeholder="Selecione o colaborador..."
-                />
+                <label className={labelCls}>Início</label>
+                <input type="time" value={draftAtividade.hora_inicio || ""} onChange={e => updateDraftCampo("hora_inicio", e.target.value)} className={inputCls} />
               </div>
-
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Matrícula
-                </label>
-                <input
-                  type="text"
-                  disabled={!canEdit}
-                  value={mecanicoMatricula}
-                  onChange={e => setMecanicoMatricula(e.target.value)}
-                  placeholder="Ex: MEC-1234"
-                  className={inputCls}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Equipe / Turno
-                </label>
-                <SearchableSelect
-                  options={equipeOptions}
-                  value={equipe}
-                  onChange={setEquipe}
-                  disabled={!canEdit}
-                  placeholder="Selecione o turno..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Supervisor Responsável
-                </label>
-                <SearchableSelect
-                  options={supervisorOptions}
-                  value={supervisor}
-                  onChange={setSupervisor}
-                  disabled={!canEdit}
-                  placeholder="Selecione o supervisor..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Módulo
-                </label>
-                <SearchableSelect
-                  options={moduloOptions}
-                  value={modulo}
-                  onChange={setModulo}
-                  disabled={!canEdit}
-                  placeholder="Selecione o módulo..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Frente de Trabalho
-                </label>
-                <SearchableSelect
-                  options={frenteTrabalhoOptions}
-                  value={frenteTrabalho}
-                  onChange={setFrenteTrabalho}
-                  disabled={!canEdit}
-                  placeholder="Selecione a frente..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Data
-                </label>
-                <input
-                  type="date"
-                  disabled={!canEdit}
-                  value={dataJornada}
-                  onChange={e => setDataJornada(e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Início da Jornada
-                </label>
-                <input
-                  type="time"
-                  disabled={!canEdit}
-                  value={horaInicioJornada}
-                  onChange={e => setHoraInicioJornada(e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Fim da Jornada
-                </label>
-                <input
-                  type="time"
-                  disabled={!canEdit}
-                  value={horaFimJornada}
-                  onChange={e => setHoraFimJornada(e.target.value)}
-                  className={inputCls}
-                />
+                <label className={labelCls}>Término</label>
+                <input type="time" value={draftAtividade.hora_fim || ""} onChange={e => updateDraftCampo("hora_fim", e.target.value)} className={inputCls} />
               </div>
             </div>
-            {editingId && (
-              <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1.5">
-                <RefreshCcw size={11} /> Jornada em aberto — pode ser retomada de qualquer celular com o mesmo nome, na mesma data.
-              </p>
-            )}
-          </div>
-
-          {/* Seção 2 (Atividades), Seção 3 (Observações) e Botões de Ação só aparecem depois
-              que o colaborador for identificado — revelação progressiva do formulário. */}
-          {mecanicoNome.trim() && (
-          <>
-          {/* Seção 2: Atividades do Dia */}
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-sm font-extrabold uppercase text-slate-800 dark:text-slate-200 border-l-4 border-emerald-500 pl-3">
-                ⏱️ 2. Atividades do Dia — Histórico de Apontamentos
-              </h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-xl font-black text-xs">
-                  Total: {tempoTotalHorasCalculado}h
-                </span>
-                <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-xl font-black text-xs">
-                  Produtivo: {tempoProdutivoCalculado}h
-                </span>
-                <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded-xl font-black text-xs">
-                  Ocioso: {tempoOciosoCalculado}h
-                </span>
-              </div>
+            <div className="p-2.5 rounded-xl bg-amber-500/10 font-black text-sm text-amber-400 text-center">
+              Duração: {draftAtividade.tempo_gasto || "00:00"}
             </div>
 
-            {tempoNaoApontadoCalculado > 0 && (
-              <div className="p-2.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-xl text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
-                <AlertCircle size={14} />
-                {tempoNaoApontadoCalculado}h da jornada ainda sem nenhuma atividade apontada.
+            {conflitoDraft && (
+              <div className="p-3 bg-red-950/30 border border-red-900/40 rounded-xl text-[11px] font-bold text-red-400 flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0" />
+                Esse horário sobrepõe "{conflitoDraft.tipo_atividade}" ({conflitoDraft.hora_inicio} → {conflitoDraft.hora_fim}).
               </div>
             )}
 
-            {/* Rascunho da atividade sendo apontada agora */}
-            {draftAtividade && canEdit && (
-              <div className="p-3 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Categoria (Tipo de Manutenção)</span>
-                    <SearchableSelect
-                      options={tipoManutencaoOptions}
-                      value={draftAtividade.tipo_manutencao || ""}
-                      onChange={v => updateDraftCampo("tipo_manutencao", v)}
-                      placeholder="— Não aplicável —"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Apontamento (Produtivo / Improdutivo) <span className="text-red-500">*</span></span>
-                    <SearchableSelect
-                      options={apontamentoOptions}
-                      value={draftAtividade.apontamento_codigo || ""}
-                      onChange={handleSelecionarApontamento}
-                      placeholder="Selecione o que está sendo feito..."
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Placa (opcional)</span>
-                    <SearchableSelect
-                      options={placaOptions}
-                      value={draftAtividade.placa || ""}
-                      onChange={v => updateDraftCampo("placa", v)}
-                      placeholder="— Nenhuma —"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Observação (opcional)</span>
-                    <input
-                      type="text"
-                      value={draftAtividade.descricao}
-                      onChange={e => updateDraftCampo("descricao", e.target.value)}
-                      placeholder="Detalhe extra sobre a atividade..."
-                      className={inputCls}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase">Início</span>
-                    <input
-                      type="time"
-                      value={draftAtividade.hora_inicio || ""}
-                      onChange={e => updateDraftCampo("hora_inicio", e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase">Término</span>
-                    <input
-                      type="time"
-                      value={draftAtividade.hora_fim || ""}
-                      onChange={e => updateDraftCampo("hora_fim", e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase">Duração</span>
-                    <div className="p-1.5 rounded-lg bg-emerald-100/60 dark:bg-emerald-900/40 font-black text-xs text-emerald-700 dark:text-emerald-300 text-center">
-                      {draftAtividade.tempo_gasto || "00:00"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={savingAtividade || !!conflitoDraft}
-                      onClick={handleRegistrarAtividade}
-                      className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow disabled:opacity-60"
-                    >
-                      <Save size={13} /> {savingAtividade ? "Salvando..." : "Registrar"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelarDraft}
-                      className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                {conflitoDraft && (
-                  <div className="p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-lg text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                    <AlertCircle size={13} className="shrink-0" />
-                    Esse horário sobrepõe "{conflitoDraft.tipo_atividade}" ({conflitoDraft.hora_inicio} → {conflitoDraft.hora_fim}). Ajuste o horário.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Atividades já registradas (histórico do dia) */}
-            <div className="space-y-2">
-              {apontamentosDaJornada
-                .filter(atv => atv.id !== draftAtividade?.id)
-                .map(atv => (
-                  <div
-                    key={atv.id}
-                    className={cn(
-                      "p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4",
-                      (atv.produtivo ?? isAtividadeProdutiva(atv.tipo_atividade))
-                        ? "bg-indigo-50/40 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-900/40"
-                        : "bg-orange-50/40 dark:bg-orange-950/10 border-orange-200 dark:border-orange-900/40"
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {atv.apontamento_codigo && <span className="text-[9px] font-mono font-black text-slate-400">#{atv.apontamento_codigo}</span>}
-                        <span className="text-xs font-black text-slate-800 dark:text-slate-100">{atv.tipo_atividade}</span>
-                        {atv.tipo_manutencao && <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase">{atv.tipo_manutencao}</span>}
-                        {atv.placa && <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{atv.placa}</span>}
-                        <span className="text-[10px] font-bold text-slate-500">{atv.hora_inicio || "—"} → {atv.hora_fim || "—"} ({formatMinutos(atv.tempo_gasto_minutos)})</span>
-                      </div>
-                      {atv.descricao && <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">{atv.descricao}</p>}
-                      <p className="text-[9px] text-slate-400 mt-1">
-                        {(atv as any)._isPendingSync
-                          ? "Aguardando sincronização..."
-                          : atv.criado_em
-                            ? `Registrado em ${new Date(atv.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${atv.registrado_por_nome ? ` por ${atv.registrado_por_nome}` : ""}`
-                            : null}
-                      </p>
-                    </div>
-                    {canEdit && (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleEditarAtividade(atv)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleExcluirAtividade(atv.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-              {apontamentosDaJornada.length === 0 && !draftAtividade && (
-                <p className="text-xs text-slate-400 italic">Nenhuma atividade apontada ainda.</p>
-              )}
-            </div>
-
-            {canEdit && !draftAtividade && (
-              <button
-                type="button"
-                onClick={handleNovaAtividade}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow"
-              >
-                <Plus size={14} /> Apontar Atividade
-              </button>
-            )}
-          </div>
-
-          {/* Seção 3: Observações */}
-          <div className="space-y-2 pt-2">
-            <h3 className="text-sm font-extrabold uppercase text-slate-800 dark:text-slate-200 border-l-4 border-emerald-500 pl-3">
-              💬 3. Observações Gerais
-            </h3>
-            <textarea
-              rows={3}
-              disabled={!canEdit}
-              value={observacoes}
-              onChange={e => setObservacoes(e.target.value)}
-              placeholder="Ex: Peça indisponível no estoque, aguardando autorização do supervisor..."
-              className={inputCls}
-            />
-          </div>
-
-          {/* Botões de Ação Principais */}
-          {canEdit && (
-            <div className="flex items-center justify-between gap-3 pt-6 border-t border-slate-200 dark:border-slate-800 flex-wrap">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold text-xs rounded-xl hover:bg-slate-300 transition"
-              >
-                Nova Jornada
-              </button>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleSaveFicha(false)}
-                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl shadow transition active:scale-95 flex items-center gap-1.5"
-                >
-                  💾 Salvar Cabeçalho
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSaveFicha(true)}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg transition active:scale-95 flex items-center gap-1.5"
-                >
-                  <CheckCircle2 size={16} /> Finalizar Jornada
-                </button>
-              </div>
-            </div>
-          )}
-          </>
-          )}
-        </div>
-      )}
-
-      {/* ─── ABA 2: HISTÓRICO DE JORNADAS ─── */}
-      {activeTab === "historico" && (
-        <div className="space-y-4">
-          {/* Barra de Filtros Avançados — discreta, só expande ao clicar */}
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
             <button
               type="button"
-              onClick={() => setShowFiltros(v => !v)}
-              className="flex items-center gap-2 text-xs font-extrabold uppercase text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+              disabled={savingAtividade || !!conflitoDraft}
+              onClick={handleRegistrarAtividade}
+              className="w-full rounded-xl text-sm font-black text-white bg-emerald-600 active:bg-emerald-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ minHeight: "var(--tap-min)" }}
             >
-              <Filter size={15} /> Filtros
+              {savingAtividade ? "Salvando..." : "Registrar Atividade"}
             </button>
-            {showFiltros && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-2">
-              <input
-                type="text"
-                placeholder="Colaborador..."
-                value={filtroMecanico}
-                onChange={e => setFiltroMecanico(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              />
-              <input
-                type="text"
-                placeholder="Placa..."
-                value={filtroPlaca}
-                onChange={e => setFiltroPlaca(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              />
-              <select
-                value={filtroCategoria}
-                onChange={e => setFiltroCategoria(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              >
-                <option value="">-- Todos os Apontamentos --</option>
-                {(apontamentosCatalogo || [])
-                  .slice()
-                  .sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo)))
-                  .map((t: any) => (
-                    <option key={t.codigo} value={t.descricao}>{t.codigo} · {t.descricao}</option>
-                  ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Supervisor..."
-                value={filtroSupervisor}
-                onChange={e => setFiltroSupervisor(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              />
-              <input
-                type="date"
-                value={filtroDataInicio}
-                onChange={e => setFiltroDataInicio(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              />
-              <input
-                type="date"
-                value={filtroDataFim}
-                onChange={e => setFiltroDataFim(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              />
-            </div>
-            )}
           </div>
+        )}
+      </BottomSheet>
 
-          {/* Tabela de Histórico */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            {fichasFiltradas.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold uppercase border-b border-slate-200 dark:border-slate-700">
-                    <tr>
-                      <th className="p-3">Data</th>
-                      <th className="p-3">Número</th>
-                      <th className="p-3">Colaborador</th>
-                      <th className="p-3 text-center">Atividades</th>
-                      <th className="p-3 text-center">Total</th>
-                      <th className="p-3 text-center">Produtivo</th>
-                      <th className="p-3 text-center">Ocioso</th>
-                      <th className="p-3 text-center">Status</th>
-                      <th className="p-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {fichasFiltradas.map((f) => {
-                      const qtdAtividades = apontamentos.filter(a => a.jornada_id === f.id).length;
-                      return (
-                        <tr
-                          key={f.id}
-                          onClick={(e) => {
-                            if (openMenuFichaId === f.id) {
-                              fecharMenuFicha();
-                            } else {
-                              setMenuAnchorRect(e.currentTarget.getBoundingClientRect());
-                              setOpenMenuFichaId(f.id);
-                            }
-                          }}
-                          className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer"
-                        >
-                          <td className="p-3 font-semibold">
-                            {(f.data_jornada || f.created_at?.split("T")[0] || "").split("-").reverse().join("/")}
-                          </td>
-                          <td className="p-3 font-extrabold text-emerald-600 dark:text-emerald-400">
-                            {f.numero_ficha}
-                          </td>
-                          <td className="p-3 font-bold">{f.mecanico_nome}</td>
-                          <td className="p-3 text-center font-bold text-slate-600 dark:text-slate-300">{qtdAtividades}</td>
-                          <td className="p-3 text-center font-black">{f.tempo_total_horas || 0}h</td>
-                          <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400">{f.tempo_produtivo_horas || 0}h</td>
-                          <td className="p-3 text-center font-bold text-orange-600 dark:text-orange-400">{f.tempo_ocioso_horas || 0}h</td>
-                          <td className="p-3 text-center">
-                            <span className={cn(
-                              "px-2.5 py-1 rounded-full text-[10px] font-black uppercase",
-                              f.status === "Finalizado" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            )}>
-                              {f.status}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right">
-                            <MoreVertical size={16} className="ml-auto text-slate-400" />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-12 text-center text-slate-400 space-y-2">
-                <FileText size={32} className="mx-auto text-slate-300" />
-                <p className="font-semibold text-xs">Nenhum apontamento de mão de obra encontrado.</p>
-              </div>
-            )}
+      {/* BOTTOM SHEET — filtros do histórico */}
+      <BottomSheet open={filtrosOpen} onClose={() => setFiltrosOpen(false)} title="Filtros">
+        <div className="space-y-3 pb-2">
+          <div>
+            <label className={labelCls}>Colaborador</label>
+            <input type="text" placeholder="Colaborador..." value={filtroMecanico} onChange={e => setFiltroMecanico(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Placa</label>
+            <input type="text" placeholder="Placa..." value={filtroPlaca} onChange={e => setFiltroPlaca(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Apontamento</label>
+            <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} className={inputCls}>
+              <option value="">-- Todos os Apontamentos --</option>
+              {(apontamentosCatalogo || [])
+                .slice()
+                .sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo)))
+                .map((t: any) => (
+                  <option key={t.codigo} value={t.descricao}>{t.codigo} · {t.descricao}</option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Supervisor</label>
+            <input type="text" placeholder="Supervisor..." value={filtroSupervisor} onChange={e => setFiltroSupervisor(e.target.value)} className={inputCls} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>De</label>
+              <input type="date" value={filtroDataInicio} onChange={e => setFiltroDataInicio(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Até</label>
+              <input type="date" value={filtroDataFim} onChange={e => setFiltroDataFim(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => { setFiltroMecanico(""); setFiltroPlaca(""); setFiltroCategoria(""); setFiltroSupervisor(""); setFiltroDataInicio(""); setFiltroDataFim(""); }}
+              className="flex-1 rounded-xl text-xs font-bold text-zinc-300 bg-zinc-800 active:bg-zinc-700"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltrosOpen(false)}
+              className="flex-1 rounded-xl text-xs font-black text-white bg-amber-600 active:bg-amber-700"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              Aplicar
+            </button>
           </div>
         </div>
-      )}
+      </BottomSheet>
 
-      {/* ─── ABA 3: DASHBOARD DE PRODUTIVIDADE ─── */}
-      {activeTab === "dashboard" && (
-        <MaoDeObraDashboard fichas={fichas} apontamentos={apontamentos} colaboradores={colaboradores} calendario={calendario} />
-      )}
+      {/* ACTION SHEET — ações por ficha no histórico (substitui o antigo menu flutuante ancorado) */}
+      <ActionSheet
+        open={!!actionSheetFichaId}
+        onClose={() => setActionSheetFichaId(null)}
+        title={fichaDoActionSheet ? `${fichaDoActionSheet.numero_ficha} · ${fichaDoActionSheet.mecanico_nome}` : undefined}
+        items={actionSheetItems}
+      />
 
-      {/* ─── ABA 4: CATÁLOGOS (ADMIN) ─── */}
-      {activeTab === "catalogos" && isAdmin && (
-        <MaoDeObraCatalogos
-          catalogos={catalogos}
-          apontamentosCatalogo={apontamentosCatalogo}
-          onCatalogoAdicionado={item => setCatalogos(prev => [...prev.filter(c => c.id !== item.id), item])}
-          onCatalogoRemovido={id => setCatalogos(prev => prev.filter(c => c.id !== id))}
-          onApontamentoAdicionado={item => setApontamentosCatalogo(prev => [...prev.filter(c => c.id !== item.id), item])}
-          onApontamentoRemovido={id => setApontamentosCatalogo(prev => prev.filter(c => c.id !== id))}
-        />
-      )}
-
-      {/* MENU FLUTUANTE DE AÇÕES DO HISTÓRICO — via portal em document.body, ancorado à
-          linha clicada e reposicionado com position: fixed. Assim ele nunca fica preso
-          (cortado) pelo overflow-hidden/overflow-x-auto do card da tabela, mesmo quando a
-          linha clicada é a última visível: nesse caso ele abre para cima em vez de para baixo. */}
-      {openMenuFichaId && menuAnchorRect && mounted && typeof document !== "undefined" && (() => {
-        const f = fichasFiltradas.find(x => x.id === openMenuFichaId);
-        if (!f) return null;
-
-        const MENU_WIDTH = 192;
-        const MENU_HEIGHT_ESTIMATE = 220;
-        const MARGIN = 8;
-        const abrirParaCima = menuAnchorRect.bottom + MENU_HEIGHT_ESTIMATE > window.innerHeight;
-        const top = abrirParaCima
-          ? Math.max(MARGIN, menuAnchorRect.top - MENU_HEIGHT_ESTIMATE)
-          : menuAnchorRect.bottom + 4;
-        const left = Math.min(
-          Math.max(MARGIN, menuAnchorRect.right - MENU_WIDTH),
-          window.innerWidth - MENU_WIDTH - MARGIN
-        );
-
-        return createPortal(
-          <>
-            <div className="fixed inset-0 z-40" onClick={fecharMenuFicha} />
-            <div
-              style={{ position: "fixed", top, left, width: MENU_WIDTH }}
-              className="z-50 py-1.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl text-left"
-            >
-              <button
-                onClick={() => { setSelectedFichaForPDF(f); fecharMenuFicha(); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              >
-                <Printer size={14} /> Ver / Imprimir
-              </button>
-              <button
-                onClick={() => { handleEditFicha(f); fecharMenuFicha(); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              >
-                <Pencil size={14} /> Editar
-              </button>
-              <button
-                onClick={() => { handleDuplicateFicha(f.id); fecharMenuFicha(); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              >
-                <Copy size={14} /> Duplicar
-              </button>
-              {isAdmin && f.status === "Finalizado" && (
-                <button
-                  onClick={() => { handleReabrirJornada(f.id); fecharMenuFicha(); }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
-                >
-                  <RefreshCcw size={14} /> Reabrir Jornada
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={() => { handleDeleteFicha(f.id); fecharMenuFicha(); }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-                >
-                  <Trash2 size={14} /> Excluir
-                </button>
-              )}
-            </div>
-          </>,
-          document.body
-        );
-      })()}
+      {/* CONFIRMAÇÕES (exclusão / reabertura) */}
+      <ConfirmDialog
+        open={pendingConfirm?.kind === "excluir-atividade"}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={() => { if (pendingConfirm?.kind === "excluir-atividade") handleExcluirAtividade(pendingConfirm.id); }}
+        title="Remover apontamento?"
+        description="Essa atividade será removida da jornada."
+        confirmLabel="Remover"
+        destructive
+      />
+      <ConfirmDialog
+        open={pendingConfirm?.kind === "excluir-ficha"}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={() => { if (pendingConfirm?.kind === "excluir-ficha") handleDeleteFicha(pendingConfirm.id); }}
+        title="Excluir jornada?"
+        description={pendingConfirm?.kind === "excluir-ficha" ? `A jornada ${pendingConfirm.numero} e todas as atividades registradas nela serão removidas.` : undefined}
+        confirmLabel="Excluir"
+        destructive
+      />
+      <ConfirmDialog
+        open={pendingConfirm?.kind === "reabrir-ficha"}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={() => { if (pendingConfirm?.kind === "reabrir-ficha") handleReabrirJornada(pendingConfirm.id); }}
+        title="Reabrir esta jornada?"
+        description="A jornada volta a ficar editável."
+        confirmLabel="Reabrir"
+      />
 
       {/* MODAL DE EXIBIÇÃO / GERAÇÃO DE RELATÓRIO */}
       {selectedFichaForPDF && (

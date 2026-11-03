@@ -17,10 +17,11 @@ import {
   Legend,
   LabelList
 } from "recharts";
-import { BarChart2, Clock, Users, TrendingUp, ClipboardList, Download, Loader2 } from "lucide-react";
+import { BarChart2, Clock, Users, TrendingUp, ClipboardList, Download, Loader2, CheckCircle2, Percent, AlertCircle } from "lucide-react";
 import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
+import { StatTile } from "../../ui/primitives/StatTile";
 
 const PRODUTIVO_COLOR = "#4f46e5"; // indigo — paleta padrão do projeto
 const OCIOSO_COLOR = "#f97316"; // laranja — usado como "Improdutivo" na exibição
@@ -55,15 +56,6 @@ interface Props {
   apontamentos?: AtividadeJornada[];
   colaboradores?: any[];
   calendario?: any[];
-}
-
-function KpiCard({ label, value, color }: { label: string; value: string | number; color: string }) {
-  return (
-    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-      <span className="text-[10px] font-bold text-slate-400 uppercase">{label}</span>
-      <div className={`text-xl font-black ${color}`}>{value}</div>
-    </div>
-  );
 }
 
 export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], colaboradores = [], calendario = [] }: Props) {
@@ -363,7 +355,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   }, [fichasFiltradas, filterDia, filterColaborador]);
 
   const selectCls =
-    "px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold outline-none";
+    "px-3 py-3 rounded-xl border border-zinc-800 bg-zinc-800 text-zinc-100 text-xs font-semibold outline-none";
 
   // Baixa o dashboard inteiro (KPIs + todos os gráficos + tabelas, exatamente como está na
   // tela, já filtrado) em PDF — tira uma "foto" real do layout renderizado (html2canvas) e
@@ -432,98 +424,93 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
   return (
     <div className="space-y-6">
       {/* Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center gap-3">
-        <select
-          value={filterMes}
-          onChange={e => setFilterMes(e.target.value)}
-          disabled={periodoPersonalizadoAtivo}
-          className={`${selectCls} disabled:opacity-40 disabled:cursor-not-allowed`}
-        >
-          {MONTHS_PT.map(m => (
-            <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
-          ))}
-        </select>
-        <select
-          value={filterAno}
-          onChange={e => setFilterAno(e.target.value)}
-          disabled={periodoPersonalizadoAtivo}
-          className={`${selectCls} disabled:opacity-40 disabled:cursor-not-allowed`}
-        >
-          {anoOptions.map(a => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
-        <select value={filterColaborador} onChange={e => setFilterColaborador(e.target.value)} className={selectCls}>
+      <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-2.5">
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={filterMes}
+            onChange={e => setFilterMes(e.target.value)}
+            disabled={periodoPersonalizadoAtivo}
+            className={`${selectCls} disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            {MONTHS_PT.map(m => (
+              <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+            ))}
+          </select>
+          <select
+            value={filterAno}
+            onChange={e => setFilterAno(e.target.value)}
+            disabled={periodoPersonalizadoAtivo}
+            className={`${selectCls} disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            {anoOptions.map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <select value={filterColaborador} onChange={e => setFilterColaborador(e.target.value)} className={`${selectCls} w-full`}>
           <option value="">Todos os Colaboradores</option>
           {colaboradorOptions.map(c => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
 
-        <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-700">
-          <span className="text-[10px] font-bold text-slate-400 uppercase">Período</span>
-          <input
-            type="date"
-            value={filtroDataInicio}
-            onChange={e => setFiltroDataInicio(e.target.value)}
-            className={selectCls}
-          />
-          <span className="text-[10px] text-slate-400">até</span>
-          <input
-            type="date"
-            value={filtroDataFim}
-            onChange={e => setFiltroDataFim(e.target.value)}
-            className={selectCls}
-          />
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase shrink-0">Período</span>
+          <input type="date" value={filtroDataInicio} onChange={e => setFiltroDataInicio(e.target.value)} className={`${selectCls} flex-1`} />
+          <span className="text-[10px] text-zinc-500">até</span>
+          <input type="date" value={filtroDataFim} onChange={e => setFiltroDataFim(e.target.value)} className={`${selectCls} flex-1`} />
           {periodoPersonalizadoAtivo && (
             <button
               type="button"
               onClick={() => { setFiltroDataInicio(""); setFiltroDataFim(""); }}
               title="Limpar período personalizado e voltar ao mês selecionado"
-              className="px-2 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+              className="shrink-0 px-2.5 rounded-xl border border-zinc-700 bg-zinc-800 text-[10px] font-bold text-zinc-400 active:text-red-400"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               ✕
             </button>
           )}
         </div>
 
-        <span className="text-[10px] text-slate-400 font-semibold">
+        <p className="text-[10px] text-zinc-500 font-semibold">
           {periodoPersonalizadoAtivo ? "Período personalizado: " : "Período: "}
           {selectedPeriodo.data_inicio?.split("-").reverse().join("/")} — {selectedPeriodo.data_fim?.split("-").reverse().join("/")}
-        </span>
+        </p>
 
         <button
           type="button"
           onClick={handleExportarPdf}
           disabled={exportandoPdf}
-          className="ml-auto flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 active:bg-emerald-700 text-white text-xs font-extrabold disabled:opacity-60"
+          style={{ minHeight: "var(--tap-min)" }}
         >
           {exportandoPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          {exportandoPdf ? "Gerando PDF..." : "Baixar PDF"}
+          {exportandoPdf ? "Gerando PDF..." : "Baixar PDF do Dashboard"}
         </button>
       </div>
 
       {/* A partir daqui é o que entra na exportação em PDF (handleExportarPdf) — KPIs,
-          todos os gráficos e as tabelas, exatamente como aparecem na tela e já filtrados. */}
-      <div ref={reportRef} className="space-y-6 bg-slate-50 dark:bg-slate-950">
+          todos os gráficos e as tabelas, exatamente como aparecem na tela e já filtrados.
+          Fundo claro de propósito (bg-slate-50): é o que o html2canvas captura pro PDF. */}
+      <div ref={reportRef} className="space-y-4 bg-slate-50 p-3 rounded-2xl">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-        <KpiCard label="Jornadas Finalizadas" value={kpis.finalizadas} color="text-slate-900 dark:text-white" />
-        <KpiCard label="Horas Apontadas" value={`${kpis.horasTotais}h`} color="text-slate-900 dark:text-white" />
-        <KpiCard label="Horas Produtivas" value={`${kpis.horasProdutivas}h`} color="text-indigo-600 dark:text-indigo-400" />
-        <KpiCard label="Horas Improdutivas" value={`${kpis.horasOciosas}h`} color="text-orange-600 dark:text-orange-400" />
-        <KpiCard label="Horas Não Apontadas" value={`${kpis.horasNaoApontadas}h`} color="text-slate-500 dark:text-slate-400" />
-        <KpiCard label="% Produtividade" value={`${kpis.produtividade}%`} color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="Colaboradores Ativos" value={kpis.colaboradoresAtivos} color="text-purple-600 dark:text-purple-400" />
+      <div className="grid grid-cols-2 gap-2">
+        <StatTile icon={CheckCircle2} label="Jornadas Finalizadas" value={kpis.finalizadas} accent="zinc" />
+        <StatTile icon={Clock} label="Horas Apontadas" value={`${kpis.horasTotais}h`} accent="zinc" />
+        <StatTile icon={TrendingUp} label="Horas Produtivas" value={`${kpis.horasProdutivas}h`} accent="emerald" />
+        <StatTile icon={AlertCircle} label="Horas Improdutivas" value={`${kpis.horasOciosas}h`} accent="amber" />
+        <StatTile icon={Clock} label="Não Apontadas" value={`${kpis.horasNaoApontadas}h`} accent="zinc" />
+        <StatTile icon={Percent} label="% Produtividade" value={`${kpis.produtividade}%`} accent="emerald" />
+        <StatTile icon={Users} label="Colaboradores Ativos" value={kpis.colaboradoresAtivos} accent="amber" />
       </div>
 
       {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+      <div className="grid grid-cols-1 gap-4">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <Clock size={14} /> Horas por Dia (período selecionado)
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-56 w-full">
             {dadosPorDia.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorDia} barCategoryGap="35%">
@@ -544,16 +531,16 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+              <p className="text-xs text-zinc-500 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
             )}
           </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <TrendingUp size={14} /> Tendência Mensal
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-56 w-full">
             {dadosPorMes.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorMes}>
@@ -574,16 +561,16 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem dados suficientes.</p>
+              <p className="text-xs text-zinc-500 italic flex items-center justify-center h-full">Sem dados suficientes.</p>
             )}
           </div>
         </div>
 
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3 lg:col-span-2">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <BarChart2 size={14} /> Distribuição por Tipo de Atividade
           </h3>
-          <div className="h-80 w-full">
+          <div className="h-64 w-full">
             {dadosPorTipo.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorTipo} margin={{ top: 20, bottom: 10 }}>
@@ -600,17 +587,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+              <p className="text-xs text-zinc-500 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
             )}
           </div>
         </div>
 
         {/* Produtivo x Improdutivo x Não Apontado (proporção geral) */}
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <BarChart2 size={14} /> Produtivo x Improdutivo x Não Apontado
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-56 w-full">
             {(kpis.horasTotais > 0 || kpis.horasNaoApontadas > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -632,17 +619,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+              <p className="text-xs text-zinc-500 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
             )}
           </div>
         </div>
 
         {/* Distribuição por Tipo de Manutenção */}
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <BarChart2 size={14} /> Por Tipo de Manutenção
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-56 w-full">
             {dadosPorTipoManutencao.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorTipoManutencao} layout="vertical" margin={{ left: 24 }}>
@@ -656,17 +643,17 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Nenhuma atividade com tipo de manutenção informado.</p>
+              <p className="text-xs text-zinc-500 italic flex items-center justify-center h-full">Nenhuma atividade com tipo de manutenção informado.</p>
             )}
           </div>
         </div>
 
         {/* Horas por Colaborador (Produtivo x Improdutivo x Não Apontado) */}
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3 lg:col-span-2">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <Users size={14} /> Horas por Colaborador
           </h3>
-          <div className="h-80 w-full">
+          <div className="h-64 w-full">
             {dadosPorColaborador.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosPorColaborador}>
@@ -696,20 +683,20 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-xs text-slate-400 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
+              <p className="text-xs text-zinc-500 italic flex items-center justify-center h-full">Sem apontamentos no período.</p>
             )}
           </div>
         </div>
 
         {/* Ranking por Colaborador */}
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <Users size={14} /> Ranking por Colaborador
           </h3>
           {ranking.length > 0 ? (
             <div data-pdf-expand="true" className="overflow-x-auto max-h-64 overflow-y-auto">
               <table className="w-full text-left text-[11px]">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase sticky top-0">
+                <thead className="bg-zinc-800 text-zinc-400 font-extrabold uppercase sticky top-0">
                   <tr>
                     <th className="p-2">Colaborador</th>
                     <th className="p-2 text-right">Produtivo</th>
@@ -719,35 +706,35 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                     <th className="p-2 text-right">%</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-zinc-800 text-zinc-200">
                   {ranking.map(r => (
                     <tr key={r.nome}>
                       <td className="p-2 font-bold">{r.nome}</td>
-                      <td className="p-2 text-right font-semibold text-indigo-600 dark:text-indigo-400">{r.produtivo}h</td>
-                      <td className="p-2 text-right font-semibold text-orange-600 dark:text-orange-400">{r.ocioso}h</td>
-                      <td className="p-2 text-right font-semibold text-slate-500 dark:text-slate-400">{r.naoApontado}h</td>
+                      <td className="p-2 text-right font-semibold text-indigo-400">{r.produtivo}h</td>
+                      <td className="p-2 text-right font-semibold text-orange-400">{r.ocioso}h</td>
+                      <td className="p-2 text-right font-semibold text-zinc-400">{r.naoApontado}h</td>
                       <td className="p-2 text-right font-black">{r.total}h</td>
-                      <td className="p-2 text-right font-bold text-emerald-600 dark:text-emerald-400">{r.pct}%</td>
+                      <td className="p-2 text-right font-bold text-emerald-400">{r.pct}%</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 italic">Sem apontamentos no período.</p>
+            <p className="text-xs text-zinc-500 italic">Sem apontamentos no período.</p>
           )}
         </div>
       </div>
 
       {/* Atividades e Observações — detalhamento apontamento-por-apontamento. Use o
           colaborador no filtro do topo + o "Dia" abaixo pra ver so um colaborador num dia. */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-xs font-extrabold uppercase text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800">
+        <div className="p-4 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-xs font-extrabold uppercase text-zinc-200 flex items-center gap-1.5">
             <ClipboardList size={14} /> Atividades e Observações
           </h3>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Dia</span>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase">Dia</span>
             <input
               type="date"
               value={filterDia}
@@ -759,7 +746,8 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                 type="button"
                 onClick={() => setFilterDia("")}
                 title="Limpar filtro de dia"
-                className="px-2 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                className="px-2.5 rounded-xl border border-zinc-700 bg-zinc-800 text-[10px] font-bold text-zinc-400 active:text-red-400"
+                style={{ minHeight: "var(--tap-min)" }}
               >
                 ✕
               </button>
@@ -768,15 +756,15 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
         </div>
 
         {fichaUnicaSelecionada && (
-          <div className="mx-4 mt-4 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs text-slate-700 dark:text-slate-300">
+          <div className="mx-4 mt-4 p-3 rounded-xl bg-indigo-950/30 border border-indigo-900/40 text-xs text-zinc-300">
             <p>
-              <span className="font-black">{fichaUnicaSelecionada.mecanico_nome}</span>
+              <span className="font-black text-zinc-100">{fichaUnicaSelecionada.mecanico_nome}</span>
               {" · "}{fichaUnicaSelecionada.data_jornada?.split("-").reverse().join("/")}
               {" · "}Jornada {fichaUnicaSelecionada.hora_inicio_jornada || "-"} às {fichaUnicaSelecionada.hora_fim_jornada || "-"}
               {" · "}<span className="font-bold">{fichaUnicaSelecionada.status}</span>
             </p>
             {fichaUnicaSelecionada.observacoes && (
-              <p className="mt-1 italic text-slate-500 dark:text-slate-400">"{fichaUnicaSelecionada.observacoes}"</p>
+              <p className="mt-1 italic text-zinc-400">"{fichaUnicaSelecionada.observacoes}"</p>
             )}
           </div>
         )}
@@ -785,7 +773,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
           {apontamentosDetalhados.length > 0 ? (
             <div data-pdf-expand="true" className="overflow-x-auto max-h-96 overflow-y-auto">
               <table className="w-full text-left text-[11px]">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase sticky top-0">
+                <thead className="bg-zinc-800 text-zinc-400 font-extrabold uppercase sticky top-0">
                   <tr>
                     <th className="p-2">Data</th>
                     <th className="p-2">Colaborador</th>
@@ -795,7 +783,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                     <th className="p-2">Observação</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-zinc-800 text-zinc-200">
                   {apontamentosDetalhados.map(a => (
                     <tr key={a.id}>
                       <td className="p-2 font-semibold whitespace-nowrap">{a.data ? a.data.split("-").reverse().join("/") : "-"}</td>
@@ -803,14 +791,14 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
                       <td className="p-2 whitespace-nowrap">{a.hora_inicio} – {a.hora_fim}</td>
                       <td className="p-2">{a.tipo_atividade}{a.placa ? ` (${a.placa})` : ""}</td>
                       <td className="p-2 text-right font-semibold">{minutosParaHoras(a.minutos)}</td>
-                      <td className="p-2 text-slate-500 dark:text-slate-400 max-w-xs">{a.descricao || "—"}</td>
+                      <td className="p-2 text-zinc-400 max-w-xs">{a.descricao || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 italic">Nenhum apontamento encontrado para os filtros selecionados.</p>
+            <p className="text-xs text-zinc-500 italic">Nenhum apontamento encontrado para os filtros selecionados.</p>
           )}
         </div>
       </div>

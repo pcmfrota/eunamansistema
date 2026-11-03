@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 
 export function EmptyState({
   icon: Icon,
@@ -6,7 +6,9 @@ export function EmptyState({
   description,
   action,
 }: {
-  icon?: ComponentType<{ size?: number }>;
+  // ElementType, não ComponentType<{size}> — ver nota em StatTile.tsx sobre a
+  // incompatibilidade de propTypes com ícones reais do lucide-react.
+  icon?: ElementType;
   title: string;
   description?: string;
   action?: ReactNode;
