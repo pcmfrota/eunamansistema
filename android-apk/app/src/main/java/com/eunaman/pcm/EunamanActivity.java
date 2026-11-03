@@ -328,6 +328,16 @@ public class EunamanActivity extends AppCompatActivity {
             safeAreaBottomDp = bars.bottom / density;
             safeAreaLeftDp = bars.left / density;
             aplicarSafeAreaNoWebView();
+
+            // android:windowSoftInputMode="adjustResize" para de funcionar sozinho quando a
+            // janela e edge-to-edge (WindowCompat.setDecorFitsSystemWindows(false) acima) --
+            // o Android nao encolhe mais a WebView quando o teclado abre, entao o Chromium
+            // nunca faz scroll do campo focado pra cima do teclado, e o teclado cobre o que
+            // o usuario esta digitando. Reproduzimos o adjustResize na mao aplicando o inset
+            // do IME como padding nativo da WebView: encolhe a area visivel quando o teclado
+            // aparece (reflow real da pagina) e volta a 0 quando ele fecha.
+            int imeBottom = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            v.setPadding(0, 0, 0, imeBottom);
             return windowInsets;
         });
         ViewCompat.requestApplyInsets(webView);
