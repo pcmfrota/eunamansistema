@@ -289,6 +289,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const [filterFornecedor, setFilterFornecedor] = useState('')
   const [filterArea, setFilterArea] = useState('')
   const [filterModulo, setFilterModulo] = useState('')
+  const [filterDetalhamento, setFilterDetalhamento] = useState('')
   const [filterAno, setFilterAno] = useState(defaultYearString)
   const [filterMes, setFilterMes] = useState(defaultMonthName)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -459,6 +460,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       // 5. Modulo
       if (filterModulo && item.modulo !== filterModulo) return false
 
+      // 5b. Detalhamento do Pedido
+      if (filterDetalhamento && item.detalhamento !== filterDetalhamento) return false
+
       // 6. Ano (Data)
       if (filterAno && item.mappedYear !== filterAno) return false
 
@@ -490,7 +494,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
       return true
     })
-  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterAno, filterMes, filterOrigens, filterTipos, filterDataInicio, filterDataFim, search])
+  }, [mappedItems, filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterDetalhamento, filterAno, filterMes, filterOrigens, filterTipos, filterDataInicio, filterDataFim, search])
 
   // Quantos filtros estão ativos além do padrão — mostrado como selo no botão
   // quando o painel de filtros está fechado, pra não esconder que algo está filtrando.
@@ -501,6 +505,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     if (filterFornecedor) count++
     if (filterArea) count++
     if (filterModulo) count++
+    if (filterDetalhamento) count++
     if (filterMecanico) count++
     if (filterOrigens.length > 0) count++
     if (filterTipos.length > 0) count++
@@ -508,7 +513,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     if (filterDataFim) count++
     if (search) count++
     return count
-  }, [filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterMecanico, filterOrigens, filterTipos, filterDataInicio, filterDataFim, search])
+  }, [filterStatuses, filterCriticidade, filterFornecedor, filterArea, filterModulo, filterDetalhamento, filterMecanico, filterOrigens, filterTipos, filterDataInicio, filterDataFim, search])
 
   // Apply all filters including Mechanic
   const filtered = useMemo(() => {
@@ -585,6 +590,19 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
     const map: Record<string, number> = {}
     filtered.forEach(i => {
       const key = i.modulo || 'N/A'
+      map[key] = (map[key] || 0) + 1
+    })
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
+  // Horizontal Bar Chart: Etiqueta por Detalhamento do Pedido — mostra placa/descrição/
+  // detalhamento do pedido dos itens ao clicar numa barra (filtra a lista de Detalhamento).
+  const barDetalhamentoData = useMemo(() => {
+    const map: Record<string, number> = {}
+    filtered.forEach(i => {
+      const key = i.detalhamento || 'NÃO INFORMADO'
       map[key] = (map[key] || 0) + 1
     })
     return Object.entries(map)
@@ -1457,6 +1475,59 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
           </ResponsiveContainer>
         </ChartCard>
 
+      </div>
+
+      {/* ─── ROW 3.3: ETIQUETA POR DETALHAMENTO DO PEDIDO (largo — labels longos, até 15 status) ─── */}
+      <div className="grid grid-cols-1 gap-4 w-full">
+        <ChartCard
+          title="ETIQUETA POR DETALHAMENTO DO PEDIDO"
+          subtitle="Placa, descrição e status do pedido — clique numa barra para filtrar"
+          titleColor="border-violet-600"
+          compactHeight={Math.max(220, barDetalhamentoData.length * 32)}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={barDetalhamentoData}
+              layout="vertical"
+              margin={{ left: -10, right: 30, top: 10, bottom: 10 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} opacity={0.1} />
+              <XAxis type="number" hide />
+              <YAxis
+                dataKey="name"
+                type="category"
+                tick={{ fill: '#a1a1aa', fontSize: 9, fontWeight: 900 }}
+                axisLine={false}
+                tickLine={false}
+                width={200}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const data = payload[0]
+                  return (
+                    <div className="bg-zinc-950/90 text-white px-3 py-1.5 rounded-xl border border-zinc-800 text-[10px] font-black uppercase tracking-wider">
+                      {data.name}: <span className="text-violet-400">{data.value}</span>
+                    </div>
+                  )
+                }}
+              />
+              <Bar
+                dataKey="value"
+                radius={[0, 4, 4, 0]}
+                label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                barSize={14}
+                cursor="pointer"
+                onClick={(entry: any) => setFilterDetalhamento(prev => prev === entry.name ? '' : entry.name)}
+              >
+                {barDetalhamentoData.map((entry, idx) => (
+                  <Cell key={idx} fill="#7c3aed" opacity={filterDetalhamento && filterDetalhamento !== entry.name ? 0.35 : 1} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
       </div>
 
       {/* ─── ROW 3.4: TENDÊNCIA MENSAL — ENCERRADAS X PENDENTES (ano inteiro, largo) ─── */}

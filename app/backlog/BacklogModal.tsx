@@ -847,16 +847,19 @@ export default function BacklogModal({
                 </datalist>
               </Field>
               <Field label="Detalhamento do Pedido">
-                <input
+                <select
                   className={inputCls}
-                  list="backlog-detalhamento"
-                  placeholder="Ex: Aguardando Fornecedor..."
-                  value={form.detalhamento}
+                  value={form.detalhamento || ''}
                   onChange={e => setForm({...form, detalhamento: e.target.value})}
-                />
-                <datalist id="backlog-detalhamento">
-                  {DETALHAMENTO_PEDIDO_SUGESTOES.map(d => <option key={d} value={d} />)}
-                </datalist>
+                >
+                  <option value="">Selecione...</option>
+                  {/* Preserva um valor antigo em texto livre que não esteja mais na lista,
+                      pra não sumir/zerar o campo ao editar um item já cadastrado. */}
+                  {form.detalhamento && !DETALHAMENTO_PEDIDO_SUGESTOES.includes(form.detalhamento) && (
+                    <option value={form.detalhamento}>{form.detalhamento}</option>
+                  )}
+                  {DETALHAMENTO_PEDIDO_SUGESTOES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
               </Field>
               <Field label="Data da RC">
                 <input className={cn(inputCls, "font-mono")} type="date" value={(form.data_rc || '').split('T')[0]} onChange={e => setForm({...form, data_rc: e.target.value})} />
