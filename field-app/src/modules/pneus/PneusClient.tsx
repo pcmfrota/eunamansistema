@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
-import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, Eye, ArrowLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid } from "lucide-react";
+import { Download, Upload, Plus, Circle, ShieldAlert, AlertTriangle, Search, Printer, Eye, ChevronLeft, Filter, ChevronDown, ClipboardList, History, LayoutGrid, MoreVertical, Pencil, Trash2, BarChart2 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { registrarInspecaoCompleta, atualizarInspecao, excluirInspecao, excluirInspecoesMassivo } from "./actions";
 import { useAuth } from "@/components/auth-context";
@@ -20,6 +20,13 @@ import {
   normalizarCondicaoPneu, sulcoTailwind, calcCondicaoPneu,
   CONDICAO_BADGE_CLASSES, CONDICAO_HEX, CONDICAO_LABEL,
 } from "@/src/models/pneus";
+import { ListRow, Card } from "../../ui/primitives/ListRow";
+import { ActionSheet, ActionSheetItem } from "../../ui/primitives/ActionSheet";
+import { ConfirmDialog } from "../../ui/primitives/ConfirmDialog";
+import { StatTile } from "../../ui/primitives/StatTile";
+import { EmptyState } from "../../ui/primitives/EmptyState";
+import { Fab } from "../../ui/primitives/Fab";
+import { useToast } from "../../ui/primitives/Toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Equipamento = { id: string; placa: string; tipo?: string | null; modulo?: string | null; categoria?: string | null; status?: string | null; deleted_at?: string | null };
@@ -158,6 +165,13 @@ export default function PneusClient({
   const [selectedSchematic, setSelectedSchematic] = useState<Inspecao | null>(null);
   // Boletim aberto na pré-visualização da ficha (ver antes de baixar o PDF).
   const [previewInspecao, setPreviewInspecao] = useState<Inspecao | null>(null);
+  const toast = useToast();
+  // Item cujo menu de ações (ActionSheet) está aberto — substitui o antigo hover-reveal
+  // de botões por linha (sem equivalente em toque).
+  const [actionSheetItem, setActionSheetItem] = useState<Inspecao | null>(null);
+  // Confirmação pendente (exclusão única ou em massa) — substitui window.confirm(), que
+  // não tem equivalente nativo decente em mobile/WebView.
+  const [pendingConfirm, setPendingConfirm] = useState<{ kind: "excluir" | "excluir-lote" } | null>(null);
 
   // ── Batch Actions ──
   const toggleSelect = (id: string) => {
@@ -171,16 +185,16 @@ export default function PneusClient({
   };
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Confirmar exclusão de ${selectedIds.size} registros?`)) return;
 
     if (isOnline) {
       const res = await excluirInspecoesMassivo(Array.from(selectedIds));
       if (res && "error" in res) {
-        alert(res.error);
+        toast.show(res.error, "error");
       } else {
         await localDb.deleteMany("pneus_inspecao", Array.from(selectedIds));
         window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
         setSelectedIds(new Set());
+        toast.show("Registros excluídos.", "success");
       }
     } else {
       const idsArray = Array.from(selectedIds);
@@ -189,27 +203,26 @@ export default function PneusClient({
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
       window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
       setSelectedIds(new Set());
-      alert("✅ Exclusão em lote registrada localmente!");
+      toast.show("Exclusão em lote registrada localmente!", "success");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Confirmar exclusão definitiva?")) return;
-
     if (isOnline) {
       const res = await excluirInspecao(id);
       if (res && "error" in res) {
-        alert(res.error);
+        toast.show(res.error, "error");
       } else {
         await localDb.delete("pneus_inspecao", id);
         window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
+        toast.show("Registro excluído.", "success");
       }
     } else {
       await localDb.delete("pneus_inspecao", id);
       await localDb.addToQueue("pneu", "delete", id);
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
       window.dispatchEvent(new CustomEvent("offline-db-updated-pneus_inspecao"));
-      alert("✅ Exclusão registrada localmente!");
+      toast.show("Exclusão registrada localmente!", "success");
     }
   };
 
@@ -493,11 +506,11 @@ export default function PneusClient({
         (window as any).EunamanApp.saveBase64File(excelBase64, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       } catch (err: any) {
         console.error("Erro ao gerar Excel para App:", err);
-        alert("Erro ao salvar Excel: " + err.message);
+        toast.show("Erro ao salvar Excel: " + err.message, "error");
       }
     } else {
       XLSXLib.writeFile(wb, filename);
-      alert("Planilha Excel gerada e baixada com sucesso!");
+      toast.show("Planilha Excel gerada e baixada com sucesso!", "success");
     }
   };
 
@@ -506,848 +519,518 @@ export default function PneusClient({
    const downloadBoletimPDF = (ins: Inspecao) => gerarFichaPneusPDF(ins);
 
   return (
-    <div className="p-4 md:p-8 flex flex-col gap-6 max-w-[100rem] mx-auto w-full h-full animate-in fade-in duration-500">
-      
-      {/* Header Section — sempre visível; ações e filtros só aparecem fora do menu inicial */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-zinc-950 p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
-         <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/5 blur-3xl rounded-full -mr-20 -mt-20 group-hover:bg-orange-500/10 transition-colors" />
+    <div className="min-h-full">
+      {/* ─── MENU DE CARDS (TELA INICIAL DO MÓDULO) ─── */}
+      {tab === "menu" && (
+        <div className="p-4 space-y-2.5">
+          {!isVisitante && (
+            <ListRow
+              icon={<Plus size={18} />}
+              title="Registrar"
+              subtitle="Lançar um novo boletim de inspeção"
+              onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
+            />
+          )}
+          <ListRow
+            icon={<span className="text-base leading-none">🚛</span>}
+            title="Boletim Pesados"
+            subtitle="Painel e inspeções da frota pesada"
+            onClick={() => handleSetTab("dashboard")}
+          />
+          <ListRow
+            icon={<span className="text-base leading-none">🚗</span>}
+            title="Boletim Leves"
+            subtitle="Painel e inspeções da frota leve"
+            onClick={() => handleSetTab("leves")}
+          />
+          <ListRow
+            icon={<ClipboardList size={18} />}
+            title="Lista"
+            subtitle="Todas as inspeções em formato de lista"
+            onClick={() => handleSetTab("lista")}
+          />
+          <ListRow
+            icon={<LayoutGrid size={18} />}
+            title="Sulcos Detalhados"
+            subtitle="Medição por lado direito, meio e esquerdo"
+            onClick={() => handleSetTab("sulcos")}
+          />
+          <ListRow
+            icon={<History size={18} />}
+            title="Histórico"
+            subtitle="Ciclos e alterações já encerrados"
+            onClick={() => handleSetTab("historico")}
+          />
+        </div>
+      )}
 
-         <div className="flex items-center gap-5 relative z-10">
-            <div className="p-4 bg-orange-500 text-white rounded-2xl shadow-xl shadow-orange-500/20">
-              <Circle size={28} fill="currentColor" fillOpacity={0.2} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-50">Boletim de Pneus</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-bold flex items-center gap-2">
-                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                 Monitoramento e Inspeção de Frotas
-              </p>
-            </div>
-         </div>
-
-          {tab !== "menu" && (
-          <div className="flex flex-wrap items-center gap-3 relative z-10">
-            {/* Voltar ao menu de cards */}
+      {/* ─── SUB-TELAS (com cabeçalho local de volta ao menu do módulo) ─── */}
+      {tab !== "menu" && (
+        <>
+          <div className="sticky top-0 z-10 flex items-center gap-1 px-2 py-2 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
             <button
               onClick={() => handleSetTab("menu")}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-xs font-black text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              aria-label="Voltar ao menu de Pneus"
+              className="flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+              style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
             >
-              <ArrowLeft size={15} /> Voltar
+              <ChevronLeft size={22} />
             </button>
-
-            {/* Botão Filtros — retrátil, fechado por padrão pra manter a tela limpa */}
+            <h2 className="flex-1 text-sm font-black text-zinc-50 truncate">
+              {tab === "dashboard" ? "Boletim Pesados" :
+               tab === "leves" ? "Boletim Leves" :
+               tab === "lista" ? "Lista" :
+               tab === "sulcos" ? "Sulcos Detalhados" : "Histórico"}
+            </h2>
             <button
               onClick={() => setShowFiltros(v => !v)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-3 rounded-2xl border text-xs font-black uppercase tracking-widest transition-colors",
-                showFiltros
-                  ? "bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400"
-                  : "bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              )}
+              aria-label="Filtros"
+              className="relative flex items-center justify-center rounded-xl text-zinc-300 active:bg-zinc-800"
+              style={{ minWidth: "var(--tap-min)", minHeight: "var(--tap-min)" }}
             >
-              <Filter size={15} /> Filtros
+              <Filter size={18} />
               {(search || searchStatus) && (
-                <span className="px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[9px] leading-none">•</span>
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
               )}
-              <ChevronDown size={14} className={cn("transition-transform", showFiltros && "rotate-180")} />
             </button>
+          </div>
 
-            <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm">
-               <Download size={16} /> Exportar
-            </button>
+          <div className="p-4 space-y-4 pb-24">
 
-            {!isVisitante && (
-              <button
-                  onClick={() => alert("Histórico da quinzena arquivado com sucesso. Iniciando novo ciclo...")}
-                  className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-orange-600 border border-orange-200 dark:border-orange-900/50 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-all"
-              >
-                 <Archive size={16} /> Fechar Ciclo
-              </button>
-            )}
-
-            {!isVisitante ? (
-              <>
-                <button onClick={() => setIsImportOpen(true)} className="flex items-center gap-2 px-4 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all shadow-sm">
-                   <Upload size={16} /> Importar
-                </button>
-                <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-orange-500/30 transition-all active:scale-95 group">
-                   <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
-                   Registrar
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2 px-5 py-3 bg-zinc-100 dark:bg-zinc-900 rounded-2xl text-zinc-500 text-xs font-bold border border-zinc-200 dark:border-zinc-800 shadow-inner">
-                 <ShieldAlert size={16} className="text-orange-500" />
-                 VISUALIZAÇÃO
-              </div>
-            )}
-         </div>
+          {isVisitante && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-zinc-900 rounded-2xl text-zinc-400 text-xs font-bold border border-zinc-800">
+              <ShieldAlert size={16} className="text-amber-500" />
+              VISUALIZAÇÃO
+            </div>
           )}
-      </div>
 
-      {/* ─── MENU DE CARDS (TELA INICIAL) ─── */}
-      {tab === "menu" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {!isVisitante && (
-            <button
-              onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
-              className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
-            >
-              <div className="p-3 bg-orange-500 text-white rounded-xl shadow-md">
-                <Plus size={22} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Registrar</h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Lançar um novo boletim de inspeção</p>
-              </div>
-            </button>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+              <button onClick={exportExcel} className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl" style={{ minHeight: "var(--tap-min)" }}>
+                <Download size={14} /> Exportar
+              </button>
+              <button onClick={() => setIsImportOpen(true)} className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl" style={{ minHeight: "var(--tap-min)" }}>
+                <Upload size={14} /> Importar
+              </button>
+              <button
+                onClick={() => toast.show("Histórico da quinzena arquivado com sucesso. Iniciando novo ciclo...", "success")}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl"
+                style={{ minHeight: "var(--tap-min)" }}
+              >
+                <Archive size={14} /> Fechar Ciclo
+              </button>
+            </div>
           )}
 
-          <button
-            onClick={() => handleSetTab("dashboard")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
-          >
-            <div className="p-3 bg-orange-500 text-white rounded-xl shadow-md text-lg leading-none">🚛</div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Boletim Pesados</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Painel e inspeções da frota pesada</p>
+          {criticos.length > 0 && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span className="text-xs font-bold leading-snug">
+                ALERTA: {criticos.length} pneus em estado crítico ou troca imediata detectados na frota.
+              </span>
             </div>
-          </button>
+          )}
 
-          <button
-            onClick={() => handleSetTab("leves")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition-all text-left"
-          >
-            <div className="p-3 bg-blue-500 text-white rounded-xl shadow-md text-lg leading-none">🚗</div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Boletim Leves</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Painel e inspeções da frota leve</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => handleSetTab("lista")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
-          >
-            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
-              <ClipboardList size={22} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Lista</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Todas as inspeções em formato de lista</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => handleSetTab("sulcos")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
-          >
-            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
-              <LayoutGrid size={22} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Sulcos Detalhados</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Medição por lado direito, meio e esquerdo</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => handleSetTab("historico")}
-            className="flex flex-col items-start gap-3 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition-all text-left"
-          >
-            <div className="p-3 bg-zinc-700 text-white rounded-xl shadow-md">
-              <History size={22} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-tight text-zinc-800 dark:text-zinc-100">Histórico</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Ciclos e alterações já encerrados</p>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {tab !== "menu" && (
-      <>
-      {criticos.length > 0 && (
-        <div className="flex items-center gap-4 px-6 py-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-600 dark:text-red-400 shadow-sm animate-pulse">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span className="text-sm font-bold tracking-tight">
-            ALERTA: {criticos.length} pneus em estado crítico ou troca imediata detectados na frota.
-          </span>
-        </div>
-      )}
-
-      {showFiltros && (
-        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-zinc-950 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-            {/* Filtro por Placa */}
-            <div className="relative group">
-               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-orange-500 transition-colors" />
-               <input
-                 type="text"
-                 placeholder="PLACA..."
-                 value={search}
-                 onChange={e => setSearch(e.target.value)}
-                 className="pl-12 pr-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all w-44"
-               />
-            </div>
-
-            {/* Filtro por Data */}
-            <div className="flex items-center bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-1.5 gap-2">
-              <input
-                type="date"
-                value={dateInicio}
-                onChange={e => setDateInicio(e.target.value)}
-                className="bg-transparent text-[10px] font-black uppercase outline-none text-zinc-600 dark:text-zinc-400"
-              />
-              <span className="text-zinc-300 font-bold">/</span>
-              <input
-                type="date"
-                value={dateFim}
-                onChange={e => setDateFim(e.target.value)}
-                className="bg-transparent text-[10px] font-black uppercase outline-none text-zinc-600 dark:text-zinc-400"
-              />
-            </div>
-
-            {/* Filtro por Status */}
-            <select
-              value={searchStatus}
-              onChange={e => setSearchStatus(e.target.value)}
-              className="px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none transition-all cursor-pointer"
-            >
-              <option value="">TODOS STATUS</option>
-              {Object.keys(counts).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-
-            {(search || searchStatus) && (
-              <button
-                onClick={handleClearFilters}
-                className="px-4 py-3 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-2xl transition-all"
+          {showFiltros && (
+            <Card className="p-4 space-y-3">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="PLACA..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-black uppercase tracking-widest text-zinc-100 outline-none"
+                  style={{ minHeight: "var(--tap-min)" }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={dateInicio}
+                  onChange={e => setDateInicio(e.target.value)}
+                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-[11px] font-bold text-zinc-300 outline-none"
+                />
+                <span className="text-zinc-600 font-bold">—</span>
+                <input
+                  type="date"
+                  value={dateFim}
+                  onChange={e => setDateFim(e.target.value)}
+                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-[11px] font-bold text-zinc-300 outline-none"
+                />
+              </div>
+              <select
+                value={searchStatus}
+                onChange={e => setSearchStatus(e.target.value)}
+                className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-black uppercase tracking-widest text-zinc-300 outline-none"
+                style={{ minHeight: "var(--tap-min)" }}
               >
-                Limpar
-              </button>
-            )}
-        </div>
-      )}
-
-      {/* Main Tabs */}
-      <div className="flex flex-col gap-6">
-
-        {(tab === "dashboard" || tab === "leves") && (
-          <div className="space-y-6">
-
-            {/* Dashboard Header: AI Report + Module Filter + Legend */}
-            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                <button 
-                  onClick={() => setIsAIReportOpen(true)}
-                  className="flex items-center gap-3 px-6 py-4 bg-zinc-900 dark:bg-orange-500/10 text-white dark:text-orange-400 border border-zinc-800 dark:border-orange-500/30 rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
+                <option value="">TODOS STATUS</option>
+                {Object.keys(counts).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {(search || searchStatus) && (
+                <button
+                  onClick={handleClearFilters}
+                  className="w-full py-2.5 text-xs font-black text-red-400 uppercase tracking-widest active:bg-red-500/10 rounded-xl"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <Sparkles size={20} className="text-orange-500 animate-pulse" />
-                  RELATÓRIO IA
+                  Limpar filtros
                 </button>
+              )}
+            </Card>
+          )}
+
+          <div className="flex flex-col gap-6">
+
+            {(tab === "dashboard" || tab === "leves") && (
+              <div className="space-y-4">
+
+                <button
+                  onClick={() => setIsAIReportOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-2xl text-sm font-black uppercase tracking-widest active:bg-amber-500/20"
+                >
+                  <Sparkles size={18} className="text-amber-500" />
+                  Relatório IA
+                </button>
+
                 <div>
-                  <h3 className="font-black text-zinc-800 dark:text-zinc-200 tracking-tight text-lg">
+                  <h3 className="font-black text-zinc-100 tracking-tight text-base">
                     {tab === 'leves' ? '🚗 Painel — Carros Leves' : '🚛 Painel — Veículos Pesados'}
                   </h3>
-                  <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-2">
-                    <CalendarCheck size={14} className="text-emerald-500" />
-                    Última Atualização: <span className="text-zinc-900 dark:text-zinc-50">{fmtDate(globalLatestDate)}</span>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-1.5 mt-0.5">
+                    <CalendarCheck size={12} className="text-emerald-500" />
+                    Atualizado em {fmtDate(globalLatestDate)}
                   </p>
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Module Filter Tabs */}
-                <div className="flex flex-wrap gap-2">
+
+                <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
                   {modulosDisponiveis.map(mod => (
                     <button
                       key={mod}
                       onClick={() => setModuloFiltro(mod)}
-                      className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border ${
+                      className={cn(
+                        "shrink-0 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl border",
                         moduloFiltro === mod
-                          ? "bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/20"
-                          : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:border-orange-300"
-                      }`}
+                          ? "bg-amber-500 text-zinc-950 border-amber-500"
+                          : "bg-zinc-900 text-zinc-400 border-zinc-800"
+                      )}
                     >
                       {mod}
                     </button>
                   ))}
-                  {/* Atalho rápido pro filtro de status PENDENTE (mesmo filtro do card de KPI
-                      abaixo), direto ao lado dos módulos pra não precisar rolar a tela. */}
                   <button
                     type="button"
                     onClick={() => handleClickCondicao('PENDENTE')}
-                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-dashed ${
+                    className={cn(
+                      "shrink-0 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl border border-dashed",
                       condicaoFiltro === 'PENDENTE'
-                        ? "bg-zinc-700 text-white border-zinc-700 shadow-lg shadow-zinc-700/20 dark:bg-zinc-300 dark:text-zinc-900 dark:border-zinc-300"
-                        : "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-300 dark:border-zinc-700 hover:border-zinc-400"
-                    }`}
+                        ? "bg-zinc-300 text-zinc-900 border-zinc-300"
+                        : "bg-zinc-900 text-zinc-400 border-zinc-700"
+                    )}
                   >
                     Pendentes
                   </button>
                 </div>
-                <div className="flex gap-3 text-[10px] font-black uppercase tracking-tighter text-zinc-400 ml-2">
+
+                <Card className="p-3 flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-black uppercase tracking-tight text-zinc-400">
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Bom</span>
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Recapagem</span>
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Crítico</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-300" /> Pendente</span>
-                </div>
-              </div>
-            </div>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-500" /> Pendente</span>
+                </Card>
 
-            {/* Explica a lógica de cálculo da condição geral (mesmo texto do formulário de
-                registro), aqui na aba principal do Boletim pra quem só está consultando. */}
-            <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-5 space-y-2">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Como a condição geral é calculada</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" /> Crítico — sulco até 4mm</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shrink-0" /> Recapagem — sulco de 5 a 6mm</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> Bom — sulco acima de 6mm</span>
-              </div>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                Vale o <b>pior valor entre o Sulco 2 (meio)</b> de todas as posições — Sulco 1 (direito) e Sulco 3 (esquerdo) são só apoio visual, não entram nessa conta. <b>Exemplo:</b> se 10 posições estão com meio em 12mm e o TDE está com meio em 3mm, a condição geral vira <b>CRÍTICO</b>.
-              </p>
-            </div>
+                {/* Aviso: placas há mais de LIMITE_DIAS_BOLETIM dias sem nenhum boletim (independe
+                    do período selecionado nos filtros de data acima — usa o histórico real). */}
+                {atrasados15d.length > 0 && (
+                  <div className="flex items-start gap-3 p-4 rounded-2xl border border-red-900/60 bg-red-950/20">
+                    <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-wide text-red-400">
+                        {atrasados15d.length} placa{atrasados15d.length !== 1 ? "s" : ""} há mais de {LIMITE_DIAS_BOLETIM} dias sem boletim
+                      </p>
+                      <p className="text-[11px] font-semibold text-red-400/80 mt-1 break-words">
+                        {atrasados15d.map(({ eq, dias }) => `${eq.placa} (${dias == null ? "nunca teve boletim" : `${dias}d`})`).join(" · ")}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-            {/* Aviso: placas há mais de LIMITE_DIAS_BOLETIM dias sem nenhum boletim (independe
-                do período selecionado nos filtros de data acima — usa o histórico real). */}
-            {atrasados15d.length > 0 && (
-              <div className="flex items-start gap-3 p-4 rounded-2xl border-2 border-red-300 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20">
-                <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-wide text-red-700 dark:text-red-400">
-                    {atrasados15d.length} placa{atrasados15d.length !== 1 ? "s" : ""} há mais de {LIMITE_DIAS_BOLETIM} dias sem boletim de pneus
-                  </p>
-                  <p className="text-[11px] font-semibold text-red-600/90 dark:text-red-400/80 mt-1 break-words">
-                    {atrasados15d.map(({ eq, dias }) => `${eq.placa} (${dias == null ? "nunca teve boletim" : `${dias}d`})`).join(" · ")}
-                  </p>
+                {/* Global KPI Cards — toque num cartão pra filtrar a lista abaixo por aquele status; toque de novo pra limpar */}
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(counts).map(([label, val]) => {
+                    const isActive = condicaoFiltro === label;
+                    const accent = label === 'BOM' ? 'text-emerald-500 bg-emerald-500/10' : label === 'RECAPAGEM' ? 'text-yellow-400 bg-yellow-400/10' : 'text-red-500 bg-red-500/10';
+                    return (
+                      <button
+                        type="button"
+                        key={label}
+                        onClick={() => handleClickCondicao(label)}
+                        className={cn(
+                          "text-left p-3.5 rounded-2xl border bg-zinc-900",
+                          isActive ? "border-amber-500 ring-2 ring-amber-500/30" : "border-zinc-800"
+                        )}
+                      >
+                        <span className={cn("inline-flex p-2 rounded-xl mb-2", accent)}>
+                          <Circle size={16} fill="currentColor" fillOpacity={0.2} />
+                        </span>
+                        <div className="text-xl font-black text-zinc-50">{val}</div>
+                        <p className="text-[9px] font-bold text-zinc-500 mt-0.5 uppercase">{label} · {Math.round((val/total)*100)}%</p>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => handleClickCondicao('PENDENTE')}
+                    className={cn(
+                      "text-left p-3.5 rounded-2xl border border-dashed bg-zinc-900",
+                      condicaoFiltro === 'PENDENTE' ? "border-amber-500 ring-2 ring-amber-500/30" : "border-zinc-700"
+                    )}
+                  >
+                    <span className="inline-flex p-2 rounded-xl mb-2 bg-zinc-800 text-zinc-500">
+                      <Circle size={16} className="opacity-40" />
+                    </span>
+                    <div className="text-xl font-black text-zinc-400">{pendentesTotal}</div>
+                    <p className="text-[9px] font-bold text-zinc-500 mt-0.5 uppercase">Pendente · sem boletim</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleClickCondicao('ATRASADO_15D')}
+                    className={cn(
+                      "text-left p-3.5 rounded-2xl border bg-zinc-900",
+                      condicaoFiltro === 'ATRASADO_15D' ? "border-red-500 ring-2 ring-red-500/30" : "border-red-900/50"
+                    )}
+                  >
+                    <span className="inline-flex p-2 rounded-xl mb-2 bg-red-500/10 text-red-500">
+                      <AlertTriangle size={16} />
+                    </span>
+                    <div className="text-xl font-black text-red-400">{atrasados15d.length}</div>
+                    <p className="text-[9px] font-bold text-red-500/80 mt-0.5 uppercase">Atrasadas · +{LIMITE_DIAS_BOLETIM}d</p>
+                  </button>
                 </div>
+
+                {/* Lista de veículos (respeitando o filtro de módulo/status acima) — toque numa
+                    placa abre o esquema completo com os 3 pontos de medição por posição. */}
+                {(() => {
+                  const items = todosItensFiltrados.map(x => x.row);
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                          Veículos{moduloFiltro !== 'TODOS' ? ` · ${moduloFiltro}` : ''} ({items.length})
+                        </h4>
+                        {condicaoFiltro !== 'TODOS' && (
+                          <button
+                            type="button"
+                            onClick={() => setCondicaoFiltro('TODOS')}
+                            className="flex items-center gap-1 px-2 py-1 bg-amber-500/15 text-amber-400 rounded-full text-[9px] font-black uppercase tracking-widest"
+                          >
+                            {condicaoFiltro} ✕
+                          </button>
+                        )}
+                      </div>
+                      {items.length === 0 && (
+                        <EmptyState icon={Circle} title="Nenhum veículo encontrado" />
+                      )}
+                      {todosItensFiltrados.map(({ modulo, row }) => {
+                        if (row.kind === 'inspecao') {
+                          const ins = row.ins;
+                          return (
+                            <ListRow
+                              key={ins.id}
+                              title={ins.equipamentos?.placa || '—'}
+                              subtitle={`${modulo} · ${fmtDate(ins.data_inspecao)}${ins.km_atual ? ` · ${ins.km_atual} km` : ''}`}
+                              meta={(ins as any)._isPendingSync ? "Salvo offline" : undefined}
+                              badge={
+                                <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border", condBadge(calcCondicaoPneu(ins)))}>
+                                  {CONDICAO_LABEL[calcCondicaoPneu(ins)]}
+                                </span>
+                              }
+                              onClick={() => setSelectedSchematic(ins)}
+                              rightSlot={<ChevronDown size={16} className="text-zinc-600 -rotate-90" />}
+                            />
+                          );
+                        }
+                        return (
+                          <ListRow
+                            key={`pendente-${row.eq.id}`}
+                            title={row.eq.placa}
+                            subtitle={modulo}
+                            badge={
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border border-dashed border-zinc-700 bg-zinc-900 text-zinc-500">
+                                PENDENTE
+                              </span>
+                            }
+                            onClick={() => setSelectedSchematic({
+                              id: `pendente-${row.eq.id}`,
+                              equipamento_id: row.eq.id,
+                              data_inspecao: new Date().toISOString(),
+                              km_atual: null,
+                              de: null, dd: null, tei: null, tee: null, tdi: null, tde: null, tei1: null, tee1: null, tdi1: null, tde1: null, estepe: null,
+                              condicao: "PENDENTE",
+                              equipamentos: {
+                                placa: row.eq.placa,
+                                tipo: row.eq.tipo,
+                                modulo: row.eq.modulo,
+                                categoria: row.eq.categoria
+                              }
+                            })}
+                            rightSlot={<ChevronDown size={16} className="text-zinc-700 -rotate-90" />}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                {/* Charts */}
+                <Card className="p-4">
+                  <h3 className="font-bold text-zinc-200 text-xs uppercase tracking-wide mb-3 flex items-center gap-2">📊 Distribuição das Condições</h3>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={80} dataKey="value" paddingAngle={5}>
+                        {pieData.map((entry) => <Cell key={entry.name} fill={COND_COLOR[entry.name]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', background: '#18181b', color: '#fafafa' }} itemStyle={{ fontWeight: 'bold' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Card>
+
+                <Card className="p-4">
+                  <h3 className="font-bold text-zinc-200 text-xs uppercase tracking-wide mb-3 flex items-center gap-2">📈 Média de Desgaste (Sulcos)</h3>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={posMedia} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.5} />
+                      <XAxis dataKey="pos" tick={{ fontSize: 8, fontWeight: 800, fill: '#a1a1aa' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9, fontWeight: 700, fill: '#a1a1aa' }} axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{ fill: '#27272a' }} contentStyle={{ borderRadius: '12px', border: 'none', background: '#18181b', color: '#fafafa' }} />
+                      <Legend wrapperStyle={{ fontSize: 9, fontWeight: 700 }} />
+                      <Bar dataKey="mediaDir" name="Direito" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={10} />
+                      <Bar dataKey="media" name="Meio" fill="#f97316" radius={[4, 4, 0, 0]} barSize={10} />
+                      <Bar dataKey="mediaEsq" name="Esquerdo" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={10} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+
               </div>
             )}
 
-            {/* Global KPI Cards — clique num cartão pra filtrar a tabela abaixo por aquele status; clique de novo pra limpar */}
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-              {Object.entries(counts).map(([label, val]) => {
-                const isActive = condicaoFiltro === label;
-                return (
-                  <button
-                    type="button"
-                    key={label}
-                    onClick={() => handleClickCondicao(label)}
-                    className={`text-left bg-white dark:bg-zinc-950 p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group ${
-                      isActive
-                        ? "border-orange-500 ring-2 ring-orange-500/30"
-                        : "border-zinc-200 dark:border-zinc-800"
-                    }`}
-                  >
-                     <div className="flex items-center justify-between mb-3">
-                        <span className={`p-2 rounded-xl ${
-                          label === 'BOM' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10' :
-                          label === 'RECAPAGEM' ? 'bg-yellow-50 text-yellow-500 dark:bg-yellow-500/10' :
-                          'bg-red-50 text-red-500 dark:bg-red-500/10'
-                        }`}>
-                           <Circle size={18} fill="currentColor" fillOpacity={0.2} />
-                        </span>
-                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">{isActive ? "Filtrando" : "Global"}</span>
-                     </div>
-                     <div className="text-2xl font-black text-zinc-900 dark:text-zinc-50">{val}</div>
-                     <p className="text-[10px] font-bold text-zinc-500 mt-0.5">{label} · {Math.round((val/total)*100)}%</p>
-                  </button>
-                );
-              })}
-              {/* Pendente Card */}
-              <button
-                type="button"
-                onClick={() => handleClickCondicao('PENDENTE')}
-                className={`text-left bg-white dark:bg-zinc-950 p-5 rounded-2xl border-2 border-dashed shadow-sm hover:shadow-md transition-all group ${
-                  condicaoFiltro === 'PENDENTE'
-                    ? "border-orange-500 ring-2 ring-orange-500/30"
-                    : "border-zinc-300 dark:border-zinc-700"
-                }`}
-              >
-                 <div className="flex items-center justify-between mb-3">
-                    <span className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400">
-                       <Circle size={18} className="opacity-40" />
-                    </span>
-                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">{condicaoFiltro === 'PENDENTE' ? "Filtrando" : "Global"}</span>
-                 </div>
-                 <div className="text-2xl font-black text-zinc-400">{pendentesTotal}</div>
-                 <p className="text-[10px] font-bold text-zinc-400 mt-0.5">PENDENTE · sem boletim</p>
-              </button>
-              {/* Atrasados > 15 dias Card */}
-              <button
-                type="button"
-                onClick={() => handleClickCondicao('ATRASADO_15D')}
-                className={`text-left bg-white dark:bg-zinc-950 p-5 rounded-2xl border-2 shadow-sm hover:shadow-md transition-all group ${
-                  condicaoFiltro === 'ATRASADO_15D'
-                    ? "border-red-500 ring-2 ring-red-500/30"
-                    : "border-red-200 dark:border-red-900/50"
-                }`}
-              >
-                 <div className="flex items-center justify-between mb-3">
-                    <span className="p-2 rounded-xl bg-red-50 text-red-500 dark:bg-red-500/10">
-                       <AlertTriangle size={18} />
-                    </span>
-                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-tight">{condicaoFiltro === 'ATRASADO_15D' ? "Filtrando" : "Global"}</span>
-                 </div>
-                 <div className="text-2xl font-black text-red-600 dark:text-red-400">{atrasados15d.length}</div>
-                 <p className="text-[10px] font-bold text-red-500/80 mt-0.5">ATRASADAS · +{LIMITE_DIAS_BOLETIM} dias</p>
-              </button>
-            </div>
-
-            {/* Unified Monitoring Table — todos os veículos (respeitando o filtro de módulo acima),
-                uma placa embaixo da outra, em vez de um card separado por módulo. */}
-            {(() => {
-              const items = todosItensFiltrados.map(x => x.row);
-              const modCounts = getModuloCounts(items);
-              const modTotal = items.length || 1;
-              const totalCriticos = items.filter(row => row.kind === 'inspecao' && calcCondicaoPneu(row.ins) === "CRITICO").length;
-              const totalPendentes = items.filter(row => row.kind === 'pendente').length;
-
-              return (
-                <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700">
-                  {/* Header */}
-                  <div className="w-full p-5 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-orange-500/10 rounded-xl">
-                          <Circle size={16} className="text-orange-500" fill="currentColor" fillOpacity={0.3} />
-                        </div>
-                        <div className="text-left">
-                          <h4 className="font-black text-zinc-800 dark:text-zinc-200 text-base uppercase tracking-wider flex items-center gap-2 flex-wrap">
-                            <span>🚛 Veículos{moduloFiltro !== 'TODOS' ? ` — Módulo: ${moduloFiltro}` : ''}</span>
-                            {condicaoFiltro !== 'TODOS' && (
-                              <button
-                                type="button"
-                                onClick={() => setCondicaoFiltro('TODOS')}
-                                className="flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-orange-200 dark:hover:bg-orange-500/30 transition-colors"
-                                title="Limpar filtro de status"
-                              >
-                                Status: {condicaoFiltro} ✕
-                              </button>
-                            )}
-                          </h4>
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                            {items.length} veículo{items.length !== 1 ? "s" : ""}
-                            {totalCriticos > 0 && (
-                              <span className="ml-2 text-red-500 animate-pulse">⚠ {totalCriticos} crítico{totalCriticos !== 1 ? "s" : ""}</span>
-                            )}
-                            {totalPendentes > 0 && (
-                              <span className="ml-2 text-zinc-400">— {totalPendentes} sem boletim</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Mini KPI pills */}
-                    <div className="hidden md:flex gap-2">
-                      {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
-                        <span key={lbl} className={`px-2.5 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
-                          lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
-                          lbl === 'RECAPAGEM' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
-                          lbl === 'CRITICO' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
-                          'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
-                        }`}>
-                          {v} {lbl}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Unified Table */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[10px]">
-                      <thead>
-                        <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800">
-                          <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-left">Veículo</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-left">Módulo</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Data</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={2}>Frontal</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 1</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center" colSpan={4}>Eixo 2</th>
-                          <th className="px-6 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Step</th>
-                          <th className="px-4 py-3 font-black uppercase tracking-widest text-zinc-400 text-center">Status</th>
-                        </tr>
-                        <tr className="bg-zinc-50/30 dark:bg-zinc-900/30">
-                          <th className="px-6 py-1.5" />
-                          <th className="px-4 py-1.5" />
-                          <th className="px-4 py-1.5" />
-                          {["DE","DD","TEI","TEE","TDI","TDE","TEI1","TEE1","TDI1","TDE1","EST"].map(l => (
-                            <th key={l} className="px-1 py-1.5 text-center text-orange-500/70 font-black">{l}</th>
-                          ))}
-                          <th className="px-4 py-1.5" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                        {todosItensFiltrados.map(({ modulo, row }) => {
-                          if (row.kind === 'inspecao') {
-                            const ins = row.ins;
-                            return (
-                              <tr key={ins.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors group">
-                                <td className="px-6 py-3">
-                                  <span
-                                    onClick={() => setSelectedSchematic(ins)}
-                                    className="block text-sm text-zinc-900 dark:text-zinc-50 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                                  >
-                                    {ins.equipamentos?.placa}
-                                    {(ins as any)._isPendingSync && (
-                                      <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline">
-                                        <RefreshCw size={9} className="animate-spin mr-1" />
-                                        (Offline)
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="text-[9px] text-zinc-400 block tracking-widest">{ins.km_atual || (ins as any).horimetro_registro || 0} {ins.km_atual ? 'KM' : 'H'}</span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase">{modulo}</span>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md">
-                                    {ins.data_inspecao.split('T')[0].split('-').slice(1, 3).reverse().join('/')}
-                                  </span>
-                                </td>
-                                {POSICOES.map(pos => (
-                                  <td key={pos} className="px-1 py-3 text-center">
-                                    {ins[pos] != null
-                                      ? <span className={`inline-block w-8 py-1.5 rounded-lg border-b-2 text-center shadow-sm ${sulcoColor(ins[pos])}`}>{ins[pos]}</span>
-                                      : <span className="text-zinc-200 dark:text-zinc-800 opacity-20">••</span>
-                                    }
-                                  </td>
-                                ))}
-                                <td className="px-4 py-3 text-center">
-                                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>
-                                    {CONDICAO_LABEL[calcCondicaoPneu(ins)]}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          } else {
-                            // PENDENTE row - vehicle with no inspection in this period
-                            return (
-                              <tr key={`pendente-${row.eq.id}`} className="bg-zinc-50/30 dark:bg-zinc-900/20 border-l-2 border-dashed border-zinc-300 dark:border-zinc-700 opacity-70">
-                                <td className="px-6 py-3">
-                                  <span
-                                    onClick={() => setSelectedSchematic({
-                                      id: `pendente-${row.eq.id}`,
-                                      equipamento_id: row.eq.id,
-                                      data_inspecao: new Date().toISOString(),
-                                      km_atual: null,
-                                      de: null, dd: null, tei: null, tee: null, tdi: null, tde: null, tei1: null, tee1: null, tdi1: null, tde1: null, estepe: null,
-                                      condicao: "PENDENTE",
-                                      equipamentos: {
-                                        placa: row.eq.placa,
-                                        tipo: row.eq.tipo,
-                                        modulo: row.eq.modulo,
-                                        categoria: row.eq.categoria
-                                      }
-                                    })}
-                                    className="block text-sm text-zinc-500 dark:text-zinc-400 font-black hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                                  >
-                                    {row.eq.placa}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase">{modulo}</span>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="text-[10px] font-black text-zinc-300 dark:text-zinc-700">—</span>
-                                </td>
-                                {POSICOES.map(pos => (
-                                  <td key={pos} className="px-1 py-3 text-center">
-                                    <span className="inline-block w-8 py-1.5 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 text-zinc-200 dark:text-zinc-700 text-center">—</span>
-                                  </td>
-                                ))}
-                                <td className="px-4 py-3 text-center">
-                                  <span className="px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest border border-dashed border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500">
-                                    PENDENTE
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          }
-                        })}
-                        {todosItensFiltrados.length === 0 && (
-                          <tr>
-                            <td colSpan={15} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
-                              Nenhum veículo encontrado.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                      {/* Footer Summary */}
-                      <tfoot>
-                        <tr className="bg-zinc-50/80 dark:bg-zinc-900/60 border-t-2 border-zinc-100 dark:border-zinc-800">
-                          <td className="px-6 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest" colSpan={3}>
-                            Resumo ({items.length} veículos)
-                          </td>
-                          <td colSpan={12} className="px-4 py-2">
-                            <div className="flex gap-2 flex-wrap">
-                              {Object.entries(modCounts).filter(([,v]) => v > 0).map(([lbl, v]) => (
-                                <span key={lbl} className={`px-2 py-0.5 text-[8px] font-black rounded-full uppercase ${
-                                  lbl === 'BOM' ? 'bg-emerald-100 text-emerald-700' :
-                                  lbl === 'RECAPAGEM' ? 'bg-yellow-100 text-yellow-700' :
-                                  lbl === 'CRITICO' ? 'bg-red-100 text-red-700' :
-                                  'bg-zinc-100 text-zinc-500'
-                                }`}>
-                                  {v} {lbl} ({Math.round((v/modTotal)*100)}%)
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="bg-white dark:bg-zinc-950 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm min-h-[400px]">
-                 <h3 className="font-bold text-zinc-800 dark:text-zinc-200 mb-8 flex items-center gap-2">📊 Distribuição das Condições</h3>
-                 <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={110} dataKey="value" paddingAngle={5}>
-                        {pieData.map((entry) => <Cell key={entry.name} fill={COND_COLOR[entry.name]} />)}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}
-                        itemStyle={{ fontWeight: 'bold' }}
-                      />
-                    </PieChart>
-                 </ResponsiveContainer>
-               </div>
-
-               <div className="bg-white dark:bg-zinc-950 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm min-h-[400px]">
-                 <h3 className="font-bold text-zinc-800 dark:text-zinc-200 mb-8 flex items-center gap-2">📈 Média de Desgaste (Sulcos) — Direito / Meio / Esquerdo</h3>
-                 <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={posMedia} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" opacity={0.5} />
-                      <XAxis dataKey="pos" tick={{ fontSize: 9, fontWeight: 800, fill: '#71717a' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fontWeight: 700, fill: '#71717a' }} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{ fill: '#f4f4f5', radius: 10 }} contentStyle={{ borderRadius: '12px' }} />
-                      <Legend wrapperStyle={{ fontSize: 10, fontWeight: 700 }} />
-                      <Bar dataKey="mediaDir" name="Direito" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={16} />
-                      <Bar dataKey="media" name="Meio" fill="#f97316" radius={[6, 6, 0, 0]} barSize={16} />
-                      <Bar dataKey="mediaEsq" name="Esquerdo" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={16} />
-                    </BarChart>
-                 </ResponsiveContainer>
-               </div>
-            </div>
-
+        {tab === "lista" && (
+          <div className="space-y-2">
+            {!isVisitante && (
+              <label className="flex items-center gap-2 px-1 text-xs font-bold text-zinc-400">
+                <input type="checkbox" onChange={toggleSelectAll} checked={inspecoes.length > 0 && selectedIds.size === inspecoes.length} />
+                Selecionar todos ({inspecoes.length})
+              </label>
+            )}
+            {selectedIds.size > 0 && !isVisitante && (
+              <div className="sticky top-[52px] z-10 flex items-center justify-between px-3 py-2.5 bg-amber-500/15 border border-amber-500/30 rounded-xl">
+                <span className="text-xs font-black text-amber-400">{selectedIds.size} selecionado{selectedIds.size !== 1 ? "s" : ""}</span>
+                <button onClick={() => setPendingConfirm({ kind: "excluir-lote" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase">
+                  <Trash2 size={13} /> Excluir
+                </button>
+              </div>
+            )}
+            {latestByEq.length === 0 && <EmptyState icon={ClipboardList} title="Nenhuma inspeção encontrada" />}
+            {latestByEq.map(ins => (
+              <ListRow
+                key={ins.id}
+                icon={!isVisitante ? (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(ins.id)}
+                    onChange={(e) => { e.stopPropagation(); toggleSelect(ins.id); }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : undefined}
+                title={ins.equipamentos?.placa || '—'}
+                subtitle={`${fmtDate(ins.data_inspecao)}${ins.km_atual ? ` · ${ins.km_atual} km` : ''}${ins.registrado_por_nome ? ` · ${ins.registrado_por_nome}` : ''}`}
+                meta={ins._isPendingSync ? "Salvo offline, aguardando conexão" : undefined}
+                badge={
+                  <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border", condBadge(calcCondicaoPneu(ins)))}>
+                    {CONDICAO_LABEL[calcCondicaoPneu(ins)]}
+                  </span>
+                }
+                onClick={() => (isVisitante ? setSelectedSchematic(ins) : setActionSheetItem(ins))}
+                rightSlot={!isVisitante ? <MoreVertical size={18} className="text-zinc-500" /> : undefined}
+              />
+            ))}
           </div>
         )}
 
-        {tab === "lista" && (
-           <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-between items-center">
-               <div className="flex items-center gap-4">
-                  {selectedIds.size > 0 && !isVisitante && (
-                    <button onClick={handleBatchDelete} className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all">Excluir {selectedIds.size}</button>
-                  )}
-               </div>
-             </div>
-             <div className="overflow-x-auto min-h-[300px]">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-                    <tr>
-                      <th className="px-6 py-4 w-10"><input type="checkbox" onChange={toggleSelectAll} checked={inspecoes.length > 0 && selectedIds.size === inspecoes.length} /></th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Placa</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">KM</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Registrado por</th>
-                      <th colSpan={3} className="px-4 py-4 font-black uppercase text-zinc-400 text-right">Controle</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                    {latestByEq.map(ins => (
-                      <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors group">
-                        <td className="px-6 py-4"><input type="checkbox" checked={selectedIds.has(ins.id)} onChange={() => toggleSelect(ins.id)} /></td>
-                        <td className="px-4 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
-                          <span
-                            onClick={() => setSelectedSchematic(ins)}
-                            className="hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                          >
-                            {ins.equipamentos?.placa}
-                          </span>
-                          {ins._isPendingSync && (
-                            <span className="ml-2 inline-flex items-center text-[9px] text-amber-500 font-bold" title="Salvo offline, aguardando conexão">
-                              <RefreshCw size={9} className="animate-spin mr-1" />
-                              (Offline)
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-zinc-500">{fmtDate(ins.data_inspecao)}</td>
-                        <td className="px-4 py-4 text-center font-black text-blue-600">{ins.km_atual || '??'}</td>
-                        <td className="px-4 py-4 text-center">
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>{CONDICAO_LABEL[calcCondicaoPneu(ins)]}</span>
-                        </td>
-                        <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
-                          {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
-                        </td>
-                        <td className="px-4 py-4 text-right" colSpan={3}>
-                           {!isVisitante && (
-                              <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => setPreviewInspecao(ins)} className="p-2 text-zinc-400 hover:text-orange-500" title="Ver Ficha"><Eye size={16} /></button>
-                                <button onClick={() => downloadBoletimPDF(ins)} className="p-2 text-zinc-400 hover:text-orange-500" title="Baixar PDF"><Printer size={16} /></button>
-                                <button onClick={() => { setEditingItem(ins); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-blue-500"><Plus size={16} /></button>
-                                <button onClick={() => handleDelete(ins.id)} className="p-2 text-zinc-400 hover:text-red-500"><Plus size={16} className="rotate-45" /></button>
-                              </div>
-                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-             </div>
-           </div>
-        )}
-
         {tab === "sulcos" && (
-           <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
-             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between flex-wrap gap-2">
-               <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 px-2">Sulcos Detalhados por Posição — Último boletim de cada veículo</h4>
-               <div className="flex gap-3 text-[9px] font-black uppercase tracking-widest text-zinc-400 px-2">
-                 <span>D = Lado Direito</span>
-                 <span>M = Meio</span>
-                 <span>E = Lado Esquerdo</span>
-               </div>
-             </div>
-             <div className="overflow-x-auto min-h-[300px]">
-                <table className="w-full text-[10px] text-left">
-                  <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-                    <tr>
-                      <th className="px-6 py-4 font-black uppercase text-zinc-400">Placa</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
-                      {POSICOES.map(p => (
-                        <th key={p} className="px-2 py-4 font-black uppercase text-zinc-400 text-center">
-                          {p}
-                          <span className="block text-[8px] text-zinc-300 dark:text-zinc-700 normal-case font-bold">D/M/E</span>
-                        </th>
-                      ))}
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Registrado por</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                    {todosLatestSulcos.map(ins => (
-                      <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
-                        <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black align-top">
-                          <span
-                            onClick={() => setSelectedSchematic(ins)}
-                            className="hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                          >
-                            {ins.equipamentos?.placa}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-zinc-500 align-top">{fmtDate(ins.data_inspecao)}</td>
-                        {POSICOES.map(p => (
-                          <td key={p} className="px-2 py-3 text-center">
-                            {renderSulcoTriple((ins as any)[`${p}_s1`], ins[p], (ins as any)[`${p}_s3`])}
-                          </td>
-                        ))}
-                        <td className="px-4 py-4 text-center align-top">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>{CONDICAO_LABEL[calcCondicaoPneu(ins)]}</span>
-                        </td>
-                        <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400 align-top">
-                          {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
-                        </td>
-                      </tr>
-                    ))}
-                    {todosLatestSulcos.length === 0 && (
-                      <tr>
-                        <td colSpan={POSICOES.length + 4} className="px-6 py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest">
-                          Nenhum boletim encontrado.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-             </div>
-           </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 px-1">
+              Toque numa placa pra ver os 3 pontos de medição (direito/meio/esquerdo) de cada posição
+            </p>
+            {todosLatestSulcos.length === 0 && <EmptyState icon={LayoutGrid} title="Nenhum boletim encontrado" />}
+            {todosLatestSulcos.map(ins => (
+              <ListRow
+                key={ins.id}
+                title={ins.equipamentos?.placa || '—'}
+                subtitle={`${fmtDate(ins.data_inspecao)}${ins.registrado_por_nome ? ` · ${ins.registrado_por_nome}` : ''}`}
+                badge={
+                  <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border", condBadge(calcCondicaoPneu(ins)))}>
+                    {CONDICAO_LABEL[calcCondicaoPneu(ins)]}
+                  </span>
+                }
+                onClick={() => setSelectedSchematic(ins)}
+                rightSlot={<ChevronDown size={16} className="text-zinc-600 -rotate-90" />}
+              />
+            ))}
+          </div>
         )}
 
         {tab === "historico" && (
-           <div className="bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
-             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
-               <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 px-2">Histórico Completo de Inspeções</h4>
-               {!isAdmin && (
-                 <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 px-2">
-                   Mostrando só os boletins que você registrou
-                 </span>
-               )}
-             </div>
-             <div className="overflow-x-auto min-h-[300px]">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-                    <tr>
-                      <th className="px-6 py-4 font-black uppercase text-zinc-400">Placa</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Data</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">KM</th>
-                      {POSICOES.map(p => <th key={p} className="px-2 py-4 font-black uppercase text-zinc-400 text-center">{p}</th>)}
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400 text-center">Status</th>
-                      <th className="px-4 py-4 font-black uppercase text-zinc-400">Registrado por</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900 font-bold">
-                    {historicoVisivel.map(ins => (
-                      <tr key={ins.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/50 transition-colors">
-                        <td className="px-6 py-4 text-zinc-900 dark:text-zinc-100 text-sm font-black">
-                          <span
-                            onClick={() => setSelectedSchematic(ins)}
-                            className="hover:text-orange-500 dark:hover:text-orange-400 hover:underline cursor-pointer transition-colors"
-                          >
-                            {ins.equipamentos?.placa}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-zinc-500">{fmtDate(ins.data_inspecao)}</td>
-                        <td className="px-4 py-4 text-center font-black text-blue-600">{ins.km_atual || '??'}</td>
-                        {POSICOES.map(p => (
-                           <td key={p} className="px-2 py-4 text-center">
-                             <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${sulcoColor(ins[p])}`}>
-                               {ins[p] || '-'}
-                             </span>
-                           </td>
-                        ))}
-                        <td className="px-4 py-4 text-center">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${condBadge(calcCondicaoPneu(ins))}`}>{CONDICAO_LABEL[calcCondicaoPneu(ins)]}</span>
-                        </td>
-                        <td className="px-4 py-4 text-zinc-500 dark:text-zinc-400">
-                          {ins.registrado_por_nome || <span className="italic text-zinc-300 dark:text-zinc-700">—</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-             </div>
-           </div>
+          <div className="space-y-2">
+            {!isAdmin && (
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 px-1">
+                Mostrando só os boletins que você registrou
+              </p>
+            )}
+            {historicoVisivel.length === 0 && <EmptyState icon={History} title="Nenhum boletim encontrado" />}
+            {historicoVisivel.map(ins => (
+              <ListRow
+                key={ins.id}
+                title={ins.equipamentos?.placa || '—'}
+                subtitle={`${fmtDate(ins.data_inspecao)}${ins.km_atual ? ` · ${ins.km_atual} km` : ''}${ins.registrado_por_nome ? ` · ${ins.registrado_por_nome}` : ''}`}
+                badge={
+                  <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border", condBadge(calcCondicaoPneu(ins)))}>
+                    {CONDICAO_LABEL[calcCondicaoPneu(ins)]}
+                  </span>
+                }
+                onClick={() => setSelectedSchematic(ins)}
+                rightSlot={<ChevronDown size={16} className="text-zinc-600 -rotate-90" />}
+              />
+            ))}
+          </div>
         )}
-      </div>
-      </>
+          </div>
+          </div>
+        </>
+      )}
+
+      {!isVisitante && tab !== "menu" && (
+        <Fab onClick={() => { setEditingItem(null); setIsModalOpen(true); }} icon={<Plus size={20} />} label="Registrar" />
       )}
 
       {/* Modals */}
-      <PneusModal 
+      <PneusModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         equipamentos={equipamentos.filter(e => isEquipamentoAtivo(e) && (tab === 'leves' ? isEquipamentoLeve(e) : isEquipamentoPesado(e)))}
         editData={editingItem}
         onSuccess={() => router.refresh()}
       />
-      
-      <PneusImportModal 
+
+      <PneusImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onSuccess={() => router.refresh()}
       />
 
       {isAIReportOpen && (
-        <PneusAIReport 
-          inspecoes={inspecoes} 
-          onClose={() => setIsAIReportOpen(false)} 
+        <PneusAIReport
+          inspecoes={inspecoes}
+          onClose={() => setIsAIReportOpen(false)}
         />
       )}
 
@@ -1366,6 +1049,31 @@ export default function PneusClient({
           onShare={() => gerarFichaPneusPDF(previewInspecao, 'share')}
         />
       )}
+
+      <ActionSheet
+        open={!!actionSheetItem}
+        onClose={() => setActionSheetItem(null)}
+        title={actionSheetItem?.equipamentos?.placa}
+        items={actionSheetItem ? [
+          { key: "ver", label: "Ver Ficha", icon: Eye, onSelect: () => setPreviewInspecao(actionSheetItem) },
+          { key: "pdf", label: "Baixar PDF", icon: Printer, onSelect: () => downloadBoletimPDF(actionSheetItem) },
+          { key: "editar", label: "Editar", icon: Pencil, onSelect: () => { setEditingItem(actionSheetItem); setIsModalOpen(true); } },
+          { key: "excluir", label: "Excluir", icon: Trash2, destructive: true, onSelect: () => setPendingConfirm({ kind: "excluir" }) },
+        ] as ActionSheetItem[] : []}
+      />
+
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          if (pendingConfirm?.kind === "excluir" && actionSheetItem) handleDelete(actionSheetItem.id);
+          if (pendingConfirm?.kind === "excluir-lote") handleBatchDelete();
+        }}
+        title={pendingConfirm?.kind === "excluir-lote" ? `Excluir ${selectedIds.size} registros?` : "Excluir boletim?"}
+        description="Essa ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        destructive
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from './pdfBoletim'
 import FichaPreviewModal from '@/components/FichaPreviewModal'
 import { useAuth } from '@/components/auth-context'
 import { condicaoPorSulco } from '@/src/models/pneus'
+import { BottomSheet } from '../../ui/primitives/BottomSheet'
 
 interface PneusModalProps {
   isOpen: boolean
@@ -253,33 +254,16 @@ export default function PneusModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 overflow-y-auto">
-      <div className="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-4 max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] animate-in fade-in zoom-in duration-200">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400 rounded-xl shadow-inner">
-               <Info size={22} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">
-                {editData ? 'Editar Inspeção' : 'Novo Boletim de Pneu'}
-              </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium"> Controle detalhado de sulcos por posição </p>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
+    <>
+    <BottomSheet
+      open={isOpen}
+      onClose={handleClose}
+      title={editData ? 'Editar Inspeção' : 'Novo Boletim de Pneu'}
+      fullHeight
+    >
         {/* Content */}
         {savedRecord ? (
-          <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1 flex flex-col items-center justify-center text-center">
+          <div className="space-y-6 flex flex-col items-center justify-center text-center py-6">
             <div className="p-4 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-full shadow-inner">
               <CheckCircle2 size={40} />
             </div>
@@ -315,7 +299,7 @@ export default function PneusModal({
             </div>
           </div>
         ) : (
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
+        <div className="space-y-6">
           {error && (
             <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3 text-red-600 dark:text-red-400 animate-in slide-in-from-top-2">
               <AlertCircle size={20} className="shrink-0 mt-0.5" />
@@ -496,33 +480,33 @@ export default function PneusModal({
         )}
 
         {/* Footer */}
-        <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-between items-center shrink-0">
+        <div className="flex justify-between items-center pt-2 pb-4 -mx-4 px-4 mt-2 border-t border-zinc-800">
           {savedRecord ? (
-            <div className="flex justify-end w-full">
-              <button
-                onClick={handleClose}
-                className="px-8 py-2.5 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all"
-              >
-                Fechar
-              </button>
-            </div>
+            <button
+              onClick={handleClose}
+              className="w-full py-3.5 text-sm font-black bg-amber-600 active:bg-amber-700 text-white rounded-xl"
+              style={{ minHeight: "var(--tap-min)" }}
+            >
+              Fechar
+            </button>
           ) : (
           <>
           <div>
             {!editData && hasContent && (
               <button
                 onClick={clearDraft}
-                className="text-xs font-semibold text-zinc-500 hover:text-red-500 flex items-center gap-1.5 transition-colors"
+                className="text-xs font-semibold text-zinc-500 active:text-red-500 flex items-center gap-1.5"
                 title="Limpar rascunho salvo"
               >
                 Limpar Rascunho
               </button>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 ml-auto">
             <button
               onClick={handleClose}
-              className="px-5 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl transition-all"
+              className="px-5 py-2.5 text-sm font-bold text-zinc-300 active:bg-zinc-800 rounded-xl"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               Cancelar
             </button>
@@ -530,7 +514,8 @@ export default function PneusModal({
               form="pneus-form"
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-8 py-2.5 text-sm font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-8 py-2.5 text-sm font-black bg-amber-600 active:bg-amber-700 text-white rounded-xl disabled:opacity-50"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -543,7 +528,7 @@ export default function PneusModal({
           </>
           )}
         </div>
-      </div>
+    </BottomSheet>
 
       {showPreview && savedRecord && (
         <FichaPreviewModal
@@ -553,6 +538,6 @@ export default function PneusModal({
           onShare={() => gerarFichaPneusPDF(savedRecord, 'share')}
         />
       )}
-    </div>
+    </>
   )
 }

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { baixarOuCompartilharPdf } from '@/lib/pdf-share';
 import { calcCondicaoPneu } from '@/src/models/pneus';
+import { BottomSheet } from '../../ui/primitives/BottomSheet';
 
 interface Inspecao {
   id: string;
@@ -96,63 +97,46 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
   if (!analysis) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-zinc-950 w-full max-w-4xl rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500">
-        
-        {/* Header Elegante */}
-        <div className="relative p-8 bg-gradient-to-br from-zinc-900 to-black overflow-hidden shrink-0">
-          <div className="absolute top-0 right-0 p-12 opacity-10">
-            <BrainCircuit size={120} className="text-orange-500 animate-pulse" />
-          </div>
-          <div className="relative z-10 flex justify-between items-start">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-orange-500 rounded-xl">
-                   <Zap size={24} className="text-white" />
-                 </div>
-                 <h2 className="text-3xl font-black text-white tracking-tight leading-none uppercase">Relatório de Inteligência</h2>
-              </div>
-              <p className="text-zinc-400 text-sm font-medium tracking-wide">Análise avançada da frota baseada em {inspecoes.length} registros</p>
-            </div>
-            <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-full transition-colors text-zinc-400">
-              <X size={24} />
-            </button>
-          </div>
-        </div>
-
+    <BottomSheet open onClose={onClose} title="Relatório de Inteligência" fullHeight>
         {/* Corpo do Relatório */}
-        <div id="ai-report-content" className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8 bg-white dark:bg-zinc-950">
-          
+        <div id="ai-report-content" className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500 rounded-xl">
+              <Zap size={20} className="text-white" />
+            </div>
+            <p className="text-zinc-400 text-xs font-bold tracking-wide">Análise avançada da frota baseada em {inspecoes.length} registros</p>
+          </div>
+
           {/* Dashboard Rápido */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 space-y-1">
-              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Frota Analisada</span>
-              <div className="text-3xl font-black text-zinc-900 dark:text-zinc-100">{analysis.totalVehicles} <span className="text-sm text-zinc-500">unids</span></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-1">
+              <span className="text-[9px] font-black uppercase text-zinc-500 tracking-widest">Frota Analisada</span>
+              <div className="text-2xl font-black text-zinc-100">{analysis.totalVehicles} <span className="text-xs text-zinc-500">unids</span></div>
             </div>
-            <div className={`p-6 rounded-3xl border space-y-1 ${analysis.criticalCount > 0 ? 'bg-red-50 border-red-100 dark:bg-red-950/20 dark:border-red-900/50' : 'bg-zinc-50 dark:bg-zinc-900/50 border-zinc-100'}`}>
-              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Críticos/Troca</span>
-              <div className={`text-3xl font-black ${analysis.criticalCount > 0 ? 'text-red-600' : 'text-zinc-500'}`}>{analysis.criticalCount}</div>
+            <div className={`p-4 rounded-2xl border space-y-1 ${analysis.criticalCount > 0 ? 'bg-red-950/20 border-red-900/50' : 'bg-zinc-900 border-zinc-800'}`}>
+              <span className="text-[9px] font-black uppercase text-zinc-500 tracking-widest">Críticos/Troca</span>
+              <div className={`text-2xl font-black ${analysis.criticalCount > 0 ? 'text-red-400' : 'text-zinc-400'}`}>{analysis.criticalCount}</div>
             </div>
-            <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 space-y-1">
-              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Média Sulco</span>
-              <div className="text-3xl font-black text-orange-500">{analysis.avgSulco} <span className="text-sm font-medium text-zinc-400">mm</span></div>
+            <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-1">
+              <span className="text-[9px] font-black uppercase text-zinc-500 tracking-widest">Média Sulco</span>
+              <div className="text-2xl font-black text-amber-500">{analysis.avgSulco} <span className="text-xs font-medium text-zinc-500">mm</span></div>
             </div>
-            <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 space-y-1">
-              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Saúde Frota</span>
-              <div className="text-3xl font-black text-emerald-500">{Math.round((analysis.goodCount / analysis.totalVehicles) * 100)}%</div>
+            <div className="p-4 bg-zinc-900 rounded-2xl border border-zinc-800 space-y-1">
+              <span className="text-[9px] font-black uppercase text-zinc-500 tracking-widest">Saúde Frota</span>
+              <div className="text-2xl font-black text-emerald-500">{Math.round((analysis.goodCount / analysis.totalVehicles) * 100)}%</div>
             </div>
           </div>
 
           {/* Seção Estratégica */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            
+          <div className="space-y-6">
+
             {/* Insights IA */}
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <BarChart3 className="text-blue-500" size={20} />
-                <h3 className="text-lg font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Insights Estratégicos</h3>
+                <BarChart3 className="text-blue-500" size={18} />
+                <h3 className="text-sm font-black uppercase tracking-tight text-zinc-100">Insights Estratégicos</h3>
               </div>
-              
+
               <div className="space-y-4">
                 {analysis.criticalCount > 0 && (
                   <InsightCard 
@@ -217,21 +201,16 @@ export default function PneusAIReport({ inspecoes, onClose }: PneusAIReportProps
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 text-center">
-          <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.3em]">Gerado por EUNAMAN IA Engine • © 2026</p>
-        </div>
-
-      </div>
-    </div>
+        <p className="text-center text-[9px] font-black uppercase text-zinc-600 tracking-[0.3em] pt-2 pb-1">Gerado por EUNAMAN IA Engine • © 2026</p>
+    </BottomSheet>
   );
 }
 
 function InsightCard({ icon, title, desc, color }: { icon: React.ReactNode, title: string, desc: string, color: string }) {
   const colorMap: any = {
-    red: "bg-red-50 dark:bg-red-950/20 text-red-700 border-red-100 dark:border-red-900/50",
-    orange: "bg-orange-50 dark:bg-orange-950/20 text-orange-700 border-orange-100 dark:border-orange-900/50",
-    blue: "bg-blue-50 dark:bg-blue-950/20 text-blue-700 border-blue-100 dark:border-blue-900/50",
+    red: "bg-red-950/20 text-red-400 border-red-900/50",
+    orange: "bg-amber-950/20 text-amber-400 border-amber-900/50",
+    blue: "bg-blue-950/20 text-blue-400 border-blue-900/50",
   };
   return (
     <div className={`p-5 rounded-2xl border flex gap-4 ${colorMap[color]}`}>

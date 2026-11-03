@@ -14,6 +14,7 @@ import {
   Database
 } from 'lucide-react'
 import { importarInspecoesPneus } from './actions'
+import { BottomSheet } from '../../ui/primitives/BottomSheet'
 
 const POSICOES = ["de", "dd", "tei", "tee", "tdi", "tde", "tei1", "tee1", "tdi1", "tde1", "estepe"] as const
 
@@ -178,30 +179,9 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
-      <div className="bg-white dark:bg-zinc-950 w-full max-w-4xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 rounded-xl shadow-inner">
-               <FileSpreadsheet size={22} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Importar Boletins de Pneus</h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium"> Carga em massa de inspeções via Excel (.xlsx) </p>
-            </div>
-          </div>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
+    <BottomSheet open={isOpen} onClose={onClose} title="Importar Boletins de Pneus" fullHeight>
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div className="space-y-4">
           {result?.error && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl flex items-start gap-3 text-red-600 dark:text-red-400">
               <AlertCircle size={20} className="shrink-0 mt-0.5" />
@@ -316,18 +296,20 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end items-center gap-3 shrink-0">
-          <button 
+        <div className="flex justify-end items-center gap-3 pt-4 pb-2 mt-2 border-t border-zinc-800">
+          <button
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl transition-all"
+            className="px-5 py-2.5 text-sm font-bold text-zinc-300 active:bg-zinc-800 rounded-xl"
+            style={{ minHeight: "var(--tap-min)" }}
           >
             Cancelar
           </button>
           {rows.length > 0 && !result?.success && (
-            <button 
+            <button
               onClick={handleImport}
               disabled={loading || rows.filter(r => r._ok).length === 0}
-              className="flex items-center gap-2 px-8 py-2.5 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-8 py-2.5 text-sm font-black bg-emerald-600 active:bg-emerald-700 text-white rounded-xl disabled:opacity-50"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -338,7 +320,6 @@ export default function PneusImportModal({ isOpen, onClose, onSuccess }: { isOpe
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </BottomSheet>
   )
 }

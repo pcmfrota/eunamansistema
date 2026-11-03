@@ -4,6 +4,7 @@ import React from "react";
 import { X, Calendar, Gauge, AlertTriangle, CheckCircle, Clock, FileDown, Share2 } from "lucide-react";
 import { gerarFichaPneusPDF } from "./pdfBoletim";
 import { condicaoPorSulco, normalizarCondicaoPneu, sulcoTailwind, calcCondicaoPneu, CONDICAO_LABEL } from "@/src/models/pneus";
+import { BottomSheet } from "../../ui/primitives/BottomSheet";
 
 type Inspecao = {
   id: string;
@@ -159,42 +160,30 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
     : null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative bg-white dark:bg-zinc-950 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 w-full max-w-2xl overflow-hidden flex flex-col max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
+    <BottomSheet open onClose={onClose} title={placa} fullHeight>
         {/* Header */}
-        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-orange-500/10 rounded-2xl">
+        <div className="flex items-start justify-between pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-amber-500/10 rounded-2xl">
               <span className="text-2xl">🚛</span>
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-50 tracking-tight">{placa}</h2>
-                <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest border ${
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest border ${
                   isPendente
-                    ? "text-zinc-500 bg-zinc-50 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                    ? "text-zinc-400 bg-zinc-900 border-zinc-700"
                     : condColor(condicaoAtual!)
                 }`}>
                   {isPendente ? "PENDENTE" : CONDICAO_LABEL[condicaoAtual!]}
                 </span>
               </div>
-              <div className="flex items-center gap-4 mt-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
+              <div className="flex items-center gap-3 mt-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wide flex-wrap">
                 {modulo && <span>📍 {modulo}</span>}
                 <span className="flex items-center gap-1"><Calendar size={11} /> {fmtDate(ins.data_inspecao)}</span>
                 {ins.km_atual && <span className="flex items-center gap-1"><Gauge size={11} /> {ins.km_atual.toLocaleString()} km</span>}
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Stats bar */}
@@ -325,36 +314,31 @@ export default function PneuEsquemaModal({ inspecao, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-3 flex-wrap shrink-0">
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2 flex-wrap">
+        <div className="flex flex-col gap-3 pt-3 pb-2 mt-2 border-t border-zinc-800">
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 flex-wrap">
             <Clock size={11} />
             Inspeção: {fmtDate(ins.data_inspecao)}
-            <span className="normal-case font-semibold text-zinc-400">
+            <span className="normal-case font-semibold text-zinc-500">
               · Registrado por {ins.registrado_por_nome || "—"}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => gerarFichaPneusPDF(ins)}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 active:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               <FileDown size={14} /> Baixar PDF
             </button>
             <button
               onClick={() => gerarFichaPneusPDF(ins, "share")}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 active:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest"
+              style={{ minHeight: "var(--tap-min)" }}
             >
               <Share2 size={14} /> Compartilhar
             </button>
-            <button
-              onClick={onClose}
-              className="px-5 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-            >
-              Fechar
-            </button>
           </div>
         </div>
-      </div>
-    </div>
+    </BottomSheet>
   );
 }
