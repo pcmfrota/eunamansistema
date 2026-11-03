@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -9,12 +9,13 @@ import {
 import {
   TrendingUp, TrendingDown, Layers, MapPin, Tag, Wrench, ShieldAlert,
   ArrowRight, Search, Filter, X, ChevronRight, ChevronLeft, ChevronDown, Edit3, Trash2, RefreshCw, Clock,
-  Maximize2
+  Maximize2, FileDown, Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { mesAnoOperacional } from '@/lib/calendario-suzano'
 import { MultiSelect } from '@/components/MultiSelect'
 import { calcularTipoPedido } from './classificacaoTecnica'
+import { baixarOuCompartilharPdf } from '@/lib/pdf-share'
 
 interface Props {
   items: any[]
@@ -294,6 +295,26 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const [search, setSearch] = useState('')
   // Painel de filtros fica fechado por padrão (discreto) — só expande ao clicar.
   const [showFiltros, setShowFiltros] = useState(false)
+  const dashboardRef = useRef<HTMLDivElement>(null)
+  const [gerandoPdf, setGerandoPdf] = useState(false)
+
+  async function handleBaixarPdf() {
+    if (!dashboardRef.current || gerandoPdf) return
+    setGerandoPdf(true)
+    try {
+      const periodo = `${filterMes}_${filterAno}`.replace(/\s+/g, '_')
+      await baixarOuCompartilharPdf(
+        dashboardRef.current,
+        `Backlog_Dashboard_${periodo}.pdf`,
+        'Dashboard do Backlog',
+        `Dashboard do Backlog — ${filterMes}/${filterAno}`,
+        'download',
+        { jsPDF: { orientation: 'landscape', unit: 'mm', format: 'a4' } }
+      )
+    } finally {
+      setGerandoPdf(false)
+    }
+  }
 
   // Pagination states for dashboard table
   const [currentPage, setCurrentPage] = useState(1)
@@ -944,8 +965,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   }, [parsedBacklogHours, filtered, numMaquinas, horasTotaisFrota]);
 
   return (
-    <div className="flex flex-col gap-4 w-full text-zinc-800 dark:text-zinc-100">
-      
+    <div ref={dashboardRef} className="flex flex-col gap-4 w-full text-zinc-800 dark:text-zinc-100">
+
       {/* ─── ROW 1: PAINEL DE ETIQUETAS (Filtros — retrátil, fechado por padrão) ─── */}
       <div className="w-full">
         <div className="bg-white dark:bg-[#12141c] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col">
@@ -960,6 +981,18 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             </div>
 
             <div className="flex items-center gap-3 self-end lg:self-center">
+              {/* Baixa a tela inteira do dashboard (KPIs + gráficos, no estado atual dos
+                  filtros) como PDF — mesmo helper já usado nas fichas do sistema. */}
+              <button
+                type="button"
+                onClick={handleBaixarPdf}
+                disabled={gerandoPdf}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-colors bg-zinc-50 dark:bg-[#1e2028] border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 disabled:opacity-60"
+              >
+                {gerandoPdf ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+                {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
+              </button>
+
               {/* Botão de Filtros — retrátil e discreto, selo mostra quantos estão ativos */}
               <button
                 type="button"
