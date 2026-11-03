@@ -16,6 +16,11 @@ type PdfOpt = {
   image?: { type: string; quality: number };
   html2canvas?: any;
   jsPDF?: any;
+  // Seletor CSS (ex: '[data-pdf-block]') de blocos dentro do elemento que não podem ser
+  // cortados ao meio por uma quebra de página — se um corte cairia no meio de um bloco,
+  // a página termina antes dele e o bloco inteiro vai pra página seguinte. Opcional: sem
+  // isso, o comportamento é o de sempre (fatiar em alturas fixas, pode cortar qualquer coisa).
+  avoidBreakSelector?: string;
 };
 
 const DEFAULT_OPT: PdfOpt = {
@@ -117,6 +122,18 @@ function normalizarMargem(margin: number[] = [0, 0, 0, 0]) {
   return { top: all, right: all, bottom: all, left: all };
 }
 
+// Posição (topo/base, em px relativos ao próprio `element`) de cada bloco que não pode
+// ser cortado ao meio — lido ANTES do html2canvas rodar, enquanto o layout original ainda
+// está intacto no DOM.
+function coletarBlocosNaoQuebraveis(element: HTMLElement, selector?: string) {
+  if (!selector) return [];
+  const topoElemento = element.getBoundingClientRect().top;
+  return Array.from(element.querySelectorAll<HTMLElement>(selector)).map((bloco) => {
+    const rect = bloco.getBoundingClientRect();
+    return { top: rect.top - topoElemento, bottom: rect.bottom - topoElemento };
+  });
+}
+
 /**
  * Gera o PDF a partir de um elemento HTML (via html2canvas + jsPDF) e baixa e/ou compartilha
  * o arquivo de verdade. `modo: 'download'` só salva; `modo: 'share'` salva e também tenta
@@ -138,6 +155,9 @@ export async function baixarOuCompartilharPdf(
   const imageQuality = fullOpt.image?.quality ?? 0.92;
 
   try {
+    const elementRect = element.getBoundingClientRect();
+    const blocosNaoQuebraveis = coletarBlocosNaoQuebraveis(element, fullOpt.avoidBreakSelector);
+
     const canvas = await html2canvas(element, {
       backgroundColor: "#ffffff",
       ...fullOpt.html2canvas,
@@ -157,17 +177,36 @@ export async function baixarOuCompartilharPdf(
     const imgData = canvas.toDataURL(`image/${imageType}`, imageQuality);
     const formato = imageType.toUpperCase();
 
-    let heightLeft = imgHeight;
-    let position = margem.top;
-    pdf.addImage(imgData, formato, margem.left, position, usableWidth, imgHeight);
-    heightLeft -= usableHeight;
+    // Converte os blocos (medidos em px de DOM) pra mm na mesma escala da imagem final.
+    const mmPorPxDom = elementRect.height > 0 ? imgHeight / elementRect.height : 0;
+    const blocosMm = blocosNaoQuebraveis.map((b) => ({
+      top: b.top * mmPorPxDom,
+      bottom: b.bottom * mmPorPxDom,
+    }));
 
-    while (heightLeft > 0) {
-      position = margem.top - (imgHeight - heightLeft);
-      pdf.addPage();
-      pdf.addImage(imgData, formato, margem.left, position, usableWidth, imgHeight);
-      heightLeft -= usableHeight;
+    // Decide onde cada página termina: por padrão, a cada `usableHeight`; mas se esse corte
+    // cairia no meio de um bloco não-quebrável, termina a página antes do bloco (ele inteiro
+    // vai pra próxima) — a menos que o bloco sozinho já seja maior que uma página, caso em
+    // que não tem como evitar o corte.
+    const paginas: Array<{ inicio: number; fim: number }> = [];
+    let cursor = 0;
+    while (cursor < imgHeight - 0.01) {
+      let fimPagina = Math.min(cursor + usableHeight, imgHeight);
+      if (fimPagina < imgHeight) {
+        const blocoCortado = blocosMm.find((b) => b.top < fimPagina - 0.01 && b.bottom > fimPagina + 0.01);
+        if (blocoCortado && blocoCortado.top > cursor && blocoCortado.bottom - blocoCortado.top <= usableHeight) {
+          fimPagina = blocoCortado.top;
+        }
+      }
+      paginas.push({ inicio: cursor, fim: fimPagina });
+      cursor = fimPagina;
     }
+
+    paginas.forEach((pagina, idx) => {
+      if (idx > 0) pdf.addPage();
+      const position = margem.top - pagina.inicio;
+      pdf.addImage(imgData, formato, margem.left, position, usableWidth, imgHeight);
+    });
 
     const blob: Blob = pdf.output("blob");
     await salvarOuCompartilharBlob(blob, filename, shareTitle, shareText, modo);
