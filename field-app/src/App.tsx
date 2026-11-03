@@ -1,4 +1,5 @@
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/components/auth-context";
 import { OfflineProvider } from "@/components/offline-provider";
 import { ToastProvider } from "./ui/primitives/Toast";
@@ -11,8 +12,37 @@ import BacklogPage from "./modules/backlog/BacklogPage";
 import CaptacaoPage from "./modules/captacao/CaptacaoPage";
 import MaoDeObraPage from "./modules/mao-de-obra/MaoDeObraPage";
 
+// Rotas que valem a pena restaurar quando o app reabre sem hash nenhum na URL (ex: depois
+// que o Android mata o processo em segundo plano e o WebView força um reload do zero —
+// nesse caminho o restoreState() nativo nem sempre preserva o hash de fato, então sem isso
+// o usuário sempre cai de volta no Menu em vez de continuar de onde parou).
+const LAST_ROUTE_KEY = "field-app:last-route";
+const ROTAS_RESTAURAVEIS = ["/pneus", "/backlog", "/captacao", "/mao-de-obra", "/equipamentos"];
+
+function lerUltimaRota(): string {
+  try {
+    const salva = localStorage.getItem(LAST_ROUTE_KEY);
+    return salva && ROTAS_RESTAURAVEIS.includes(salva) ? salva : "/menu";
+  } catch {
+    return "/menu";
+  }
+}
+
+function useRastrearRota() {
+  const location = useLocation();
+  useEffect(() => {
+    if (location.pathname === "/") return;
+    try {
+      localStorage.setItem(LAST_ROUTE_KEY, location.pathname);
+    } catch {
+      // localStorage indisponível (modo privado/quota) — só perde a restauração, não quebra nada.
+    }
+  }, [location.pathname]);
+}
+
 function Conteudo() {
   const { user, loading } = useAuth();
+  useRastrearRota();
 
   if (loading) {
     return (
@@ -27,7 +57,7 @@ function Conteudo() {
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<Navigate to="/menu" replace />} />
+        <Route path="/" element={<Navigate to={lerUltimaRota()} replace />} />
         <Route path="/menu" element={<MenuScreen />} />
         <Route path="/pneus" element={<PneusPage />} />
         <Route path="/backlog" element={<BacklogPage />} />

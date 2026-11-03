@@ -25,6 +25,7 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
   const [searchTerm, setSearchTerm] = useState('');
   const [adicionando, setAdicionando] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(opt => opt.value === value);
 
@@ -37,6 +38,17 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // O painel é position:absolute logo abaixo do campo — se o campo estiver perto do fim
+  // da área rolável (comum em formulários mobile com teclado aberto, que já encolhe a
+  // área visível), o painel abre fora da tela sem rolar automaticamente até ele.
+  useEffect(() => {
+    if (!isOpen) return;
+    const t = setTimeout(() => {
+      panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isOpen]);
 
   const filteredOptions = options.filter(opt => 
     opt.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -61,7 +73,7 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
       </div>
 
       {isOpen && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-h-60 flex flex-col overflow-hidden">
+        <div ref={panelRef} className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-h-60 flex flex-col overflow-hidden">
           <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 flex items-center gap-2">
              <Search size={14} className="text-zinc-400" />
              <input
