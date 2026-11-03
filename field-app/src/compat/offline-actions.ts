@@ -34,6 +34,10 @@ import {
   salvarApontamento,
   excluirApontamento,
 } from "../modules/mao-de-obra/actions";
+import {
+  saveLavagem,
+  deleteLavagem,
+} from "../modules/lavagens/actions";
 
 export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
   const { entity, action, payload } = item;
@@ -126,6 +130,18 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirApontamento(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+
+    else if (entity === "lavagem") {
+      if (action === "create" || action === "update") {
+        // itens_lavados chega serializado (JSON.stringify) na fila, igual o app principal
+        // monta — saveLavagem aceita tanto string quanto array já desserializado.
+        const res = await saveLavagem(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await deleteLavagem(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }

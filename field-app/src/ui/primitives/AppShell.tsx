@@ -10,6 +10,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/backlog": "Backlog",
   "/captacao": "Captação de Água",
   "/mao-de-obra": "Mão de Obra",
+  "/lavagens": "Lavagens",
   "/equipamentos": "Equipamentos (teste)",
 };
 

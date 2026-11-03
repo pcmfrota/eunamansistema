@@ -7,6 +7,7 @@ const MODULOS: { chave: string; nome: string; icone: typeof Circle; cor: string 
   { chave: "backlog", nome: "Backlog", icone: ListChecks, cor: "text-indigo-500 bg-indigo-500/10" },
   { chave: "captacao", nome: "Captação de Água", icone: Droplets, cor: "text-blue-500 bg-blue-500/10" },
   { chave: "mao-de-obra", nome: "Mão de Obra", icone: Clock, cor: "text-violet-500 bg-violet-500/10" },
+  { chave: "lavagens", nome: "Lavagens", icone: Droplets, cor: "text-cyan-500 bg-cyan-500/10" },
   { chave: "equipamentos", nome: "Equipamentos (teste)", icone: Truck, cor: "text-zinc-400 bg-zinc-500/10" },
 ];
 
