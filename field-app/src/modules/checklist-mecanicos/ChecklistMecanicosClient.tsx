@@ -227,8 +227,11 @@ export default function ChecklistMecanicosClient({
   const placasOptions = useMemo(() => equipamentos.map((e) => ({ value: e.placa, label: e.placa })), [equipamentos]);
 
   const grupos = useMemo(() => getConfigPorTipo(form.tipo), [form.tipo]);
+  // Mantém o prefixo numérico ("1.", "2."...) no label da aba — removê-lo gerava abas com
+  // texto idêntico de verdade (grupos 1 e 2 de todo tipo de caminhão se chamam, ambos,
+  // "EQUIPAMENTO INTERDITADO" no checklistConfig.ts original), impossível de distinguir.
   const tabs = useMemo(
-    () => [...grupos.map((g) => ({ key: g.id, label: g.title.replace(/^\d+\.\s*/, "") })), { key: "pendencias", label: "Pendências" }],
+    () => [...grupos.map((g) => ({ key: g.id, label: g.title })), { key: "pendencias", label: "Pendências" }],
     [grupos]
   );
 

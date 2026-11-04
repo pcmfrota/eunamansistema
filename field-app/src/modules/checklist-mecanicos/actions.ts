@@ -8,6 +8,7 @@ import { OSService } from '@/src/services/OSService';
 import { OSInsert } from '@/src/models/os';
 import { registrarExclusao } from '@/lib/audit-log';
 import { upsertBacklogItem } from '../backlog/actions';
+import { getCurrentLocalDate, getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 
 async function getUsuarioAtual(supabase: any) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -38,7 +39,7 @@ export async function salvarChecklistMecanico(formData: FormData) {
         tipo_caminhao,
         local,
         co,
-        data_checklist: new Date().toISOString().split('T')[0],
+        data_checklist: getCurrentLocalDate(),
         status: 'Fechado',
         respostas,
         pendencias_adicionais,
@@ -65,7 +66,7 @@ export async function salvarChecklistMecanico(formData: FormData) {
         placa,
         modulo: local,
         status: 'Aberta',
-        data_abertura: new Date().toISOString(),
+        data_abertura: getCurrentLocalDatetime(),
         data_fechamento: null,
         horimetro: null,
         operacao_tipo: 'CHECKLIST',
@@ -104,7 +105,7 @@ export async function salvarChecklistMecanico(formData: FormData) {
     // Action original insere direto — essas colunas legadas não existem mais no
     // BACKLOG_SELECT_LEVE/BacklogDashboard atual, então ficariam invisíveis no site.
     if (equipamento_id) {
-      const dataEvidencia = new Date().toISOString()
+      const dataEvidencia = getCurrentLocalDatetime()
       const itensParaLancar: { descricao: string; criticidade: 'A' | 'B' }[] = []
 
       for (const key in respostas) {

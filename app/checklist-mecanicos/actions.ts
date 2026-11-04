@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server'
 import { OSService } from '@/src/services/OSService'
 import { OSInsert } from '@/src/models/os'
 import { registrarExclusao } from '@/lib/audit-log'
+import { getCurrentLocalDate, getCurrentLocalDatetime } from '@/src/utils/dateUtils'
 
 export async function salvarChecklist(formData: FormData) {
   try {
@@ -28,7 +29,7 @@ export async function salvarChecklist(formData: FormData) {
         tipo_caminhao,
         local,
         co,
-        data_checklist: new Date().toISOString().split('T')[0],
+        data_checklist: getCurrentLocalDate(),
         status: 'Fechado',
         respostas,
         pendencias_adicionais,
@@ -55,7 +56,7 @@ export async function salvarChecklist(formData: FormData) {
         placa,
         modulo: local,
         status: 'Aberta',
-        data_abertura: new Date().toISOString(),
+        data_abertura: getCurrentLocalDatetime(),
         data_fechamento: null,
         horimetro: null,
         operacao_tipo: 'CHECKLIST',
