@@ -16,6 +16,7 @@ import { OSRepository } from '@/src/repositories/OSRepository';
 import { OSInsert } from '@/src/models/os';
 import { getUserFilial } from '@/utils/filial';
 import { registrarExclusao } from '@/lib/audit-log';
+import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 
 export async function getBacklog(limit: number = 5000) {
   try {
@@ -283,7 +284,7 @@ export async function responderSolicitacaoExclusao(requestId: string, aprovado: 
       .update({
         status: aprovado ? 'APROVADO' : 'REJEITADO',
         respondido_por: user.id,
-        respondido_em: new Date().toISOString(),
+        respondido_em: getCurrentLocalDatetime(),
       })
       .eq('id', requestId);
     if (updateError) throw new Error(updateError.message);

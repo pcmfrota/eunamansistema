@@ -15,6 +15,7 @@
 //   lançado normalmente pelos módulos Preventivas/Horímetro.
 import { createClient } from "@/utils/supabase/client";
 import { InsumoTipo, INSUMO_TIPOS } from "./config";
+import { getCurrentLocalDate, getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 
 // ─── Tipos (idênticos ao desktop) ───────────────────────────────────────────
 
@@ -210,7 +211,7 @@ export async function abrirOuCriarFicha(equipamentoId: string): Promise<{ ficha?
       equipamento_id: equipamentoId,
       modulo_id: ultimaFicha?.modulo_id || null,
       turno: "1",
-      data: new Date().toISOString().slice(0, 10),
+      data: getCurrentLocalDate(),
       km_horimetro_inicial: ultimaFicha?.km_horimetro_final ?? null,
       status: "RASCUNHO",
       criado_por: usuario.id,
@@ -251,7 +252,7 @@ export async function atualizarCabecalhoFicha(fichaId: string, patch: Partial<Fi
   ];
   const payload: any = {};
   camposPermitidos.forEach((c) => { if (c in patch) payload[c] = (patch as any)[c]; });
-  payload.updated_at = new Date().toISOString();
+  payload.updated_at = getCurrentLocalDatetime();
 
   const { error } = await supabase.from("insumos_fichas_abastecimento").update(payload).eq("id", fichaId);
   if (error) return { error: error.message };
@@ -276,7 +277,7 @@ export async function atualizarFichaInsumo(
   const restou = Number(novo.quantidade_inicial || 0) + Number(novo.entrou || 0) - Number(novo.saiu || 0);
 
   const { error } = await supabase.from("insumos_ficha_insumos")
-    .update({ ...patch, restou, updated_at: new Date().toISOString() })
+    .update({ ...patch, restou, updated_at: getCurrentLocalDatetime() })
     .eq("id", atual.id);
   if (error) return { error: error.message };
   return { success: true };
@@ -340,7 +341,7 @@ async function recalcularSaiu(supabase: any, fichaId: string) {
     const { data: insumo } = await supabase.from("insumos_ficha_insumos").select("id, quantidade_inicial, entrou").eq("ficha_id", fichaId).eq("insumo_tipo", tipo).maybeSingle();
     if (insumo) {
       const restou = Number(insumo.quantidade_inicial || 0) + Number(insumo.entrou || 0) - saiu;
-      await supabase.from("insumos_ficha_insumos").update({ saiu, restou, updated_at: new Date().toISOString() }).eq("id", insumo.id);
+      await supabase.from("insumos_ficha_insumos").update({ saiu, restou, updated_at: getCurrentLocalDatetime() }).eq("id", insumo.id);
     }
   }
 }
@@ -379,7 +380,7 @@ export async function finalizarFicha(fichaId: string, fechamento: FechamentoPayl
   const supabase = createClient();
 
   const { error: updError } = await supabase.from("insumos_fichas_abastecimento")
-    .update({ ...fechamento, updated_at: new Date().toISOString() }).eq("id", fichaId);
+    .update({ ...fechamento, updated_at: getCurrentLocalDatetime() }).eq("id", fichaId);
   if (updError) return { error: updError.message };
 
   const { data: insumos } = await supabase.from("insumos_ficha_insumos").select("*").eq("ficha_id", fichaId);
@@ -451,7 +452,7 @@ async function aplicarItemNaFicha(supabase: any, fichaId: string, tipo: InsumoTi
   if (!insumo) return;
   const novoEntrou = Number(insumo.entrou || 0) + quantidade;
   const restou = Number(insumo.quantidade_inicial || 0) + novoEntrou - Number(insumo.saiu || 0);
-  await supabase.from("insumos_ficha_insumos").update({ entrou: novoEntrou, restou, updated_at: new Date().toISOString() }).eq("id", insumo.id);
+  await supabase.from("insumos_ficha_insumos").update({ entrou: novoEntrou, restou, updated_at: getCurrentLocalDatetime() }).eq("id", insumo.id);
 }
 
 async function aplicarRecargasPendentes(supabase: any, equipamentoId: string, fichaId: string) {

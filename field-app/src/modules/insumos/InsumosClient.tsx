@@ -45,12 +45,13 @@ import {
   enqueueAtualizarCabecalho, enqueueSalvarLinha, enqueueExcluirLinha, enqueueFinalizar,
   persistirFichaLocal, persistirLinhaLocal, removerLinhaLocal,
 } from "./offlineInsumos";
+import { getCurrentLocalDate } from "@/src/utils/dateUtils";
 
 function formatarPlaca(placa: string) {
   const m = placa.match(/^([A-Z]{3})(\d[A-Z0-9]{3})$/);
   return m ? `${m[1]} ${m[2]}` : placa;
 }
-function hoje() { return new Date().toISOString().slice(0, 10); }
+function hoje() { return getCurrentLocalDate(); }
 function uid() { return (crypto as any).randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`; }
 
 // ── Compressão de imagem + ponte da câmera nativa — mesmo padrão de Lavagens ──

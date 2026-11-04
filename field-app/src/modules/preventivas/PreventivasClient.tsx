@@ -25,6 +25,7 @@ import { EmptyState } from "../../ui/primitives/EmptyState";
 import { Fab } from "../../ui/primitives/Fab";
 import { useToast } from "../../ui/primitives/Toast";
 import { registrarHorimetro, atualizarPreventiva, excluirPreventiva } from "./actions";
+import { getCurrentLocalDate } from "@/src/utils/dateUtils";
 
 type Equipamento = { id: string; placa: string; modelo?: string; tipo?: string; categoria?: string; modulo?: string };
 
@@ -77,7 +78,7 @@ function isLeve(p: Preventiva) {
 }
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return getCurrentLocalDate();
 }
 
 const BLANK_FORM = {

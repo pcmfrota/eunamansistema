@@ -30,6 +30,7 @@ import { EmptyState } from "../../ui/primitives/EmptyState";
 import { Fab } from "../../ui/primitives/Fab";
 import { useToast } from "../../ui/primitives/Toast";
 import { saveLavagem, deleteLavagem, getLavagemImagens, Lavagem } from "./actions";
+import { getCurrentLocalDate } from "@/src/utils/dateUtils";
 
 // Checklist do que foi lavado — igual ao app principal (app/lavagens/LavagensClient.tsx),
 // diferente pra caminhão (frota pesada) e carro (frota leve).
@@ -53,7 +54,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return getCurrentLocalDate();
 }
 
 const BLANK_FORM = {

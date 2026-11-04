@@ -8,6 +8,7 @@
 //   trilha de auditoria, não ação de campo) — fica só no site ao vivo por enquanto.
 import { PreventivaService } from '@/src/services/PreventivaService';
 import { registrarAtualizacaoHorimetro, inferUnidadeHorimetro } from '@/lib/horimetro-log';
+import { getCurrentLocalDate } from '@/src/utils/dateUtils';
 
 export async function criarPreventiva(formData: FormData) {
   try {
@@ -66,7 +67,7 @@ export async function atualizarPreventiva(id: string, dados: {
 
     const { error } = await supabase
       .from('preventivas')
-      .update({ ...dados, data_atualizacao: dados.data_atualizacao || new Date().toISOString().split('T')[0] })
+      .update({ ...dados, data_atualizacao: dados.data_atualizacao || getCurrentLocalDate() })
       .eq('id', id);
     if (error) throw error;
 

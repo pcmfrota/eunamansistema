@@ -62,6 +62,7 @@ import { ConfirmDialog } from '../../ui/primitives/ConfirmDialog';
 import { Fab } from '../../ui/primitives/Fab';
 import { StatTile } from '../../ui/primitives/StatTile';
 import { useToast } from '../../ui/primitives/Toast';
+import { getCurrentLocalDate, getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 
 // Utility for robust UUID generation (Safe for Android WebView)
 const generateId = () => {
@@ -641,10 +642,10 @@ export default function CaptacaoClient({
 
   // Determine current active Suzano operational period
   const currentPeriod = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentLocalDate();
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) return period;
-    
+
     // Fallback if no matching dates: use current month/year
     const now = new Date();
     return {
@@ -699,7 +700,7 @@ export default function CaptacaoClient({
 
   // New Lancamento form state
   const [newLancamentoData, setNewLancamentoData] = useState({
-    data: new Date().toISOString().split('T')[0],
+    data: getCurrentLocalDate(),
     id_ponto: '',
     hora_inicial: '',
     hora_final: '',
@@ -824,7 +825,7 @@ export default function CaptacaoClient({
     if (isLancamentoModalOpen && selectedFicha) {
       const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedFicha.mes && p.ano === selectedFicha.ano) : null;
       if (period) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getCurrentLocalDate();
         const isTodayValid = today >= period.data_inicio && today <= period.data_fim;
         const defaultDate = isTodayValid ? today : period.data_inicio;
         
@@ -861,7 +862,7 @@ export default function CaptacaoClient({
 
   // Filtro de período operacional (Default para o período operacional ativo)
   const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<{ mes: number; ano: number } | 'Todos'>(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentLocalDate();
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) {
       return { mes: period.mes, ano: period.ano };
@@ -1303,7 +1304,7 @@ export default function CaptacaoClient({
         id: tempId,
         status: 'Aberta' as const,
         criado_por: null,
-        created_at: new Date().toISOString().split('.')[0],
+        created_at: getCurrentLocalDatetime(),
         ...payload
       };
 
@@ -1428,7 +1429,7 @@ export default function CaptacaoClient({
       return;
     }
 
-    const reabertaEm = res.data?.reaberta_em || new Date().toISOString();
+    const reabertaEm = res.data?.reaberta_em || getCurrentLocalDatetime();
     const dbFicha = await localDb.get('fichas_captacao', id);
     if (dbFicha) {
       await localDb.put('fichas_captacao', { ...dbFicha, status: 'Aberta', reaberta_em: reabertaEm });
@@ -1514,7 +1515,7 @@ export default function CaptacaoClient({
       const tempId = generateId();
       const offlineRow = {
         id: tempId,
-        created_at: new Date().toISOString().split('.')[0],
+        created_at: getCurrentLocalDatetime(),
         ...payload
       };
 
@@ -1646,7 +1647,7 @@ export default function CaptacaoClient({
     setEditingLancamentoId(null);
     // Reset launch form
     setNewLancamentoData({
-      data: new Date().toISOString().split('T')[0],
+      data: getCurrentLocalDate(),
       id_ponto: '',
       hora_inicial: '',
       hora_final: '',

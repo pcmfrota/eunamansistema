@@ -32,6 +32,7 @@ import {
   FichaLubrificacao,
   ChecklistItem,
 } from "./actions";
+import { getCurrentLocalDate } from "@/src/utils/dateUtils";
 
 // Mesmos itens padrão do app principal (app/lubrificacao/LubrificacaoClient.tsx) — dado de
 // negócio real, não layout, não reinventar.
@@ -74,7 +75,7 @@ const ITENS_REAPERTOS_DEFAULT: ChecklistItem[] = [
 ];
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return getCurrentLocalDate();
 }
 
 function blankForm() {

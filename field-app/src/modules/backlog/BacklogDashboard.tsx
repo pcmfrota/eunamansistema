@@ -22,6 +22,7 @@ import { mesAnoOperacional } from '@/lib/calendario-suzano'
 import { StatTile } from '../../ui/primitives/StatTile'
 import { Card } from '../../ui/primitives/ListRow'
 import { EmptyState } from '../../ui/primitives/EmptyState'
+import { getCurrentLocalDate } from '@/src/utils/dateUtils'
 
 interface Props {
   items: any[]
@@ -103,7 +104,7 @@ function formatAIMarkdown(text: string) {
 
 export default function BacklogDashboard({ items, placas, calendario = [], onEdit, onDelete }: Props) {
   const currentPeriod = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentLocalDate();
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) return period;
 

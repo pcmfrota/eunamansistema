@@ -5,6 +5,7 @@
 // sincronizadas localmente (localDb) e consumidas direto pela tela, igual outros módulos.
 import { createClient } from "@/utils/supabase/client";
 import { registrarExclusao } from "@/lib/audit-log";
+import { getCurrentLocalDate, getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 
 export interface ChecklistItem {
   item: string;
@@ -66,7 +67,7 @@ export async function registrarFichaLubrificacao(payload: Partial<FichaLubrifica
   try {
     const cleanPayload = {
       ...payload,
-      data_registro: payload.data_registro || new Date().toISOString(),
+      data_registro: payload.data_registro || getCurrentLocalDate(),
       status: payload.status || "CONCLUÍDO",
     };
     const { data, error } = await supabase.from("fichas_lubrificacao").insert(cleanPayload).select().single();
@@ -97,7 +98,7 @@ export async function excluirFichaLubrificacao(id: string) {
       row = data;
     } catch {}
 
-    const { error } = await supabase.from("fichas_lubrificacao").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("fichas_lubrificacao").update({ deleted_at: getCurrentLocalDatetime() }).eq("id", id);
     if (error) throw new Error(error.message);
 
     await registrarExclusao({

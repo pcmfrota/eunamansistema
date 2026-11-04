@@ -9,6 +9,7 @@
 
 import { localDb } from "@/lib/offline-db";
 import { INSUMO_TIPOS, InsumoTipo } from "./config";
+import { getCurrentLocalDate } from "@/src/utils/dateUtils";
 import type {
   Comboio, FichaAbastecimento, FichaInsumo, LinhaAbastecimento, FichaCompleta,
   EstoqueAtualItem, FechamentoPayload, Material, RecargaInput, Skid, SaldoSkidItem,
@@ -114,7 +115,7 @@ export async function abrirOuCriarFichaOffline(equipamentoId: string): Promise<{
     equipamento_id: equipamentoId,
     modulo_id: ultimaFicha?.modulo_id ?? null,
     turno: "1",
-    data: new Date().toISOString().slice(0, 10),
+    data: getCurrentLocalDate(),
     motorista_nome: null, motorista_matricula: null, lubrificador_nome: null, lubrificador_matricula: null,
     km_horimetro_inicial: ultimaFicha?.km_horimetro_final ?? null, km_horimetro_final: null,
     regua_tanque1_inicial_cm: null, regua_tanque1_inicial_lts: null, regua_tanque1_final_cm: null, regua_tanque1_final_lts: null,

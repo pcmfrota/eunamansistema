@@ -2,6 +2,7 @@
 // resolve pro client de browser via alias (ver vite.config.ts).
 import { CaptacaoService } from '@/src/services/CaptacaoService';
 import { FichaCaptacao, LancamentoCaptacao } from '@/src/models/captacao';
+import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 
 export async function criarFicha(data: Omit<FichaCaptacao, 'id' | 'status' | 'created_at'>) {
   try {
@@ -49,7 +50,7 @@ export async function fecharFicha(id: string) {
 // ficha de novo assim que ela é lida.
 export async function reabrirFicha(id: string) {
   try {
-    const result = await CaptacaoService.updateFicha(id, { status: 'Aberta', reaberta_em: new Date().toISOString() });
+    const result = await CaptacaoService.updateFicha(id, { status: 'Aberta', reaberta_em: getCurrentLocalDatetime() });
     return { success: true, data: result };
   } catch (error: any) {
     console.error("Erro na action reabrirFicha:", error);

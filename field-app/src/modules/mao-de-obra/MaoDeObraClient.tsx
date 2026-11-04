@@ -30,6 +30,7 @@ import { SearchableSelect, Option } from "@/components/SearchableSelect";
 import FichaPDFModal, { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 import { salvarFichaMaoObra, excluirFichaMaoObra, duplicarFichaMaoObra, reabrirJornada, salvarApontamento, excluirApontamento } from "./actions";
 import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
+import { getCurrentLocalDate, getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import MaoDeObraDashboard from "./MaoDeObraDashboard";
 import MaoDeObraCatalogos from "./MaoDeObraCatalogos";
 import { ListRow, Card } from "../../ui/primitives/ListRow";
@@ -53,7 +54,7 @@ interface MaoDeObraClientProps {
 }
 
 const gerarNumeroFicha = () => `MO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-const hojeStr = () => new Date().toISOString().split("T")[0];
+const hojeStr = () => getCurrentLocalDate();
 
 const gerarId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -294,9 +295,9 @@ export default function MaoDeObraClient({
   const allocateJornadaId = (): { id: string; created_at: string } => {
     if (editingId) {
       const existente = fichas.find(f => f.id === editingId);
-      return { id: editingId, created_at: existente?.created_at || new Date().toISOString() };
+      return { id: editingId, created_at: existente?.created_at || getCurrentLocalDatetime() };
     }
-    return { id: gerarId(), created_at: new Date().toISOString() };
+    return { id: gerarId(), created_at: getCurrentLocalDatetime() };
   };
 
   // Garante que a jornada já existe gravada (local + fila de sync + melhor esforço online)
@@ -306,11 +307,11 @@ export default function MaoDeObraClient({
   const ensureJornadaPersisted = async (): Promise<{ id: string; created_at: string }> => {
     if (editingId) {
       const existente = fichas.find(f => f.id === editingId);
-      return { id: editingId, created_at: existente?.created_at || new Date().toISOString() };
+      return { id: editingId, created_at: existente?.created_at || getCurrentLocalDatetime() };
     }
 
     const novoId = gerarId();
-    const createdAt = new Date().toISOString();
+    const createdAt = getCurrentLocalDatetime();
     const novaFicha: FichaMaoObraItem = {
       id: novoId,
       numero_ficha: numeroFicha,
@@ -397,7 +398,7 @@ export default function MaoDeObraClient({
       observacoes,
       status: nextStatus,
       created_at,
-      updated_at: new Date().toISOString()
+      updated_at: getCurrentLocalDatetime()
     };
 
     try {
@@ -656,7 +657,7 @@ export default function MaoDeObraClient({
             numero_ficha: gerarNumeroFicha(),
             data_jornada: hojeStr(),
             status: "Em andamento",
-            created_at: new Date().toISOString()
+            created_at: getCurrentLocalDatetime()
           };
           await localDb.put("fichas_mao_obra", dup);
           setFichas(prev => [dup, ...prev]);

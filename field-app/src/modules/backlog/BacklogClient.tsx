@@ -39,6 +39,7 @@ import { BottomSheet } from '../../ui/primitives/BottomSheet';
 import { ConfirmDialog } from '../../ui/primitives/ConfirmDialog';
 import { Fab } from '../../ui/primitives/Fab';
 import { useToast } from '../../ui/primitives/Toast';
+import { getCurrentLocalDate } from '@/src/utils/dateUtils';
 
 type Placa = {
   id: string;
@@ -312,7 +313,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   };
 
   const currentPeriod = React.useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentLocalDate();
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) return period;
     const now = new Date();

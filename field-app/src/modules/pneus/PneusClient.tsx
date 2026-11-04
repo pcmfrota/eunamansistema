@@ -10,6 +10,7 @@ import PneusModal from "./PneusModal";
 import PneusImportModal from "./PneusImportModal";
 import PneusAIReport from "./PneusAIReport";
 import PneuEsquemaModal from "./PneuEsquemaModal";
+import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
@@ -862,7 +863,7 @@ export default function PneusClient({
                             onClick={() => setSelectedSchematic({
                               id: `pendente-${row.eq.id}`,
                               equipamento_id: row.eq.id,
-                              data_inspecao: new Date().toISOString(),
+                              data_inspecao: getCurrentLocalDatetime(),
                               km_atual: null,
                               de: null, dd: null, tei: null, tee: null, tdi: null, tde: null, tei1: null, tee1: null, tdi1: null, tde1: null, estepe: null,
                               condicao: "PENDENTE",

@@ -23,6 +23,7 @@ import {
   ChecklistItem,
 } from "@/app/checklist-mecanicos/checklistConfig";
 import { salvarChecklistMecanico, excluirChecklistMecanico } from "./actions";
+import { getCurrentLocalDate, getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 
 const TIPOS = ["Comboio", "Pipa", "Multifuncional", "Munck"] as const;
 
@@ -307,11 +308,11 @@ export default function ChecklistMecanicosClient({
           tipo_caminhao: form.tipo,
           local: form.local,
           co: form.co,
-          data_checklist: new Date().toISOString().split("T")[0],
+          data_checklist: getCurrentLocalDate(),
           status: "Fechado",
           respostas: form.respostas,
           pendencias_adicionais: form.pendencias,
-          criado_em: new Date().toISOString(),
+          criado_em: getCurrentLocalDatetime(),
           _isPendingSync: true,
         };
         await localDb.put("checklists_mecanicos", optimistic);

@@ -3,6 +3,7 @@
 // Mesma lógica, zero mudança de comportamento.
 import { createClient } from '@/utils/supabase/client';
 import { registrarExclusao } from '@/lib/audit-log';
+import { getCurrentLocalDate, getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 
 export async function getFichasMaoObra(limit: number = 2000) {
   try {
@@ -27,7 +28,7 @@ export async function salvarFichaMaoObra(ficha: any) {
 
     const payload = {
       ...ficha,
-      updated_at: new Date().toISOString(),
+      updated_at: getCurrentLocalDatetime(),
       created_by: user?.id || ficha.created_by || null,
     };
 
@@ -135,7 +136,7 @@ export async function reabrirJornada(id: string) {
     const supabase = createClient();
     const { error } = await supabase
       .from('fichas_mao_obra')
-      .update({ status: 'Em andamento', updated_at: new Date().toISOString() })
+      .update({ status: 'Em andamento', updated_at: getCurrentLocalDatetime() })
       .eq('id', id);
 
     if (error) throw new Error(error.message);
@@ -163,9 +164,9 @@ export async function duplicarFichaMaoObra(id: string) {
       id: undefined,
       numero_ficha: newNum,
       status: 'Em andamento',
-      data_jornada: new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      data_jornada: getCurrentLocalDate(),
+      created_at: getCurrentLocalDatetime(),
+      updated_at: getCurrentLocalDatetime(),
     };
     delete copyPayload.id;
 
@@ -231,7 +232,7 @@ async function atualizarTotaisJornada(supabase: any, jornadaId: string) {
         tempo_total_horas: Number((totalMin / 60).toFixed(2)),
         tempo_produtivo_horas: Number((produtivoMin / 60).toFixed(2)),
         tempo_ocioso_horas: Number(((totalMin - produtivoMin) / 60).toFixed(2)),
-        updated_at: new Date().toISOString(),
+        updated_at: getCurrentLocalDatetime(),
       })
       .eq('id', jornadaId);
   } catch (err) {
@@ -271,7 +272,7 @@ export async function salvarApontamento(apontamento: any) {
       tempo_gasto_minutos: Number(apontamento.tempo_gasto_minutos) || 0,
       registrado_por: user?.id || null,
       registrado_por_nome: nome,
-      atualizado_em: new Date().toISOString(),
+      atualizado_em: getCurrentLocalDatetime(),
     };
 
     if (!payload.id) throw new Error('Apontamento sem id.');

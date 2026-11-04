@@ -22,6 +22,7 @@ import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 import { StatTile } from "../../ui/primitives/StatTile";
+import { getCurrentLocalDate } from "@/src/utils/dateUtils";
 
 const PRODUTIVO_COLOR = "#4f46e5"; // indigo — paleta padrão do projeto
 const OCIOSO_COLOR = "#f97316"; // laranja — usado como "Improdutivo" na exibição
@@ -60,7 +61,7 @@ interface Props {
 
 export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], colaboradores = [], calendario = [] }: Props) {
   const currentPeriod = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getCurrentLocalDate();
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) return period;
     const now = new Date();
