@@ -74,7 +74,6 @@ public class EunamanActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private ImageView   splashScreen;
     private String      currentPhotoPath;
-    private Uri         photoUri;
 
     // Trava de seguranca para navegacao pendurada: ao retomar do segundo plano no Android,
     // a ConnectivityManager pode reportar rede disponivel antes do radio realmente terminar
@@ -119,7 +118,6 @@ public class EunamanActivity extends AppCompatActivity {
         
         if (savedInstanceState != null) {
             currentPhotoPath = savedInstanceState.getString("currentPhotoPath");
-            photoUri = savedInstanceState.getParcelable("photoUri");
             pendingPhotoDataUrl = savedInstanceState.getString("pendingPhotoDataUrl");
         }
 
@@ -282,7 +280,6 @@ public class EunamanActivity extends AppCompatActivity {
         super.onSaveInstanceState(outState);
         if (webView != null) webView.saveState(outState);
         outState.putString("currentPhotoPath", currentPhotoPath);
-        outState.putParcelable("photoUri", photoUri);
         outState.putString("pendingPhotoDataUrl", pendingPhotoDataUrl);
     }
 
@@ -536,8 +533,12 @@ public class EunamanActivity extends AppCompatActivity {
         }
     }
 
+    // Câmera embutida (EunamanCameraActivity, CameraX) — mesmo processo desta Activity, ver
+    // nota em app/build.gradle. Antes abria o app de Câmera do sistema via
+    // ACTION_IMAGE_CAPTURE; isso foi trocado porque o Android podia encerrar esta Activity em
+    // segundo plano enquanto o app de Câmera (outro processo) estava em primeiro plano, pra
+    // liberar memória em aparelhos com pouca RAM — ao voltar, a WebView recarregava do zero.
     private void launchCameraIntent() {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         File photoFile = null;
         try {
             photoFile = createImageFile();
@@ -546,17 +547,13 @@ public class EunamanActivity extends AppCompatActivity {
             sendCameraResultError("Erro ao criar arquivo para salvar a foto.");
             return;
         }
-        if (photoFile != null) {
-            try {
-                String authority = getPackageName() + ".provider";
-                photoUri = FileProvider.getUriForFile(this, authority, photoFile);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
-                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                startActivityForResult(takePictureIntent, REQUEST_CAMERA);
-            } catch (Exception e) {
-                Log.e(TAG, "Erro ao iniciar camera intent", e);
-                sendCameraResultError("Não foi possível abrir a câmera: " + e.getMessage());
-            }
+        try {
+            Intent intent = new Intent(this, EunamanCameraActivity.class);
+            intent.putExtra(EunamanCameraActivity.EXTRA_OUTPUT_PATH, photoFile.getAbsolutePath());
+            startActivityForResult(intent, REQUEST_CAMERA);
+        } catch (Exception e) {
+            Log.e(TAG, "Erro ao iniciar a câmera embutida", e);
+            sendCameraResultError("Não foi possível abrir a câmera: " + e.getMessage());
         }
     }
 

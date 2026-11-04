@@ -63,6 +63,17 @@
 
         </activity>
 
+        <!-- ══════════════════════════════════════════════════════════════════
+             Câmera embutida (CameraX), mesmo processo da EunamanActivity — ver
+             nota em app/build.gradle. android:exported="false": só é chamada de
+             dentro do próprio app.
+        ══════════════════════════════════════════════════════════════════════ -->
+        <activity
+            android:name=".EunamanCameraActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.EUNAMAN" />
+
         <!-- LauncherActivity do TWA (Mantida para referência) -->
         <activity
             android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"

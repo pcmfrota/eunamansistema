@@ -14,6 +14,7 @@ import { SegmentedTabs } from "../../ui/primitives/SegmentedTabs";
 import { EmptyState } from "../../ui/primitives/EmptyState";
 import { Fab } from "../../ui/primitives/Fab";
 import { useToast } from "../../ui/primitives/Toast";
+import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import {
   criarOrdemServico,
   atualizarOrdemServico,
@@ -167,7 +168,7 @@ function SignaturePad({ label, value, onChange }: { label: string; value: string
 function blankForm() {
   return {
     horario_parada: "",
-    data_abertura: new Date().toISOString().slice(0, 16),
+    data_abertura: getCurrentLocalDatetime(),
     data_fechamento: "",
     status: "Aberta",
     equipamento_id: "",
