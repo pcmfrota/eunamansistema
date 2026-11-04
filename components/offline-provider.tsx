@@ -84,9 +84,34 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Quantas falhas SEGUIDAS já ocorreram — só declara "offline" de verdade depois de 2
+  // falhas em sequência. Uma falha isolada do fetch de ping normalmente não é a rede caindo
+  // de verdade: é o WebView jogando os timers/fetches em segundo plano (ex: enquanto a
+  // câmera nativa embutida está em primeiro plano — ver EunamanCameraActivity) e o pedido
+  // nunca termina a tempo do timeout de 5s. Sem esse amortecimento, isso derrubava isOnline
+  // por um instante e, ao voltar a true no check seguinte, cada tela disparava sua
+  // sincronização completa de novo — o usuário via isso como "o app meio que atualiza"
+  // toda vez que tirava uma foto, mesmo a conexão nunca tendo caído de verdade.
+  const falhasConsecutivasRef = useRef(0);
+  const FALHAS_PARA_DECLARAR_OFFLINE = 2;
+
   const updateNetworkStatus = async () => {
+    // Enquanto a aba/WebView não está visível (ex: câmera nativa embutida em primeiro
+    // plano), o fetch de ping tende a ficar preso/atrasado por throttling do navegador —
+    // um resultado nesse período não é confiável, então nem tenta; o listener de
+    // visibilitychange abaixo já garante uma checagem fresca assim que voltar a ficar visível.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+
     const activeOnline = await checkConnectivity();
-    setIsOnline(activeOnline);
+    if (activeOnline) {
+      falhasConsecutivasRef.current = 0;
+      setIsOnline(true);
+      return;
+    }
+    falhasConsecutivasRef.current += 1;
+    if (falhasConsecutivasRef.current >= FALHAS_PARA_DECLARAR_OFFLINE) {
+      setIsOnline(false);
+    }
   };
 
   useEffect(() => {
@@ -100,18 +125,26 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     };
     const handleOffline = () => {
       console.log("[OfflineProvider] Navegador reportou OFFLINE");
+      falhasConsecutivasRef.current = FALHAS_PARA_DECLARAR_OFFLINE;
       setIsOnline(false);
+    };
+    // Checagem fresca assim que o WebView volta a ficar visível (ex: fechou a câmera
+    // nativa embutida) — mais confiável do que esperar o próximo tick do intervalo de 30s.
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") updateNetworkStatus();
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     // Intervalo de segurança estendido para 30 segundos
     const interval = setInterval(updateNetworkStatus, 30000);
 
     return () => {
-      window.removeEventListener("online", updateNetworkStatus);
-      window.removeEventListener("offline", updateNetworkStatus);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
       clearInterval(interval);
     };
   }, []);
