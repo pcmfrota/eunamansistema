@@ -10,10 +10,30 @@
 //   são fluxos de Escritório (Web) — ver OSService.ts.
 import { createClient } from '@/utils/supabase/client';
 import { OSService } from '@/src/services/OSService';
-import { OSInsert, OSUpdate } from '@/src/models/os';
+import { OSInsert, OSUpdate, DescricaoAtividade } from '@/src/models/os';
 import { getCurrentLocalDatetime } from '@/src/utils/dateUtils';
 
-const parseFormData = (formData: FormData): OSInsert => ({
+// Resumo concatenado dos blocos de descricoes_atividade — mantém a coluna legada `descricao`
+// (texto livre) coerente com o que o site/listagens ainda leem, mesmo vindo do novo formulário
+// com múltiplas descrições.
+const resumoDescricoes = (blocos: DescricaoAtividade[]): string =>
+  blocos
+    .map((b, i) => (b.descricao || '').trim())
+    .filter(Boolean)
+    .map((texto, i) => `${i + 1}) ${texto}`)
+    .join('\n\n');
+
+const parseFormData = (formData: FormData): OSInsert => {
+  let descricoesAtividade: DescricaoAtividade[] = [];
+  try {
+    descricoesAtividade = JSON.parse((formData.get('descricoes_atividade') as string) || '[]');
+    if (!Array.isArray(descricoesAtividade)) descricoesAtividade = [];
+  } catch {
+    descricoesAtividade = [];
+  }
+  const descricaoLegado = (formData.get('descricao') as string) || resumoDescricoes(descricoesAtividade);
+
+  return ({
   equipamento_id: formData.get('equipamento_id') as string,
   placa: formData.get('placa') as string,
   modulo: formData.get('modulo') as string,
@@ -31,7 +51,8 @@ const parseFormData = (formData: FormData): OSInsert => ({
   // rodando dentro do app Android (`isAndroidApp`), então aqui nem existem no formulário.
   classe: 'CORRETIVA',
   foi_enviado_reserva: false,
-  descricao: formData.get('descricao') as string,
+  descricao: descricaoLegado,
+  descricoes_atividade: descricoesAtividade,
   motivo: (formData.get('motivo') as string) || null,
   sistema: null,
   sub_sistema: null,
@@ -44,7 +65,8 @@ const parseFormData = (formData: FormData): OSInsert => ({
   assinatura_mecanico: (formData.get('assinatura_mecanico') as string) || null,
   fotos: formData.getAll('fotos') as string[],
   numero_os: '', // Gerado automaticamente se vazio
-});
+  } as OSInsert);
+};
 
 const extractMecanicos = (formData: FormData): string[] => {
   const mecanicos: string[] = [];
@@ -67,15 +89,16 @@ async function getUsuarioAtual(supabase: any) {
   };
 }
 
-// As fotos/assinatura da OS saíram da listagem em massa (ver lib/offline-sync.ts) pra não
-// estourar a cota de saída do Supabase — quem abre uma OS específica pra editar ou ver
-// detalhes busca essas colunas aqui, sob demanda.
+// As fotos/assinatura/descricoes_atividade (que também carrega fotos por bloco) da OS
+// saíram da listagem em massa (ver lib/offline-sync.ts) pra não estourar a cota de saída
+// do Supabase — quem abre uma OS específica pra editar ou ver detalhes busca essas
+// colunas aqui, sob demanda.
 export async function getOSImagensClient(id: string) {
   try {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('ordens_servico')
-      .select('foto_horimetro, foto_km, fotos, assinatura_mecanico')
+      .select('foto_horimetro, foto_km, fotos, assinatura_mecanico, descricoes_atividade')
       .eq('id', id)
       .maybeSingle();
     if (error) throw new Error(error.message);

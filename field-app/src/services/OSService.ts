@@ -35,6 +35,18 @@ const OSSchema = z.object({
   // app principal nunca pego lá porque o build do Next.js tolera erro de tipo; aqui o
   // field-app usa tsc --noEmit estrito, então corrigido só nesta cópia local.
   descricao: z.string().optional().nullable().transform((val) => val ?? 'Importação via Planilha'),
+  descricoes_atividade: z
+    .array(
+      z.object({
+        descricao: z.string(),
+        hora_inicio: z.string().optional().nullable(),
+        hora_fim: z.string().optional().nullable(),
+        foto: z.string().optional().nullable(),
+      })
+    )
+    .optional()
+    .nullable()
+    .default([]),
   motivo: z.string().optional().nullable(),
   sistema: z.string().optional().nullable(),
   sub_sistema: z.string().optional().nullable(),

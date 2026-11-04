@@ -1,3 +1,15 @@
+// Bloco de descrição de atividade com horário inicial/final e foto — usado pelo field-app
+// pra permitir várias descrições na mesma OS (ex: "Descrição 1", "Descrição 2"...), cada
+// uma com seu próprio intervalo de horário e evidência fotográfica. A coluna `descricao`
+// (texto livre) continua existindo e recebe um resumo concatenado desses blocos, pra ficar
+// compatível com o que já lê/filtra por ela (site, listagens, etc.).
+export interface DescricaoAtividade {
+  descricao: string;
+  hora_inicio?: string | null;
+  hora_fim?: string | null;
+  foto?: string | null;
+}
+
 export interface OS {
   id?: string;
   numero_os: string;
@@ -16,6 +28,7 @@ export interface OS {
   classe: 'CORRETIVA' | 'PREVENTIVA' | 'PREDITIVA' | string;
   foi_enviado_reserva: boolean;
   descricao: string;
+  descricoes_atividade?: DescricaoAtividade[] | null;
   motivo?: string | null;
   sistema?: string | null;
   sub_sistema?: string | null;

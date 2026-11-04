@@ -26,6 +26,12 @@ import {
 const STATUS_OPTIONS = ["Aberta", "Programado", "Fechada"] as const;
 const MOTIVOS_FALLBACK = ["Desgaste Natural", "Quebra Operacional", "Falha Elétrica"];
 
+// Forma "de formulário" de DescricaoAtividade (campos sempre string, nunca null/undefined,
+// pra ligar direto em inputs controlados) — convertida pra DescricaoAtividade de verdade só
+// na hora de montar o payload (buildFields).
+type DescricaoAtividadeForm = { descricao: string; hora_inicio: string; hora_fim: string; foto: string };
+const blankDescricaoAtividade = (): DescricaoAtividadeForm => ({ descricao: "", hora_inicio: "", hora_fim: "", foto: "" });
+
 function compressBase64(dataUrl: string, maxWidth = 900, maxHeight = 900, quality = 0.65): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -180,7 +186,7 @@ function blankForm() {
     local: "",
     foto_horimetro: "",
     foto_km: "",
-    descricao: "",
+    descricoes_atividade: [blankDescricaoAtividade()] as DescricaoAtividadeForm[],
     motivo: "",
     observacoes: "",
     mecanicos: [""] as string[],
@@ -255,6 +261,13 @@ export default function OSClient({
             const arr = [...p.fotos];
             arr[idx] = compressed;
             return { ...p, fotos: arr };
+          });
+        } else if (alvo.startsWith("descricao:")) {
+          const idx = Number(alvo.split(":")[1]);
+          setForm((p) => {
+            const arr = [...p.descricoes_atividade];
+            if (arr[idx]) arr[idx] = { ...arr[idx], foto: compressed };
+            return { ...p, descricoes_atividade: arr };
           });
         }
       } catch (e) {
@@ -350,6 +363,22 @@ export default function OSClient({
       assinaturasSalvas = Array.isArray(parsed.mecanicos) ? parsed.mecanicos : [];
     } catch {}
     const mecanicosSalvos = Array.isArray(o.mecanicos) && o.mecanicos.length > 0 ? o.mecanicos : [""];
+    // descricoes_atividade (como fotos/foto_horimetro/foto_km) fica de fora da listagem em
+    // massa por ter fotos — só vem em fotosExtra, buscado sob demanda acima. OS antigas
+    // (gravadas antes desse campo existir) continuam editáveis: monta um único bloco a
+    // partir do texto legado de `descricao`, sem perder nada.
+    const descricoesOrigem = Array.isArray(fotosExtra.descricoes_atividade) && fotosExtra.descricoes_atividade.length > 0
+      ? fotosExtra.descricoes_atividade
+      : o.descricoes_atividade;
+    const descricoesSalvas: DescricaoAtividadeForm[] =
+      Array.isArray(descricoesOrigem) && descricoesOrigem.length > 0
+        ? descricoesOrigem.map((d: any) => ({
+            descricao: d?.descricao || "",
+            hora_inicio: d?.hora_inicio || "",
+            hora_fim: d?.hora_fim || "",
+            foto: d?.foto || "",
+          }))
+        : [{ ...blankDescricaoAtividade(), descricao: o.descricao || "" }];
     setForm({
       horario_parada: (o.horario_parada || "").slice(0, 16),
       data_abertura: (o.data_abertura || "").slice(0, 16),
@@ -364,7 +393,7 @@ export default function OSClient({
       local: o.local || "",
       foto_horimetro: fotosExtra.foto_horimetro || o.foto_horimetro || "",
       foto_km: fotosExtra.foto_km || o.foto_km || "",
-      descricao: o.descricao || "",
+      descricoes_atividade: descricoesSalvas,
       motivo: o.motivo || "",
       observacoes: o.observacoes || "",
       mecanicos: mecanicosSalvos,
@@ -374,9 +403,20 @@ export default function OSClient({
     setSheetOpen(true);
   };
 
+  // "Ver Detalhes" também precisa buscar sob demanda (mesmo motivo de abrirEdicao acima):
+  // fotos/foto_horimetro/foto_km/descricoes_atividade ficam fora da listagem em massa.
+  const abrirVisualizacao = async (o: any) => {
+    let fotosExtra: any = {};
+    if (isOnline && !String(o.id).startsWith("temp_")) {
+      const res = await getOSImagensClient(o.id);
+      if (res && "data" in res && res.data) fotosExtra = res.data;
+    }
+    setViewItem({ ...o, ...fotosExtra });
+  };
+
   const onSelecionarPlaca = (equipamentoId: string) => {
     const eq = equipamentos.find((e) => e.id === equipamentoId);
-    setForm((p) => ({ ...p, equipamento_id: equipamentoId, placa: eq?.placa || "", modulo: eq?.modulo || "" }));
+    setForm((p) => ({ ...p, equipamento_id: equipamentoId, placa: eq?.placa || "", modulo: eq?.modulo || "", operacao_tipo: eq?.categoria || "" }));
   };
 
   const horasManutencao = useMemo(() => {
@@ -403,7 +443,14 @@ export default function OSClient({
       foto_km: form.foto_km || null,
       operacao_tipo: form.operacao_tipo,
       local: form.local,
-      descricao: form.descricao,
+      descricao: form.descricoes_atividade
+        .map((d) => d.descricao.trim())
+        .filter(Boolean)
+        .map((texto, i) => `${i + 1}) ${texto}`)
+        .join("\n\n"),
+      descricoes_atividade: JSON.stringify(
+        form.descricoes_atividade.filter((d) => d.descricao.trim() || d.hora_inicio || d.hora_fim || d.foto)
+      ),
       motivo: form.motivo,
       observacoes: form.observacoes,
       horario_parada: form.horario_parada,
@@ -417,9 +464,14 @@ export default function OSClient({
     return fields;
   };
 
+  const temDescricaoPreenchida = useMemo(
+    () => form.descricoes_atividade.some((d) => d.descricao.trim()),
+    [form.descricoes_atividade]
+  );
+
   const handleSalvar = async () => {
-    if (!form.equipamento_id || !form.horario_parada || !form.data_abertura || !form.descricao.trim()) {
-      toast.show("Preencha Placa, Horário da Parada, Início da Manutenção e Descrição.", "error");
+    if (!form.equipamento_id || !form.horario_parada || !form.data_abertura || !temDescricaoPreenchida) {
+      toast.show("Preencha Placa, Horário da Parada, Início da Manutenção e ao menos uma Descrição.", "error");
       return;
     }
     setSalvando(true);
@@ -525,7 +577,7 @@ export default function OSClient({
 
   const actionSheetItems: ActionSheetItem[] = actionItem
     ? [
-        { key: "ver", label: "Ver Detalhes", icon: Eye, onSelect: () => setViewItem(actionItem) },
+        { key: "ver", label: "Ver Detalhes", icon: Eye, onSelect: () => abrirVisualizacao(actionItem) },
         ...(podeCriar ? [{ key: "editar", label: "Editar", icon: Pencil, onSelect: () => abrirEdicao(actionItem) } as ActionSheetItem] : []),
         ...(podeAprovar && actionItem.aprovado === false
           ? [{ key: "aprovar", label: "Aprovar", icon: CheckCircle2, onSelect: () => handleAprovar(actionItem) } as ActionSheetItem]
@@ -657,15 +709,96 @@ export default function OSClient({
             <FotoSlot label="Foto KM" url={form.foto_km} onCapture={() => abrirCamera("foto_km")} onClear={() => setForm((p) => ({ ...p, foto_km: "" }))} />
           </div>
 
-          <div>
-            <label className={labelCls}>Descrição da Atividade *</label>
-            <textarea
-              value={form.descricao}
-              onChange={(e) => setForm((p) => ({ ...p, descricao: e.target.value }))}
-              rows={3}
-              placeholder="Descreva a falha ou manutenção..."
-              className={inputCls}
-            />
+          {/* Descrições da atividade — lista repetível, cada bloco com horário inicial/final
+              e foto própria (sem limite de quantidade) */}
+          <div className="p-3.5 rounded-xl bg-amber-950/10 border border-amber-900/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-black text-amber-500 uppercase tracking-wide">Descrições da Atividade *</p>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((p) => ({ ...p, descricoes_atividade: [...p.descricoes_atividade, blankDescricaoAtividade()] }))
+                }
+                className="text-[10px] font-black text-amber-500 uppercase"
+              >
+                + Adicionar Descrição
+              </button>
+            </div>
+            {form.descricoes_atividade.map((bloco, idx) => (
+              <div key={idx} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase">Descrição {idx + 1}</span>
+                  {form.descricoes_atividade.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, descricoes_atividade: p.descricoes_atividade.filter((_, i) => i !== idx) }))
+                      }
+                      className="text-red-400 text-lg leading-none px-1"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={bloco.descricao}
+                  onChange={(e) =>
+                    setForm((p) => {
+                      const arr = [...p.descricoes_atividade];
+                      arr[idx] = { ...arr[idx], descricao: e.target.value };
+                      return { ...p, descricoes_atividade: arr };
+                    })
+                  }
+                  rows={2}
+                  placeholder="Descreva a falha ou manutenção..."
+                  className={inputCls}
+                />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-500 mb-1">Horário Inicial</label>
+                    <input
+                      type="time"
+                      value={bloco.hora_inicio}
+                      onChange={(e) =>
+                        setForm((p) => {
+                          const arr = [...p.descricoes_atividade];
+                          arr[idx] = { ...arr[idx], hora_inicio: e.target.value };
+                          return { ...p, descricoes_atividade: arr };
+                        })
+                      }
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-500 mb-1">Horário Final</label>
+                    <input
+                      type="time"
+                      value={bloco.hora_fim}
+                      onChange={(e) =>
+                        setForm((p) => {
+                          const arr = [...p.descricoes_atividade];
+                          arr[idx] = { ...arr[idx], hora_fim: e.target.value };
+                          return { ...p, descricoes_atividade: arr };
+                        })
+                      }
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+                <FotoSlot
+                  label="Foto desta descrição"
+                  url={bloco.foto}
+                  onCapture={() => abrirCamera(`descricao:${idx}`)}
+                  onClear={() =>
+                    setForm((p) => {
+                      const arr = [...p.descricoes_atividade];
+                      arr[idx] = { ...arr[idx], foto: "" };
+                      return { ...p, descricoes_atividade: arr };
+                    })
+                  }
+                />
+              </div>
+            ))}
           </div>
 
           <div>
@@ -764,7 +897,7 @@ export default function OSClient({
 
           <button
             onClick={handleSalvar}
-            disabled={salvando || !form.equipamento_id || !form.descricao.trim()}
+            disabled={salvando || !form.equipamento_id || !temDescricaoPreenchida}
             className="w-full py-3.5 rounded-xl text-sm font-black text-white bg-amber-600 active:bg-amber-700 disabled:opacity-60"
           >
             {salvando ? "Salvando..." : editingId ? "Salvar Alterações" : "Abrir OS"}
@@ -794,10 +927,27 @@ export default function OSClient({
                 <p className="font-black text-zinc-100">{viewItem.data_fechamento ? viewItem.data_fechamento.slice(0, 16).replace("T", " ") : "—"}</p>
               </div>
             </div>
-            <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Descrição</p>
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{viewItem.descricao}</p>
-            </div>
+            {Array.isArray(viewItem.descricoes_atividade) && viewItem.descricoes_atividade.length > 0 ? (
+              <div className="space-y-2">
+                {viewItem.descricoes_atividade.map((bloco: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Descrição {idx + 1}</p>
+                    <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bloco.descricao}</p>
+                    {(bloco.hora_inicio || bloco.hora_fim) && (
+                      <p className="text-[11px] text-zinc-400 font-bold">
+                        {bloco.hora_inicio || "—"} às {bloco.hora_fim || "—"}
+                      </p>
+                    )}
+                    {bloco.foto && <img src={bloco.foto} className="w-full rounded-lg object-cover max-h-40" />}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Descrição</p>
+                <p className="text-sm text-zinc-200 whitespace-pre-wrap">{viewItem.descricao}</p>
+              </div>
+            )}
             {Array.isArray(viewItem.mecanicos) && viewItem.mecanicos.length > 0 && (
               <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
                 <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Mecânicos</p>
