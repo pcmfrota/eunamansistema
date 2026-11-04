@@ -114,6 +114,11 @@ export default function LavagensClient({
   const { profile } = useAuth();
   const toast = useToast();
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [view, setView] = useState<View>("menu");
   const [lavagens, setLavagens] = useState<Lavagem[]>(lavagensIniciais);
   const [busca, setBusca] = useState("");
@@ -203,6 +208,46 @@ export default function LavagensClient({
       delete (window as any).onEunamanCameraResult;
     };
   }, []);
+
+  // ── Rascunho do formulário (sobrevive ao reload que o Android dá na Activity
+  // enquanto o app de Câmera nativo está em primeiro plano, pra liberar memória) —
+  // mesmo padrão de CaptacaoClient.tsx/OSClient.tsx. form.id já distingue edição de
+  // criação aqui, então não precisa de um editingId separado.
+  const hasRestoredRef = useRef(false);
+
+  useEffect(() => {
+    if (!mounted || !hasRestoredRef.current) return;
+    try {
+      if (sheetOpen) {
+        localStorage.setItem("eunaman_lavagens_form_draft", JSON.stringify(form));
+        localStorage.setItem("eunaman_lavagens_sheet_open", "true");
+      } else {
+        localStorage.removeItem("eunaman_lavagens_form_draft");
+        localStorage.setItem("eunaman_lavagens_sheet_open", "false");
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho de lavagem:", e);
+    }
+  }, [form, sheetOpen, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const sheetWasOpen = localStorage.getItem("eunaman_lavagens_sheet_open");
+      const draft = localStorage.getItem("eunaman_lavagens_form_draft");
+      if (sheetWasOpen === "true" && draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed && typeof parsed === "object") {
+          setForm(parsed);
+          setSheetOpen(true);
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho de lavagem:", e);
+    } finally {
+      hasRestoredRef.current = true;
+    }
+  }, [mounted]);
 
   const abrirNovo = () => {
     setForm({ ...BLANK_FORM, data: hoje() });

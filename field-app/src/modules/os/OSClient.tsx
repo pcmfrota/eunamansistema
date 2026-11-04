@@ -206,6 +206,11 @@ export default function OSClient({
   const podeCriar = role !== "visitante";
   const podeExcluir = role === "admin" || role === "pcm" || role === "gestao";
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [ordens, setOrdens] = useState<any[]>(ordensIniciais);
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<"lista" | "validacao">("lista");
@@ -268,6 +273,49 @@ export default function OSClient({
       delete (window as any).onEunamanCameraResult;
     };
   }, []);
+
+  // ── Rascunho do formulário (sobrevive ao reload que o Android dá na Activity
+  // enquanto o app de Câmera nativo está em primeiro plano, pra liberar memória —
+  // comum em aparelhos com pouca RAM) — mesmo padrão de CaptacaoClient.tsx. Sem isso,
+  // a foto tirada volta certinho (via EunamanCamera.getPendingPhoto acima) mas fica
+  // anexada a um formulário em branco atrás de uma folha fechada: pro usuário parece
+  // que "o app recarregou e perdeu tudo".
+  const hasRestoredRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!mounted || !hasRestoredRef.current) return;
+    try {
+      if (sheetOpen) {
+        localStorage.setItem("eunaman_os_form_draft", JSON.stringify({ form, editingId }));
+        localStorage.setItem("eunaman_os_sheet_open", "true");
+      } else {
+        localStorage.removeItem("eunaman_os_form_draft");
+        localStorage.setItem("eunaman_os_sheet_open", "false");
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho da OS:", e);
+    }
+  }, [form, editingId, sheetOpen, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const sheetWasOpen = localStorage.getItem("eunaman_os_sheet_open");
+      const draft = localStorage.getItem("eunaman_os_form_draft");
+      if (sheetWasOpen === "true" && draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed && typeof parsed === "object" && parsed.form) {
+          setForm(parsed.form);
+          setEditingId(parsed.editingId ?? null);
+          setSheetOpen(true);
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho da OS:", e);
+    } finally {
+      hasRestoredRef.current = true;
+    }
+  }, [mounted]);
 
   const abrirCamera = (alvo: string) => {
     localStorage.setItem("eunaman_os_active_photo_field", alvo);

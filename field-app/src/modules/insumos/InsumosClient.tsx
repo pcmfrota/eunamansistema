@@ -183,6 +183,10 @@ export default function InsumosClient({
 }) {
   const { isOnline } = useOffline();
   const toast = useToast();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [view, setView] = useState<View>("hub");
   const [busca, setBusca] = useState("");
   const [fichaAtiva, setFichaAtiva] = useState<FichaCompleta | null>(null);
@@ -190,6 +194,40 @@ export default function InsumosClient({
   const [comboioMenu, setComboioMenu] = useState<Comboio | null>(null);
   const [comboioEstoque, setComboioEstoque] = useState<Comboio | null>(null);
   const [comboioRecarga, setComboioRecarga] = useState<Comboio | null>(null);
+
+  // ── Rascunho de "qual ficha está aberta" (sobrevive ao reload que o Android dá na
+  // Activity enquanto o app de Câmera nativo está em primeiro plano — ver LinhaForm,
+  // que tem o próprio rascunho dos campos da linha; sem este aqui, o reload volta pro
+  // Hub inteiro e o usuário nem chega a ver o rascunho da linha restaurado).
+  const hasRestoredFichaRef = useRef(false);
+
+  useEffect(() => {
+    if (!mounted || !hasRestoredFichaRef.current) return;
+    try {
+      if (fichaAtiva) {
+        localStorage.setItem("eunaman_insumos_ficha_ativa", JSON.stringify(fichaAtiva));
+      } else {
+        localStorage.removeItem("eunaman_insumos_ficha_ativa");
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho de ficha de insumos:", e);
+    }
+  }, [fichaAtiva, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const draft = localStorage.getItem("eunaman_insumos_ficha_ativa");
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed && typeof parsed === "object") setFichaAtiva(parsed);
+      }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho de ficha de insumos:", e);
+    } finally {
+      hasRestoredFichaRef.current = true;
+    }
+  }, [mounted]);
 
   const comboios = useMemo(
     () => deriveComboiosOffline(equipamentos as any, fichas, fichaInsumos),
@@ -425,12 +463,47 @@ function FichaScreen({ fichaInicial, comboio, equipamentos, colaboradores, isOnl
   onAtualizar: (f: FichaCompleta) => void;
 }) {
   const { ficha, insumos, linhas } = fichaInicial;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [editCabecalho, setEditCabecalho] = useState(false);
   const [linhaEdit, setLinhaEdit] = useState<LinhaAbastecimento | "nova" | null>(null);
   const [linhaMenu, setLinhaMenu] = useState<LinhaAbastecimento | null>(null);
   const [confirmExcluirLinha, setConfirmExcluirLinha] = useState<LinhaAbastecimento | null>(null);
   const [fecharOpen, setFecharOpen] = useState(false);
   const [salvando, setSalvando] = useState(false);
+
+  // ── Rascunho de "qual linha estava sendo editada" (ver LinhaForm pros campos em si).
+  const hasRestoredLinhaEditRef = useRef(false);
+
+  useEffect(() => {
+    if (!mounted || !hasRestoredLinhaEditRef.current) return;
+    try {
+      if (linhaEdit !== null) {
+        localStorage.setItem("eunaman_insumos_linha_edit", JSON.stringify(linhaEdit));
+      } else {
+        localStorage.removeItem("eunaman_insumos_linha_edit");
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho de linha em edição:", e);
+    }
+  }, [linhaEdit, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const draft = localStorage.getItem("eunaman_insumos_linha_edit");
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed === "nova" || (parsed && typeof parsed === "object")) setLinhaEdit(parsed);
+      }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho de linha em edição:", e);
+    } finally {
+      hasRestoredLinhaEditRef.current = true;
+    }
+  }, [mounted]);
 
   const temTanque2 = comboio.numero_tanques_diesel >= 2;
   const dieselRestou = insumos.filter((i) => i.insumo_tipo === "DIESEL_T1" || i.insumo_tipo === "DIESEL_T2").reduce((s, i) => s + Number(i.restou || 0), 0);
@@ -732,6 +805,10 @@ function LinhaForm({ linhaInicial, equipamentos, temTanque2, salvando, onSalvar 
   onSalvar: (linha: Partial<LinhaAbastecimento> & { id: string }) => void;
 }) {
   const toast = useToast();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [equipamentoId, setEquipamentoId] = useState(linhaInicial?.equipamento_id || "");
   const [horaInicial, setHoraInicial] = useState(linhaInicial?.hora_inicial || "");
   const [horaFinal, setHoraFinal] = useState(linhaInicial?.hora_final || "");
@@ -747,6 +824,56 @@ function LinhaForm({ linhaInicial, equipamentos, temTanque2, salvando, onSalvar 
   });
 
   useCameraBridge((_field, dataUrl) => setAssinatura(dataUrl), "eunaman_insumos_active_field");
+
+  // ── Rascunho dos campos da linha (sobrevive ao reload que o Android dá na Activity
+  // enquanto o app de Câmera nativo está em primeiro plano) — mesmo padrão de
+  // CaptacaoClient.tsx/OSClient.tsx, só que consolidando vários useState num objeto só
+  // porque este formulário não usa um único `form` de estado.
+  const hasRestoredRef = useRef(false);
+
+  useEffect(() => {
+    if (!mounted || !hasRestoredRef.current) return;
+    try {
+      const draft = { equipamentoId, horaInicial, horaFinal, horimetro, tanqueDiesel, dieselLitros, matriculaOperador, assinatura, valores };
+      localStorage.setItem("eunaman_insumos_linha_form_draft", JSON.stringify(draft));
+    } catch (e) {
+      console.error("Erro ao salvar rascunho da linha:", e);
+    }
+  }, [equipamentoId, horaInicial, horaFinal, horimetro, tanqueDiesel, dieselLitros, matriculaOperador, assinatura, valores, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const draft = localStorage.getItem("eunaman_insumos_linha_form_draft");
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed && typeof parsed === "object") {
+          if (parsed.equipamentoId !== undefined) setEquipamentoId(parsed.equipamentoId);
+          if (parsed.horaInicial !== undefined) setHoraInicial(parsed.horaInicial);
+          if (parsed.horaFinal !== undefined) setHoraFinal(parsed.horaFinal);
+          if (parsed.horimetro !== undefined) setHorimetro(parsed.horimetro);
+          if (parsed.tanqueDiesel !== undefined) setTanqueDiesel(parsed.tanqueDiesel);
+          if (parsed.dieselLitros !== undefined) setDieselLitros(parsed.dieselLitros);
+          if (parsed.matriculaOperador !== undefined) setMatriculaOperador(parsed.matriculaOperador);
+          if (parsed.assinatura !== undefined) setAssinatura(parsed.assinatura);
+          if (parsed.valores !== undefined) setValores(parsed.valores);
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho da linha:", e);
+    } finally {
+      hasRestoredRef.current = true;
+    }
+  }, [mounted]);
+
+  // Some embora via reload (JS reinicia do zero, este cleanup não roda) — só quando o
+  // usuário realmente fecha a folha (salvando ou cancelando), pra não vazar rascunho de
+  // uma linha pra a próxima "Nova Linha" aberta.
+  useEffect(() => {
+    return () => {
+      localStorage.removeItem("eunaman_insumos_linha_form_draft");
+    };
+  }, []);
 
   const equipamentoOptions = equipamentos.map((e) => ({ value: e.id, label: e.placa }));
 

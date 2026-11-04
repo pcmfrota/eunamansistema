@@ -145,6 +145,11 @@ export default function LubrificacaoClient({
   const { isOnline } = useOffline();
   const toast = useToast();
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [view, setView] = useState<View>("menu");
   const [fichas, setFichas] = useState<FichaLubrificacao[]>(fichasIniciais);
   const [busca, setBusca] = useState("");
@@ -203,6 +208,46 @@ export default function LubrificacaoClient({
       delete (window as any).onEunamanCameraResult;
     };
   }, []);
+
+  // ── Rascunho do formulário (sobrevive ao reload que o Android dá na Activity
+  // enquanto o app de Câmera nativo está em primeiro plano) — mesmo padrão de
+  // CaptacaoClient.tsx/OSClient.tsx/LavagensClient.tsx. form.id já distingue edição de
+  // criação aqui, então não precisa de um editingId separado.
+  const hasRestoredRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!mounted || !hasRestoredRef.current) return;
+    try {
+      if (sheetOpen) {
+        localStorage.setItem("eunaman_lubrificacao_form_draft", JSON.stringify(form));
+        localStorage.setItem("eunaman_lubrificacao_sheet_open", "true");
+      } else {
+        localStorage.removeItem("eunaman_lubrificacao_form_draft");
+        localStorage.setItem("eunaman_lubrificacao_sheet_open", "false");
+      }
+    } catch (e) {
+      console.error("Erro ao salvar rascunho de lubrificação:", e);
+    }
+  }, [form, sheetOpen, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const sheetWasOpen = localStorage.getItem("eunaman_lubrificacao_sheet_open");
+      const draft = localStorage.getItem("eunaman_lubrificacao_form_draft");
+      if (sheetWasOpen === "true" && draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed && typeof parsed === "object") {
+          setForm(parsed);
+          setSheetOpen(true);
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao restaurar rascunho de lubrificação:", e);
+    } finally {
+      hasRestoredRef.current = true;
+    }
+  }, [mounted]);
 
   const handleCapture = (grupo: "fotos_antes" | "fotos_depois", idx: number) => {
     localStorage.setItem("eunaman_lubrificacao_active_field", `${grupo}:${idx}`);
