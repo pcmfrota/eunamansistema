@@ -126,11 +126,12 @@ function mergeTimeIntervals(intervals: Array<{ start: number, end: number }>) {
 export async function getOfflineDashboardData(filtros?: {
   mes?: number;
   ano?: number;
-  categoria?: string;
-  placa?: string;
-  modulo?: string;
-  area?: string;
-  status?: string;
+  categoria?: string[];
+  placa?: string[];
+  modulo?: string[];
+  area?: string[];
+  statusVeiculo?: string[];
+  statusOS?: string[];
   dataInicio?: string;
   dataFim?: string;
 }): Promise<DashboardData> {
@@ -240,6 +241,7 @@ export async function getOfflineDashboardData(filtros?: {
 
   const filteredOS = todasAsOS.filter(os => {
     // OS "Programado" é só planejamento futuro — não conta como indisponibilidade real.
+    // Vale sempre, mesmo se o usuário filtrar por status "Programado" — ver statusOS abaixo.
     if (os.status === 'Programado') return false;
 
     const osStart = parseLocal(os.horario_parada || os.data_abertura);
@@ -248,9 +250,18 @@ export async function getOfflineDashboardData(filtros?: {
     if (!matchesTime) return false;
 
     // Filtros de placa
-    if (filtros?.placa) {
-      return os.placa?.toUpperCase().trim() === filtros.placa.toUpperCase().trim();
+    if (filtros?.placa && filtros.placa.length > 0) {
+      const osPlaca = os.placa?.toUpperCase().trim();
+      if (!filtros.placa.some(p => p.toUpperCase().trim() === osPlaca)) return false;
     }
+
+    if (filtros?.statusOS && filtros.statusOS.length > 0) {
+      const matches = filtros.statusOS.some(s =>
+        s === 'Fechada' ? (os.status === 'Fechada' || os.status === 'Concluída') : os.status === s
+      );
+      if (!matches) return false;
+    }
+
     return true;
   });
 
@@ -316,14 +327,20 @@ export async function getOfflineDashboardData(filtros?: {
       if (isCurrentlyInactive && !hadActivity) return false;
     }
 
-    const cat = (filtros?.categoria || "").toUpperCase().trim();
+    const catSel = (filtros?.categoria || []).map(c => c.toUpperCase().trim()).filter(Boolean);
     const eqCat = (eq.categoria || "").toUpperCase().trim();
-    if (cat && eqCat !== cat) return false;
-    if (!cat && !["PESADA", "LEVE"].includes(eqCat)) return false;
+    if (catSel.length > 0 && !catSel.includes(eqCat)) return false;
+    if (catSel.length === 0 && !["PESADA", "LEVE"].includes(eqCat)) return false;
 
-    if (filtros?.modulo && (eq.modulo || "").toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
-    if (filtros?.area && (eq.area || "").toUpperCase().trim() !== filtros.area.toUpperCase().trim()) return false;
-    if (filtros?.placa && p !== filtros.placa.toUpperCase().trim()) return false;
+    if (filtros?.modulo && filtros.modulo.length > 0) {
+      const eqMod = (eq.modulo || "").toUpperCase().trim();
+      if (!filtros.modulo.some(m => m.toUpperCase().trim() === eqMod)) return false;
+    }
+    if (filtros?.area && filtros.area.length > 0) {
+      const eArea = (eq.area || "").toUpperCase().trim();
+      if (!filtros.area.some(a => a.toUpperCase().trim() === eArea)) return false;
+    }
+    if (filtros?.placa && filtros.placa.length > 0 && !filtros.placa.some(fp => fp.toUpperCase().trim() === p)) return false;
 
     return true;
   });
@@ -491,8 +508,8 @@ export async function getOfflineDashboardData(filtros?: {
   });
 
   // ── TRAVAS DE MESES HISTÓRICOS (2026) ──
-  if (anoFiltro === 2026 && (!filtros?.categoria || filtros.categoria.toUpperCase() === "PESADA")) {
-    const isOverallFilter = !filtros?.placa && !filtros?.modulo && !filtros?.area;
+  if (anoFiltro === 2026 && (!filtros?.categoria?.length || filtros.categoria.some(c => c.toUpperCase() === "PESADA"))) {
+    const isOverallFilter = !filtros?.placa?.length && !filtros?.modulo?.length && !filtros?.area?.length;
 
     if (mesFiltro === 4) {
       const ABRIL_2026_DM_OVERRIDES: Record<string, number> = {
@@ -531,21 +548,23 @@ export async function getOfflineDashboardData(filtros?: {
 
         veiculos.length = 0;
         veiculos.push(...novosVeiculos);
-      } else if (filtros?.placa) {
-        const pUpper = filtros.placa.toUpperCase();
-        if (pUpper in ABRIL_2026_DM_OVERRIDES) {
-          veiculos.forEach(v => {
-            if (v.placa.toUpperCase() === pUpper) {
-              const dmVal = ABRIL_2026_DM_OVERRIDES[pUpper];
-              const targetDO = Math.min(100, Math.max(0, Math.round((dmVal - 2.5) * 10) / 10));
-              v.disponibilidade = dmVal;
-              v.disponibilidade_operacional = targetDO;
-              v.horasManut = Math.round((v.hTotalDM * (100 - dmVal) / 100) * 10) / 10;
-              v.horasOperacional = Math.round((v.hTotalDO * (100 - targetDO) / 100) * 10) / 10;
-              v.horasDisponiveisOperacional = Math.round((v.hTotalDO * targetDO / 100) * 10) / 10;
-            }
-          });
-        }
+      } else if (filtros?.placa && filtros.placa.length > 0) {
+        filtros.placa.forEach(placaSel => {
+          const pUpper = placaSel.toUpperCase();
+          if (pUpper in ABRIL_2026_DM_OVERRIDES) {
+            veiculos.forEach(v => {
+              if (v.placa.toUpperCase() === pUpper) {
+                const dmVal = ABRIL_2026_DM_OVERRIDES[pUpper];
+                const targetDO = Math.min(100, Math.max(0, Math.round((dmVal - 2.5) * 10) / 10));
+                v.disponibilidade = dmVal;
+                v.disponibilidade_operacional = targetDO;
+                v.horasManut = Math.round((v.hTotalDM * (100 - dmVal) / 100) * 10) / 10;
+                v.horasOperacional = Math.round((v.hTotalDO * (100 - targetDO) / 100) * 10) / 10;
+                v.horasDisponiveisOperacional = Math.round((v.hTotalDO * targetDO / 100) * 10) / 10;
+              }
+            });
+          }
+        });
       }
     } else {
       const locks: Record<number, number> = {
@@ -799,7 +818,13 @@ export async function getOfflineIndicadoresData(filtros?: {
   area?: string;
   placa?: string;
 }): Promise<any> {
-  const dash = await getOfflineDashboardData(filtros);
+  const dash = await getOfflineDashboardData({
+    mes: filtros?.mes,
+    ano: filtros?.ano,
+    categoria: filtros?.categoria ? [filtros.categoria] : undefined,
+    area: filtros?.area ? [filtros.area] : undefined,
+    placa: filtros?.placa ? [filtros.placa] : undefined,
+  });
   
   const veiculos = dash.veiculos.map(v => {
     const eqInfo = dash.statusFrota.find(sf => sf.placa === v.placa);
@@ -868,10 +893,10 @@ export async function getOfflineHistoricoMensal(
     const dash = await getOfflineDashboardData({
       mes: m.mes,
       ano: m.ano,
-      categoria,
-      modulo: filtrosAdicionais?.modulo,
-      area: filtrosAdicionais?.area,
-      placa: filtrosAdicionais?.placa,
+      categoria: categoria ? [categoria] : undefined,
+      modulo: filtrosAdicionais?.modulo ? [filtrosAdicionais.modulo] : undefined,
+      area: filtrosAdicionais?.area ? [filtrosAdicionais.area] : undefined,
+      placa: filtrosAdicionais?.placa ? [filtrosAdicionais.placa] : undefined,
     });
     result.push({
       mes: `${MESES_ABREV[m.mes]}/${String(m.ano).slice(2)}`,

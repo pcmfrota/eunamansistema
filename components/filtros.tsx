@@ -2,24 +2,34 @@
 
 import { Calendar, ChevronDown, RotateCcw } from "lucide-react";
 import type { FiltroOpcoes } from "@/app/actions/dashboard";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 export interface FiltrosValues {
   mes: number;
   ano: number;
-  categoria: string;
-  placa: string;
-  modulo: string;
-  area: string;
-  status: string;
+  categoria: string[];
+  placa: string[];
+  modulo: string[];
+  area: string[];
+  statusVeiculo: string[];
+  statusOS: string[];
   dataInicio: string;
   dataFim: string;
   filial?: string; // Apenas para admin — 'TODAS' ou ID da filial
 }
 
+// Status de OS é um conjunto fixo do fluxo de trabalho (não vem dos dados, ao contrário
+// das demais opções em `opcoes`) — por isso é uma constante aqui, não um campo de FiltroOpcoes.
+const STATUS_OS_OPCOES = [
+  { value: "Aberta", label: "Aberta" },
+  { value: "Programado", label: "Programado" },
+  { value: "Fechada", label: "Fechada" },
+];
+
 interface FiltrosProps {
   opcoes: FiltroOpcoes;
   valores: FiltrosValues;
-  onChange: (key: keyof FiltrosValues, value: string | number) => void;
+  onChange: (key: keyof FiltrosValues, value: string | number | string[]) => void;
   onReset: () => void;
   periodoLabel: string;
 }
@@ -103,43 +113,52 @@ export function Filtros({ opcoes, valores, onChange, onReset, periodoLabel }: Fi
         <div className="h-8 w-[1px] bg-zinc-100 dark:bg-zinc-800 mx-1"></div>
 
         {/* Categoria */}
-        <SelectFilter
-          value={valores.categoria}
+        <CheckboxMultiSelect
+          values={valores.categoria}
           onChange={(v) => onChange("categoria", v)}
           options={opcoes.categorias.map((c) => ({ value: c, label: c }))}
           placeholder="Todas Categorias"
         />
 
         {/* Placa */}
-        <SelectFilter
-          value={valores.placa}
+        <CheckboxMultiSelect
+          values={valores.placa}
           onChange={(v) => onChange("placa", v)}
           options={opcoes.placas.map((p) => ({ value: p, label: p }))}
           placeholder="Todas as Placas"
         />
 
         {/* Módulo */}
-        <SelectFilter
-          value={valores.modulo}
+        <CheckboxMultiSelect
+          values={valores.modulo}
           onChange={(v) => onChange("modulo", v)}
           options={opcoes.modulos.map((m) => ({ value: m, label: m }))}
           placeholder="Todos os Módulos"
         />
 
         {/* Área */}
-        <SelectFilter
-          value={valores.area}
+        <CheckboxMultiSelect
+          values={valores.area}
           onChange={(v) => onChange("area", v)}
           options={(opcoes.areas || []).map((a) => ({ value: a, label: a }))}
           placeholder="Todas as Áreas"
         />
 
-        {/* Status */}
-        <SelectFilter
-          value={valores.status}
-          onChange={(v) => onChange("status", v)}
+        {/* Status do Veículo */}
+        <CheckboxMultiSelect
+          values={valores.statusVeiculo}
+          onChange={(v) => onChange("statusVeiculo", v)}
           options={opcoes.statusList.map((s) => ({ value: s, label: s }))}
-          placeholder="Todos os Status"
+          placeholder="Status do Veículo"
+        />
+
+        {/* Status da OS */}
+        <CheckboxMultiSelect
+          values={valores.statusOS}
+          onChange={(v) => onChange("statusOS", v)}
+          options={STATUS_OS_OPCOES}
+          placeholder="Status da OS"
+          accent="amber"
         />
 
         {/* Filial — Visível APENAS para Administrador Geral */}

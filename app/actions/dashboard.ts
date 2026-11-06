@@ -158,14 +158,20 @@ const dashboardCache = new Map<string, { data: DashboardData, timestamp: number 
 const CACHE_TTL = 30 * 1000; // Reduzido para 30 segundos (dados mais frescos)
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+// Normaliza um filtro multi-seleção (array) numa chave estável e caseless para cache/comparação.
+function normalizeMulti(vals?: string[]): string {
+  return (vals || []).map(v => v.toUpperCase().trim()).filter(Boolean).sort().join(',');
+}
+
 export async function getDashboardData(filtros?: {
   mes?: number;
   ano?: number;
-  categoria?: string;
-  placa?: string;
-  modulo?: string;
-  area?: string;
-  status?: string;
+  categoria?: string[];
+  placa?: string[];
+  modulo?: string[];
+  area?: string[];
+  statusVeiculo?: string[];
+  statusOS?: string[];
   dataInicio?: string;
   dataFim?: string;
   filial?: string; // 'TODAS' ou ID da filial (ex: 'ACAILANDIA') — apenas para admin
@@ -174,11 +180,12 @@ export async function getDashboardData(filtros?: {
   const normalizedFiltros = {
     mes: filtros?.mes || 0,
     ano: filtros?.ano || 0,
-    categoria: (filtros?.categoria || "").toUpperCase(),
-    placa: (filtros?.placa || "").toUpperCase(),
-    modulo: (filtros?.modulo || "").toUpperCase(),
-    area: (filtros?.area || "").toUpperCase(),
-    status: (filtros?.status || "").toUpperCase(),
+    categoria: normalizeMulti(filtros?.categoria),
+    placa: normalizeMulti(filtros?.placa),
+    modulo: normalizeMulti(filtros?.modulo),
+    area: normalizeMulti(filtros?.area),
+    statusVeiculo: normalizeMulti(filtros?.statusVeiculo),
+    statusOS: normalizeMulti(filtros?.statusOS),
     dataInicio: filtros?.dataInicio || "",
     dataFim: filtros?.dataFim || "",
     filial: (filtros?.filial || "").toUpperCase()
@@ -313,8 +320,8 @@ export async function getDashboardData(filtros?: {
     .or(`data_fechamento.is.null,data_fechamento.gte.${inicioFiltro}`)
     .or(`data_abertura.lte.${fimFiltro},horario_parada.lte.${fimFiltro}`);
 
-  if (filtros?.placa) {
-    queryOS = queryOS.eq('placa', filtros.placa.toUpperCase());
+  if (filtros?.placa && filtros.placa.length > 0) {
+    queryOS = queryOS.in('placa', filtros.placa.map(p => p.toUpperCase()));
   }
 
   // Backlog pendente (módulo de etiquetas) — não é escopado pelo período do dashboard,
@@ -333,11 +340,22 @@ export async function getDashboardData(filtros?: {
   const allOS = allOSUnfiltered.filter(os => {
     // OS "Programado" é só planejamento futuro — não pode contar como tempo de
     // indisponibilidade (DM/DO), MTTR/MTBF nem nenhuma métrica de manutenção real
-    // enquanto o serviço não foi de fato iniciado.
+    // enquanto o serviço não foi de fato iniciado. Isso vale sempre, mesmo se o usuário
+    // filtrar por status "Programado" — ver filtro statusOS abaixo, que é aplicado por cima.
     if (os.status === 'Programado') return false;
     const osStart = parseLocal(os.horario_parada || os.data_abertura);
     const osEnd = os.data_fechamento ? parseLocal(os.data_fechamento) : null;
-    return osStart <= fimTime && (!osEnd || osEnd >= inicioTime);
+    const matchesTime = osStart <= fimTime && (!osEnd || osEnd >= inicioTime);
+    if (!matchesTime) return false;
+
+    if (filtros?.statusOS && filtros.statusOS.length > 0) {
+      const matches = filtros.statusOS.some(s =>
+        s === 'Fechada' ? (os.status === 'Fechada' || os.status === 'Concluída') : os.status === s
+      );
+      if (!matches) return false;
+    }
+
+    return true;
   });
 
   const todasAsEquips = eqRes.data ?? [];
@@ -419,22 +437,24 @@ export async function getDashboardData(filtros?: {
       if (isCurrentlyInactive && !hadActivity) return false;
     }
 
-    // Filtros de Categoria/Modulo/Placa
-    const cat = (filtros?.categoria || "").toUpperCase().trim();
+    // Filtros de Categoria/Modulo/Placa (multi-seleção: vazio = sem filtro, qualquer valor bate)
+    const catSel = (filtros?.categoria || []).map(c => c.toUpperCase().trim()).filter(Boolean);
     const eqCat = (eq.categoria || "").toUpperCase().trim();
-    if (cat && eqCat !== cat) return false;
-    if (!cat && !["PESADA", "LEVE"].includes(eqCat)) return false;
-    
-    if (filtros?.modulo && (eq.modulo || "").toUpperCase().trim() !== filtros.modulo.toUpperCase().trim()) return false;
-    
-    // Filtro de Área - Robusto
-    if (filtros?.area) {
-      const fArea = filtros.area.toUpperCase().trim();
-      const eArea = (eq.area || "").toUpperCase().trim();
-      if (fArea && eArea !== fArea) return false;
+    if (catSel.length > 0 && !catSel.includes(eqCat)) return false;
+    if (catSel.length === 0 && !["PESADA", "LEVE"].includes(eqCat)) return false;
+
+    if (filtros?.modulo && filtros.modulo.length > 0) {
+      const eqMod = (eq.modulo || "").toUpperCase().trim();
+      if (!filtros.modulo.some(m => m.toUpperCase().trim() === eqMod)) return false;
     }
 
-    if (filtros?.placa && p !== filtros.placa.toUpperCase().trim()) return false;
+    // Filtro de Área - Robusto
+    if (filtros?.area && filtros.area.length > 0) {
+      const eArea = (eq.area || "").toUpperCase().trim();
+      if (!filtros.area.some(a => a.toUpperCase().trim() === eArea)) return false;
+    }
+
+    if (filtros?.placa && filtros.placa.length > 0 && !filtros.placa.some(fp => fp.toUpperCase().trim() === p)) return false;
 
     return true;
   });
@@ -464,8 +484,9 @@ export async function getDashboardData(filtros?: {
   });
 
   // Filtros em memória (como fallback de segurança para placas específicas ocultas)
-  if (filtros?.placa) {
-    placasFiltradas = placasFiltradas.filter(p => p === filtros.placa!.toUpperCase());
+  if (filtros?.placa && filtros.placa.length > 0) {
+    const placaSelUpper = filtros.placa.map(fp => fp.toUpperCase());
+    placasFiltradas = placasFiltradas.filter(p => placaSelUpper.includes(p));
   }
 
   // 5. Cálculos Otimizados
@@ -615,8 +636,8 @@ export async function getDashboardData(filtros?: {
   });
 
   // ─── TRAVAS DE MESES HISTÓRICOS (2026) ───
-  if (anoFiltro === 2026 && (!filtros?.categoria || filtros.categoria.toUpperCase() === "PESADA")) {
-    const isOverallFilter = !filtros?.placa && !filtros?.modulo && !filtros?.area;
+  if (anoFiltro === 2026 && (!filtros?.categoria?.length || filtros.categoria.some(c => c.toUpperCase() === "PESADA"))) {
+    const isOverallFilter = !filtros?.placa?.length && !filtros?.modulo?.length && !filtros?.area?.length;
 
     if (mesFiltro === 4) {
       if (isOverallFilter) {
@@ -679,7 +700,7 @@ export async function getDashboardData(filtros?: {
 
         veiculos.length = 0;
         veiculos.push(...novosVeiculos);
-      } else if (filtros?.placa) {
+      } else if (filtros?.placa && filtros.placa.length > 0) {
         const ABRIL_2026_DM_OVERRIDES: Record<string, number> = {
           "PTF-4236": 31.1,
           "ROG1I40": 36.4,
@@ -708,20 +729,22 @@ export async function getDashboardData(filtros?: {
           "TCN7J72": 100.0,
           "PTV5G37": 100.0
         };
-        const pUpper = filtros.placa.toUpperCase();
-        if (pUpper in ABRIL_2026_DM_OVERRIDES) {
-          veiculos.forEach(v => {
-            if (v.placa.toUpperCase() === pUpper) {
-              const dmVal = ABRIL_2026_DM_OVERRIDES[pUpper];
-              const targetDO = Math.min(100, Math.max(0, Math.round((dmVal - 2.5) * 10) / 10));
-              v.disponibilidade = dmVal;
-              v.disponibilidade_operacional = targetDO;
-              v.horasManut = Math.round((v.hTotalDM * (100 - dmVal) / 100) * 10) / 10;
-              v.horasOperacional = Math.round((v.hTotalDO * (100 - targetDO) / 100) * 10) / 10;
-              v.horasDisponiveisOperacional = Math.round((v.hTotalDO * targetDO / 100) * 10) / 10;
-            }
-          });
-        }
+        filtros.placa.forEach(placaSel => {
+          const pUpper = placaSel.toUpperCase();
+          if (pUpper in ABRIL_2026_DM_OVERRIDES) {
+            veiculos.forEach(v => {
+              if (v.placa.toUpperCase() === pUpper) {
+                const dmVal = ABRIL_2026_DM_OVERRIDES[pUpper];
+                const targetDO = Math.min(100, Math.max(0, Math.round((dmVal - 2.5) * 10) / 10));
+                v.disponibilidade = dmVal;
+                v.disponibilidade_operacional = targetDO;
+                v.horasManut = Math.round((v.hTotalDM * (100 - dmVal) / 100) * 10) / 10;
+                v.horasOperacional = Math.round((v.hTotalDO * (100 - targetDO) / 100) * 10) / 10;
+                v.horasDisponiveisOperacional = Math.round((v.hTotalDO * targetDO / 100) * 10) / 10;
+              }
+            });
+          }
+        });
       }
     } else {
       const locks: Record<number, number> = {
@@ -1014,8 +1037,8 @@ export async function getDashboardData(filtros?: {
   };
 
   // ─── FINAL OVERRIDES FOR METRICS ───
-  if (anoFiltro === 2026 && (!filtros?.categoria || filtros.categoria.toUpperCase() === "PESADA")) {
-    const isOverallFilter = !filtros?.placa && !filtros?.modulo && !filtros?.area;
+  if (anoFiltro === 2026 && (!filtros?.categoria?.length || filtros.categoria.some(c => c.toUpperCase() === "PESADA"))) {
+    const isOverallFilter = !filtros?.placa?.length && !filtros?.modulo?.length && !filtros?.area?.length;
     if (mesFiltro === 4) {
       if (isOverallFilter) {
         result.totalOS = 86;
@@ -1030,7 +1053,7 @@ export async function getDashboardData(filtros?: {
         result.backlog = 0;
         result.totalEquipamentos = 26;
         result.totalVeiculosAtivos = 26;
-      } else if (filtros?.placa) {
+      } else if (filtros?.placa && filtros.placa.length === 1) {
         const ABRIL_2026_DM_OVERRIDES: Record<string, number> = {
           "PTF-4236": 31.1, "ROG1I40": 36.4, "TCN7J82": 48.2, "LMT7E29": 52.4, "ROG1I26": 54.7,
           "PTT8D76": 72.3, "TCN7J90": 74.5, "ROE8F66": 77.3, "ROG1I38": 77.4, "SFR4F37": 78.4,
@@ -1039,7 +1062,7 @@ export async function getDashboardData(filtros?: {
           "SGJ1G11": 99.8, "ROE8F63": 99.8, "TCC2E83": 99.9, "TCA4B23": 100.0, "TCN7J72": 100.0,
           "PTV5G37": 100.0
         };
-        const pUpper = filtros.placa.toUpperCase();
+        const pUpper = filtros.placa[0].toUpperCase();
         if (pUpper in ABRIL_2026_DM_OVERRIDES) {
           result.disponibilidadeMedia = ABRIL_2026_DM_OVERRIDES[pUpper];
           result.dm = ABRIL_2026_DM_OVERRIDES[pUpper];

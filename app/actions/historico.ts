@@ -73,10 +73,10 @@ export async function getHistoricoMensal(
         const r = await getDashboardData({
           mes: m.mes,
           ano: m.ano,
-          categoria,
-          modulo: filtrosAdicionais?.modulo,
-          area: filtrosAdicionais?.area,
-          placa: filtrosAdicionais?.placa,
+          categoria: categoria ? [categoria] : undefined,
+          modulo: filtrosAdicionais?.modulo ? [filtrosAdicionais.modulo] : undefined,
+          area: filtrosAdicionais?.area ? [filtrosAdicionais.area] : undefined,
+          placa: filtrosAdicionais?.placa ? [filtrosAdicionais.placa] : undefined,
           filial: filtrosAdicionais?.filial
         });
 

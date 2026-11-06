@@ -46,11 +46,12 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   const defaultFiltros: FiltrosValues = {
     mes: data?.mesSelecionado || 0, // 0 triggers operational month detection on server
     ano: data?.anoSelecionado || 0,
-    categoria: "PESADA",
-    placa: "",
-    modulo: "",
-    area: "",
-    status: "",
+    categoria: ["PESADA"],
+    placa: [],
+    modulo: [],
+    area: [],
+    statusVeiculo: [],
+    statusOS: [],
     dataInicio: "",
     dataFim: "",
     filial: "TODAS", // Admin pode trocar; usuário comum não vê este campo
@@ -96,15 +97,18 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
     startTransition(async () => {
       try {
-        const categoria = filtros.categoria || "PESADA";
+        // Histórico mensal (gráfico de tendência) só suporta 1 valor por filtro — usa o
+        // primeiro selecionado, igual ao comportamento de quando o filtro era single-select.
+        const categoria = filtros.categoria[0] || "PESADA";
         const filterParams = {
           mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
           ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
-          categoria: filtros.categoria || undefined,
-          placa: filtros.placa || undefined,
-          modulo: filtros.modulo || undefined,
-          area: filtros.area || undefined,
-          status: filtros.status || undefined,
+          categoria: filtros.categoria.length > 0 ? filtros.categoria : undefined,
+          placa: filtros.placa.length > 0 ? filtros.placa : undefined,
+          modulo: filtros.modulo.length > 0 ? filtros.modulo : undefined,
+          area: filtros.area.length > 0 ? filtros.area : undefined,
+          statusVeiculo: filtros.statusVeiculo.length > 0 ? filtros.statusVeiculo : undefined,
+          statusOS: filtros.statusOS.length > 0 ? filtros.statusOS : undefined,
           dataInicio: filtros.dataInicio || undefined,
           dataFim: filtros.dataFim || undefined,
           filial: (filtros as any).filial || undefined,
@@ -114,9 +118,9 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         const [localData, localHist] = await Promise.all([
           getOfflineDashboardData(filterParams),
           getOfflineHistoricoMensal(categoria, {
-            modulo: filtros.modulo || undefined,
-            area: filtros.area || undefined,
-            placa: filtros.placa || undefined,
+            modulo: filtros.modulo[0] || undefined,
+            area: filtros.area[0] || undefined,
+            placa: filtros.placa[0] || undefined,
           }),
         ]);
 
@@ -140,9 +144,9 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
 
             // 2b. Busca o histórico mensal em segundo plano sem bloquear os cards
             const freshHist = await getHistoricoMensal(categoria, {
-              modulo: filtros.modulo || undefined,
-              area: filtros.area || undefined,
-              placa: filtros.placa || undefined,
+              modulo: filtros.modulo[0] || undefined,
+              area: filtros.area[0] || undefined,
+              placa: filtros.placa[0] || undefined,
               filial: (filtros as any).filial || undefined,
             }).catch(() => null);
 
@@ -166,7 +170,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     };
   }, [filtros, isOnline]);
 
-  function handleFilterChange(key: keyof FiltrosValues, value: string | number) {
+  function handleFilterChange(key: keyof FiltrosValues, value: string | number | string[]) {
     setFiltros(prev => ({ ...prev, [key]: value }));
   }
 
@@ -187,7 +191,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
       const dadosPesada = await getDashboardData({
         mes: (filtros.mes as number) > 0 ? (filtros.mes as number) : undefined,
         ano: (filtros.ano as number) > 0 ? (filtros.ano as number) : undefined,
-        categoria: 'PESADA',
+        categoria: ['PESADA'],
         dataInicio: filtros.dataInicio || undefined,
         dataFim: filtros.dataFim || undefined,
       });
