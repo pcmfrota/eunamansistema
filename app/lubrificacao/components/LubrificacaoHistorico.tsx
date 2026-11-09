@@ -22,6 +22,7 @@ import { FichaLubrificacao } from "@/src/services/LubrificacaoService";
 import { obterImagensFichaLubrificacao } from "../actions";
 import { gerarPDFLubrificacao } from "./LubrificacaoPDF";
 import { cn } from "@/lib/utils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 interface LubrificacaoHistoricoProps {
   fichas: FichaLubrificacao[];
@@ -41,9 +42,10 @@ export function LubrificacaoHistorico({
   const [filtroData, setFiltroData] = useState("");
   const [filtroPlaca, setFiltroPlaca] = useState("");
   const [filtroMecanico, setFiltroMecanico] = useState("");
-  const [filtroModulo, setFiltroModulo] = useState("");
-  const [filtroCliente, setFiltroCliente] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("");
+  // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
+  const [filtroModulo, setFiltroModulo] = useState<string[]>([]);
+  const [filtroCliente, setFiltroCliente] = useState<string[]>([]);
+  const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
 
   // Modal de Detalhes
   const [selectedFicha, setSelectedFicha] = useState<FichaLubrificacao | null>(null);
@@ -63,9 +65,9 @@ export function LubrificacaoHistorico({
       const matchData = !filtroData || (f.data_registro && f.data_registro.startsWith(filtroData));
       const matchPlaca = !filtroPlaca || (f.placa && f.placa.toLowerCase().includes(filtroPlaca.toLowerCase()));
       const matchMecanico = !filtroMecanico || (f.mecanico_responsavel && f.mecanico_responsavel.toLowerCase().includes(filtroMecanico.toLowerCase()));
-      const matchModulo = !filtroModulo || (f.modulo === filtroModulo);
-      const matchCliente = !filtroCliente || (f.cliente === filtroCliente);
-      const matchStatus = !filtroStatus || (f.status === filtroStatus);
+      const matchModulo = filtroModulo.length === 0 || (!!f.modulo && filtroModulo.includes(f.modulo));
+      const matchCliente = filtroCliente.length === 0 || (!!f.cliente && filtroCliente.includes(f.cliente));
+      const matchStatus = filtroStatus.length === 0 || (!!f.status && filtroStatus.includes(f.status));
 
       return matchSearch && matchData && matchPlaca && matchMecanico && matchModulo && matchCliente && matchStatus;
     });
@@ -201,48 +203,51 @@ export function LubrificacaoHistorico({
 
         {/* Linha 2 de Filtros */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-          <select
-            value={filtroModulo}
-            onChange={(e) => setFiltroModulo(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-          >
-            <option value="">Todos os Módulos</option>
-            <option value="BASE">BASE</option>
-            <option value="COLHEITA">COLHEITA</option>
-            <option value="SILVICULTURA">SILVICULTURA</option>
-            <option value="TRANSPORTE">TRANSPORTE</option>
-          </select>
+          <CheckboxMultiSelect
+            values={filtroModulo}
+            onChange={setFiltroModulo}
+            options={[
+              { value: "BASE", label: "BASE" },
+              { value: "COLHEITA", label: "COLHEITA" },
+              { value: "SILVICULTURA", label: "SILVICULTURA" },
+              { value: "TRANSPORTE", label: "TRANSPORTE" },
+            ]}
+            placeholder="Todos os Módulos"
+            className="w-full"
+          />
 
-          <select
-            value={filtroCliente}
-            onChange={(e) => setFiltroCliente(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-          >
-            <option value="">Todos os Clientes</option>
-            <option value="SUZANO">SUZANO</option>
-            <option value="OUTRO">OUTRO</option>
-          </select>
+          <CheckboxMultiSelect
+            values={filtroCliente}
+            onChange={setFiltroCliente}
+            options={[
+              { value: "SUZANO", label: "SUZANO" },
+              { value: "OUTRO", label: "OUTRO" },
+            ]}
+            placeholder="Todos os Clientes"
+            className="w-full"
+          />
 
-          <select
-            value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-          >
-            <option value="">Todos os Status</option>
-            <option value="CONCLUÍDO">CONCLUÍDO</option>
-            <option value="RASCUNHO">RASCUNHO</option>
-          </select>
+          <CheckboxMultiSelect
+            values={filtroStatus}
+            onChange={setFiltroStatus}
+            options={[
+              { value: "CONCLUÍDO", label: "CONCLUÍDO" },
+              { value: "RASCUNHO", label: "RASCUNHO" },
+            ]}
+            placeholder="Todos os Status"
+            className="w-full"
+          />
 
-          {(filtroData || filtroPlaca || filtroMecanico || filtroModulo || filtroCliente || filtroStatus || searchTerm) && (
+          {(filtroData || filtroPlaca || filtroMecanico || filtroModulo.length > 0 || filtroCliente.length > 0 || filtroStatus.length > 0 || searchTerm) && (
             <button
               onClick={() => {
                 setSearchTerm("");
                 setFiltroData("");
                 setFiltroPlaca("");
                 setFiltroMecanico("");
-                setFiltroModulo("");
-                setFiltroCliente("");
-                setFiltroStatus("");
+                setFiltroModulo([]);
+                setFiltroCliente([]);
+                setFiltroStatus([]);
               }}
               className="py-2 px-3 rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-50 font-bold uppercase text-[10px]"
             >

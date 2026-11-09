@@ -1,6 +1,7 @@
 'use client'
-import { useState, useMemo, useRef, useEffect } from 'react'
-import { ChevronDown, X, Filter, Info, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { X, Filter, TrendingUp, TrendingDown } from 'lucide-react'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 type Prev = {
   id: string
@@ -19,51 +20,6 @@ function getColor(falta: number, warn = 75) {
 }
 function getStatusLabel(falta: number, warn = 75) {
   return falta < 0 ? 'ATRASADO' : falta <= warn ? 'ATENÇÃO' : 'NO PRAZO'
-}
-
-// ─── MULTI-SELECT DROPDOWN ────────────────────────────────────────────────────
-function MultiSelect({ label, options, value, onChange }: {
-  label: string; options: string[]; value: string[]; onChange: (v: string[]) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-  const toggle = (opt: string) => {
-    onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt])
-  }
-  const allSelected = value.length === 0
-  return (
-    <div ref={ref} className="relative min-w-[160px]">
-      <button onClick={() => setOpen(!open)}
-        className="flex items-center justify-between gap-2 w-full px-3 py-2 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-text-primary hover:border-slate-400 dark:hover:border-slate-500 transition-colors">
-        <span className="truncate">{allSelected ? 'Todos' : value.length === 1 ? value[0] : `${value.length} selecionados`}</span>
-        <ChevronDown size={14} className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-max min-w-full max-h-56 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl py-1">
-          <button onClick={() => onChange([])} className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${allSelected ? 'text-blue-500' : 'text-text-muted'}`}>
-            <div className={`w-4 h-4 rounded border flex items-center justify-center ${allSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
-              {allSelected && <svg width="10" height="8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-            </div>
-            Todos
-          </button>
-          {options.map(opt => (
-            <button key={opt} onClick={() => toggle(opt)}
-              className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${value.includes(opt) ? 'text-blue-500' : 'text-text-secondary'}`}>
-              <div className={`w-4 h-4 rounded border flex items-center justify-center ${value.includes(opt) ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                {value.includes(opt) && <svg width="10" height="8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-              </div>
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 }
 
 // ─── SVG BAR CHART ────────────────────────────────────────────────────────────
@@ -253,8 +209,9 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
 }) {
   const [tipoFilter, setTipoFilter] = useState<string[]>([])
   const [placaFilter, setPlacaFilter] = useState<string[]>([])
-  const [mesFilter, setMesFilter] = useState('')
-  const [anoFilter, setAnoFilter] = useState('')
+  // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
+  const [mesFilter, setMesFilter] = useState<string[]>([])
+  const [anoFilter, setAnoFilter] = useState<string[]>([])
   const [selected, setSelected] = useState<Prev | null>(null)
 
   // Options for filters
@@ -298,8 +255,8 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
 
       if (tipoFilter.length > 0 && !tipoFilter.includes(tipo)) return false
       if (placaFilter.length > 0 && !placaFilter.includes(placa)) return false
-      if (mesFilter && mesLabel !== mesFilter) return false
-      if (anoFilter && y !== anoFilter) return false
+      if (mesFilter.length > 0 && !mesFilter.includes(mesLabel)) return false
+      if (anoFilter.length > 0 && !anoFilter.includes(y)) return false
       return true
     })
   }, [data, tipoFilter, placaFilter, mesFilter, anoFilter])
@@ -330,7 +287,7 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
   const comboio = groups.find(g => g.tipo === 'COMBOIO')
   const others = groups.filter(g => g.tipo !== 'COMBOIO')
 
-  const hasActiveFilter = tipoFilter.length > 0 || placaFilter.length > 0 || mesFilter || anoFilter
+  const hasActiveFilter = tipoFilter.length > 0 || placaFilter.length > 0 || mesFilter.length > 0 || anoFilter.length > 0
 
   return (
     <div className="flex flex-col gap-2">
@@ -361,20 +318,12 @@ export default function DashboardHorimetros({ data, unit = 'h', warnThreshold = 
           <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider flex items-center gap-1 mr-1">
             <Filter size={8} /> Filtros:
           </span>
-          <MultiSelect label="Tipo" options={tipoOptions} value={tipoFilter} onChange={setTipoFilter} />
-          <MultiSelect label="Placa" options={placaOptions} value={placaFilter} onChange={setPlacaFilter} />
-          <select value={mesFilter} onChange={e => setMesFilter(e.target.value)}
-            className="px-2 py-1.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-text-primary outline-none hover:border-slate-400 dark:hover:border-slate-500 transition-colors">
-            <option value="">Todos os Meses</option>
-            {mesOptions.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <select value={anoFilter} onChange={e => setAnoFilter(e.target.value)}
-            className="px-2 py-1.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-text-primary outline-none hover:border-slate-400 dark:hover:border-slate-500 transition-colors">
-            <option value="">Todos</option>
-            {anoOptions.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <CheckboxMultiSelect values={tipoFilter} onChange={setTipoFilter} options={tipoOptions.map(t => ({ value: t, label: t }))} placeholder="Tipo" />
+          <CheckboxMultiSelect values={placaFilter} onChange={setPlacaFilter} options={placaOptions.map(p => ({ value: p, label: p }))} placeholder="Placa" />
+          <CheckboxMultiSelect values={mesFilter} onChange={setMesFilter} options={mesOptions.map(m => ({ value: m, label: m }))} placeholder="Todos os Meses" />
+          <CheckboxMultiSelect values={anoFilter} onChange={setAnoFilter} options={anoOptions.map(a => ({ value: a, label: a }))} placeholder="Todos os Anos" />
           {hasActiveFilter && (
-            <button onClick={() => { setTipoFilter([]); setPlacaFilter([]); setMesFilter(''); setAnoFilter('') }}
+            <button onClick={() => { setTipoFilter([]); setPlacaFilter([]); setMesFilter([]); setAnoFilter([]) }}
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-900/30 border border-red-800/50 text-red-400 text-xs font-semibold hover:bg-red-900/50 transition-colors">
               <X size={10} /> Limpar
             </button>

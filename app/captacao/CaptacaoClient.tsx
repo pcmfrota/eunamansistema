@@ -34,6 +34,7 @@ import { useAuth } from '@/components/auth-context';
 import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select';
 import { baixarOuCompartilharPdf } from '@/lib/pdf-share';
 import {
   criarFicha,
@@ -875,17 +876,19 @@ export default function CaptacaoClient({
 
   // Search and status filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'Todas' | 'Aberta' | 'Fechada'>('Todas');
+  // Multi-seleção — vazio = sem filtro (mostra Abertas + Fechadas)
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
 
-  // Filtro de período operacional (Default para o período operacional ativo)
-  const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<{ mes: number; ano: number } | 'Todos'>(() => {
+  // Filtro de período operacional (multi-seleção de "ano-mes"; vazio = Todos os meses).
+  // Default pré-seleciona o período operacional ativo, igual ao comportamento anterior.
+  const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<string[]>(() => {
     const today = new Date().toISOString().split('T')[0];
     const period = Array.isArray(calendario) ? calendario.find(p => p && p.data_inicio <= today && p.data_fim >= today) : null;
     if (period) {
-      return { mes: period.mes, ano: period.ano };
+      return [`${period.ano}-${period.mes}`];
     }
     const now = new Date();
-    return { mes: now.getMonth() + 1, ano: now.getFullYear() };
+    return [`${now.getFullYear()}-${now.getMonth() + 1}`];
   });
 
   const periodOptions = useMemo(() => {
@@ -1289,13 +1292,10 @@ export default function CaptacaoClient({
       
       const locked = isFichaLocked(f);
       const computedStatus = locked ? 'Fechada' : 'Aberta';
-      const matchesStatus = filterStatus === 'Todas' || computedStatus === filterStatus;
-      
-      let matchesPeriod = true;
-      if (selectedPeriodFilter !== 'Todos') {
-        matchesPeriod = f.mes === selectedPeriodFilter.mes && f.ano === selectedPeriodFilter.ano;
-      }
-      
+      const matchesStatus = filterStatus.length === 0 || filterStatus.includes(computedStatus);
+
+      const matchesPeriod = selectedPeriodFilter.length === 0 || selectedPeriodFilter.includes(`${f.ano}-${f.mes}`);
+
       return matchesSearch && matchesStatus && matchesPeriod;
     });
   }, [fichas, searchTerm, filterStatus, isFichaLocked, selectedPeriodFilter]);
@@ -1788,10 +1788,17 @@ export default function CaptacaoClient({
           </h1>
           <span className="bg-white/80 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400 px-3 py-1.5 rounded-full font-bold uppercase flex items-center gap-1.5 shadow-sm">
             <Clock size={12} />
-            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{(!selectedPeriodFilter || selectedPeriodFilter === 'Todos') ? 'TODOS' : `${getMonthName(selectedPeriodFilter.mes)} / ${selectedPeriodFilter.ano}`}</span>
+            Mês: <span className="text-blue-600 dark:text-blue-400 font-extrabold">
+              {selectedPeriodFilter.length === 0
+                ? 'TODOS'
+                : selectedPeriodFilter.length === 1
+                ? (() => { const [ano, mes] = selectedPeriodFilter[0].split('-').map(Number); return `${getMonthName(mes)} / ${ano}`; })()
+                : `${selectedPeriodFilter.length} selecionados`}
+            </span>
           </span>
-          {selectedPeriodFilter !== 'Todos' && (() => {
-            const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === selectedPeriodFilter.mes && p.ano === selectedPeriodFilter.ano) : null;
+          {selectedPeriodFilter.length === 1 && (() => {
+            const [ano, mes] = selectedPeriodFilter[0].split('-').map(Number);
+            const period = Array.isArray(calendario) ? calendario.find(p => p && p.mes === mes && p.ano === ano) : null;
             if (!period) return null;
             return (
               <span className="bg-blue-50 dark:bg-blue-950/30 border border-blue-150 dark:border-blue-900/50 text-[10px] text-blue-750 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold shadow-sm flex items-center gap-1.5">
@@ -1931,36 +1938,22 @@ export default function CaptacaoClient({
                     />
                   </div>
  
-                  <select
-                    value={selectedPeriodFilter === 'Todos' ? 'Todos' : `${selectedPeriodFilter.ano}-${selectedPeriodFilter.mes}`}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'Todos') {
-                        setSelectedPeriodFilter('Todos');
-                      } else {
-                        const [ano, mes] = val.split('-').map(Number);
-                        setSelectedPeriodFilter({ ano, mes });
-                      }
-                    }}
-                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
-                  >
-                    <option value="Todos">TODOS OS MESES</option>
-                    {periodOptions.map(opt => (
-                      <option key={`${opt.ano}-${opt.mes}`} value={`${opt.ano}-${opt.mes}`}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <CheckboxMultiSelect
+                    values={selectedPeriodFilter}
+                    onChange={setSelectedPeriodFilter}
+                    options={periodOptions.map(opt => ({ value: `${opt.ano}-${opt.mes}`, label: opt.label }))}
+                    placeholder="TODOS OS MESES"
+                  />
 
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
-                  >
-                    <option value="Todas">TODAS AS FICHAS</option>
-                    <option value="Aberta">ABERTAS</option>
-                    <option value="Fechada">FECHADAS</option>
-                  </select>
+                  <CheckboxMultiSelect
+                    values={filterStatus}
+                    onChange={setFilterStatus}
+                    options={[
+                      { value: 'Aberta', label: 'ABERTAS' },
+                      { value: 'Fechada', label: 'FECHADAS' },
+                    ]}
+                    placeholder="TODAS AS FICHAS"
+                  />
                 </div>
               </div>
  

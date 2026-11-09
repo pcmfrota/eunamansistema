@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react'
 import { Search, Edit2, Trash2, Upload, Download } from 'lucide-react'
 import Script from 'next/script'
 import { excluirPreventiva, importarPreventivas } from './actions'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 interface PreventivasTableProps {
   initialData: any[]
@@ -12,8 +13,9 @@ interface PreventivasTableProps {
 
 export default function PreventivasTable({ initialData, isVisitante }: PreventivasTableProps) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('Todos Status')
-  const [tipoFilter, setTipoFilter] = useState('Todos Tipos')
+  // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [tipoFilter, setTipoFilter] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleDelete = async (id: string, placa: string) => {
@@ -73,8 +75,8 @@ export default function PreventivasTable({ initialData, isVisitante }: Preventiv
     if (falta < 0) status = "ATRASADO"
     else if (falta <= 100) status = "ATENÇÃO"
 
-    const matchesStatus = statusFilter === 'Todos Status' || status === statusFilter
-    const matchesTipo = tipoFilter === 'Todos Tipos' || eq?.tipo === tipoFilter
+    const matchesStatus = statusFilter.length === 0 || statusFilter.includes(status)
+    const matchesTipo = tipoFilter.length === 0 || (!!eq?.tipo && tipoFilter.includes(eq.tipo))
 
     return matchesSearch && matchesStatus && matchesTipo
   })
@@ -111,27 +113,27 @@ export default function PreventivasTable({ initialData, isVisitante }: Preventiv
             />
           </div>
           <div className="flex gap-4">
-            <select 
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 bg-zinc-50 dark:bg-zinc-900 text-sm outline-none text-zinc-700 dark:text-zinc-300 min-w-36"
-            >
-              <option>Todos Status</option>
-              <option>NO PRAZO</option>
-              <option>ATENÇÃO</option>
-              <option>ATRASADO</option>
-            </select>
-            <select 
-              value={tipoFilter}
-              onChange={(e) => setTipoFilter(e.target.value)}
-              className="border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 bg-zinc-50 dark:bg-zinc-900 text-sm outline-none text-zinc-700 dark:text-zinc-300 min-w-36"
-            >
-              <option>Todos Tipos</option>
-              <option value="COMBOIO">COMBOIO</option>
-              <option value="MUNCK">MUNCK</option>
-              <option value="PIPA">PIPA</option>
-              <option value="ESCAVADEIRA">ESCAVADEIRA</option>
-            </select>
+            <CheckboxMultiSelect
+              values={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'NO PRAZO', label: 'NO PRAZO' },
+                { value: 'ATENÇÃO', label: 'ATENÇÃO' },
+                { value: 'ATRASADO', label: 'ATRASADO' },
+              ]}
+              placeholder="Todos Status"
+            />
+            <CheckboxMultiSelect
+              values={tipoFilter}
+              onChange={setTipoFilter}
+              options={[
+                { value: 'COMBOIO', label: 'COMBOIO' },
+                { value: 'MUNCK', label: 'MUNCK' },
+                { value: 'PIPA', label: 'PIPA' },
+                { value: 'ESCAVADEIRA', label: 'ESCAVADEIRA' },
+              ]}
+              placeholder="Todos Tipos"
+            />
           </div>
         </div>
       </div>

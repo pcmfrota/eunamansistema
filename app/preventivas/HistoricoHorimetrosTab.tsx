@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { History, Search, RefreshCcw, User, Clock, Database, ArrowRight } from 'lucide-react'
 import { getHistoricoHorimetros } from './actions'
 import { PremiumLoader } from '@/components/premium-loader'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 type HistoricoItem = {
   id: string
@@ -38,7 +39,8 @@ export default function HistoricoHorimetrosTab() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [origemFilter, setOrigemFilter] = useState('')
+  // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
+  const [origemFilter, setOrigemFilter] = useState<string[]>([])
 
   const load = async () => {
     setLoading(true)
@@ -62,7 +64,7 @@ export default function HistoricoHorimetrosTab() {
   const filtrados = useMemo(() => {
     const q = search.toLowerCase().trim()
     return registros.filter(r => {
-      const matchOrigem = !origemFilter || r.origem === origemFilter
+      const matchOrigem = origemFilter.length === 0 || origemFilter.includes(r.origem)
       const matchBusca = !q ||
         r.placa?.toLowerCase().includes(q) ||
         r.atualizado_por_nome?.toLowerCase().includes(q) ||
@@ -103,12 +105,15 @@ export default function HistoricoHorimetrosTab() {
           <input type="text" placeholder="Buscar placa ou usuário..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 text-sm text-text-primary outline-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors" />
         </div>
-        <select value={origemFilter} onChange={e => setOrigemFilter(e.target.value)}
-          className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white/50 dark:bg-slate-900/50 text-sm text-text-secondary outline-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-          <option value="">Todas as Origens</option>
-          <option value="NOVO_APONTAMENTO">Novo Apontamento</option>
-          <option value="EDICAO_MANUAL">Edição na Tabela</option>
-        </select>
+        <CheckboxMultiSelect
+          values={origemFilter}
+          onChange={setOrigemFilter}
+          options={[
+            { value: 'NOVO_APONTAMENTO', label: 'Novo Apontamento' },
+            { value: 'EDICAO_MANUAL', label: 'Edição na Tabela' },
+          ]}
+          placeholder="Todas as Origens"
+        />
         <span className="text-xs text-text-muted">{filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}</span>
       </div>
 

@@ -34,6 +34,7 @@ import { Lavagem, saveLavagem, deleteLavagem, validarLavagem, getLavagemImagens 
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
 import { SearchableSelect } from '@/components/SearchableSelect'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 import { useAuth } from '@/components/auth-context'
 import FichaPreviewModal from '@/components/FichaPreviewModal'
 import { gerarFichaLavagemPDF, gerarHtmlFichaLavagem } from './pdfFicha'
@@ -166,8 +167,9 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [activeDate, setActiveDate] = useState(new Date(currentAno, currentMes - 1))
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('Todos')
-  const [filterArea, setFilterArea] = useState('Todas')
+  // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
+  const [filterStatus, setFilterStatus] = useState<string[]>([])
+  const [filterArea, setFilterArea] = useState<string[]>([])
   // Alterna qual frota o Painel mostra — evita ter que rolar a tela pra ver a outra.
   const [painelVista, setPainelVista] = useState<'pesada' | 'leve'>('pesada')
   // Preenchido só após salvar com sucesso — troca o formulário do lançamento pela tela de
@@ -208,7 +210,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
   const areaOptions = useMemo(() => {
     const s = new Set<string>()
     equipamentos.forEach(e => { if (e.area) s.add(e.area) })
-    return ['Todas', ...Array.from(s).sort()]
+    return Array.from(s).sort()
   }, [equipamentos])
 
   // Modal State
@@ -320,12 +322,12 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
   const filteredLavagens = useMemo(() => {
     return lavagens.filter(l => {
       const matchesSearch = l.placa.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = filterStatus === 'Todos' || l.status === filterStatus
+      const matchesStatus = filterStatus.length === 0 || filterStatus.includes(l.status)
 
       let matchesArea = true
-      if (filterArea !== 'Todas') {
+      if (filterArea.length > 0) {
         const eq = equipamentos.find(e => e.placa === l.placa)
-        matchesArea = eq?.area === filterArea
+        matchesArea = !!eq && filterArea.includes(eq.area)
       }
 
       return matchesSearch && matchesStatus && matchesArea
@@ -699,25 +701,24 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                 />
               </div>
 
-              <select
-                value={filterArea}
-                onChange={(e) => setFilterArea(e.target.value)}
-                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer min-w-[120px] font-bold text-zinc-700 dark:text-zinc-400"
-              >
-                {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterArea}
+                onChange={setFilterArea}
+                options={areaOptions.map(a => ({ value: a, label: a.toUpperCase() }))}
+                placeholder="TODAS AS ÁREAS"
+              />
 
               {(tab === 'galeria' || tab === 'historico') && (
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-700 dark:text-zinc-400"
-                >
-                  <option value="Todos">TODOS STATUS</option>
-                  <option value="Lavado">LAVADO</option>
-                  <option value="Pendente">PENDENTE</option>
-                  <option value="Não realizado">NÃO REALIZADO</option>
-                </select>
+                <CheckboxMultiSelect
+                  values={filterStatus}
+                  onChange={setFilterStatus}
+                  options={[
+                    { value: 'Lavado', label: 'LAVADO' },
+                    { value: 'Pendente', label: 'PENDENTE' },
+                    { value: 'Não realizado', label: 'NÃO REALIZADO' },
+                  ]}
+                  placeholder="TODOS STATUS"
+                />
               )}
             </div>
           )}
@@ -773,7 +774,7 @@ export default function LavagensClient({ initialLavagens, equipamentos, colabora
                       <tbody>
                         {equipamentos.filter(e => {
                           const matchesSearch = e.placa.toLowerCase().includes(searchTerm.toLowerCase())
-                          const matchesArea = filterArea === 'Todas' || e.area === filterArea
+                          const matchesArea = filterArea.length === 0 || filterArea.includes(e.area)
                           const matchesCategoria = tab === 'calendario-pesados' ? isEquipamentoPesado(e) : isEquipamentoLeve(e)
                           return matchesSearch && matchesArea && matchesCategoria && isEquipamentoAtivo(e)
                         }).map(eq => (

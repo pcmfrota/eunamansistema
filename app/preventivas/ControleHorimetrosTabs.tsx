@@ -9,6 +9,7 @@ import HistoricoHorimetrosTab from './HistoricoHorimetrosTab'
 import { useEffect } from 'react'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 type Prev = {
   id: string
@@ -150,7 +151,8 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
   const [editId, setEditId] = useState<string | null>(null)
   const [editVals, setEditVals] = useState({ ultimo: '', atual: '', intervalo: '', data: '' })
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('Todos Status')
+  // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -247,7 +249,7 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
     const placa = p.equipamentos?.placa?.toLowerCase() || ''
     const status = getStatus(p)
     return placa.includes(search.toLowerCase()) &&
-      (statusFilter === 'Todos Status' || status === statusFilter)
+      (statusFilter.length === 0 || statusFilter.includes(status))
   })
 
   const inp = "px-2 py-1 rounded border border-blue-300 dark:border-blue-700 bg-white dark:bg-zinc-800 text-xs outline-none focus:ring-1 focus:ring-blue-400 w-24"
@@ -261,13 +263,16 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
           <input type="text" placeholder="Buscar placa..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white/50 dark:bg-slate-900/50 text-sm text-text-primary outline-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors" />
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white/50 dark:bg-slate-900/50 text-sm text-text-secondary outline-none hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-          <option>Todos Status</option>
-          <option>NO PRAZO</option>
-          <option>ATENÇÃO</option>
-          <option>ATRASADO</option>
-        </select>
+        <CheckboxMultiSelect
+          values={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: 'NO PRAZO', label: 'NO PRAZO' },
+            { value: 'ATENÇÃO', label: 'ATENÇÃO' },
+            { value: 'ATRASADO', label: 'ATRASADO' },
+          ]}
+          placeholder="Todos Status"
+        />
         <span className="text-xs text-text-muted">{filtered.length} veículos</span>
       </div>
 
