@@ -131,6 +131,7 @@ export default function BacklogTable({
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Status</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Evidência</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Descrição</th>
+                  <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Detalhamento do Pedido</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">TAG</th>
                   <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Tempo Est.</th>
                 </>
@@ -203,6 +204,9 @@ export default function BacklogTable({
                            </>
                          )}
                        </div>
+                    </td>
+                    <td className="px-4 py-4 max-w-[160px]">
+                       <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 truncate block" title={item.detalhamento || ''}>{item.detalhamento || '—'}</span>
                     </td>
                     <td className="px-4 py-4">
                        <span className="text-[10px] px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded font-black text-zinc-500 dark:text-zinc-400">{item.tag || '---'}</span>

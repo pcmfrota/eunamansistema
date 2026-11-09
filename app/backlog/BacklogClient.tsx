@@ -27,7 +27,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '@/components/auth-context';
 import { getBacklog, deleteBacklogItems, getSolicitacoesExclusaoBacklog, gerarOSDeBacklog, getBacklogHistorico, encerrarBacklogsEmMassa } from './actions';
 import type { HistoricoBacklog, AcaoHistoricoBacklog } from '@/lib/backlog-historico';
-import { nomeSistema, nomeSubsistema, nomeComponente } from './classificacaoTecnica';
+import { nomeSistema, nomeSubsistema, nomeComponente, DETALHAMENTO_PEDIDO_SUGESTOES } from './classificacaoTecnica';
 import BacklogModal from './BacklogModal';
 import BacklogQuickView from './BacklogQuickView';
 import BacklogTable from './BacklogTable';
@@ -408,12 +408,13 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [filterArea, setFilterArea] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterCriticidade, setFilterCriticidade] = useState<string[]>([]);
+  const [filterDetalhamento, setFilterDetalhamento] = useState<string[]>([]);
   const [filterDataInicio, setFilterDataInicio] = useState("");
   const [filterDataFim, setFilterDataFim] = useState("");
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
 
-  const hasActiveFilters = search || filterPlaca.length > 0 || filterModulo.length > 0 || filterArea.length > 0 || filterStatuses.length > 0 || filterCriticidade.length > 0 || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
+  const hasActiveFilters = search || filterPlaca.length > 0 || filterModulo.length > 0 || filterArea.length > 0 || filterStatuses.length > 0 || filterCriticidade.length > 0 || filterDetalhamento.length > 0 || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
 
   const clearFilters = () => {
     setSearch("");
@@ -422,6 +423,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     setFilterArea([]);
     setFilterStatuses([]);
     setFilterCriticidade([]);
+    setFilterDetalhamento([]);
     setFilterDataInicio("");
     setFilterDataFim("");
     setFilterMes("");
@@ -434,6 +436,10 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
   const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
   const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
+  const detalhamentoOptions = React.useMemo(() => {
+    const extras = items.map(i => i.detalhamento).filter((d): d is string => Boolean(d) && !DETALHAMENTO_PEDIDO_SUGESTOES.includes(d));
+    return [...DETALHAMENTO_PEDIDO_SUGESTOES, ...Array.from(new Set(extras)).sort()];
+  }, [items]);
 
   const anoOptions = React.useMemo(() => {
     const years = new Set<string>();
@@ -466,6 +472,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
       const matchStatus = filterStatuses.length === 0 || filterStatuses.includes(i.status);
       const matchCriticidade = filterCriticidade.length === 0 || filterCriticidade.includes(i.criticidade);
+      const matchDetalhamento = filterDetalhamento.length === 0 || filterDetalhamento.includes(i.detalhamento);
 
       let matchData = true;
       if (filterDataInicio || filterDataFim) {
@@ -500,9 +507,9 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       if (filterMes && itemMonth !== filterMes) matchMonth = false;
       if (filterAno && itemYear !== filterAno) matchYear = false;
 
-      return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade && matchData && matchMonth && matchYear;
+      return matchSearch && matchPlaca && matchModulo && matchArea && matchStatus && matchCriticidade && matchDetalhamento && matchData && matchMonth && matchYear;
     });
-  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatuses, filterCriticidade, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas, calendario]);
+  }, [items, search, filterPlaca, filterModulo, filterArea, filterStatuses, filterCriticidade, filterDetalhamento, filterDataInicio, filterDataFim, filterMes, filterAno, localPlacas, calendario]);
 
   const exportToExcel = () => {
     const fmtData = (d: string | null | undefined) => d ? d.split('T')[0].split('-').reverse().join('/') : '';
@@ -810,6 +817,15 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                 options={criticidadeOptions.map(c => ({ value: c, label: c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL' }))}
                 placeholder="⚠️ TODA CRITICIDADE"
                 accent="amber"
+                className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
+              />
+
+              {/* Detalhamento do Pedido filter */}
+              <CheckboxMultiSelect
+                values={filterDetalhamento}
+                onChange={setFilterDetalhamento}
+                options={detalhamentoOptions.map(d => ({ value: d, label: d }))}
+                placeholder="📦 DETALHAMENTO: TODOS"
                 className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
               />
 
