@@ -22,6 +22,7 @@ import { findPeriodoSuzano, MONTHS_PT } from "@/lib/calendario-suzano";
 import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 import { isAtividadeProdutiva } from "./tiposAtividade";
 import type { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 type FiltroCategoria = "" | "PRODUTIVO" | "IMPRODUTIVO" | "NAO_APONTADO";
 
@@ -107,7 +108,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
 
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
-  const [filterColaborador, setFilterColaborador] = useState("");
+  const [filterColaborador, setFilterColaborador] = useState<string[]>([]);
   // Isola uma única categoria (Produtivo/Improdutivo/Não Apontado) nos gráficos do
   // dashboard — reduz os 3 gráficos empilhados a uma única série e filtra os gráficos/
   // tabela que dependem do tipo de atividade apontada.
@@ -169,7 +170,7 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
       const d = f.data_jornada || f.created_at?.split("T")[0];
       if (!d) return false;
       if (d < selectedPeriodo.data_inicio || d > selectedPeriodo.data_fim) return false;
-      if (filterColaborador && f.mecanico_nome !== filterColaborador) return false;
+      if (filterColaborador.length > 0 && !filterColaborador.includes(f.mecanico_nome)) return false;
       return true;
     });
   }, [fichas, selectedPeriodo, filterColaborador]);
@@ -403,10 +404,12 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
     });
   }, [fichasFiltradas, apontamentos, filterDia, filterCategoria]);
 
-  // Quando dia + colaborador estão os dois selecionados, dá pra identificar a jornada exata
-  // e mostrar o cabeçalho dela (horário do turno, status, observação da jornada).
+  // Quando dia + exatamente um colaborador estão selecionados, dá pra identificar a jornada
+  // exata e mostrar o cabeçalho dela (horário do turno, status, observação da jornada). Com
+  // mais de um colaborador selecionado no filtro multi-seleção, não dá mais pra garantir que
+  // existe uma única jornada — melhor não exibir do que arriscar mostrar a errada.
   const fichaUnicaSelecionada = useMemo(() => {
-    if (!filterDia || !filterColaborador) return null;
+    if (!filterDia || filterColaborador.length !== 1) return null;
     return fichasFiltradas.find(f => (f.data_jornada || f.created_at?.split("T")[0]) === filterDia) || null;
   }, [fichasFiltradas, filterDia, filterColaborador]);
 
@@ -507,12 +510,12 @@ export default function MaoDeObraDashboard({ fichas = [], apontamentos = [], col
             <option key={a} value={a}>{a}</option>
           ))}
         </select>
-        <select value={filterColaborador} onChange={e => setFilterColaborador(e.target.value)} className={selectCls}>
-          <option value="">Todos os Colaboradores</option>
-          {colaboradorOptions.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <CheckboxMultiSelect
+          values={filterColaborador}
+          onChange={setFilterColaborador}
+          options={colaboradorOptions.map(c => ({ value: c, label: c }))}
+          placeholder="Todos os Colaboradores"
+        />
         <select
           value={filterCategoria}
           onChange={e => setFilterCategoria(e.target.value as FiltroCategoria)}

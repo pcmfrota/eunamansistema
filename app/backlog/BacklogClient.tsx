@@ -36,6 +36,7 @@ import BacklogAIImportModal from './BacklogAIImportModal';
 import BacklogDashboard from './BacklogDashboard';
 import BacklogSolicitarExclusaoModal from './BacklogSolicitarExclusaoModal';
 import BacklogSolicitacoesExclusao from './BacklogSolicitacoesExclusao';
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select';
 import OSFichaModal, { type OSFichaData } from '@/app/os/OSFicha';
 import { PremiumLoader } from '@/components/premium-loader';
 import { useOffline } from '@/components/offline-provider';
@@ -109,7 +110,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   const [historico, setHistorico] = useState<HistoricoBacklog[] | null>(null);
   const [historicoCarregando, setHistoricoCarregando] = useState(false);
   const [buscaHistorico, setBuscaHistorico] = useState("");
-  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string>("");
+  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string[]>([]);
   const [linhaExpandidaHistorico, setLinhaExpandidaHistorico] = useState<string | null>(null);
 
   useEffect(() => {
@@ -402,26 +403,25 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
   }, [currentPeriod]);
 
   // Filter States
-  const [filterPlaca, setFilterPlaca] = useState("");
-  const [filterModulo, setFilterModulo] = useState("");
-  const [filterArea, setFilterArea] = useState("");
+  const [filterPlaca, setFilterPlaca] = useState<string[]>([]);
+  const [filterModulo, setFilterModulo] = useState<string[]>([]);
+  const [filterArea, setFilterArea] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [filterCriticidade, setFilterCriticidade] = useState("");
+  const [filterCriticidade, setFilterCriticidade] = useState<string[]>([]);
   const [filterDataInicio, setFilterDataInicio] = useState("");
   const [filterDataFim, setFilterDataFim] = useState("");
   const [filterMes, setFilterMes] = useState(defaultMonthName);
   const [filterAno, setFilterAno] = useState(defaultYearString);
 
-  const hasActiveFilters = search || filterPlaca || filterModulo || filterArea || filterStatuses.length > 0 || filterCriticidade || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
+  const hasActiveFilters = search || filterPlaca.length > 0 || filterModulo.length > 0 || filterArea.length > 0 || filterStatuses.length > 0 || filterCriticidade.length > 0 || filterDataInicio || filterDataFim || filterMes !== defaultMonthName || filterAno !== defaultYearString;
 
   const clearFilters = () => {
     setSearch("");
-    setFilterPlaca("");
-    setFilterModulo("");
-    setFilterArea("");
+    setFilterPlaca([]);
+    setFilterModulo([]);
+    setFilterArea([]);
     setFilterStatuses([]);
-    setFilterCriticidade("");
+    setFilterCriticidade([]);
     setFilterDataInicio("");
     setFilterDataFim("");
     setFilterMes("");
@@ -430,7 +430,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
   // Dynamic options from data - MEMOIZED
   const placaOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.frota).filter(Boolean))).sort(), [items]);
-  const areaOptions = React.useMemo(() => Array.from(new Set(localPlacas.map(p => p.area).filter(Boolean))).sort(), [localPlacas]);
+  const areaOptions = React.useMemo(() => Array.from(new Set(localPlacas.map(p => p.area).filter((a): a is string => Boolean(a)))).sort(), [localPlacas]);
   const moduloOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.modulo).filter(Boolean))).sort(), [items]);
   const statusOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.status).filter(Boolean))).sort(), [items]);
   const criticidadeOptions = React.useMemo(() => Array.from(new Set(items.map(i => i.criticidade).filter(Boolean))).sort(), [items]);
@@ -455,17 +455,17 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       const matchSearch = !q || 
         i.frota?.toLowerCase().includes(q) ||
         i.descricao?.toLowerCase().includes(q);
-      const matchPlaca = !filterPlaca || i.frota === filterPlaca;
-      const matchModulo = !filterModulo || i.modulo === filterModulo;
-      
+      const matchPlaca = filterPlaca.length === 0 || filterPlaca.includes(i.frota);
+      const matchModulo = filterModulo.length === 0 || filterModulo.includes(i.modulo);
+
       let matchArea = true;
-      if (filterArea) {
+      if (filterArea.length > 0) {
         const pInfo = placasMap.get(i.frota);
-        matchArea = pInfo?.area === filterArea;
+        matchArea = !!pInfo?.area && filterArea.includes(pInfo.area);
       }
 
       const matchStatus = filterStatuses.length === 0 || filterStatuses.includes(i.status);
-      const matchCriticidade = !filterCriticidade || i.criticidade === filterCriticidade;
+      const matchCriticidade = filterCriticidade.length === 0 || filterCriticidade.includes(i.criticidade);
 
       let matchData = true;
       if (filterDataInicio || filterDataFim) {
@@ -609,7 +609,7 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
   const historicoFiltrado = React.useMemo(() => {
     let lista = historico || [];
-    if (filtroAcaoHistorico) lista = lista.filter((h) => h.acao === filtroAcaoHistorico);
+    if (filtroAcaoHistorico.length > 0) lista = lista.filter((h) => filtroAcaoHistorico.includes(h.acao));
     const term = buscaHistorico.toLowerCase().trim();
     if (term) {
       lista = lista.filter(
@@ -768,136 +768,50 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
             {/* Filters Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               {/* Placa filter */}
-              <select
-                value={filterPlaca}
-                onChange={e => setFilterPlaca(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterPlaca
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">🚛 TODAS AS PLACAS</option>
-                {placaOptions.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterPlaca}
+                onChange={setFilterPlaca}
+                options={placaOptions.map(p => ({ value: p, label: p }))}
+                placeholder="🚛 TODAS AS PLACAS"
+                className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
+              />
 
               {/* Módulo filter */}
-              <select
-                value={filterModulo}
-                onChange={e => setFilterModulo(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterModulo
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">📍 TODOS OS MÓDULOS</option>
-                {moduloOptions.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterModulo}
+                onChange={setFilterModulo}
+                options={moduloOptions.map(m => ({ value: m, label: m }))}
+                placeholder="📍 TODOS OS MÓDULOS"
+                className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
+              />
 
               {/* Área filter */}
-              <select
-                value={filterArea}
-                onChange={e => setFilterArea(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterArea
-                    ? "bg-indigo-600 text-white border-indigo-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">🏢 TODAS AS ÁREAS</option>
-                {areaOptions.map(a => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterArea}
+                onChange={setFilterArea}
+                options={areaOptions.map(a => ({ value: a, label: a }))}
+                placeholder="🏢 TODAS AS ÁREAS"
+                className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
+              />
 
               {/* Status filter (multi-select) */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowStatusDropdown(v => !v)}
-                  className={cn(
-                    "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer w-full flex items-center justify-between gap-2",
-                    filterStatuses.length > 0
-                      ? "bg-indigo-600 text-white border-indigo-500"
-                      : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                  )}
-                >
-                  <span className="truncate">
-                    {filterStatuses.length === 0
-                      ? "📋 TODOS OS STATUS"
-                      : filterStatuses.length === 1
-                      ? filterStatuses[0]
-                      : `${filterStatuses.length} STATUS SEL.`}
-                  </span>
-                  <ChevronDown size={14} className="opacity-60 shrink-0" />
-                </button>
-
-                {showStatusDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowStatusDropdown(false)} />
-                    <div className="absolute left-0 mt-2 w-full min-w-[180px] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 shadow-2xl z-50 flex flex-col gap-2">
-                      {statusOptions.map(status => {
-                        const active = filterStatuses.includes(status);
-                        return (
-                          <label key={status} className="flex items-center gap-2.5 text-[10px] font-black text-zinc-600 dark:text-zinc-300 uppercase tracking-wider cursor-pointer hover:text-indigo-500 transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={active}
-                              onChange={() => {
-                                if (active) setFilterStatuses(filterStatuses.filter(s => s !== status));
-                                else setFilterStatuses([...filterStatuses, status]);
-                              }}
-                              className="w-3.5 h-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            {status}
-                          </label>
-                        );
-                      })}
-                      <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2 mt-1 flex justify-between">
-                        <button
-                          type="button"
-                          onClick={() => setFilterStatuses([])}
-                          className="text-[8px] font-bold text-red-500 hover:underline uppercase"
-                        >
-                          Limpar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFilterStatuses(statusOptions)}
-                          className="text-[8px] font-bold text-indigo-500 hover:underline uppercase"
-                        >
-                          Todos
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <CheckboxMultiSelect
+                values={filterStatuses}
+                onChange={setFilterStatuses}
+                options={statusOptions.map(s => ({ value: s, label: s }))}
+                placeholder="📋 TODOS OS STATUS"
+                className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
+              />
 
               {/* Criticidade filter */}
-              <select
-                value={filterCriticidade}
-                onChange={e => setFilterCriticidade(e.target.value)}
-                className={cn(
-                  "px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border outline-none transition-all shadow-sm cursor-pointer appearance-none w-full",
-                  filterCriticidade
-                    ? "bg-orange-600 text-white border-orange-500"
-                    : "bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
-                )}
-              >
-                <option value="">⚠️ TODA CRITICIDADE</option>
-                {criticidadeOptions.map(c => (
-                  <option key={c} value={c}>{c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL'}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterCriticidade}
+                onChange={setFilterCriticidade}
+                options={criticidadeOptions.map(c => ({ value: c, label: c === 'A' ? 'A - CRÍTICO' : 'B - NORMAL' }))}
+                placeholder="⚠️ TODA CRITICIDADE"
+                accent="amber"
+                className="w-full [&>button]:w-full [&>button]:max-w-none [&>button]:rounded-2xl [&>button]:py-3 [&>button]:text-xs [&>button]:tracking-widest"
+              />
 
               {/* Mês filter */}
               <select
@@ -982,16 +896,16 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                 className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-indigo-500"
               />
             </div>
-            <select
-              value={filtroAcaoHistorico}
-              onChange={(e) => setFiltroAcaoHistorico(e.target.value)}
-              className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
-            >
-              <option value="">Todas as Ações</option>
-              <option value="CRIACAO">Criação</option>
-              <option value="EDICAO">Edição</option>
-              <option value="EXCLUSAO">Exclusão</option>
-            </select>
+            <CheckboxMultiSelect
+              values={filtroAcaoHistorico}
+              onChange={setFiltroAcaoHistorico}
+              options={[
+                { value: "CRIACAO", label: "Criação" },
+                { value: "EDICAO", label: "Edição" },
+                { value: "EXCLUSAO", label: "Exclusão" },
+              ]}
+              placeholder="Todas as Ações"
+            />
           </div>
 
           {historicoCarregando ? (

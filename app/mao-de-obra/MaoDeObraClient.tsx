@@ -29,6 +29,7 @@ import { useAuth } from "@/components/auth-context";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { SearchableSelect, Option } from "@/components/SearchableSelect";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 import FichaPDFModal, { FichaMaoObraItem, AtividadeJornada } from "./FichaPDFModal";
 import { salvarFichaMaoObra, excluirFichaMaoObra, duplicarFichaMaoObra, reabrirJornada, salvarApontamento, excluirApontamento } from "./actions";
 import { isAtividadeProdutiva, formatMinutos } from "./tiposAtividade";
@@ -193,7 +194,7 @@ export default function MaoDeObraClient({
   // Estados de Filtro do Histórico
   const [filtroMecanico, setFiltroMecanico] = useState("");
   const [filtroPlaca, setFiltroPlaca] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState<string[]>([]);
   const [filtroSupervisor, setFiltroSupervisor] = useState("");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
@@ -232,6 +233,21 @@ export default function MaoDeObraClient({
       .filter((c: any) => c.categoria === categoriaBusca)
       .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0))
       .map((c: any) => ({ value: c.valor, label: c.valor }));
+
+  // Opções (deduplicadas por descrição) do filtro de Categoria do Histórico — vários
+  // códigos de apontamento podem compartilhar a mesma descrição.
+  const categoriaFiltroOptions = useMemo(() => {
+    const vistos = new Set<string>();
+    return (apontamentosCatalogo || [])
+      .slice()
+      .sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo)))
+      .filter((t: any) => {
+        if (!t.descricao || vistos.has(t.descricao)) return false;
+        vistos.add(t.descricao);
+        return true;
+      })
+      .map((t: any) => ({ value: t.descricao, label: `${t.codigo} · ${t.descricao}` }));
+  }, [apontamentosCatalogo]);
 
   const supervisorOptions = useMemo(() => catalogoPorCategoria("supervisor"), [catalogos]);
   const equipeOptions = useMemo(() => catalogoPorCategoria("equipe_turno"), [catalogos]);
@@ -727,9 +743,9 @@ export default function MaoDeObraClient({
           f.placa?.toLowerCase().includes(filtroPlaca.toLowerCase());
         if (!temPlaca) return false;
       }
-      if (filtroCategoria) {
+      if (filtroCategoria.length > 0) {
         const atividadesDaFicha = apontamentos.filter(a => a.jornada_id === f.id);
-        const temCategoria = atividadesDaFicha.some(a => a.tipo_atividade === filtroCategoria);
+        const temCategoria = atividadesDaFicha.some(a => filtroCategoria.includes(a.tipo_atividade));
         if (!temCategoria) return false;
       }
       if (filtroSupervisor && !f.supervisor?.toLowerCase().includes(filtroSupervisor.toLowerCase())) return false;
@@ -1284,19 +1300,13 @@ export default function MaoDeObraClient({
                 onChange={e => setFiltroPlaca(e.target.value)}
                 className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
               />
-              <select
-                value={filtroCategoria}
-                onChange={e => setFiltroCategoria(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-              >
-                <option value="">-- Todos os Apontamentos --</option>
-                {(apontamentosCatalogo || [])
-                  .slice()
-                  .sort((a: any, b: any) => String(a.codigo).localeCompare(String(b.codigo)))
-                  .map((t: any) => (
-                    <option key={t.codigo} value={t.descricao}>{t.codigo} · {t.descricao}</option>
-                  ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filtroCategoria}
+                onChange={setFiltroCategoria}
+                options={categoriaFiltroOptions}
+                placeholder="-- Todos os Apontamentos --"
+                className="[&>button]:w-full [&>button]:max-w-none [&>button]:rounded-xl [&>button]:py-2"
+              />
               <input
                 type="text"
                 placeholder="Supervisor..."

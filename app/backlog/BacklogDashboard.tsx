@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { mesAnoOperacional } from '@/lib/calendario-suzano'
 import { MultiSelect } from '@/components/MultiSelect'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 import { calcularTipoPedido, DETALHAMENTO_PEDIDO_SUGESTOES } from './classificacaoTecnica'
 import { baixarOuCompartilharPdf } from '@/lib/pdf-share'
 
@@ -285,11 +286,11 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
   // Global Filters
   const [filterStatuses, setFilterStatuses] = useState<string[]>(['PENDENTE', 'PROGRAMADO', 'ENCERRADO'])
-  const [filterCriticidade, setFilterCriticidade] = useState('')
-  const [filterFornecedor, setFilterFornecedor] = useState('')
-  const [filterArea, setFilterArea] = useState('')
-  const [filterModulo, setFilterModulo] = useState('')
-  const [filterDetalhamento, setFilterDetalhamento] = useState('')
+  const [filterCriticidade, setFilterCriticidade] = useState<string[]>([])
+  const [filterFornecedor, setFilterFornecedor] = useState<string[]>([])
+  const [filterArea, setFilterArea] = useState<string[]>([])
+  const [filterModulo, setFilterModulo] = useState<string[]>([])
+  const [filterDetalhamento, setFilterDetalhamento] = useState<string[]>([])
   const [filterAno, setFilterAno] = useState(defaultYearString)
   const [filterMes, setFilterMes] = useState(defaultMonthName)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -321,7 +322,7 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
-  const [filterMecanico, setFilterMecanico] = useState('')
+  const [filterMecanico, setFilterMecanico] = useState<string[]>([])
   const [mecanicosExpanded, setMecanicosExpanded] = useState(false)
   const [mecanicosMounted, setMecanicosMounted] = useState(false)
   useEffect(() => { setMecanicosMounted(true) }, [])
@@ -449,19 +450,19 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
       if (filterStatuses.length > 0 && !filterStatuses.includes(item.mappedStatus)) return false
 
       // 2. Criticidade
-      if (filterCriticidade && item.mappedCriticidade !== filterCriticidade) return false
+      if (filterCriticidade.length > 0 && !filterCriticidade.includes(item.mappedCriticidade)) return false
 
       // 3. Fornecedor
-      if (filterFornecedor && item.fornecedor !== filterFornecedor) return false
+      if (filterFornecedor.length > 0 && !filterFornecedor.includes(item.fornecedor)) return false
 
       // 4. Area
-      if (filterArea && item.mappedArea !== filterArea) return false
+      if (filterArea.length > 0 && !filterArea.includes(item.mappedArea)) return false
 
       // 5. Modulo
-      if (filterModulo && item.modulo !== filterModulo) return false
+      if (filterModulo.length > 0 && !filterModulo.includes(item.modulo)) return false
 
       // 5b. Detalhamento do Pedido
-      if (filterDetalhamento && item.detalhamento !== filterDetalhamento) return false
+      if (filterDetalhamento.length > 0 && !filterDetalhamento.includes(item.detalhamento)) return false
 
       // 6. Ano (Data)
       if (filterAno && item.mappedYear !== filterAno) return false
@@ -501,12 +502,12 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
   const activeFilterCount = useMemo(() => {
     let count = 0
     if (filterStatuses.length > 0 && filterStatuses.length < 3) count++
-    if (filterCriticidade) count++
-    if (filterFornecedor) count++
-    if (filterArea) count++
-    if (filterModulo) count++
-    if (filterDetalhamento) count++
-    if (filterMecanico) count++
+    if (filterCriticidade.length > 0) count++
+    if (filterFornecedor.length > 0) count++
+    if (filterArea.length > 0) count++
+    if (filterModulo.length > 0) count++
+    if (filterDetalhamento.length > 0) count++
+    if (filterMecanico.length > 0) count++
     if (filterOrigens.length > 0) count++
     if (filterTipos.length > 0) count++
     if (filterDataInicio) count++
@@ -517,8 +518,8 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
 
   // Apply all filters including Mechanic
   const filtered = useMemo(() => {
-    if (!filterMecanico) return filteredWithoutMechanic
-    return filteredWithoutMechanic.filter(item => (item.colaborador || 'Sem Mecânico') === filterMecanico)
+    if (filterMecanico.length === 0) return filteredWithoutMechanic
+    return filteredWithoutMechanic.filter(item => filterMecanico.includes(item.colaborador || 'Sem Mecânico'))
   }, [filteredWithoutMechanic, filterMecanico])
 
   // Reset pagination to first page on filter changes
@@ -1100,16 +1101,17 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             {/* Criticidade */}
             <div>
               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Criticidade</span>
-              <select
-                value={filterCriticidade}
-                onChange={e => setFilterCriticidade(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                <option value="A">A - Crítico</option>
-                <option value="B">B - Normal</option>
-                <option value="C">C - Baixa</option>
-              </select>
+              <CheckboxMultiSelect
+                values={filterCriticidade}
+                onChange={setFilterCriticidade}
+                options={[
+                  { value: 'A', label: 'A - Crítico' },
+                  { value: 'B', label: 'B - Normal' },
+                  { value: 'C', label: 'C - Baixa' },
+                ]}
+                placeholder="Todos"
+                className="w-full [&>button]:w-full [&>button]:max-w-none"
+              />
             </div>
 
             {/* Origem (multi-select) */}
@@ -1139,46 +1141,37 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             {/* Fornecedor */}
             <div>
               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Fornecedor</span>
-              <select
-                value={filterFornecedor}
-                onChange={e => setFilterFornecedor(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.fornecedores.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterFornecedor}
+                onChange={setFilterFornecedor}
+                options={filterOptions.fornecedores.map(f => ({ value: f, label: f }))}
+                placeholder="Todos"
+                className="w-full [&>button]:w-full [&>button]:max-w-none"
+              />
             </div>
 
             {/* Área */}
             <div>
               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Área</span>
-              <select
-                value={filterArea}
-                onChange={e => setFilterArea(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.areas.map(a => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterArea}
+                onChange={setFilterArea}
+                options={filterOptions.areas.map(a => ({ value: a, label: a }))}
+                placeholder="Todos"
+                className="w-full [&>button]:w-full [&>button]:max-w-none"
+              />
             </div>
 
             {/* Módulo */}
             <div>
               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Módulo</span>
-              <select
-                value={filterModulo}
-                onChange={e => setFilterModulo(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.modulos.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterModulo}
+                onChange={setFilterModulo}
+                options={filterOptions.modulos.map(m => ({ value: m, label: m }))}
+                placeholder="Todos"
+                className="w-full [&>button]:w-full [&>button]:max-w-none"
+              />
             </div>
 
             {/* Ano */}
@@ -1214,16 +1207,13 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             {/* Mecânico */}
             <div>
               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Mecânico</span>
-              <select
-                value={filterMecanico}
-                onChange={e => setFilterMecanico(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-[#1e2028] border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-black outline-none cursor-pointer"
-              >
-                <option value="">Todos</option>
-                {filterOptions.mecanicos.map(mec => (
-                  <option key={mec} value={mec}>{mec}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterMecanico}
+                onChange={setFilterMecanico}
+                options={filterOptions.mecanicos.map(mec => ({ value: mec, label: mec }))}
+                placeholder="Todos"
+                className="w-full [&>button]:w-full [&>button]:max-w-none"
+              />
             </div>
 
             {/* De (Data) */}
@@ -1355,15 +1345,15 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 nameKey="name"
                 label={({ name, value }) => value > 0 ? `${name} ${value}` : ''}
                 labelLine={false}
-                onClick={(entry: any) => setFilterCriticidade(prev => prev === entry.name ? '' : entry.name)}
+                onClick={(entry: any) => setFilterCriticidade(prev => prev.length === 1 && prev[0] === entry.name ? [] : [entry.name])}
                 cursor="pointer"
               >
                 {donutData.map((entry, idx) => (
                   <Cell
                     key={idx}
                     fill={CRITICIDADE_COLORS[entry.name]?.chart || '#cbd5e1'}
-                    stroke={filterCriticidade === entry.name ? '#0f172a' : 'transparent'}
-                    strokeWidth={filterCriticidade === entry.name ? 2 : 0}
+                    stroke={filterCriticidade.includes(entry.name) ? '#0f172a' : 'transparent'}
+                    strokeWidth={filterCriticidade.includes(entry.name) ? 2 : 0}
                     cursor="pointer"
                   />
                 ))}
@@ -1419,10 +1409,10 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                 barSize={14}
                 cursor="pointer"
-                onClick={(entry: any) => setFilterArea(prev => prev === entry.name ? '' : entry.name)}
+                onClick={(entry: any) => setFilterArea(prev => prev.length === 1 && prev[0] === entry.name ? [] : [entry.name])}
               >
                 {barAreaData.map((entry, idx) => (
-                  <Cell key={idx} fill="#0055b8" opacity={filterArea && filterArea !== entry.name ? 0.35 : 1} />
+                  <Cell key={idx} fill="#0055b8" opacity={filterArea.length > 0 && !filterArea.includes(entry.name) ? 0.35 : 1} />
                 ))}
               </Bar>
             </BarChart>
@@ -1465,10 +1455,10 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                 barSize={14}
                 cursor="pointer"
-                onClick={(entry: any) => setFilterModulo(prev => prev === entry.name ? '' : entry.name)}
+                onClick={(entry: any) => setFilterModulo(prev => prev.length === 1 && prev[0] === entry.name ? [] : [entry.name])}
               >
                 {barModuloData.map((entry, idx) => (
-                  <Cell key={idx} fill="#00a859" opacity={filterModulo && filterModulo !== entry.name ? 0.35 : 1} />
+                  <Cell key={idx} fill="#00a859" opacity={filterModulo.length > 0 && !filterModulo.includes(entry.name) ? 0.35 : 1} />
                 ))}
               </Bar>
             </BarChart>
@@ -1519,10 +1509,10 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 label={{ position: 'right', fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                 barSize={14}
                 cursor="pointer"
-                onClick={(entry: any) => setFilterDetalhamento(prev => prev === entry.name ? '' : entry.name)}
+                onClick={(entry: any) => setFilterDetalhamento(prev => prev.length === 1 && prev[0] === entry.name ? [] : [entry.name])}
               >
                 {barDetalhamentoData.map((entry, idx) => (
-                  <Cell key={idx} fill="#7c3aed" opacity={filterDetalhamento && filterDetalhamento !== entry.name ? 0.35 : 1} />
+                  <Cell key={idx} fill="#7c3aed" opacity={filterDetalhamento.length > 0 && !filterDetalhamento.includes(entry.name) ? 0.35 : 1} />
                 ))}
               </Bar>
             </BarChart>
@@ -1835,14 +1825,13 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             {/* Filtro rápido por Detalhamento do Pedido, direto acima da tabela — o mesmo
                 campo também filtra ao clicar numa barra do gráfico "Etiqueta por
                 Detalhamento do Pedido" (compartilham o estado filterDetalhamento). */}
-            <select
-              value={filterDetalhamento}
-              onChange={e => setFilterDetalhamento(e.target.value)}
-              className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#1e2028] text-zinc-600 dark:text-zinc-300"
-            >
-              <option value="">Detalhamento: Todos</option>
-              {DETALHAMENTO_PEDIDO_SUGESTOES.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <CheckboxMultiSelect
+              values={filterDetalhamento}
+              onChange={setFilterDetalhamento}
+              options={DETALHAMENTO_PEDIDO_SUGESTOES.map(d => ({ value: d, label: d }))}
+              placeholder="Detalhamento: Todos"
+              className="[&>button]:text-[9px] [&>button]:py-1.5"
+            />
             <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded">
               {filtered.length} itens listados
             </span>
@@ -2045,11 +2034,11 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
             <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-1" style={{ maxHeight: chartHeight }}>
               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Selecione para Filtrar</span>
               {mechanicStats.map(s => {
-                const isSelected = filterMecanico === s.name;
+                const isSelected = filterMecanico.includes(s.name);
                 return (
                   <div
                     key={s.name}
-                    onClick={() => setFilterMecanico(isSelected ? '' : s.name)}
+                    onClick={() => setFilterMecanico(prev => prev.length === 1 && prev[0] === s.name ? [] : [s.name])}
                     className={cn(
                       "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between hover:scale-[1.02] shadow-sm select-none",
                       isSelected
@@ -2092,9 +2081,9 @@ export default function BacklogDashboard({ items, placas, calendario = [], onEdi
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {filterMecanico && (
+                {filterMecanico.length > 0 && (
                   <button
-                    onClick={() => setFilterMecanico('')}
+                    onClick={() => setFilterMecanico([])}
                     className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest border border-red-500/20 px-3 py-1 rounded-xl bg-red-500/5 transition-colors"
                   >
                     ✕ Limpar Filtro

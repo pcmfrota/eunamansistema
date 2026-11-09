@@ -20,6 +20,7 @@ import { localDb } from "@/lib/offline-db";
 import { RefreshCw } from "lucide-react";
 import OSDashboard from "./OSDashboard";
 import OSFichaModal, { type OSFichaData } from "./OSFicha";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 import { PremiumLoader } from "@/components/premium-loader";
 import React from "react";
 
@@ -274,13 +275,13 @@ export default function ControleOSClient({
   const [activeTab, setActiveTab] = useState<"menu" | "dashboard" | "lista" | "validacao">("menu");
   const [showFiltros, setShowFiltros] = useState(false);
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("Todos Status");
-  const [filtroModulo, setFiltroModulo] = useState("Todos Módulos");
-  const [filtroArea, setFiltroArea] = useState("Todas as Áreas");
+  const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
+  const [filtroModulo, setFiltroModulo] = useState<string[]>([]);
+  const [filtroArea, setFiltroArea] = useState<string[]>([]);
   const [filtroPeriodo, setFiltroPeriodo] = useState("Todos Períodos");
   const [filtroOrdem, setFiltroOrdem] = useState("Mais Recente");
-  const [filtroAprovacao, setFiltroAprovacao] = useState("Todos Lançamentos");
-  const [filtroSuzano, setFiltroSuzano] = useState("Todas Assinaturas");
+  const [filtroAprovacao, setFiltroAprovacao] = useState<string[]>([]);
+  const [filtroSuzano, setFiltroSuzano] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingOS, setEditingOS] = useState<OS | null>(null);
   const [modalFotos, setModalFotos] = useState<string[]>([]);
@@ -642,13 +643,13 @@ export default function ControleOSClient({
     const statusParam = params.get("status");
     if (statusParam) {
       if (statusParam.toLowerCase() === "aberta") {
-        setFiltroStatus("Aberta");
+        setFiltroStatus(["Aberta"]);
         setActiveTab("lista");
       } else if (statusParam.toLowerCase() === "programado") {
-        setFiltroStatus("Programado");
+        setFiltroStatus(["Programado"]);
         setActiveTab("lista");
       } else if (statusParam.toLowerCase() === "fechada") {
-        setFiltroStatus("Fechada");
+        setFiltroStatus(["Fechada"]);
         setActiveTab("lista");
       }
     }
@@ -665,9 +666,8 @@ export default function ControleOSClient({
   useEffect(() => { setOrdens(initialOrdens); }, [initialOrdens]);
 
   // Derived lists for filter dropdowns
-  const modulos = React.useMemo(() => 
+  const modulos = React.useMemo(() =>
     [
-      "Todos Módulos",
       "MÓDULO 5",
       "MÓDULO 2",
       "MÓDULO 7",
@@ -681,7 +681,7 @@ export default function ControleOSClient({
   const areasOptions = React.useMemo(() => {
     const s = new Set<string>();
     equipamentos.forEach(e => { if (e.area) s.add(e.area); });
-    return ["Todas as Áreas", ...Array.from(s).sort()];
+    return Array.from(s).sort();
   }, [equipamentos]);
 
   // Filter + sort - MEMOIZED for performance
@@ -690,13 +690,13 @@ export default function ControleOSClient({
       .filter(o => {
         const q = busca.toLowerCase();
         const matchBusca = !q || (o.numero_os || "").toLowerCase().includes(q) || (o.placa || "").toLowerCase().includes(q);
-        const matchStatus = filtroStatus === "Todos Status" || o.status === filtroStatus;
-        const matchModulo = filtroModulo === "Todos Módulos" || o.modulo === filtroModulo;
-        
+        const matchStatus = filtroStatus.length === 0 || filtroStatus.includes(o.status || "Aberta");
+        const matchModulo = filtroModulo.length === 0 || filtroModulo.includes(o.modulo || "");
+
         let matchArea = true;
-        if (filtroArea !== "Todas as Áreas") {
+        if (filtroArea.length > 0) {
           const eq = equipamentos.find(e => e.id === o.equipamento_id || e.placa === o.placa);
-          matchArea = eq ? eq.area === filtroArea : false;
+          matchArea = eq ? filtroArea.includes(eq.area || "") : false;
         }
         
         let matchPeriodo = true;
@@ -714,17 +714,19 @@ export default function ControleOSClient({
         }
 
         let matchAprovacao = true;
-        if (filtroAprovacao === "Pendentes de Aprovação") {
-          matchAprovacao = o.aprovado === false;
-        } else if (filtroAprovacao === "Aprovados") {
-          matchAprovacao = o.aprovado !== false;
+        if (filtroAprovacao.length > 0) {
+          const isPendente = o.aprovado === false;
+          matchAprovacao = filtroAprovacao.some(f =>
+            (f === "Pendentes de Aprovação" && isPendente) || (f === "Aprovados" && !isPendente)
+          );
         }
 
         let matchSuzano = true;
-        if (filtroSuzano === "Assinadas por Suzano") {
-          matchSuzano = temAssinaturaSuzano(o);
-        } else if (filtroSuzano === "Sem Assinatura Suzano") {
-          matchSuzano = !temAssinaturaSuzano(o);
+        if (filtroSuzano.length > 0) {
+          const assinado = temAssinaturaSuzano(o);
+          matchSuzano = filtroSuzano.some(f =>
+            (f === "Assinadas por Suzano" && assinado) || (f === "Sem Assinatura Suzano" && !assinado)
+          );
         }
 
         return matchBusca && matchStatus && matchModulo && matchArea && matchPeriodo && matchAprovacao && matchSuzano;
@@ -1175,16 +1177,16 @@ export default function ControleOSClient({
                   className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all font-bold"
                 />
               </div>
-              {(busca || filtroStatus !== "Todos Status" || filtroModulo !== "Todos Módulos" || filtroArea !== "Todas as Áreas" || filtroPeriodo !== "Todos Períodos" || filtroAprovacao !== "Todos Lançamentos" || filtroSuzano !== "Todas Assinaturas") && (
+              {(busca || filtroStatus.length > 0 || filtroModulo.length > 0 || filtroArea.length > 0 || filtroPeriodo !== "Todos Períodos" || filtroAprovacao.length > 0 || filtroSuzano.length > 0) && (
                 <button
-                  onClick={() => { 
-                    setBusca(""); 
-                    setFiltroStatus("Todos Status"); 
-                    setFiltroModulo("Todos Módulos"); 
-                    setFiltroArea("Todas as Áreas");
+                  onClick={() => {
+                    setBusca("");
+                    setFiltroStatus([]);
+                    setFiltroModulo([]);
+                    setFiltroArea([]);
                     setFiltroPeriodo("Todos Períodos");
-                    setFiltroAprovacao("Todos Lançamentos");
-                    setFiltroSuzano("Todas Assinaturas");
+                    setFiltroAprovacao([]);
+                    setFiltroSuzano([]);
                   }}
                   className="px-3 py-2 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"
                 >
@@ -1206,28 +1208,48 @@ export default function ControleOSClient({
                   );
                 })}
               </select>
-              <select value={filtroAprovacao} onChange={e => setFiltroAprovacao(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-amber-700 dark:text-amber-400 font-bold outline-none focus:ring-2 focus:ring-blue-500/30">
-                <option>Todos Lançamentos</option>
-                <option>Pendentes de Aprovação</option>
-                <option>Aprovados</option>
-              </select>
-              <select value={filtroSuzano} onChange={e => setFiltroSuzano(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-emerald-700 dark:text-emerald-400 font-bold outline-none focus:ring-2 focus:ring-blue-500/30">
-                <option>Todas Assinaturas</option>
-                <option>Assinadas por Suzano</option>
-                <option>Sem Assinatura Suzano</option>
-              </select>
-              <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
-                <option>Todos Status</option>
-                <option>Aberta</option>
-                <option>Programado</option>
-                <option>Fechada</option>
-              </select>
-              <select value={filtroModulo} onChange={e => setFiltroModulo(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
-                {modulos.map(m => <option key={m}>{m}</option>)}
-              </select>
-              <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
-                {areasOptions.map(a => <option key={a}>{a}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filtroAprovacao}
+                onChange={setFiltroAprovacao}
+                options={[
+                  { value: "Pendentes de Aprovação", label: "Pendentes de Aprovação" },
+                  { value: "Aprovados", label: "Aprovados" },
+                ]}
+                placeholder="Todos Lançamentos"
+                accent="amber"
+              />
+              <CheckboxMultiSelect
+                values={filtroSuzano}
+                onChange={setFiltroSuzano}
+                options={[
+                  { value: "Assinadas por Suzano", label: "Assinadas por Suzano" },
+                  { value: "Sem Assinatura Suzano", label: "Sem Assinatura Suzano" },
+                ]}
+                placeholder="Todas Assinaturas"
+              />
+              <CheckboxMultiSelect
+                values={filtroStatus}
+                onChange={setFiltroStatus}
+                options={[
+                  { value: "Aberta", label: "Aberta" },
+                  { value: "Programado", label: "Programado" },
+                  { value: "Fechada", label: "Fechada" },
+                ]}
+                placeholder="Todos Status"
+                accent="amber"
+              />
+              <CheckboxMultiSelect
+                values={filtroModulo}
+                onChange={setFiltroModulo}
+                options={modulos.map(m => ({ value: m, label: m }))}
+                placeholder="Todos Módulos"
+              />
+              <CheckboxMultiSelect
+                values={filtroArea}
+                onChange={setFiltroArea}
+                options={areasOptions.map(a => ({ value: a, label: a }))}
+                placeholder="Todas as Áreas"
+              />
               <select value={filtroOrdem} onChange={e => setFiltroOrdem(e.target.value)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
                 <option>Mais Recente</option>
                 <option>Mais Antiga</option>

@@ -8,6 +8,7 @@ import {
 import { Download } from "lucide-react";
 import { getOSDashboardData, type PeriodoSuzano } from "./actions-dashboard";
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select';
 
 // ─── Cores dos anos nos gráficos de linha ────────────────────────────────────
 const LINE_COLORS = [
@@ -136,7 +137,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
 
   // Filtros adicionais (placa, classe)
   const [filtroPlaca, setFiltroPlaca] = useState("Todas");
-  const [filtroClasse, setFiltroClasse] = useState("Todos");
+  const [filtroClasse, setFiltroClasse] = useState<string[]>([]);
 
   // Helper local para fundir intervalos e evitar duplicidade
   const mergeIntervals = (intervals: Array<{ start: number, end: number }>) => {
@@ -176,7 +177,7 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
       const dentroDoIntervalo = dtAbertura <= fim &&
         (o.data_fechamento == null || new Date(o.data_fechamento) >= inicio);
       const matchPlaca = filtroPlaca === "Todas" || o.placa === filtroPlaca;
-      const matchClasse = filtroClasse === "Todos" || o.classe === filtroClasse;
+      const matchClasse = filtroClasse.length === 0 || filtroClasse.includes(o.classe || "");
       return dentroDoIntervalo && matchPlaca && matchClasse;
     });
   }, [ordens, periodoSelecionado, filtroPlaca, filtroClasse]);
@@ -457,13 +458,16 @@ export default function OSDashboard({ ordens: initialOrdens }: { ordens: OS[] })
         {/* Classe */}
         <div className="flex flex-col gap-1 min-w-[160px]">
           <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-widest">Tipo de Manutenção</label>
-          <select value={filtroClasse} onChange={e => setFiltroClasse(e.target.value)}
-            className="px-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#1e2028] text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer font-bold">
-            <option>Todos</option>
-            <option>CORRETIVA</option>
-            <option>PREVENTIVA</option>
-            <option>PREDITIVA</option>
-          </select>
+          <CheckboxMultiSelect
+            values={filtroClasse}
+            onChange={setFiltroClasse}
+            options={[
+              { value: "CORRETIVA", label: "CORRETIVA" },
+              { value: "PREVENTIVA", label: "PREVENTIVA" },
+              { value: "PREDITIVA", label: "PREDITIVA" },
+            ]}
+            placeholder="Todos"
+          />
         </div>
 
         <div className="ml-auto flex items-center gap-4">
