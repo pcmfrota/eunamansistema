@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Truck, CalendarClock, CheckCircle2, Clock, AlertTriangle, Percent, ClipboardCheck, Droplets, Gauge, SprayCan } from "lucide-react";
+import { Truck, CalendarClock, CheckCircle2, Clock, AlertTriangle, Percent, ClipboardCheck, Droplets, Gauge, SprayCan, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFrotaPesadaAtiva, ExecucaoProgramacao, TipoProgramacao } from "./types";
 import InspecaoFrotaTab from "./InspecaoFrotaTab";
 import LubrificacaoReapertosTab from "./LubrificacaoReapertosTab";
 import CalibragemPneusTab from "./CalibragemPneusTab";
 import LavagemTab from "./LavagemTab";
+import AderenciaReportTab from "./AderenciaReportTab";
 
 interface Props {
   initialEquipamentos: any[];
@@ -15,13 +16,14 @@ interface Props {
   userRole: string;
 }
 
-type AbaPrincipal = TipoProgramacao;
+type AbaPrincipal = TipoProgramacao | "aderencia";
 
 const ABAS: { key: AbaPrincipal; label: string; Icon: typeof ClipboardCheck }[] = [
   { key: "inspecao", label: "Inspeção da Frota", Icon: ClipboardCheck },
   { key: "lubrificacao", label: "Lubrificação + Reapertos", Icon: Droplets },
   { key: "calibragem", label: "Calibragem de Pneus", Icon: Gauge },
   { key: "lavagem", label: "Lavagem dos Caminhões", Icon: SprayCan },
+  { key: "aderencia", label: "Relatório de Aderência", Icon: BarChart3 },
 ];
 
 function StatTile({ icon: Icon, label, value, accent }: { icon: typeof Truck; label: string; value: string; accent?: string }) {
@@ -101,6 +103,7 @@ export default function ProgramacaoMecanicaClient({ initialEquipamentos, initial
       {abaAtiva === "lubrificacao" && <LubrificacaoReapertosTab {...abaProps} />}
       {abaAtiva === "calibragem" && <CalibragemPneusTab {...abaProps} />}
       {abaAtiva === "lavagem" && <LavagemTab {...abaProps} />}
+      {abaAtiva === "aderencia" && <AderenciaReportTab frota={frota} execucoes={execucoes} />}
     </div>
   );
 }
