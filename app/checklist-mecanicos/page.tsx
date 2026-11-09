@@ -21,6 +21,11 @@ export default async function ChecklistMecanicosPage() {
     .select('*')
     .order('criado_em', { ascending: false })
 
+  const { data: registrosQuinzenal } = await supabase
+    .from('checklist_quinzenal_registros')
+    .select('*')
+    .order('data_checklist', { ascending: false })
+
   // Obter role do usuário (apenas para passar ao cliente)
   const { data: profile } = await supabase
     .from('profiles')
@@ -32,8 +37,9 @@ export default async function ChecklistMecanicosPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col pt-[70px] lg:pt-0 lg:pl-64 transition-all duration-300 relative overflow-hidden">
-      <ChecklistClient 
+      <ChecklistClient
         initialChecklists={checklists || []}
+        initialRegistrosQuinzenal={registrosQuinzenal || []}
         userRole={role}
         userId={user.id}
       />

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Calendar as CalendarIcon, X, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { salvarRegistroQuinzenal, excluirRegistroQuinzenal, RegistroQuinzenal } from "./actions";
 
 // Mesmos 4 tipos de caminhão que este checklist cobre (ver FROTA_PARA_TIPO_EQUIPAMENTO
 // em app/checklist-frota/ChecklistFrotaClient.tsx) — "toda a frota" aqui é a frota
@@ -35,6 +36,10 @@ function fmtBR(iso: string): string {
   const [, m, d] = iso.split("-");
   return `${d}/${m}`;
 }
+function fmtFullBR(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 type StatusChecklist = "no_prazo" | "atencao" | "atrasado" | "nunca";
 
@@ -45,12 +50,25 @@ const STATUS_CONFIG: Record<StatusChecklist, { label: string; className: string;
   nunca: { label: "Nunca feito", className: "bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800", Icon: XCircle },
 };
 
+interface ModalCell {
+  placa: string;
+  tipo: string;
+  local: string;
+  equipamentoId: string | null;
+  iso: string;
+  registroExistente: RegistroQuinzenal | null;
+}
+
 interface Props {
   checklists: any[];
   frota: any[];
+  registros: RegistroQuinzenal[];
+  onRegistrosChange: (updater: (prev: RegistroQuinzenal[]) => RegistroQuinzenal[]) => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
-export default function CalendarioQuinzenalChecklist({ checklists, frota }: Props) {
+export default function CalendarioQuinzenalChecklist({ checklists, frota, registros, onRegistrosChange, canEdit, canDelete }: Props) {
   const hoje = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -59,6 +77,13 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
   const hojeISO = useMemo(() => toISODate(hoje), [hoje]);
 
   const [refMonth, setRefMonth] = useState(() => new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  const [modalCell, setModalCell] = useState<ModalCell | null>(null);
+  const [colaborador, setColaborador] = useState("");
+  const [horimetro, setHorimetro] = useState("");
+  const [km, setKm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [erro, setErro] = useState("");
 
   const veiculos = useMemo(() => {
     return (frota || [])
@@ -68,7 +93,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
       .sort((a, b) => a.placaNorm.localeCompare(b.placaNorm));
   }, [frota]);
 
-  // Datas (YYYY-MM-DD) de checklist já feito, por placa normalizada, em ordem crescente.
+  // Datas (YYYY-MM-DD) de checklist completo já feito, por placa normalizada, em ordem crescente.
   const datasPorPlaca = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const c of checklists || []) {
@@ -82,6 +107,35 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
     return map;
   }, [checklists]);
 
+  // Registros rápidos do calendário (colaborador/horímetro/km), indexados por "placa|data".
+  const registroPorCelula = useMemo(() => {
+    const map = new Map<string, RegistroQuinzenal>();
+    for (const r of registros || []) {
+      const placaNorm = String(r.placa || "").toUpperCase().trim();
+      if (!placaNorm || !r.data_checklist) continue;
+      map.set(`${placaNorm}|${r.data_checklist}`, r);
+    }
+    return map;
+  }, [registros]);
+
+  // "Feito" considera tanto a inspeção completa (aba Checklists) quanto o registro
+  // rápido lançado pelo calendário — qualquer um dos dois comprova o checklist do dia.
+  const datasFeitasPorPlaca = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const [placa, datas] of Array.from(datasPorPlaca.entries())) {
+      map.set(placa, [...datas]);
+    }
+    for (const r of registros || []) {
+      const placaNorm = String(r.placa || "").toUpperCase().trim();
+      if (!placaNorm || !r.data_checklist) continue;
+      if (!map.has(placaNorm)) map.set(placaNorm, []);
+      const arr = map.get(placaNorm)!;
+      if (!arr.includes(r.data_checklist)) arr.push(r.data_checklist);
+    }
+    Array.from(map.values()).forEach(arr => arr.sort());
+    return map;
+  }, [datasPorPlaca, registros]);
+
   const diasDoMes = useMemo(() => {
     const ano = refMonth.getFullYear();
     const mes = refMonth.getMonth();
@@ -90,7 +144,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
   }, [refMonth]);
 
   function statusDoVeiculo(placaNorm: string) {
-    const datas = datasPorPlaca.get(placaNorm) || [];
+    const datas = datasFeitasPorPlaca.get(placaNorm) || [];
     if (datas.length === 0) {
       return { status: "nunca" as StatusChecklist, ultima: null as string | null, proxima: null as string | null, diasRestantes: null as number | null };
     }
@@ -105,6 +159,64 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
     setRefMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
   }
 
+  function abrirCelula(v: any, iso: string) {
+    if (!canEdit) return;
+    const registroExistente = registroPorCelula.get(`${v.placaNorm}|${iso}`) || null;
+    setModalCell({ placa: v.placaNorm, tipo: v.tipo || "", local: v.local || "", equipamentoId: v.id || null, iso, registroExistente });
+    setColaborador(registroExistente?.colaborador || "");
+    setHorimetro(registroExistente?.horimetro != null ? String(registroExistente.horimetro) : "");
+    setKm(registroExistente?.km != null ? String(registroExistente.km) : "");
+    setErro("");
+  }
+
+  function fecharModal() {
+    setModalCell(null);
+    setErro("");
+  }
+
+  async function handleSalvar() {
+    if (!modalCell) return;
+    if (!colaborador.trim()) {
+      setErro("Informe o colaborador que realizou o checklist.");
+      return;
+    }
+    setSaving(true);
+    setErro("");
+    const result = await salvarRegistroQuinzenal({
+      id: modalCell.registroExistente?.id,
+      equipamento_id: modalCell.equipamentoId,
+      placa: modalCell.placa,
+      tipo_caminhao: modalCell.tipo || null,
+      data_checklist: modalCell.iso,
+      colaborador: colaborador.trim(),
+      horimetro: horimetro.trim() === "" ? null : Number(horimetro),
+      km: km.trim() === "" ? null : Number(km),
+    });
+    setSaving(false);
+    if (result?.error) {
+      setErro(result.error);
+      return;
+    }
+    const salvo = result.data as RegistroQuinzenal;
+    onRegistrosChange(prev => [salvo, ...prev.filter(r => r.id !== salvo.id)]);
+    fecharModal();
+  }
+
+  async function handleExcluir() {
+    if (!modalCell?.registroExistente) return;
+    if (!confirm("Excluir este registro do calendário quinzenal?")) return;
+    setDeleting(true);
+    const result = await excluirRegistroQuinzenal(modalCell.registroExistente.id);
+    setDeleting(false);
+    if (result?.error) {
+      setErro(result.error);
+      return;
+    }
+    const idExcluido = modalCell.registroExistente.id;
+    onRegistrosChange(prev => prev.filter(r => r.id !== idExcluido));
+    fecharModal();
+  }
+
   return (
     <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border-b border-zinc-200 dark:border-zinc-800">
@@ -112,7 +224,9 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
           <CalendarIcon size={18} className="text-zinc-400 shrink-0" />
           <div>
             <h3 className="text-sm font-bold dark:text-white">Calendário Quinzenal de Checklist</h3>
-            <p className="text-xs text-zinc-500">Checklist Mecânico a cada {CICLO_DIAS} dias — Comboio, Pipa, Multifuncional e Munck.</p>
+            <p className="text-xs text-zinc-500">
+              {canEdit ? "Clique na data da placa para lançar o checklist" : "Checklist Mecânico"} a cada {CICLO_DIAS} dias — Comboio, Pipa, Multifuncional e Munck.
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 self-end md:self-auto">
@@ -162,7 +276,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
           <tbody>
             {veiculos.map((v, idx) => {
               const { status, ultima, proxima, diasRestantes } = statusDoVeiculo(v.placaNorm);
-              const datasExecutadas = new Set(datasPorPlaca.get(v.placaNorm) || []);
+              const datasExecutadas = new Set(datasFeitasPorPlaca.get(v.placaNorm) || []);
               const cfg = STATUS_CONFIG[status];
               const rowBg = idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : "bg-white dark:bg-zinc-950";
               return (
@@ -185,14 +299,33 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
                     const iso = toISODate(dia);
                     const feito = datasExecutadas.has(iso);
                     const isVencimento = !feito && proxima === iso;
+                    const registro = registroPorCelula.get(`${v.placaNorm}|${iso}`);
+                    const titulo = registro
+                      ? `${registro.colaborador} — ${fmtFullBR(iso)}${registro.horimetro != null ? ` · Horím.: ${registro.horimetro}` : ""}${registro.km != null ? ` · Km: ${registro.km}` : ""}`
+                      : feito
+                      ? `Checklist realizado em ${fmtBR(iso)}`
+                      : isVencimento
+                      ? "Data de vencimento do ciclo de 15 dias"
+                      : canEdit
+                      ? "Clique para lançar o checklist"
+                      : undefined;
                     return (
-                      <td key={iso} className={cn("border border-zinc-200 dark:border-zinc-800 text-center p-0.5", rowBg)}>
+                      <td
+                        key={iso}
+                        onClick={() => abrirCelula(v, iso)}
+                        className={cn(
+                          "border border-zinc-200 dark:border-zinc-800 text-center p-0.5",
+                          rowBg,
+                          canEdit && "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20"
+                        )}
+                        title={titulo}
+                      >
                         {feito ? (
-                          <div className="flex items-center justify-center" title={`Checklist realizado em ${fmtBR(iso)}`}>
+                          <div className="flex items-center justify-center">
                             <CheckCircle2 size={14} className="text-green-600" />
                           </div>
                         ) : isVencimento ? (
-                          <div className="flex items-center justify-center" title="Data de vencimento do ciclo de 15 dias">
+                          <div className="flex items-center justify-center">
                             <span className="w-2.5 h-2.5 rounded-full border-2 border-amber-500 inline-block" />
                           </div>
                         ) : null}
@@ -212,6 +345,81 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota }: Prop
           </tbody>
         </table>
       </div>
+
+      {modalCell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-base font-bold dark:text-white">Checklist — {modalCell.placa}</h3>
+                <p className="text-xs text-zinc-500">{modalCell.tipo} · {fmtFullBR(modalCell.iso)}</p>
+              </div>
+              <button onClick={fecharModal} className="text-zinc-400 hover:text-zinc-600 bg-zinc-100 dark:bg-zinc-900 p-1.5 rounded-full">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Colaborador que realizou *</label>
+                <input
+                  type="text"
+                  value={colaborador}
+                  onChange={e => setColaborador(e.target.value)}
+                  placeholder="Nome do colaborador"
+                  className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Horímetro</label>
+                  <input
+                    type="number"
+                    value={horimetro}
+                    onChange={e => setHorimetro(e.target.value)}
+                    placeholder="0"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">Km</label>
+                  <input
+                    type="number"
+                    value={km}
+                    onChange={e => setKm(e.target.value)}
+                    placeholder="0"
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {erro && <p className="text-xs text-red-600 font-medium">{erro}</p>}
+
+              <div className="flex items-center justify-between gap-3 pt-2">
+                {modalCell.registroExistente && canDelete ? (
+                  <button
+                    onClick={handleExcluir}
+                    disabled={deleting || saving}
+                    className="px-3 py-2 text-xs font-bold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center gap-1.5 hover:bg-red-100 disabled:opacity-60"
+                  >
+                    {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    Excluir
+                  </button>
+                ) : <span />}
+                <button
+                  onClick={handleSalvar}
+                  disabled={saving || deleting}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-sm flex items-center gap-2 disabled:opacity-60"
+                >
+                  {saving && <Loader2 size={14} className="animate-spin" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
