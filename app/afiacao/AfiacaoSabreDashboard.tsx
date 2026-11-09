@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Calendar, RefreshCw } from "lucide-react";
 import { extrairLinhas } from "./afiacaoUtils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 interface SabreDashboardProps {
   afiacoes: any[];
@@ -10,12 +11,12 @@ interface SabreDashboardProps {
 }
 
 export default function AfiacaoSabreDashboard({ afiacoes, auxiliares }: SabreDashboardProps) {
-  // ── Estados de Filtros ──
-  const [filtroCliente, setFiltroCliente] = useState("Todos");
-  const [filtroUnidade, setFiltroUnidade] = useState("Todos");
-  const [filtroMaquina, setFiltroMaquina] = useState("Todos");
-  const [filtroKit, setFiltroKit] = useState("Todos");
-  const [filtroLetra, setFiltroLetra] = useState("Todos");
+  // ── Estados de Filtros ── (vazio = sem filtro, mostra tudo)
+  const [filtroCliente, setFiltroCliente] = useState<string[]>([]);
+  const [filtroUnidade, setFiltroUnidade] = useState<string[]>([]);
+  const [filtroMaquina, setFiltroMaquina] = useState<string[]>([]);
+  const [filtroKit, setFiltroKit] = useState<string[]>([]);
+  const [filtroLetra, setFiltroLetra] = useState<string[]>([]);
   
   // Datas de início e fim
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -83,26 +84,26 @@ export default function AfiacaoSabreDashboard({ afiacoes, auxiliares }: SabreDas
     }
   }, [todosModulos]);
 
-  // Listas de opções
-  const clientesOptions = ["Todos", "SUZANO"];
+  // Listas de opções (sem sentinela "Todos" — vazio no filtro já significa "todos")
+  const clientesOptions = ["SUZANO"];
   const unidadesOptions = useMemo(() => {
     const list = Array.from(new Set(parsedData.map((d) => d.unidade).filter(Boolean)));
-    return ["Todos", ...list.sort()];
+    return list.sort();
   }, [parsedData]);
 
   const maquinasOptions = useMemo(() => {
     const list = Array.from(new Set(parsedData.map((d) => d.maquina).filter(Boolean)));
-    return ["Todos", ...list.sort()];
+    return list.sort();
   }, [parsedData]);
 
   const kitsOptions = useMemo(() => {
     const list = Array.from(new Set(parsedData.map((d) => d.kit).filter(Boolean)));
-    return ["Todos", ...list.sort((a, b) => Number(a) - Number(b))];
+    return list.sort((a, b) => Number(a) - Number(b));
   }, [parsedData]);
 
   const letrasOptions = useMemo(() => {
     const list = Array.from(new Set(parsedData.map((d) => d.letra).filter(Boolean)));
-    return ["Todos", ...list.sort()];
+    return list.sort();
   }, [parsedData]);
 
   // Alternar seleção do módulo
@@ -122,11 +123,11 @@ export default function AfiacaoSabreDashboard({ afiacoes, auxiliares }: SabreDas
   };
 
   const handleLimparFiltros = () => {
-    setFiltroCliente("Todos");
-    setFiltroUnidade("Todos");
-    setFiltroMaquina("Todos");
-    setFiltroKit("Todos");
-    setFiltroLetra("Todos");
+    setFiltroCliente([]);
+    setFiltroUnidade([]);
+    setFiltroMaquina([]);
+    setFiltroKit([]);
+    setFiltroLetra([]);
     setModulosSelecionados(todosModulos);
     if (parsedData.length > 0) {
       const dates = parsedData.map((d) => d.data).filter(Boolean);
@@ -140,11 +141,11 @@ export default function AfiacaoSabreDashboard({ afiacoes, auxiliares }: SabreDas
   // ── Filtrar Dados ──
   const filteredData = useMemo(() => {
     return parsedData.filter((d) => {
-      if (filtroCliente !== "Todos" && d.cliente !== filtroCliente) return false;
-      if (filtroUnidade !== "Todos" && d.unidade !== filtroUnidade) return false;
-      if (filtroMaquina !== "Todos" && d.maquina !== filtroMaquina) return false;
-      if (filtroKit !== "Todos" && d.kit !== filtroKit) return false;
-      if (filtroLetra !== "Todos" && d.letra !== filtroLetra) return false;
+      if (filtroCliente.length > 0 && !filtroCliente.includes(d.cliente)) return false;
+      if (filtroUnidade.length > 0 && !filtroUnidade.includes(d.unidade)) return false;
+      if (filtroMaquina.length > 0 && !filtroMaquina.includes(d.maquina)) return false;
+      if (filtroKit.length > 0 && !filtroKit.includes(d.kit)) return false;
+      if (filtroLetra.length > 0 && !filtroLetra.includes(d.letra)) return false;
       if (filtroDataInicio && d.data < filtroDataInicio) return false;
       if (filtroDataFim && d.data > filtroDataFim) return false;
       if (modulosSelecionados.length > 0 && !modulosSelecionados.includes(d.modulo)) return false;
@@ -348,81 +349,66 @@ export default function AfiacaoSabreDashboard({ afiacoes, auxiliares }: SabreDas
             {/* CLIENTE */}
             <div className="text-center">
               <label className="block text-xs font-bold text-white mb-1.5 uppercase tracking-wide">CLIENTE</label>
-              <select
-                value={filtroCliente}
-                onChange={(e) => setFiltroCliente(e.target.value)}
-                className="w-full bg-[#333] border border-slate-600 hover:border-slate-500 text-white rounded px-2.5 py-1.5 text-xs text-center font-bold outline-none cursor-pointer"
-              >
-                {clientesOptions.map((c) => (
-                  <option key={c} value={c} className="bg-[#222] text-white">
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <div className="flex justify-center">
+                <CheckboxMultiSelect
+                  values={filtroCliente}
+                  onChange={setFiltroCliente}
+                  options={clientesOptions.map((c) => ({ value: c, label: c }))}
+                  placeholder="Todos"
+                />
+              </div>
             </div>
 
             {/* UNIDADE */}
             <div className="text-center">
               <label className="block text-xs font-bold text-white mb-1.5 uppercase tracking-wide">UNIDADE</label>
-              <select
-                value={filtroUnidade}
-                onChange={(e) => setFiltroUnidade(e.target.value)}
-                className="w-full bg-[#333] border border-slate-600 hover:border-slate-500 text-white rounded px-2.5 py-1.5 text-xs text-center font-bold outline-none cursor-pointer"
-              >
-                {unidadesOptions.map((u) => (
-                  <option key={u} value={u} className="bg-[#222] text-white">
-                    {u}
-                  </option>
-                ))}
-              </select>
+              <div className="flex justify-center">
+                <CheckboxMultiSelect
+                  values={filtroUnidade}
+                  onChange={setFiltroUnidade}
+                  options={unidadesOptions.map((u) => ({ value: u, label: u }))}
+                  placeholder="Todos"
+                />
+              </div>
             </div>
 
             {/* MÁQUINA */}
             <div className="text-center">
               <label className="block text-xs font-bold text-white mb-1.5 uppercase tracking-wide">MÁQUINA</label>
-              <select
-                value={filtroMaquina}
-                onChange={(e) => setFiltroMaquina(e.target.value)}
-                className="w-full bg-[#333] border border-slate-600 hover:border-slate-500 text-white rounded px-2.5 py-1.5 text-xs text-center font-bold outline-none cursor-pointer"
-              >
-                {maquinasOptions.map((m) => (
-                  <option key={m} value={m} className="bg-[#222] text-white">
-                    {m}
-                  </option>
-                ))}
-              </select>
+              <div className="flex justify-center">
+                <CheckboxMultiSelect
+                  values={filtroMaquina}
+                  onChange={setFiltroMaquina}
+                  options={maquinasOptions.map((m) => ({ value: m, label: m }))}
+                  placeholder="Todos"
+                />
+              </div>
             </div>
 
             {/* KIT */}
             <div className="text-center">
               <label className="block text-xs font-bold text-white mb-1.5 uppercase tracking-wide">KIT</label>
-              <select
-                value={filtroKit}
-                onChange={(e) => setFiltroKit(e.target.value)}
-                className="w-full bg-[#333] border border-slate-600 hover:border-slate-500 text-white rounded px-2.5 py-1.5 text-xs text-center font-bold outline-none cursor-pointer"
-              >
-                {kitsOptions.map((k) => (
-                  <option key={k} value={k} className="bg-[#222] text-white">
-                    {k === "Todos" ? "Todos" : `Kit ${k}`}
-                  </option>
-                ))}
-              </select>
+              <div className="flex justify-center">
+                <CheckboxMultiSelect
+                  values={filtroKit}
+                  onChange={setFiltroKit}
+                  options={kitsOptions.map((k) => ({ value: k, label: `Kit ${k}` }))}
+                  placeholder="Todos"
+                />
+              </div>
             </div>
 
             {/* LETRA */}
             <div className="text-center">
               <label className="block text-xs font-bold text-white mb-1.5 uppercase tracking-wide">LETRA</label>
-              <select
-                value={filtroLetra}
-                onChange={(e) => setFiltroLetra(e.target.value)}
-                className="w-full bg-[#333] border border-slate-600 hover:border-slate-500 text-white rounded px-2.5 py-1.5 text-xs text-center font-bold outline-none cursor-pointer"
-              >
-                {letrasOptions.map((l) => (
-                  <option key={l} value={l} className="bg-[#222] text-white">
-                    {l === "Todos" ? "Todos" : `Letra ${l}`}
-                  </option>
-                ))}
-              </select>
+              <div className="flex justify-center">
+                <CheckboxMultiSelect
+                  values={filtroLetra}
+                  onChange={setFiltroLetra}
+                  options={letrasOptions.map((l) => ({ value: l, label: `Letra ${l}` }))}
+                  placeholder="Todos"
+                />
+              </div>
             </div>
 
             {/* PERIODO */}

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { extrairLinhas } from "./afiacaoUtils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 interface EstoqueDashboardProps {
   afiacoes: any[];
@@ -18,8 +19,8 @@ interface ItemEstoque {
 }
 
 export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: EstoqueDashboardProps) {
-  // ── Filtro de Depósito ──
-  const [filtroDeposito, setFiltroDeposito] = useState("AF01");
+  // ── Filtro de Depósito ── (vazio = sem filtro, mostra tudo; padrão inicial é só AF01, igual ao comportamento anterior)
+  const [filtroDeposito, setFiltroDeposito] = useState<string[]>(["AF01"]);
 
   // ── Estado do Auditado (Persistido no LocalStorage) ──
   const [auditados, setAuditados] = useState<Record<string, string>>({});
@@ -174,7 +175,7 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
 
     // Filtrar por depósito se selecionado
     const filteredLines = lines.filter((l) => {
-      if (filtroDeposito !== "Todos" && l.dep !== filtroDeposito) return false;
+      if (filtroDeposito.length > 0 && !filtroDeposito.includes(l.dep)) return false;
       return true;
     });
 
@@ -256,7 +257,7 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
         }
       }
     }
-    return ["Todos", ...Array.from(deps).sort()];
+    return Array.from(deps).sort();
   }, [afiacoes, auxiliares]);
 
   // ── Totais Gerais ──
@@ -386,17 +387,12 @@ export default function AfiacaoEstoqueDashboard({ afiacoes, auxiliares }: Estoqu
               DEPÓSITO
             </div>
             
-            <select
-              value={filtroDeposito}
-              onChange={(e) => setFiltroDeposito(e.target.value)}
-              className="bg-[#333] border border-slate-600 hover:border-slate-500 text-white rounded px-3 py-1.5 text-xs text-center font-black outline-none cursor-pointer min-w-[120px]"
-            >
-              {depositosDisponiveis.map((d) => (
-                <option key={d} value={d} className="bg-[#222] text-white font-bold">
-                  {d}
-                </option>
-              ))}
-            </select>
+            <CheckboxMultiSelect
+              values={filtroDeposito}
+              onChange={setFiltroDeposito}
+              options={depositosDisponiveis.map((d) => ({ value: d, label: d }))}
+              placeholder="Todos"
+            />
           </div>
 
           <h2 className="text-white text-base md:text-lg font-black tracking-widest uppercase text-center sm:text-left drop-shadow-md">

@@ -6,6 +6,7 @@ import { salvarAfiacao, deletarAfiacao } from "./actions";
 import { MATERIAIS_DB, buscarMaterialPorCodigo } from "./materiaisDB";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 const AFIADORES = [
   "KHAYNAN FERNANDES FERREIRA","FELYPE DANIEL MACEDO VIEIRA","JOSIEL DA SILVA RIBEIRO",
@@ -27,9 +28,9 @@ export default function AfiacaoTransferencias({
 }: TransferenciasProps) {
   const { isOnline } = useOffline();
 
-  // ── Estados de Exibição e Filtros ──
+  // ── Estados de Exibição e Filtros ── (vazio = sem filtro, mostra tudo)
   const [pesquisa, setPesquisa] = useState("");
-  const [filtroDeposito, setFiltroDeposito] = useState("Todos");
+  const [filtroDeposito, setFiltroDeposito] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -84,14 +85,14 @@ export default function AfiacaoTransferencias({
     for (const t of transferencias) {
       if (t.destino) deps.add(t.destino.toUpperCase().trim());
     }
-    return ["Todos", ...Array.from(deps).sort()];
+    return Array.from(deps).sort();
   }, [transferencias]);
 
   // ── Filtragem de Dados ──
   const filteredTransfers = useMemo(() => {
     return transferencias.filter((t) => {
       // Filtro Depósito
-      if (filtroDeposito !== "Todos" && t.destino !== filtroDeposito) return false;
+      if (filtroDeposito.length > 0 && !filtroDeposito.includes(t.destino)) return false;
 
       // Filtro de Pesquisa (NI, Descrição, Ficha, Afiador)
       if (pesquisa) {
@@ -243,17 +244,12 @@ export default function AfiacaoTransferencias({
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 font-semibold uppercase">DEP. DESTINO:</span>
-            <select
-              value={filtroDeposito}
-              onChange={(e) => setFiltroDeposito(e.target.value)}
-              className="bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
-            >
-              {depositosDisponiveis.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <CheckboxMultiSelect
+              values={filtroDeposito}
+              onChange={setFiltroDeposito}
+              options={depositosDisponiveis.map((d) => ({ value: d, label: d }))}
+              placeholder="Todos"
+            />
           </div>
         </div>
 

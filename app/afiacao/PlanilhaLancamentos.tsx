@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { MATERIAIS_DB, ESTADO_RECEBIMENTO, TIPO_DESCARTE, buscarMaterialPorCodigo } from "./materiaisDB";
 import { importarAfiacoes, excluirTodasAfiacoes, deletarAfiacao } from "./actions";
 import { getWeekNumber, extrairLinhas } from "./afiacaoUtils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 export default function PlanilhaLancamentos({
   afiacoes,
@@ -18,10 +19,10 @@ export default function PlanilhaLancamentos({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // ── Filtros de data ──────────────────────────────────────────────────────────
+  // ── Filtros de data ────────────────────────────────────────────────────────── (mês/ano vazio = sem filtro, mostra tudo)
   const [filtroDia, setFiltroDia] = useState("");
-  const [filtroMes, setFiltroMes] = useState("");
-  const [filtroAno, setFiltroAno] = useState("");
+  const [filtroMes, setFiltroMes] = useState<string[]>([]);
+  const [filtroAno, setFiltroAno] = useState<string[]>([]);
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
 
@@ -67,8 +68,8 @@ export default function PlanilhaLancamentos({
       const rowIso = `${a}-${m}-${d}`; // YYYY-MM-DD
   
       if (filtroDia  && d !== filtroDia.padStart(2, "0"))  return false;
-      if (filtroMes  && m !== filtroMes.padStart(2, "0"))  return false;
-      if (filtroAno  && a !== filtroAno)                   return false;
+      if (filtroMes.length > 0  && !filtroMes.includes(m))  return false;
+      if (filtroAno.length > 0  && !filtroAno.includes(a))  return false;
       if (filtroDataInicio && rowIso < filtroDataInicio) return false;
       if (filtroDataFim && rowIso > filtroDataFim) return false;
       
@@ -76,17 +77,17 @@ export default function PlanilhaLancamentos({
     });
   }, [todasLinhas, filtroDia, filtroMes, filtroAno, filtroDataInicio, filtroDataFim]);
 
-  const temFiltro = 
-    filtroDia || 
-    filtroMes || 
-    filtroAno || 
-    (filtroDataInicio && filtroDataInicio !== defaultDates.min) || 
+  const temFiltro =
+    filtroDia ||
+    filtroMes.length > 0 ||
+    filtroAno.length > 0 ||
+    (filtroDataInicio && filtroDataInicio !== defaultDates.min) ||
     (filtroDataFim && filtroDataFim !== defaultDates.max);
 
-  const limparFiltros = () => { 
-    setFiltroDia(""); 
-    setFiltroMes(""); 
-    setFiltroAno(""); 
+  const limparFiltros = () => {
+    setFiltroDia("");
+    setFiltroMes([]);
+    setFiltroAno([]);
     setFiltroDataInicio(defaultDates.min);
     setFiltroDataFim(defaultDates.max);
   };  // ── Exportar para Excel ─────────────────────────────────────────────────────
@@ -250,31 +251,23 @@ export default function PlanilhaLancamentos({
         {/* Mês */}
         <div className="flex items-center gap-1.5">
           <label className="text-xs text-gray-500 font-semibold">Mês</label>
-          <select
-            value={filtroMes}
-            onChange={e => setFiltroMes(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
-          >
-            <option value="">Todos</option>
-            {MESES.slice(1).map((m, i) => (
-              <option key={i+1} value={String(i+1).padStart(2,"0")}>{m}</option>
-            ))}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroMes}
+            onChange={setFiltroMes}
+            options={MESES.slice(1).map((m, i) => ({ value: String(i+1).padStart(2,"0"), label: m }))}
+            placeholder="Todos"
+          />
         </div>
 
         {/* Ano */}
         <div className="flex items-center gap-1.5">
           <label className="text-xs text-gray-500 font-semibold">Ano</label>
-          <select
-            value={filtroAno}
-            onChange={e => setFiltroAno(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
-          >
-            <option value="">Todos</option>
-            {anosDisponiveis.map(a => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroAno}
+            onChange={setFiltroAno}
+            options={anosDisponiveis.map(a => ({ value: a, label: a }))}
+            placeholder="Todos"
+          />
         </div>
 
         {/* Período */}

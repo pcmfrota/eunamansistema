@@ -11,6 +11,7 @@ import {
 } from "./AfiacaoForm";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 // ─────────────────────────────────────────────
 // Cores por tipo
@@ -536,9 +537,10 @@ interface Props {
 export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate, onDelete }: Props) {
   const { isOnline } = useOffline();
   const [busca, setBusca] = useState("");
-  const [filtroModulo, setFiltroModulo] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState("");
-  const [filtroAfiador, setFiltroAfiador] = useState("");
+  // Vazio = sem filtro, mostra tudo
+  const [filtroModulo, setFiltroModulo] = useState<string[]>([]);
+  const [filtroTipo, setFiltroTipo] = useState<string[]>([]);
+  const [filtroAfiador, setFiltroAfiador] = useState<string[]>([]);
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -560,9 +562,9 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
         (a.letra || "").toLowerCase().includes(q) ||
         (a.data || "").includes(q);
       if (!texto) return false;
-      if (filtroModulo  && a.modulo          !== filtroModulo)  return false;
-      if (filtroTipo    && a.tipo_formulario  !== filtroTipo)    return false;
-      if (filtroAfiador && a.afiador          !== filtroAfiador) return false;
+      if (filtroModulo.length  > 0 && !filtroModulo.includes(a.modulo))           return false;
+      if (filtroTipo.length    > 0 && !filtroTipo.includes(a.tipo_formulario))    return false;
+      if (filtroAfiador.length > 0 && !filtroAfiador.includes(a.afiador))         return false;
       if (filtroDataInicio && a.data < filtroDataInicio) return false;
       if (filtroDataFim    && a.data > filtroDataFim)    return false;
       return true;
@@ -574,8 +576,8 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
   const paginados    = filtrados.slice((paginaSegura - 1) * itensPorPagina, paginaSegura * itensPorPagina);
 
   const limparFiltros = useCallback(() => {
-    setBusca(""); setFiltroModulo(""); setFiltroTipo("");
-    setFiltroAfiador(""); setFiltroDataInicio(""); setFiltroDataFim("");
+    setBusca(""); setFiltroModulo([]); setFiltroTipo([]);
+    setFiltroAfiador([]); setFiltroDataInicio(""); setFiltroDataFim("");
     setPaginaAtual(1);
   }, []);
 
@@ -598,7 +600,7 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
     }
   };
 
-  const temFiltros = busca || filtroModulo || filtroTipo || filtroAfiador || filtroDataInicio || filtroDataFim;
+  const temFiltros = busca || filtroModulo.length > 0 || filtroTipo.length > 0 || filtroAfiador.length > 0 || filtroDataInicio || filtroDataFim;
 
   return (
     <div className="space-y-4">
@@ -637,27 +639,27 @@ export default function BancoDadosAfiacao({ afiacoes, auxiliares = [], onUpdate,
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-          <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            value={filtroModulo} onChange={(e) => { setFiltroModulo(e.target.value); setPaginaAtual(1); }}>
-            <option value="">Todos os módulos</option>
-            {[...new Set((afiacoes || []).map(a => a.modulo))].filter(Boolean).sort().map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroModulo}
+            onChange={(v) => { setFiltroModulo(v); setPaginaAtual(1); }}
+            options={[...new Set((afiacoes || []).map(a => a.modulo))].filter(Boolean).sort().map(m => ({ value: m, label: m }))}
+            placeholder="Todos os módulos"
+          />
 
-          <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            value={filtroAfiador} onChange={(e) => { setFiltroAfiador(e.target.value); setPaginaAtual(1); }}>
-            <option value="">Todos os afiadores</option>
-            {[...new Set((afiacoes || []).map(a => a.afiador))].filter(Boolean).sort().map(a => (
-              <option key={a} value={a}>{a.split(" ")[0]} {a.split(" ").slice(-1)[0]}</option>
-            ))}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroAfiador}
+            onChange={(v) => { setFiltroAfiador(v); setPaginaAtual(1); }}
+            options={[...new Set((afiacoes || []).map(a => a.afiador))].filter(Boolean).sort().map(a => ({ value: a, label: `${a.split(" ")[0]} ${a.split(" ").slice(-1)[0]}` }))}
+            placeholder="Todos os afiadores"
+          />
 
-          <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none col-span-2 md:col-span-1"
-            value={filtroTipo} onChange={(e) => { setFiltroTipo(e.target.value); setPaginaAtual(1); }}>
-            <option value="">Todos os tipos</option>
-            {TIPO_FORMULARIO_OPCOES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroTipo}
+            onChange={(v) => { setFiltroTipo(v); setPaginaAtual(1); }}
+            options={TIPO_FORMULARIO_OPCOES.map(t => ({ value: t, label: t }))}
+            placeholder="Todos os tipos"
+            className="col-span-2 md:col-span-1"
+          />
 
           <div className="flex items-center gap-1">
             <span className="text-xs text-gray-500 whitespace-nowrap">De:</span>
