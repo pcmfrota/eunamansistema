@@ -58,6 +58,7 @@ const navigation = [
   { name: 'Ficha Mão de Obra',         path: '/mao-de-obra',            icon: Wrench },
   { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
   { name: 'Checklist Mecânicos',      path: '/checklist-mecanicos',    icon: ClipboardList, offlineCapable: false },
+  { name: 'Programação Mecânica',     path: '/programacao-mecanica',  icon: Gauge, offlineCapable: false },
   { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
   { name: 'Boletim de Pneus',         path: '/pneus',                  icon: CircleDot },
   { name: 'Backlog',                  path: '/backlog',                icon: FileText },
