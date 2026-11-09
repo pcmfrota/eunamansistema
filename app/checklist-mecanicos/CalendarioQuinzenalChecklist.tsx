@@ -121,6 +121,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
   const veiculos = useMemo(() => {
     return (frota || [])
       .filter(f => TIPOS_FROTA_CHECKLIST.includes(String(f.tipo || "").toUpperCase().trim()))
+      .filter(f => String(f.status || "").toUpperCase().trim() !== "INATIVO")
       .map(f => ({ ...f, placaNorm: String(f.placa || "").toUpperCase().trim() }))
       .filter(f => f.placaNorm)
       .sort((a, b) => a.placaNorm.localeCompare(b.placaNorm));
