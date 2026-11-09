@@ -1,15 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, Share2, X, Loader2 } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, AlertTriangle, FileText, Download, Share2, X, Loader2, Table2, CalendarDays } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { localDb } from '@/lib/offline-db'
 import { salvarChecklist, excluirChecklist } from './actions'
 import { getComboioConfig, getPipaConfig, getMultifuncionalConfig, getMunckConfig, ChecklistGroup, ChecklistItem } from './checklistConfig'
 import { baixarOuCompartilharPdf, preCarregarHtml2Pdf } from '@/lib/pdf-share'
+import CalendarioQuinzenalChecklist from './CalendarioQuinzenalChecklist'
 
 export default function ChecklistClient({ initialChecklists, userRole, userId }: { initialChecklists: any[], userRole: string, userId: string }) {
   const [checklists, setChecklists] = useState(initialChecklists)
   const [frota, setFrota] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<'lista' | 'calendario'>('lista')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [viewChecklist, setViewChecklist] = useState<any>(null)
@@ -329,6 +332,32 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
         )}
       </div>
 
+      <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-px">
+        <button
+          onClick={() => setActiveTab('lista')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors",
+            activeTab === 'lista' ? "border-green-600 text-green-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-800"
+          )}
+        >
+          <Table2 size={16} /> Checklists
+        </button>
+        <button
+          onClick={() => setActiveTab('calendario')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors",
+            activeTab === 'calendario' ? "border-green-600 text-green-600" : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-800"
+          )}
+        >
+          <CalendarDays size={16} /> Calendário Quinzenal
+        </button>
+      </div>
+
+      {activeTab === 'calendario' && (
+        <CalendarioQuinzenalChecklist checklists={checklists} frota={frota} />
+      )}
+
+      {activeTab === 'lista' && (
       <div className="bg-white dark:bg-zinc-900 border dark:border-zinc-800 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-zinc-600 dark:text-zinc-400">
@@ -385,6 +414,7 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
           </table>
         </div>
       </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
