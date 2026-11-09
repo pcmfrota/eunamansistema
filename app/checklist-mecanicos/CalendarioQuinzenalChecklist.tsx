@@ -41,13 +41,46 @@ function fmtFullBR(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+interface Quinzena {
+  ano: number;
+  mes: number; // 0-11
+  parte: 1 | 2; // 1 = dias 01-15, 2 = dias 16-fim do mês
+}
+
+function quinzenaDeHoje(hoje: Date): Quinzena {
+  return { ano: hoje.getFullYear(), mes: hoje.getMonth(), parte: hoje.getDate() <= 15 ? 1 : 2 };
+}
+
+function ultimoDiaDoMes(ano: number, mes: number): number {
+  return new Date(ano, mes + 1, 0).getDate();
+}
+
+function diasDaQuinzena(q: Quinzena): Date[] {
+  const inicio = q.parte === 1 ? 1 : 16;
+  const fim = q.parte === 1 ? 15 : ultimoDiaDoMes(q.ano, q.mes);
+  const dias: Date[] = [];
+  for (let d = inicio; d <= fim; d++) dias.push(new Date(q.ano, q.mes, d));
+  return dias;
+}
+
+function mudarQuinzena(q: Quinzena, delta: number): Quinzena {
+  if (delta > 0) {
+    if (q.parte === 1) return { ...q, parte: 2 };
+    const proxMes = q.mes + 1;
+    return proxMes > 11 ? { ano: q.ano + 1, mes: 0, parte: 1 } : { ano: q.ano, mes: proxMes, parte: 1 };
+  }
+  if (q.parte === 2) return { ...q, parte: 1 };
+  const mesAnterior = q.mes - 1;
+  return mesAnterior < 0 ? { ano: q.ano - 1, mes: 11, parte: 2 } : { ano: q.ano, mes: mesAnterior, parte: 2 };
+}
+
 type StatusChecklist = "no_prazo" | "atencao" | "atrasado" | "nunca";
 
-const STATUS_CONFIG: Record<StatusChecklist, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
-  no_prazo: { label: "No prazo", className: "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800", Icon: CheckCircle2 },
-  atencao: { label: "Atenção", className: "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800", Icon: AlertTriangle },
-  atrasado: { label: "Atrasado", className: "bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800", Icon: XCircle },
-  nunca: { label: "Nunca feito", className: "bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800", Icon: XCircle },
+const STATUS_CONFIG: Record<StatusChecklist, { label: string; iconColor: string; Icon: typeof CheckCircle2 }> = {
+  no_prazo: { label: "No prazo", iconColor: "text-green-600", Icon: CheckCircle2 },
+  atencao: { label: "Atenção", iconColor: "text-amber-600", Icon: AlertTriangle },
+  atrasado: { label: "Atrasado", iconColor: "text-red-600", Icon: XCircle },
+  nunca: { label: "Nunca feito", iconColor: "text-red-600", Icon: XCircle },
 };
 
 interface ModalCell {
@@ -76,7 +109,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
   }, []);
   const hojeISO = useMemo(() => toISODate(hoje), [hoje]);
 
-  const [refMonth, setRefMonth] = useState(() => new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  const [refQuinzena, setRefQuinzena] = useState<Quinzena>(() => quinzenaDeHoje(hoje));
   const [modalCell, setModalCell] = useState<ModalCell | null>(null);
   const [colaborador, setColaborador] = useState("");
   const [horimetro, setHorimetro] = useState("");
@@ -136,12 +169,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
     return map;
   }, [datasPorPlaca, registros]);
 
-  const diasDoMes = useMemo(() => {
-    const ano = refMonth.getFullYear();
-    const mes = refMonth.getMonth();
-    const totalDias = new Date(ano, mes + 1, 0).getDate();
-    return Array.from({ length: totalDias }, (_, i) => new Date(ano, mes, i + 1));
-  }, [refMonth]);
+  const diasDaQuinzenaAtual = useMemo(() => diasDaQuinzena(refQuinzena), [refQuinzena]);
 
   function statusDoVeiculo(placaNorm: string) {
     const datas = datasFeitasPorPlaca.get(placaNorm) || [];
@@ -155,8 +183,8 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
     return { status, ultima, proxima: toISODate(proximaDate), diasRestantes };
   }
 
-  function mudarMes(delta: number) {
-    setRefMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  function navegarQuinzena(delta: number) {
+    setRefQuinzena(prev => mudarQuinzena(prev, delta));
   }
 
   function abrirCelula(v: any, iso: string) {
@@ -230,13 +258,16 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
           </div>
         </div>
         <div className="flex items-center gap-2 self-end md:self-auto">
-          <button onClick={() => mudarMes(-1)} className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900">
+          <button onClick={() => navegarQuinzena(-1)} className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900">
             <ChevronLeft size={16} />
           </button>
-          <span className="text-sm font-semibold w-36 text-center dark:text-white">
-            {MESES_NOME[refMonth.getMonth()]} / {refMonth.getFullYear()}
+          <span className="text-sm font-semibold w-56 text-center dark:text-white">
+            {refQuinzena.parte === 1 ? "1ª Quinzena" : "2ª Quinzena"} — {MESES_NOME[refQuinzena.mes]}/{refQuinzena.ano}
+            <span className="block text-[10px] font-normal text-zinc-400">
+              {refQuinzena.parte === 1 ? "01" : "16"} a {refQuinzena.parte === 1 ? "15" : ultimoDiaDoMes(refQuinzena.ano, refQuinzena.mes)}
+            </span>
           </span>
-          <button onClick={() => mudarMes(1)} className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900">
+          <button onClick={() => navegarQuinzena(1)} className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -248,22 +279,22 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
         <span className="flex items-center gap-1.5">Hoje <span className="inline-block w-5 h-3 rounded bg-blue-50 border border-blue-300 dark:bg-blue-900/30 dark:border-blue-700" /></span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="border-collapse text-xs">
+      <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
+        <table className="border-collapse text-xs w-full">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-left font-bold text-zinc-600 dark:text-zinc-300 w-[170px] min-w-[170px]">
-                Placa / Status
+              <th className="sticky left-0 top-0 z-20 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-left font-bold text-zinc-600 dark:text-zinc-300 w-[150px] min-w-[150px]">
+                Placa
               </th>
-              {diasDoMes.map(dia => {
+              {diasDaQuinzenaAtual.map(dia => {
                 const isWeekend = dia.getDay() === 0 || dia.getDay() === 6;
                 const isHoje = toISODate(dia) === hojeISO;
                 return (
                   <th
                     key={dia.getDate()}
                     className={cn(
-                      "border border-zinc-200 dark:border-zinc-800 px-1 py-2 text-center font-semibold w-7",
-                      isWeekend ? "bg-zinc-50 dark:bg-zinc-900/50 text-zinc-400" : "text-zinc-600 dark:text-zinc-300",
+                      "sticky top-0 z-10 border border-zinc-200 dark:border-zinc-800 px-1 py-1.5 text-center font-semibold w-9",
+                      isWeekend ? "bg-zinc-50 dark:bg-zinc-900/50 text-zinc-400" : "bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300",
                       isHoje && "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                     )}
                   >
@@ -279,23 +310,23 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
               const datasExecutadas = new Set(datasFeitasPorPlaca.get(v.placaNorm) || []);
               const cfg = STATUS_CONFIG[status];
               const rowBg = idx % 2 === 1 ? "bg-zinc-50/70 dark:bg-zinc-900/40" : "bg-white dark:bg-zinc-950";
+              const diasLabel = diasRestantes === null ? "" : diasRestantes >= 0 ? `${diasRestantes}d` : `-${Math.abs(diasRestantes)}d`;
+              const tituloStatus = `${cfg.label} — ${ultima ? `Últ.: ${fmtBR(ultima)}` : "Sem registro"}${diasRestantes !== null ? ` · ${diasRestantes >= 0 ? `vence em ${diasRestantes}d` : `${Math.abs(diasRestantes)}d atrasado`}` : ""}`;
               return (
                 <tr key={v.id || v.placaNorm}>
-                  <td className={cn("sticky left-0 z-10 border border-zinc-200 dark:border-zinc-800 px-3 py-2 w-[170px] min-w-[170px]", rowBg)}>
-                    <div className="font-mono font-bold whitespace-nowrap dark:text-white">{v.placaNorm}</div>
-                    <div className="text-[10px] text-zinc-400 uppercase truncate">{v.tipo}{v.local ? ` • ${v.local}` : ""}</div>
-                    <div className={cn("mt-1 flex items-center gap-1 justify-center px-1.5 py-0.5 rounded-md border text-[10px] font-bold", cfg.className)}>
-                      <cfg.Icon size={11} />
-                      {cfg.label}
-                    </div>
-                    <div className="text-[9px] text-zinc-400 text-center mt-0.5">
-                      {ultima ? `Últ.: ${fmtBR(ultima)}` : "Sem registro"}
-                      {diasRestantes !== null && (
-                        <> · {diasRestantes >= 0 ? `vence em ${diasRestantes}d` : `${Math.abs(diasRestantes)}d atrasado`}</>
-                      )}
+                  <td className={cn("sticky left-0 z-10 border border-zinc-200 dark:border-zinc-800 px-3 py-1 w-[150px] min-w-[150px]", rowBg)} title={tituloStatus}>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="min-w-0 truncate">
+                        <span className="font-mono font-bold dark:text-white">{v.placaNorm}</span>
+                        <span className="text-[9px] text-zinc-400 ml-1 uppercase">{v.tipo}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <cfg.Icon size={13} className={cfg.iconColor} />
+                        {diasLabel && <span className="text-[9px] font-bold text-zinc-400">{diasLabel}</span>}
+                      </div>
                     </div>
                   </td>
-                  {diasDoMes.map(dia => {
+                  {diasDaQuinzenaAtual.map(dia => {
                     const iso = toISODate(dia);
                     const feito = datasExecutadas.has(iso);
                     const isVencimento = !feito && proxima === iso;
@@ -314,7 +345,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
                         key={iso}
                         onClick={() => abrirCelula(v, iso)}
                         className={cn(
-                          "border border-zinc-200 dark:border-zinc-800 text-center p-0.5",
+                          "border border-zinc-200 dark:border-zinc-800 text-center p-0.5 h-8",
                           rowBg,
                           canEdit && "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20"
                         )}
@@ -337,7 +368,7 @@ export default function CalendarioQuinzenalChecklist({ checklists, frota, regist
             })}
             {veiculos.length === 0 && (
               <tr>
-                <td colSpan={1 + diasDoMes.length} className="text-center py-8 text-zinc-500">
+                <td colSpan={1 + diasDaQuinzenaAtual.length} className="text-center py-8 text-zinc-500">
                   Nenhum veículo encontrado (Comboio/Pipa/Multifuncional/Munck).
                 </td>
               </tr>
