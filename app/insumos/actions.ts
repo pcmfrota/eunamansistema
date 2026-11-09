@@ -382,7 +382,7 @@ export async function atualizarFichaInsumo(
 // ─── Lista, detalhe, histórico e reabertura ─────────────────────────────────
 
 export type FiltroFichas = {
-  dataInicio?: string; dataFim?: string; moduloId?: string; equipamentoId?: string; turno?: string; status?: StatusFicha;
+  dataInicio?: string; dataFim?: string; moduloIds?: string[]; equipamentoIds?: string[]; turno?: string; status?: StatusFicha[];
 };
 
 export type FichaAbastecimentoResumo = {
@@ -399,10 +399,10 @@ export async function getFichasAbastecimento(filtro: FiltroFichas = {}): Promise
 
   if (filtro.dataInicio) query = query.gte("data", filtro.dataInicio);
   if (filtro.dataFim) query = query.lte("data", filtro.dataFim);
-  if (filtro.moduloId) query = query.eq("modulo_id", filtro.moduloId);
-  if (filtro.equipamentoId) query = query.eq("equipamento_id", filtro.equipamentoId);
+  if (filtro.moduloIds?.length) query = query.in("modulo_id", filtro.moduloIds);
+  if (filtro.equipamentoIds?.length) query = query.in("equipamento_id", filtro.equipamentoIds);
   if (filtro.turno) query = query.eq("turno", filtro.turno);
-  if (filtro.status) query = query.eq("status", filtro.status);
+  if (filtro.status?.length) query = query.in("status", filtro.status);
 
   const { data, error } = await query;
   if (error || !data) return [];

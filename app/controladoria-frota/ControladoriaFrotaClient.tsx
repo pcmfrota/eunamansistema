@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { ShieldCheck, Plus, Edit2, Trash2, X, Search, Eye, Download, Upload, Loader2, CreditCard, AlertTriangle, FileText, ChevronDown, ChevronUp, RefreshCcw, History, List, BarChart2, Users } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { cn } from "@/lib/utils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 import { useOffline } from "@/components/offline-provider";
 import { localDb, serializeFormData } from "@/lib/offline-db";
 import { ControladoriaFrota, upsertControladoriaFrota, excluirControladoriaFrota, importarControladoriaFrota, getControladoriaFrotaHistorico } from "./actions";
@@ -47,7 +48,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   const { isOnline } = useOffline();
   const [registros, setRegistros] = useState<ControladoriaFrota[]>(initialRegistros);
   const [busca, setBusca] = useState("");
-  const [filtroCnh, setFiltroCnh] = useState<"todos" | "vencidos" | "proximos" | "em_dia" | "sem_data">("todos");
+  const [filtroCnh, setFiltroCnh] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<ControladoriaFrota | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,7 +68,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
   const [historico, setHistorico] = useState<HistoricoControladoriaFrota[] | null>(null);
   const [historicoCarregando, setHistoricoCarregando] = useState(false);
   const [buscaHistorico, setBuscaHistorico] = useState("");
-  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string>("");
+  const [filtroAcaoHistorico, setFiltroAcaoHistorico] = useState<string[]>([]);
   const [linhaExpandidaHistorico, setLinhaExpandidaHistorico] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,10 +86,10 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
       if (termo && !(`${r.nome} ${r.matricula || ""} ${r.cargo || ""} ${r.cpf || ""}`.toLowerCase().includes(termo))) return false;
       const isDateNull = !r.cnh_validade;
       const dias = isDateNull ? null : calcularDias(r.cnh_validade as string);
-      if (filtroCnh === "sem_data" && !isDateNull) return false;
-      if (filtroCnh === "vencidos" && (isDateNull || (dias as number) > 0)) return false;
-      if (filtroCnh === "proximos" && (isDateNull || (dias as number) <= 0 || (dias as number) > 30)) return false;
-      if (filtroCnh === "em_dia" && (isDateNull || (dias as number) <= 30)) return false;
+      if (filtroCnh.length > 0) {
+        const bucket = isDateNull ? "sem_data" : (dias as number) <= 0 ? "vencidos" : (dias as number) <= 30 ? "proximos" : "em_dia";
+        if (!filtroCnh.includes(bucket)) return false;
+      }
       return true;
     }).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
   }, [registros, busca, filtroCnh]);
@@ -411,7 +412,7 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
 
   const historicoFiltrado = useMemo(() => {
     let lista = historico || [];
-    if (filtroAcaoHistorico) lista = lista.filter(h => h.acao === filtroAcaoHistorico);
+    if (filtroAcaoHistorico.length > 0) lista = lista.filter(h => filtroAcaoHistorico.includes(h.acao));
     const term = buscaHistorico.toLowerCase().trim();
     if (term) {
       lista = lista.filter(h => h.descricao?.toLowerCase().includes(term) || h.usuario_nome?.toLowerCase().includes(term));
@@ -495,13 +496,17 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
             className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-blue-500/30"
           />
         </div>
-        <select value={filtroCnh} onChange={e => setFiltroCnh(e.target.value as any)} className="px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 outline-none focus:ring-2 focus:ring-blue-500/30">
-          <option value="todos">CNH: Todos</option>
-          <option value="vencidos">CNH Vencida</option>
-          <option value="proximos">CNH Vence em 30 dias</option>
-          <option value="em_dia">CNH em dia</option>
-          <option value="sem_data">Sem validade cadastrada</option>
-        </select>
+        <CheckboxMultiSelect
+          values={filtroCnh}
+          onChange={setFiltroCnh}
+          options={[
+            { value: "vencidos", label: "CNH Vencida" },
+            { value: "proximos", label: "CNH Vence em 30 dias" },
+            { value: "em_dia", label: "CNH em dia" },
+            { value: "sem_data", label: "Sem validade cadastrada" },
+          ]}
+          placeholder="CNH: Todos"
+        />
       </div>
 
       {/* Tabela */}
@@ -685,16 +690,16 @@ export default function ControladoriaFrotaClient({ isVisitante, initialRegistros
                 className="w-full pl-9 pr-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/30"
               />
             </div>
-            <select
-              value={filtroAcaoHistorico}
-              onChange={e => setFiltroAcaoHistorico(e.target.value)}
-              className="px-3 py-2 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none"
-            >
-              <option value="">Todas as Ações</option>
-              <option value="CRIACAO">Criação</option>
-              <option value="EDICAO">Edição</option>
-              <option value="EXCLUSAO">Exclusão</option>
-            </select>
+            <CheckboxMultiSelect
+              values={filtroAcaoHistorico}
+              onChange={setFiltroAcaoHistorico}
+              options={[
+                { value: "CRIACAO", label: "Criação" },
+                { value: "EDICAO", label: "Edição" },
+                { value: "EXCLUSAO", label: "Exclusão" },
+              ]}
+              placeholder="Todas as Ações"
+            />
           </div>
 
           {historicoCarregando ? (

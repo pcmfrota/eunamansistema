@@ -8,6 +8,7 @@ import {
   CartesianGrid, Tooltip as ReTooltip, Legend, Cell, PieChart, Pie, BarChart, LabelList
 } from "recharts"
 import { SearchableSelect } from '@/components/SearchableSelect'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 import { Plus, Pencil, Trash2, Check, X, Calendar, ChevronLeft, ChevronRight, RefreshCw, ShieldOff, Download, Upload, CalendarClock, FileDown, Loader2 } from "lucide-react"
 import { useAuth } from "@/components/auth-context"
 import type { ProgSemanal } from "./actions"
@@ -451,14 +452,14 @@ function TabProgSemanal({
     XLSX.writeFile(wb, `programacao_preventiva_${anoAtivo}.xlsx`)
   }
 
-  const [filtroStatus, setFiltroStatus] = useState("")
+  const [filtroStatus, setFiltroStatus] = useState<string[]>([])
   const [filtroPlaca, setFiltroPlaca] = useState("")
-  const [filtroModulo, setFiltroModulo] = useState("")
+  const [filtroModulo, setFiltroModulo] = useState<string[]>([])
 
   const applyFilters = (list: ProgSemanal[]) => list.filter(p =>
-    (filtroStatus ? p.status === filtroStatus : true) &&
+    (filtroStatus.length === 0 || filtroStatus.includes(p.status)) &&
     (filtroPlaca ? p.placa === filtroPlaca : true) &&
-    (filtroModulo ? String(p.modulo) === filtroModulo : true)
+    (filtroModulo.length === 0 || filtroModulo.includes(String(p.modulo)))
   )
 
   // Uma única tabela por semana, igual à planilha (sem separar Preventiva/Documentação em
@@ -784,14 +785,12 @@ function TabProgSemanal({
         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mr-2">Filtros</span>
         
         <div className="w-36">
-          <select 
-            value={filtroStatus} 
-            onChange={e => setFiltroStatus(e.target.value)}
-            className="w-full px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-gray-200 bg-gray-50 text-gray-700 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer"
-          >
-            <option value="">TODOS STATUS</option>
-            {STATUS_OPT.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroStatus}
+            onChange={setFiltroStatus}
+            options={STATUS_OPT.map(s => ({ value: s, label: s }))}
+            placeholder="TODOS STATUS"
+          />
         </div>
 
         <div className="w-40">
@@ -805,19 +804,17 @@ function TabProgSemanal({
         </div>
 
         <div className="w-36">
-          <select 
-            value={filtroModulo} 
-            onChange={e => setFiltroModulo(e.target.value)}
-            className="w-full px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-gray-200 bg-gray-50 text-gray-700 outline-none focus:ring-2 focus:ring-green-500/30 cursor-pointer"
-          >
-            <option value="">TODOS MÓDULOS</option>
-            {modulosUnicos.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <CheckboxMultiSelect
+            values={filtroModulo}
+            onChange={setFiltroModulo}
+            options={modulosUnicos.map(m => ({ value: m, label: m }))}
+            placeholder="TODOS MÓDULOS"
+          />
         </div>
 
-        {(filtroStatus || filtroPlaca || filtroModulo) && (
-          <button 
-            onClick={() => { setFiltroStatus(""); setFiltroPlaca(""); setFiltroModulo("") }}
+        {(filtroStatus.length > 0 || filtroPlaca || filtroModulo.length > 0) && (
+          <button
+            onClick={() => { setFiltroStatus([]); setFiltroPlaca(""); setFiltroModulo([]) }}
             className="ml-auto text-[10px] font-bold text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"
           >
             <X size={12} /> Limpar

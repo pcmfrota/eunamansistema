@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 import EquipamentoModal from './EquipamentoModal';
 import { PremiumLoader } from '@/components/premium-loader';
 import { 
@@ -50,14 +51,14 @@ export default function BaseFrotasPage() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterArea, setFilterArea] = useState('Todas');
+  const [filterArea, setFilterArea] = useState<string[]>([]);
   const [isPending, startTransition] = React.useTransition();
 
   // Colaboradores State
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [colabLoading, setColabLoading] = useState(true);
   const [colabSearchTerm, setColabSearchTerm] = useState('');
-  const [colabFilterTipo, setColabFilterTipo] = useState('TODOS');
+  const [colabFilterTipo, setColabFilterTipo] = useState<string[]>([]);
   const [newColab, setNewColab] = useState({
     nome: '',
     matricula: '',
@@ -71,7 +72,7 @@ export default function BaseFrotasPage() {
   const areaOptions = React.useMemo(() => {
     const s = new Set<string>();
     vehicles.forEach(v => { if (v.area) s.add(v.area) });
-    return ['Todas', ...Array.from(s).sort()];
+    return Array.from(s).sort();
   }, [vehicles]);
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
@@ -234,7 +235,7 @@ export default function BaseFrotasPage() {
     const q = colabSearchTerm.toLowerCase();
     return colaboradores.filter(c => {
       const matchesSearch = !q || c.nome?.toLowerCase().includes(q) || c.matricula?.toLowerCase().includes(q);
-      const matchesTipo = colabFilterTipo === 'TODOS' || (c.tipo || 'MECÂNICO') === colabFilterTipo;
+      const matchesTipo = colabFilterTipo.length === 0 || colabFilterTipo.includes(c.tipo || 'MECÂNICO');
       return matchesSearch && matchesTipo;
     });
   }, [colaboradores, colabSearchTerm, colabFilterTipo]);
@@ -345,7 +346,7 @@ export default function BaseFrotasPage() {
         v.tipo?.toLowerCase().includes(q) ||
         v.modulo?.toLowerCase().includes(q);
       
-      const matchesArea = filterArea === 'Todas' || v.area === filterArea;
+      const matchesArea = filterArea.length === 0 || filterArea.includes(v.area);
       
       return matchesSearch && matchesArea;
     });
@@ -459,13 +460,12 @@ export default function BaseFrotasPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <select
-                value={filterArea}
-                onChange={(e) => setFilterArea(e.target.value)}
-                className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer appearance-none min-w-[140px] font-bold text-zinc-600 dark:text-zinc-400"
-              >
-                {areaOptions.map(a => <option key={a} value={a}>{a.toUpperCase()}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterArea}
+                onChange={setFilterArea}
+                options={areaOptions.map(a => ({ value: a, label: a.toUpperCase() }))}
+                placeholder="TODAS"
+              />
 
               <div className="relative w-full md:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -597,15 +597,15 @@ export default function BaseFrotasPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <select
-                value={colabFilterTipo}
-                onChange={(e) => setColabFilterTipo(e.target.value)}
-                className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none cursor-pointer font-bold text-zinc-600 dark:text-zinc-400"
-              >
-                <option value="TODOS">Todos</option>
-                <option value="MECÂNICO">Mecânicos</option>
-                <option value="MOTORISTA">Motoristas</option>
-              </select>
+              <CheckboxMultiSelect
+                values={colabFilterTipo}
+                onChange={setColabFilterTipo}
+                options={[
+                  { value: "MECÂNICO", label: "Mecânicos" },
+                  { value: "MOTORISTA", label: "Motoristas" },
+                ]}
+                placeholder="Todos"
+              />
               <div className="relative w-full md:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input 

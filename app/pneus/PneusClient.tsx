@@ -14,6 +14,7 @@ import { Sparkles, CalendarCheck, Archive, RefreshCw } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { cn } from "@/lib/utils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from "./pdfBoletim";
 import FichaPreviewModal from "@/components/FichaPreviewModal";
 import {
@@ -226,7 +227,7 @@ export default function PneusClient({
 
   // ── Search & Filter ── (Default: Current Month)
   const [search, setSearch] = useState("");
-  const [searchStatus, setSearchStatus] = useState("");
+  const [searchStatus, setSearchStatus] = useState<string[]>([]);
   const [dateInicio, setDateInicio] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
@@ -290,7 +291,7 @@ export default function PneusClient({
     const eq = i.equipamento_id ? equipamentos.find(e => e.id === i.equipamento_id) : null;
     if (eq && !isEquipamentoAtivo(eq)) return false;
     const matchesSearch = !search || i.equipamentos?.placa?.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !searchStatus || calcCondicaoPneu(i) === searchStatus;
+    const matchesStatus = searchStatus.length === 0 || searchStatus.includes(calcCondicaoPneu(i));
     const iDate = i.data_inspecao.split('T')[0];
     const matchesDate = (!dateInicio || iDate >= dateInicio) && (!dateFim || iDate <= dateFim);
     return matchesSearch && matchesStatus && matchesDate;
@@ -306,7 +307,7 @@ export default function PneusClient({
 
   const handleClearFilters = () => {
     setSearch("");
-    setSearchStatus("");
+    setSearchStatus([]);
     const d = new Date();
     setDateInicio(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`);
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -561,7 +562,7 @@ export default function PneusClient({
               )}
             >
               <Filter size={15} /> Filtros
-              {(search || searchStatus) && (
+              {(search || searchStatus.length > 0) && (
                 <span className="px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[9px] leading-none">•</span>
               )}
               <ChevronDown size={14} className={cn("transition-transform", showFiltros && "rotate-180")} />
@@ -724,16 +725,14 @@ export default function PneusClient({
             </div>
 
             {/* Filtro por Status */}
-            <select
-              value={searchStatus}
-              onChange={e => setSearchStatus(e.target.value)}
-              className="px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none transition-all cursor-pointer"
-            >
-              <option value="">TODOS STATUS</option>
-              {Object.keys(counts).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <CheckboxMultiSelect
+              values={searchStatus}
+              onChange={setSearchStatus}
+              options={Object.keys(counts).map(c => ({ value: c, label: c }))}
+              placeholder="TODOS STATUS"
+            />
 
-            {(search || searchStatus) && (
+            {(search || searchStatus.length > 0) && (
               <button
                 onClick={handleClearFilters}
                 className="px-4 py-3 text-[10px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950/20 rounded-2xl transition-all"

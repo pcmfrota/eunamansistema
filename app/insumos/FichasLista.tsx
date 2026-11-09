@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FileText, Droplets, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 import {
   Comboio, Modulo, Material, Impedimento,
   FichaAbastecimentoResumo, FiltroFichas, getFichasAbastecimento, getFicha, FichaCompleta,
@@ -29,10 +30,10 @@ export default function FichasLista({
   const [recargas, setRecargas] = useState<FichaRecargaResumo[]>([]);
   const [carregando, setCarregando] = useState(true);
 
-  const [filtroModulo, setFiltroModulo] = useState("");
-  const [filtroComboio, setFiltroComboio] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("");
-  const [filtroOrigem, setFiltroOrigem] = useState<OrigemRecarga | "">("");
+  const [filtroModulo, setFiltroModulo] = useState<string[]>([]);
+  const [filtroComboio, setFiltroComboio] = useState<string[]>([]);
+  const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
+  const [filtroOrigem, setFiltroOrigem] = useState<string[]>([]);
   const [filtroDataIni, setFiltroDataIni] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [exportando, setExportando] = useState(false);
@@ -45,12 +46,12 @@ export default function FichasLista({
     try {
       if (subTab === "ABASTECIMENTO") {
         const filtro: FiltroFichas = {
-          moduloId: filtroModulo || undefined, equipamentoId: filtroComboio || undefined,
-          status: (filtroStatus as any) || undefined, dataInicio: filtroDataIni || undefined, dataFim: filtroDataFim || undefined,
+          moduloIds: filtroModulo.length ? filtroModulo : undefined, equipamentoIds: filtroComboio.length ? filtroComboio : undefined,
+          status: filtroStatus.length ? (filtroStatus as any) : undefined, dataInicio: filtroDataIni || undefined, dataFim: filtroDataFim || undefined,
         };
         setFichas(await getFichasAbastecimento(filtro));
       } else {
-        setRecargas(await getFichasRecarga({ equipamentoId: filtroComboio || undefined, dataInicio: filtroDataIni || undefined, dataFim: filtroDataFim || undefined, origemTipo: filtroOrigem || undefined }));
+        setRecargas(await getFichasRecarga({ equipamentoIds: filtroComboio.length ? filtroComboio : undefined, dataInicio: filtroDataIni || undefined, dataFim: filtroDataFim || undefined, origemTipos: filtroOrigem.length ? (filtroOrigem as OrigemRecarga[]) : undefined }));
       }
     } finally {
       setCarregando(false);
@@ -165,31 +166,43 @@ export default function FichasLista({
         <input type="date" className={inputCls} value={filtroDataIni} onChange={(e) => setFiltroDataIni(e.target.value)} />
         <span className="text-xs text-zinc-400">até</span>
         <input type="date" className={inputCls} value={filtroDataFim} onChange={(e) => setFiltroDataFim(e.target.value)} />
-        <select className={inputCls} value={filtroComboio} onChange={(e) => setFiltroComboio(e.target.value)}>
-          <option value="">Todos os comboios</option>
-          {comboios.map((c) => <option key={c.id} value={c.id}>{c.placa}</option>)}
-        </select>
+        <CheckboxMultiSelect
+          values={filtroComboio}
+          onChange={setFiltroComboio}
+          options={comboios.map((c) => ({ value: c.id, label: c.placa }))}
+          placeholder="Todos os comboios"
+        />
         {subTab === "ABASTECIMENTO" ? (
           <>
-            <select className={inputCls} value={filtroModulo} onChange={(e) => setFiltroModulo(e.target.value)}>
-              <option value="">Todos os módulos</option>
-              {modulos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
-            </select>
-            <select className={inputCls} value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
-              <option value="">Todos os status</option>
-              <option value="RASCUNHO">Rascunho</option>
-              <option value="FINALIZADA">Finalizada</option>
-              <option value="VALIDADA">Validada</option>
-            </select>
+            <CheckboxMultiSelect
+              values={filtroModulo}
+              onChange={setFiltroModulo}
+              options={modulos.map((m) => ({ value: m.id, label: m.nome }))}
+              placeholder="Todos os módulos"
+            />
+            <CheckboxMultiSelect
+              values={filtroStatus}
+              onChange={setFiltroStatus}
+              options={[
+                { value: "RASCUNHO", label: "Rascunho" },
+                { value: "FINALIZADA", label: "Finalizada" },
+                { value: "VALIDADA", label: "Validada" },
+              ]}
+              placeholder="Todos os status"
+            />
           </>
         ) : (
-          <select className={inputCls} value={filtroOrigem} onChange={(e) => setFiltroOrigem(e.target.value as OrigemRecarga | "")}>
-            <option value="">Todas as origens</option>
-            <option value="SKID">Skid</option>
-            <option value="ALMOXARIFADO">Almoxarifado</option>
-            <option value="FORNECEDOR">Fornecedor</option>
-            <option value="OUTRO">Outro</option>
-          </select>
+          <CheckboxMultiSelect
+            values={filtroOrigem}
+            onChange={setFiltroOrigem}
+            options={[
+              { value: "SKID", label: "Skid" },
+              { value: "ALMOXARIFADO", label: "Almoxarifado" },
+              { value: "FORNECEDOR", label: "Fornecedor" },
+              { value: "OUTRO", label: "Outro" },
+            ]}
+            placeholder="Todas as origens"
+          />
         )}
       </div>
 
