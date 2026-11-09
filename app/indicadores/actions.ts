@@ -52,9 +52,9 @@ const PLACAS_BLOQUEADAS = new Set(['QWE-5555', 'QWE-5556', 'XYZ-3876', 'XYZ-9876
 export async function getIndicadoresData(filtros?: {
   mes?: number
   ano?: number
-  categoria?: string
-  area?: string
-  placa?: string
+  categoria?: string[]
+  area?: string[]
+  placa?: string[]
 }): Promise<IndicadoresData> {
   const supabase = createClient()
   
@@ -204,10 +204,19 @@ export async function getIndicadoresData(filtros?: {
       if (isCurrentlyInactive && !hadActivity) return false;
     }
 
-    if (filtros?.placa && p !== filtros.placa.toUpperCase().trim()) return false;
-    if (filtros?.categoria && (eq?.categoria || "").toUpperCase().trim() !== filtros.categoria.toUpperCase().trim()) return false;
-    if (filtros?.area && (eq?.area || "").toUpperCase().trim() !== filtros.area.toUpperCase().trim()) return false;
-    
+    if (filtros?.placa && filtros.placa.length > 0) {
+      const placasUpper = filtros.placa.map(v => v.toUpperCase().trim());
+      if (!placasUpper.includes(p)) return false;
+    }
+    if (filtros?.categoria && filtros.categoria.length > 0) {
+      const categoriasUpper = filtros.categoria.map(v => v.toUpperCase().trim());
+      if (!categoriasUpper.includes((eq?.categoria || "").toUpperCase().trim())) return false;
+    }
+    if (filtros?.area && filtros.area.length > 0) {
+      const areasUpper = filtros.area.map(v => v.toUpperCase().trim());
+      if (!areasUpper.includes((eq?.area || "").toUpperCase().trim())) return false;
+    }
+
     return true;
   });
 
@@ -272,8 +281,14 @@ export async function getIndicadoresData(filtros?: {
   }
 
   // ─── TRAVAS DE MESES HISTÓRICOS (2026) ───
-  if (anoFiltro === 2026 && (!filtros?.categoria || filtros.categoria.toUpperCase() === "PESADA")) {
-    const isOverallFilter = !filtros?.placa && !filtros?.area;
+  // Com múltipla seleção, essas travas (específicas de uma única categoria/placa) só se
+  // aplicam quando o filtro de categoria está vazio ou tem exatamente "PESADA" selecionada —
+  // combinações com outras categorias ao mesmo tempo saem do escopo do "lock" histórico.
+  const categoriaEhSoPesada = !filtros?.categoria || filtros.categoria.length === 0 ||
+    (filtros.categoria.length === 1 && filtros.categoria[0].toUpperCase() === "PESADA");
+
+  if (anoFiltro === 2026 && categoriaEhSoPesada) {
+    const isOverallFilter = (!filtros?.placa || filtros.placa.length === 0) && (!filtros?.area || filtros.area.length === 0);
 
     if (mesFiltro === 4) {
       if (isOverallFilter) {
@@ -312,7 +327,7 @@ export async function getIndicadoresData(filtros?: {
 
         veiculos.length = 0;
         veiculos.push(...novosVeiculos);
-      } else if (filtros?.placa) {
+      } else if (filtros?.placa && filtros.placa.length === 1) {
         const ABRIL_2026_DM_OVERRIDES: Record<string, number> = {
           "PTF-4236": 31.1, "ROG1I40": 36.4, "TCN7J82": 48.2, "LMT7E29": 52.4, "ROG1I26": 54.7,
           "PTT8D76": 72.3, "TCN7J90": 74.5, "ROE8F66": 77.3, "ROG1I38": 77.4, "SFR4F37": 78.4,
@@ -321,7 +336,7 @@ export async function getIndicadoresData(filtros?: {
           "SGJ1G11": 99.8, "ROE8F63": 99.8, "TCC2E83": 99.9, "TCA4B23": 100.0, "TCN7J72": 100.0,
           "PTV5G37": 100.0
         };
-        const pUpper = filtros.placa.toUpperCase();
+        const pUpper = filtros.placa[0].toUpperCase();
         if (pUpper in ABRIL_2026_DM_OVERRIDES) {
           veiculos.forEach(v => {
             if (v.placa.toUpperCase() === pUpper) {
@@ -411,13 +426,13 @@ export async function getIndicadoresData(filtros?: {
   let finalDmMedia = dmMedia;
   let finalDoMedia = doMedia;
 
-  if (anoFiltro === 2026 && (!filtros?.categoria || filtros.categoria.toUpperCase() === "PESADA")) {
-    const isOverallFilter = !filtros?.placa && !filtros?.area;
+  if (anoFiltro === 2026 && categoriaEhSoPesada) {
+    const isOverallFilter = (!filtros?.placa || filtros.placa.length === 0) && (!filtros?.area || filtros.area.length === 0);
     if (mesFiltro === 4) {
       if (isOverallFilter) {
         finalDmMedia = 83.2;
         finalDoMedia = 80.7;
-      } else if (filtros?.placa) {
+      } else if (filtros?.placa && filtros.placa.length === 1) {
         const ABRIL_2026_DM_OVERRIDES: Record<string, number> = {
           "PTF-4236": 31.1, "ROG1I40": 36.4, "TCN7J82": 48.2, "LMT7E29": 52.4, "ROG1I26": 54.7,
           "PTT8D76": 72.3, "TCN7J90": 74.5, "ROE8F66": 77.3, "ROG1I38": 77.4, "SFR4F37": 78.4,
@@ -426,7 +441,7 @@ export async function getIndicadoresData(filtros?: {
           "SGJ1G11": 99.8, "ROE8F63": 99.8, "TCC2E83": 99.9, "TCA4B23": 100.0, "TCN7J72": 100.0,
           "PTV5G37": 100.0
         };
-        const pUpper = filtros.placa.toUpperCase();
+        const pUpper = filtros.placa[0].toUpperCase();
         if (pUpper in ABRIL_2026_DM_OVERRIDES) {
           finalDmMedia = ABRIL_2026_DM_OVERRIDES[pUpper];
           finalDoMedia = Math.min(100, Math.max(0, Math.round((ABRIL_2026_DM_OVERRIDES[pUpper] - 2.5) * 10) / 10));

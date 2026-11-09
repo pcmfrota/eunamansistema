@@ -17,6 +17,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import Script from "next/script";
 import { gerarPDFDocumentosVisaoGeral, gerarPDFDocumentosAba } from "./DocumentosPDF";
+import { CheckboxMultiSelect } from "@/components/checkbox-multi-select";
 
 // --- Utilitários ---
 
@@ -124,11 +125,11 @@ export default function DocumentosClient({
   const [activeTab, setActiveTab] = useState<TabType>("visao_geral");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Filtros
-  const [filterLocal, setFilterLocal] = useState("");
-  const [filterPlaca, setFilterPlaca] = useState("");
-  const [filterMes, setFilterMes] = useState("");
-  const [filterAno, setFilterAno] = useState("");
+  // Filtros (vazio = sem filtro, mostra tudo)
+  const [filterLocal, setFilterLocal] = useState<string[]>([]);
+  const [filterPlaca, setFilterPlaca] = useState<string[]>([]);
+  const [filterMes, setFilterMes] = useState<string[]>([]);
+  const [filterAno, setFilterAno] = useState<string[]>([]);
 
   // Frota Base para Auto-preenchimento
   const [frotaEquipamentos, setFrotaEquipamentos] = useState<any[]>([]);
@@ -163,7 +164,7 @@ export default function DocumentosClient({
     };
   }, []);
 
-  const [filterStatus, setFilterStatus] = useState("todos"); // "todos", "vencidos", "proximos", "em_dias"
+  const [filterStatus, setFilterStatus] = useState<string[]>([]); // vazio = "todos"; senão alguma combinação de "vencidos", "proximos", "em_dias"
   const [showFilters, setShowFilters] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -587,8 +588,8 @@ export default function DocumentosClient({
         (l.co || "").toLowerCase().includes(term)
       );
     }
-    if (filterLocal) linhas = linhas.filter(l => l.local === filterLocal);
-    if (filterPlaca) linhas = linhas.filter(l => l.placa === filterPlaca);
+    if (filterLocal.length > 0) linhas = linhas.filter(l => filterLocal.includes(l.local));
+    if (filterPlaca.length > 0) linhas = linhas.filter(l => filterPlaca.includes(l.placa));
 
     const locaisUnicos = Array.from(new Set(linhas.map(l => l.local))).filter(Boolean).sort() as string[];
     const placasUnicas = Array.from(new Set(linhas.map(l => l.placa))).filter(Boolean).sort() as string[];
@@ -655,17 +656,23 @@ export default function DocumentosClient({
           <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Módulo/Local</label>
-              <select value={filterLocal} onChange={e => setFilterLocal(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="">Todos</option>
-                {locaisUnicos.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterLocal}
+                onChange={setFilterLocal}
+                options={locaisUnicos.map(loc => ({ value: loc, label: loc }))}
+                placeholder="Todos"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Placa</label>
-              <select value={filterPlaca} onChange={e => setFilterPlaca(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="">Todas</option>
-                {placasUnicas.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterPlaca}
+                onChange={setFilterPlaca}
+                options={placasUnicas.map(p => ({ value: p, label: p }))}
+                placeholder="Todas"
+                className="w-full"
+              />
             </div>
           </div>
         )}
@@ -857,22 +864,26 @@ export default function DocumentosClient({
       }
 
       // Dropdown Filters
-      if (filterLocal && item.local !== filterLocal) return false;
-      if (filterPlaca && item.placa !== filterPlaca) return false;
-      
-      if (filterAno || filterMes) {
+      if (filterLocal.length > 0 && !filterLocal.includes(item.local)) return false;
+      if (filterPlaca.length > 0 && !filterPlaca.includes(item.placa)) return false;
+
+      if (filterAno.length > 0 || filterMes.length > 0) {
         if (!item.data_vencimento || item.data_vencimento === "-" || item.data_vencimento === "") return false;
         const [y, m] = item.data_vencimento.split("-");
-        if (filterAno && y !== filterAno) return false;
-        if (filterMes && m !== filterMes) return false;
+        if (filterAno.length > 0 && !filterAno.includes(y)) return false;
+        if (filterMes.length > 0 && !filterMes.includes(m)) return false;
       }
 
       // Status Filter
-      if (filterStatus !== "todos") {
+      if (filterStatus.length > 0) {
         if (item.dias === null) return false;
-        if (filterStatus === "vencidos" && item.dias > 0) return false;
-        if (filterStatus === "proximos" && (item.dias <= 0 || item.dias > 30)) return false;
-        if (filterStatus === "em_dias" && item.dias <= 30) return false;
+        const bateAlgumStatus = filterStatus.some(s => {
+          if (s === "vencidos") return item.dias <= 0;
+          if (s === "proximos") return item.dias > 0 && item.dias <= 30;
+          if (s === "em_dias") return item.dias > 30;
+          return false;
+        });
+        if (!bateAlgumStatus) return false;
       }
 
       return true;
@@ -894,42 +905,57 @@ export default function DocumentosClient({
           <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Local</label>
-              <select value={filterLocal} onChange={e => setFilterLocal(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="">Todos</option>
-                {locaisUnicos.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterLocal}
+                onChange={setFilterLocal}
+                options={locaisUnicos.map(loc => ({ value: loc, label: loc }))}
+                placeholder="Todos"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Placa</label>
-              <select value={filterPlaca} onChange={e => setFilterPlaca(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="">Todas</option>
-                {placasUnicas.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterPlaca}
+                onChange={setFilterPlaca}
+                options={placasUnicas.map(p => ({ value: p, label: p }))}
+                placeholder="Todas"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Status</label>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="todos">Todos</option>
-                <option value="vencidos">Vencidos (≤ 0)</option>
-                <option value="proximos">Próximos (1 a 30 d)</option>
-                <option value="em_dias">Em Dias (&gt; 30 d)</option>
-              </select>
+              <CheckboxMultiSelect
+                values={filterStatus}
+                onChange={setFilterStatus}
+                options={[
+                  { value: "vencidos", label: "Vencidos (≤ 0)" },
+                  { value: "proximos", label: "Próximos (1 a 30 d)" },
+                  { value: "em_dias", label: "Em Dias (> 30 d)" },
+                ]}
+                placeholder="Todos"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Mês</label>
-              <select value={filterMes} onChange={e => setFilterMes(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="">Todos</option>
-                {Array.from({length: 12}, (_, i) => String(i+1).padStart(2, '0')).map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <CheckboxMultiSelect
+                values={filterMes}
+                onChange={setFilterMes}
+                options={Array.from({length: 12}, (_, i) => String(i+1).padStart(2, '0')).map(m => ({ value: m, label: m }))}
+                placeholder="Todos"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-zinc-500 mb-1 block">Ano</label>
-              <select value={filterAno} onChange={e => setFilterAno(e.target.value)} className="w-full px-2 py-1.5 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none">
-                <option value="">Todos</option>
-                {anosUnicos.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+              <CheckboxMultiSelect
+                values={filterAno}
+                onChange={setFilterAno}
+                options={anosUnicos.map(a => ({ value: a, label: a }))}
+                placeholder="Todos"
+                className="w-full"
+              />
             </div>
           </div>
         )}

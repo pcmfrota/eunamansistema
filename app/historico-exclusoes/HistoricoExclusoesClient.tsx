@@ -7,6 +7,7 @@ import { getHistoricoExclusoes } from './actions'
 import { PremiumLoader } from '@/components/premium-loader'
 import { localDb } from '@/lib/offline-db'
 import { useOffline } from '@/components/offline-provider'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 function OrigemTag({ origem }: { origem: string }) {
   const isAprovado = origem === 'SOLICITACAO_APROVADA'
@@ -32,7 +33,7 @@ export default function HistoricoExclusoesClient() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [filterModulo, setFilterModulo] = useState('')
+  const [filterModulo, setFilterModulo] = useState<string[]>([])
   const [verSnapshot, setVerSnapshot] = useState<any | null>(null)
 
   // Recarrega direto do Supabase (usado no botão de atualizar, exige internet)
@@ -87,7 +88,7 @@ export default function HistoricoExclusoesClient() {
   const filtrados = useMemo(() => {
     const q = search.toLowerCase().trim()
     return registros.filter(r => {
-      const matchModulo = !filterModulo || r.modulo === filterModulo
+      const matchModulo = filterModulo.length === 0 || filterModulo.includes(r.modulo)
       const matchBusca = !q ||
         r.descricao?.toLowerCase().includes(q) ||
         r.excluido_por_nome?.toLowerCase().includes(q) ||
@@ -141,16 +142,12 @@ export default function HistoricoExclusoesClient() {
             className="w-full pl-10 pr-4 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
           />
         </div>
-        <select
-          value={filterModulo}
-          onChange={e => setFilterModulo(e.target.value)}
-          className="px-4 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-        >
-          <option value="">Todos os Módulos</option>
-          {modulosUnicos.map(m => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
+        <CheckboxMultiSelect
+          values={filterModulo}
+          onChange={setFilterModulo}
+          options={modulosUnicos.map(m => ({ value: m, label: m }))}
+          placeholder="Todos os Módulos"
+        />
       </div>
 
       {/* Tabela */}

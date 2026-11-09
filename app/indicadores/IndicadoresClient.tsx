@@ -12,9 +12,10 @@ import {
 import { useAuth } from '@/components/auth-context'
 import { IndicadoresData, getIndicadoresData } from './actions'
 import { useOffline } from '@/components/offline-provider'
-import { getOfflineIndicadoresData } from '@/lib/offline-calculations'
+import { getOfflineIndicadoresDataMulti } from './offline-indicadores'
 import { useEffect } from 'react'
 import { SearchableSelect } from '@/components/SearchableSelect'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const META = 95
@@ -228,11 +229,13 @@ export default function IndicadoresClient({ initialData }: Props) {
   const [data, setData] = useState<IndicadoresData | null>(initialData || null)
   const [isPending, startTransition] = useTransition()
 
-  // Filtros
+  // Filtros (mês/ano continuam de seleção única — definem o período de cálculo dos
+  // indicadores, igual ao padrão já adotado no Dashboard principal; categoria/área viram
+  // múltipla seleção, vazio = sem filtro)
   const [mes, setMes] = useState(0)
   const [ano, setAno] = useState(new Date().getFullYear())
-  const [categoria, setCategoria] = useState('')
-  const [filtroArea, setFiltroArea] = useState('')
+  const [categoria, setCategoria] = useState<string[]>([])
+  const [filtroArea, setFiltroArea] = useState<string[]>([])
   const [filtroPlaca, setFiltroPlaca] = useState('')
   const [abaAtiva, setAbaAtiva] = useState<'todos' | 'leves' | 'pesados'>('todos')
   const [filtroIndisp, setFiltroIndisp] = useState<'todos' | 'apenas_indisp' | 'apenas_100'>('todos')
@@ -243,12 +246,12 @@ export default function IndicadoresClient({ initialData }: Props) {
     startTransition(async () => {
       try {
         // 1. Carrega local primeiro (offline first)
-        const localData = await getOfflineIndicadoresData({
+        const localData = await getOfflineIndicadoresDataMulti({
           mes: mes > 0 ? mes : undefined,
           ano: ano > 0 ? ano : undefined,
-          categoria: categoria || undefined,
-          area: filtroArea || undefined,
-          placa: filtroPlaca || undefined,
+          categoria: categoria.length > 0 ? categoria : undefined,
+          area: filtroArea.length > 0 ? filtroArea : undefined,
+          placa: filtroPlaca ? [filtroPlaca] : undefined,
         })
         if (active) {
           setData(localData)
@@ -260,9 +263,9 @@ export default function IndicadoresClient({ initialData }: Props) {
             const freshData = await getIndicadoresData({
               mes: mes > 0 ? mes : undefined,
               ano: ano > 0 ? ano : undefined,
-              categoria: categoria || undefined,
-              area: filtroArea || undefined,
-              placa: filtroPlaca || undefined,
+              categoria: categoria.length > 0 ? categoria : undefined,
+              area: filtroArea.length > 0 ? filtroArea : undefined,
+              placa: filtroPlaca ? [filtroPlaca] : undefined,
             })
             if (active && freshData) {
               setData(freshData)
@@ -281,7 +284,7 @@ export default function IndicadoresClient({ initialData }: Props) {
     }
   }, [mes, ano, categoria, filtroArea, filtroPlaca, isOnline])
 
-  function handleChange(updates: Partial<{ mes: number; ano: number; categoria: string; area: string; placa: string }>) {
+  function handleChange(updates: Partial<{ mes: number; ano: number; categoria: string[]; area: string[]; placa: string }>) {
     if (updates.mes !== undefined) setMes(updates.mes)
     if (updates.ano !== undefined) setAno(updates.ano)
     if (updates.categoria !== undefined) setCategoria(updates.categoria)
@@ -293,8 +296,8 @@ export default function IndicadoresClient({ initialData }: Props) {
     const now = new Date()
     setMes(0)
     setAno(now.getFullYear())
-    setCategoria('')
-    setFiltroArea('')
+    setCategoria([])
+    setFiltroArea([])
     setFiltroPlaca('')
     setAbaAtiva('todos')
     setFiltroIndisp('todos')
@@ -414,21 +417,19 @@ export default function IndicadoresClient({ initialData }: Props) {
           ))}
         </select>
 
-        <select value={categoria} onChange={e => handleChange({ categoria: e.target.value })}
-          className={selectCls(!!categoria)}>
-          <option value="">🚘 Categoria</option>
-          {data.filtroOpcoes.categorias.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <CheckboxMultiSelect
+          values={categoria}
+          onChange={v => handleChange({ categoria: v })}
+          options={data.filtroOpcoes.categorias.map(c => ({ value: c, label: c }))}
+          placeholder="🚘 Categoria"
+        />
 
-        <select value={filtroArea} onChange={e => handleChange({ area: e.target.value })}
-          className={selectCls(!!filtroArea)}>
-          <option value="">📍 Área</option>
-          {data.filtroOpcoes.areas.map(a => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
+        <CheckboxMultiSelect
+          values={filtroArea}
+          onChange={v => handleChange({ area: v })}
+          options={data.filtroOpcoes.areas.map(a => ({ value: a, label: a }))}
+          placeholder="📍 Área"
+        />
 
         <div className="w-48">
           <SearchableSelect 
@@ -459,7 +460,7 @@ export default function IndicadoresClient({ initialData }: Props) {
           ))}
         </div>
 
-        {(mes > 0 || categoria || filtroArea || filtroPlaca || filtroIndisp !== 'todos') && (
+        {(mes > 0 || categoria.length > 0 || filtroArea.length > 0 || filtroPlaca || filtroIndisp !== 'todos') && (
           <button onClick={handleReset}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-all ml-auto">
             <X size={12} /> Limpar

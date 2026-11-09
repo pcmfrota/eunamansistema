@@ -5,6 +5,7 @@ import { ShieldAlert, ShieldCheck, Search, RefreshCcw, Clock, Globe, Monitor, Da
 import { cn } from '@/lib/utils'
 import { getTentativasAcesso } from './actions'
 import { PremiumLoader } from '@/components/premium-loader'
+import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 
 type Tentativa = {
   id: string
@@ -21,7 +22,8 @@ export default function TentativasAcessoClient() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'Todos' | 'Sucesso' | 'Falha'>('Todos')
+  // Vazio = sem filtro (Todos); senão alguma combinação de "Sucesso"/"Falha"
+  const [filterStatus, setFilterStatus] = useState<string[]>([])
 
   const load = async () => {
     setLoading(true)
@@ -45,7 +47,7 @@ export default function TentativasAcessoClient() {
   const filtradas = useMemo(() => {
     const q = search.toLowerCase().trim()
     return tentativas.filter(t => {
-      const matchStatus = filterStatus === 'Todos' || (filterStatus === 'Sucesso' ? t.sucesso : !t.sucesso)
+      const matchStatus = filterStatus.length === 0 || filterStatus.some(s => s === 'Sucesso' ? t.sucesso : !t.sucesso)
       const matchBusca = !q || t.email?.toLowerCase().includes(q) || t.ip?.toLowerCase().includes(q)
       return matchStatus && matchBusca
     })
@@ -118,15 +120,15 @@ export default function TentativasAcessoClient() {
             className="w-full pl-10 pr-4 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-red-500 transition-all"
           />
         </div>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value as any)}
-          className="px-4 py-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-        >
-          <option value="Todos">Todos os Status</option>
-          <option value="Sucesso">Só Sucesso</option>
-          <option value="Falha">Só Falha</option>
-        </select>
+        <CheckboxMultiSelect
+          values={filterStatus}
+          onChange={setFilterStatus}
+          options={[
+            { value: 'Sucesso', label: 'Só Sucesso' },
+            { value: 'Falha', label: 'Só Falha' },
+          ]}
+          placeholder="Todos os Status"
+        />
       </div>
 
       {/* Tabela */}
