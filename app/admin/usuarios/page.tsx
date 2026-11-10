@@ -16,6 +16,7 @@ export default function UsuariosPage() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [filiais, setFiliais] = useState<any[]>([]);
+  const [userPermissions, setUserPermissions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && profile && !isAdmin) {
@@ -33,28 +34,32 @@ export default function UsuariosPage() {
           profiles: any[];
           role_permissions: any[];
           filiais: any[];
-        }>(["profiles", "role_permissions", "filiais"]);
+          user_module_permissions: any[];
+        }>(["profiles", "role_permissions", "filiais", "user_module_permissions"]);
 
         if (active) {
           setProfiles(sortByNome(stores.profiles || []));
           setPermissions(stores.role_permissions || []);
           setFiliais(stores.filiais || []);
+          setUserPermissions(stores.user_module_permissions || []);
           setLoading(false);
         }
 
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["profiles", "role_permissions", "filiais"]);
+          const syncSuccess = await syncTables(["profiles", "role_permissions", "filiais", "user_module_permissions"]);
           if (syncSuccess) {
             const fresh = await localDb.getManyStores<{
               profiles: any[];
               role_permissions: any[];
               filiais: any[];
-            }>(["profiles", "role_permissions", "filiais"]);
+              user_module_permissions: any[];
+            }>(["profiles", "role_permissions", "filiais", "user_module_permissions"]);
             if (active) {
               setProfiles(sortByNome(fresh.profiles || []));
               setPermissions(fresh.role_permissions || []);
               setFiliais(fresh.filiais || []);
+              setUserPermissions(fresh.user_module_permissions || []);
             }
           }
         }
@@ -94,6 +99,7 @@ export default function UsuariosPage() {
       initialProfiles={profiles}
       initialPermissions={permissions}
       initialFiliais={filiais}
+      initialUserPermissions={userPermissions}
     />
   );
 }

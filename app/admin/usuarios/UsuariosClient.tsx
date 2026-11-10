@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
 import {
   Users,
   UserPlus,
@@ -19,6 +19,9 @@ import {
   Layout,
   Building2,
   Plus,
+  Lock,
+  Unlock,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   updateUserRole,
@@ -30,10 +33,14 @@ import {
   adminSetUserPassword,
   aprovarUsuario,
   rejeitarUsuario,
+  bloquearUsuario,
+  desbloquearUsuario,
+  updateUserModulePermissions,
 } from "./actions";
 import { useAuth } from "@/components/auth-context";
 import { useOffline } from "@/components/offline-provider";
 import { cn } from "@/lib/utils";
+import { MODULOS_SISTEMA } from "@/lib/modulos";
 
 type Filial = { id: string; nome: string; ativo: boolean };
 
@@ -70,18 +77,27 @@ type RolePermission = {
   allowed_tabs: string[];
 };
 
-export default function UsuariosClient({ 
+type UserModulePermission = {
+  id: string;
+  user_id: string;
+  modulo: string;
+};
+
+export default function UsuariosClient({
   initialProfiles,
   initialPermissions,
   initialFiliais,
-}: { 
+  initialUserPermissions,
+}: {
   initialProfiles: Profile[],
   initialPermissions: RolePermission[],
   initialFiliais: Filial[],
+  initialUserPermissions: UserModulePermission[],
 }) {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [permissions, setPermissions] = useState<RolePermission[]>(initialPermissions);
   const [filiais, setFiliais] = useState<Filial[]>(initialFiliais);
+  const [userPermissions, setUserPermissions] = useState<UserModulePermission[]>(initialUserPermissions);
   const { isOnline } = useOffline();
 
   // page.tsx agora sincroniza dado local/offline em segundo plano e repassa versões
@@ -89,7 +105,10 @@ export default function UsuariosClient({
   useEffect(() => { setProfiles(initialProfiles); }, [initialProfiles]);
   useEffect(() => { setPermissions(initialPermissions); }, [initialPermissions]);
   useEffect(() => { setFiliais(initialFiliais); }, [initialFiliais]);
+  useEffect(() => { setUserPermissions(initialUserPermissions); }, [initialUserPermissions]);
   const [editingPermissions, setEditingPermissions] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [bloqueandoId, setBloqueandoId] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showNovaFilial, setShowNovaFilial] = useState(false);
@@ -297,30 +316,54 @@ export default function UsuariosClient({
     const newTabs = currentTabs.includes(path)
       ? currentTabs.filter(t => t !== path)
       : [...currentTabs, path];
-    
+
     handleUpdatePermissions(role, newTabs);
   };
 
-  const availableTabs = [
-    { name: 'Dashboard', path: '/dashboard' },
-    { name: 'Ficha Mão de Obra', path: '/mao-de-obra' },
-    { name: 'Controle de OS', path: '/os' },
-    { name: 'Controle de Horímetros', path: '/preventivas' },
-    { name: 'Checklist Mecânicos', path: '/checklist-mecanicos' },
-    { name: 'Boletim de Pneus', path: '/pneus' },
-    { name: 'Afiação', path: '/afiacao' },
-    { name: 'Backlog', path: '/backlog' },
-    { name: 'Prog. Preventiva', path: '/programacao-preventiva' },
-    { name: 'Base de Frotas', path: '/base-frotas' },
-    { name: 'Base de Dados', path: '/base-dados' },
-    { name: 'Calendário Suzano', path: '/calendario' },
-    { name: 'Controle de Lavagens', path: '/lavagens' },
-    { name: 'Captação de Água', path: '/captacao' },
-    { name: 'Documentos da Frota', path: '/documentos' },
-    { name: 'Controle de Custos', path: '/custos' },
-    { name: 'Controle de Insumos', path: '/insumos' },
-    { name: 'Gestão de Usuários', path: '/admin/usuarios' },
-  ];
+  // Fonte única dos módulos do sistema — a mesma usada pelo menu lateral e pelo
+  // middleware (lib/modulos.ts). Evita a tela ficar faltando módulos novos.
+  const availableTabs = MODULOS_SISTEMA.filter(m => m.concedivel).map(m => ({ name: m.label, path: m.path }));
+
+  const userModulos = (userId: string) => userPermissions.filter(up => up.user_id === userId).map(up => up.modulo);
+
+  const handleToggleUserModulo = (userId: string, path: string) => {
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
+    const current = userModulos(userId);
+    const newModulos = current.includes(path) ? current.filter(m => m !== path) : [...current, path];
+
+    startTransition(async () => {
+      const result = await updateUserModulePermissions(userId, newModulos);
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        setUserPermissions(prev => {
+          const semEsse = prev.filter(up => up.user_id !== userId);
+          return [...semEsse, ...newModulos.map(modulo => ({ id: `${userId}:${modulo}`, user_id: userId, modulo }))];
+        });
+      }
+    });
+  };
+
+  const handleToggleBloqueio = async (p: Profile) => {
+    if (isVisitante) return;
+    const bloqueado = p.status === "bloqueado";
+    if (!confirm(bloqueado ? `Desbloquear ${p.full_name || p.email}?` : `Bloquear ${p.full_name || p.email}? A pessoa perde acesso imediatamente, mesmo com sessão já aberta.`)) return;
+    if (!isOnline) {
+      alert("Esta ação exige conexão com a internet. Tente novamente ao reconectar.");
+      return;
+    }
+    setBloqueandoId(p.id);
+    const result = bloqueado ? await desbloquearUsuario(p.id) : await bloquearUsuario(p.id);
+    setBloqueandoId(null);
+    if ("error" in result && result.error) {
+      alert(result.error);
+    } else {
+      setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, status: bloqueado ? "aprovado" : "bloqueado" } : x));
+    }
+  };
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-6xl mx-auto w-full">
@@ -473,9 +516,12 @@ export default function UsuariosClient({
         <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              <Shield className="text-blue-600" /> Configuração de Acesso por Cargo
+              <Shield className="text-blue-600" /> Preset de Acesso por Cargo
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Defina quais abas do sistema cada cargo pode visualizar</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Usado como ponto de partida ao criar ou aprovar um usuário novo — não afeta mais quem já está
+              cadastrado. Para controlar o acesso de alguém que já existe, use "Permissões" na tabela abaixo.
+            </p>
           </div>
         </div>
         
@@ -577,8 +623,13 @@ export default function UsuariosClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
-              {filteredProfiles.map((p) => (
-                <tr key={p.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors">
+              {filteredProfiles.map((p) => {
+                const bloqueado = p.status === "bloqueado";
+                const isEditingUser = editingUserId === p.id;
+                const modulosDoUsuario = userModulos(p.id);
+                return (
+                <Fragment key={p.id}>
+                <tr className={cn("hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors", bloqueado && "opacity-60")}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-bold overflow-hidden">
@@ -594,6 +645,11 @@ export default function UsuariosClient({
                           {p.status === "rejeitado" && (
                             <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-[9px] font-bold uppercase tracking-wider">
                               Rejeitado
+                            </span>
+                          )}
+                          {bloqueado && (
+                            <span className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1">
+                              <Lock size={9} /> Bloqueado
                             </span>
                           )}
                         </p>
@@ -618,6 +674,14 @@ export default function UsuariosClient({
                         ))}
                       </select>
                     </div>
+                    <button
+                      onClick={() => setEditingUserId(isEditingUser ? null : p.id)}
+                      className="mt-1 flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      <SlidersHorizontal size={11} />
+                      {p.role === 'admin' ? 'Acesso total (admin)' : `${modulosDoUsuario.length} módulo${modulosDoUsuario.length !== 1 ? 's' : ''} liberado${modulosDoUsuario.length !== 1 ? 's' : ''}`}
+                      {isEditingUser ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                    </button>
                   </td>
                   {/* Coluna Filial */}
                   <td className="px-6 py-4">
@@ -639,6 +703,17 @@ export default function UsuariosClient({
                     {!isVisitante && (
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => handleToggleBloqueio(p)}
+                          disabled={bloqueandoId === p.id || p.role === 'admin'}
+                          className={cn(
+                            "p-2 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed",
+                            bloqueado ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" : "text-zinc-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                          )}
+                          title={p.role === 'admin' ? 'Administradores não podem ser bloqueados' : (bloqueado ? 'Desbloquear acesso' : 'Bloquear acesso')}
+                        >
+                          {bloqueado ? <Unlock size={18} /> : <Lock size={18} />}
+                        </button>
+                        <button
                           onClick={() => setPasswordModalUser(p)}
                           disabled={isPending}
                           className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
@@ -658,7 +733,44 @@ export default function UsuariosClient({
                     )}
                   </td>
                 </tr>
-              ))}
+                {isEditingUser && p.role !== 'admin' && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/40 border-t border-b border-zinc-100 dark:border-zinc-900">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-3">
+                        Módulos liberados individualmente para {p.full_name || p.email}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {availableTabs.map(tab => {
+                          const isAllowed = modulosDoUsuario.includes(tab.path);
+                          return (
+                            <button
+                              key={tab.path}
+                              onClick={() => handleToggleUserModulo(p.id, tab.path)}
+                              disabled={isPending || isVisitante}
+                              className={cn(
+                                "flex items-center justify-between p-2.5 rounded-lg border text-xs font-medium transition-all",
+                                isAllowed
+                                  ? "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400"
+                                  : "bg-white border-zinc-200 text-zinc-500 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-500"
+                              )}
+                            >
+                              <span className="truncate">{tab.name}</span>
+                              <div className={cn(
+                                "w-4 h-4 shrink-0 rounded-full border flex items-center justify-center transition-colors ml-2",
+                                isAllowed ? "bg-blue-600 border-blue-600" : "border-zinc-300 dark:border-zinc-700"
+                              )}>
+                                {isAllowed && <CheckCircle2 size={10} className="text-white" />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

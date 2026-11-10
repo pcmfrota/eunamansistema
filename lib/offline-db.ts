@@ -18,7 +18,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 33;
+  private dbVersion = 34;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -99,6 +99,9 @@ export class OfflineDB {
     // (não confundir com 'user_profile', que guarda só o perfil do usuário logado)
     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('role_permissions')) db.createObjectStore('role_permissions', { keyPath: 'role' });
+    // Permissões por usuário individual (substitui role_permissions como fonte de
+    // autorização real — role_permissions virou só um preset ao criar usuário novo).
+    if (!db.objectStoreNames.contains('user_module_permissions')) db.createObjectStore('user_module_permissions', { keyPath: 'id' });
 
     // Controle de Insumos (fichas de abastecimento/recarga dos comboios)
     if (!db.objectStoreNames.contains('insumos_fichas_abastecimento')) db.createObjectStore('insumos_fichas_abastecimento', { keyPath: 'id' });

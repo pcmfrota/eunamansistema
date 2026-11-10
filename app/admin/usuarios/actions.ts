@@ -79,6 +79,24 @@ export async function updateUserRole(userId: string, newRole: string) {
   return { success: true };
 }
 
+// Concede ao usuário o preset de módulos do cargo escolhido (role_permissions.allowed_tabs)
+// como ponto de partida — a partir daí o acesso dele é individual (tabela
+// user_module_permissions), o cargo não volta a afetar automaticamente.
+async function seedUserModulePermissionsFromRole(adminClient: ReturnType<typeof getAdminClient>, userId: string, role: string) {
+  const { data: rolePerm } = await adminClient
+    .from("role_permissions")
+    .select("allowed_tabs")
+    .eq("role", role)
+    .maybeSingle();
+
+  const tabs: string[] = (rolePerm?.allowed_tabs || []).map((t: string) => (t === "/" ? "/dashboard" : t));
+  if (tabs.length === 0) return;
+
+  await adminClient
+    .from("user_module_permissions")
+    .upsert(tabs.map(modulo => ({ user_id: userId, modulo })), { onConflict: "user_id,modulo" });
+}
+
 export async function createNewUser(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -113,6 +131,8 @@ export async function createNewUser(formData: FormData) {
       .eq("id", authData.user.id);
 
     if (profileError) throw profileError;
+
+    await seedUserModulePermissionsFromRole(adminClient, authData.user.id, role);
 
     revalidatePath("/admin/usuarios");
     return { success: true };
@@ -364,6 +384,8 @@ export async function aprovarUsuario(userId: string, roleAprovado: string) {
     console.error("Erro ao sincronizar Auth Metadata na aprovação:", err.message);
   }
 
+  await seedUserModulePermissionsFromRole(adminClient, userId, roleAprovado);
+
   revalidatePath("/admin/usuarios");
   return { success: true };
 }
@@ -383,5 +405,85 @@ export async function rejeitarUsuario(userId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/admin/usuarios");
+  return { success: true };
+}
+
+// ─── Bloquear / desbloquear usuário (Cenário F — controle de acesso) ───
+// Bloqueado = status sai de 'aprovado', o que já é suficiente pra: (1) o
+// middleware recusar login/navegação (qualquer status != 'aprovado' já cai
+// nessa regra em app/login/page.tsx e middleware.ts), e (2) user_is_active()
+// no banco passar a negar todo RLS de módulo pra sessões já abertas, sem
+// precisar esperar o usuário deslogar.
+export async function bloquearUsuario(userId: string) {
+  const supabase = createServerClient();
+  const check = await verificarAdmin(supabase);
+  if ("error" in check) return { error: check.error };
+
+  const adminClient = getAdminClient();
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ status: "bloqueado" })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/usuarios");
+  return { success: true };
+}
+
+export async function desbloquearUsuario(userId: string) {
+  const supabase = createServerClient();
+  const check = await verificarAdmin(supabase);
+  if ("error" in check) return { error: check.error };
+
+  const adminClient = getAdminClient();
+  const { error } = await adminClient
+    .from("profiles")
+    .update({ status: "aprovado" })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/usuarios");
+  return { success: true };
+}
+
+// ─── Permissões individuais por usuário (substitui role_permissions como
+// fonte de autorização real; ver supabase/migrations/20261110000000_user_module_permissions.sql) ───
+export async function getUserModulePermissions() {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("user_module_permissions")
+    .select("*");
+
+  if (error) return { error: error.message };
+  return { permissions: data as { id: string; user_id: string; modulo: string }[] };
+}
+
+export async function updateUserModulePermissions(userId: string, modulos: string[]) {
+  const supabase = createServerClient();
+  const check = await verificarAdmin(supabase);
+  if ("error" in check) return { error: check.error };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const adminClient = getAdminClient();
+
+  // Substitui a lista inteira do usuário (mais simples e seguro que diffs
+  // incrementais — essa tela sempre manda a lista completa marcada na UI).
+  const { error: delError } = await adminClient
+    .from("user_module_permissions")
+    .delete()
+    .eq("user_id", userId);
+  if (delError) return { error: delError.message };
+
+  if (modulos.length > 0) {
+    const { error: insError } = await adminClient
+      .from("user_module_permissions")
+      .insert(modulos.map(modulo => ({ user_id: userId, modulo, granted_by: user?.id })));
+    if (insError) return { error: insError.message };
+  }
+
+  revalidatePath("/admin/usuarios");
+  revalidatePath("/");
   return { success: true };
 }

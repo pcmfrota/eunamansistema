@@ -1,29 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
-// ── Permissões por módulo ──────────────────────────────────────────────────────
-const MODULO_PERMISSOES: Record<string, string[]> = {
-  '/admin':                    ['admin'],
-  '/base-frotas':              ['admin', 'pcm', 'gestao'],
-  '/pcm':                      ['admin', 'pcm'],
-  '/preventivas':              ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
-  '/programacao-preventiva':   ['admin', 'pcm', 'gestao', 'mecanico'],
-  '/os':                       ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
-  '/pneus':                    ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
-  '/lavagens':                 ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
-  '/backlog':                  ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
-  '/base-dados':               ['admin', 'pcm', 'gestao'],
-  '/calendario':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
-  '/perfil':                   ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
-  '/checklist-mecanicos':      ['admin', 'pcm', 'gestao', 'mecanico'],
-  '/documentos':               ['admin', 'pcm', 'gestao', 'visitante', 'mecanico', 'motorista'],
-  '/controladoria-frota':      ['admin', 'pcm', 'gestao'],
-  '/checklist-frota':        ['admin', 'pcm', 'gestao', 'mecanico', 'motorista'],
-  '/controle-filtros':       ['admin', 'pcm', 'gestao', 'mecanico', 'supervisor_manutencao'],
-}
-
 // ── Rotas públicas que não precisam de auth ────────────────────────────────────
 const PUBLIC_PATHS = ['/login', '/api/', '/manifest.json', '/sw.js', '/offline.html', '/privacidade']
+
+// Rotas sempre permitidas para qualquer autenticado ativo, além do que está em
+// user_module_permissions (mesma lista usada no lib/modulos.ts do lado cliente).
+const ROTAS_SEMPRE_PERMITIDAS = ['/', '/perfil']
 
 // O middleware roda em TODA navegação do app (quase todas as rotas, ver `matcher` abaixo)
 // — sem isso, uma chamada ao Supabase que trava (banco lento/instável) trava a navegação
@@ -180,50 +163,48 @@ export async function middleware(request: NextRequest) {
   // 4. Normaliza role: qualquer variante de 'admin' ou 'administrador' vira 'admin'
   if (userRole === 'administrador') userRole = 'admin'
 
-  // 5. Verifica autorização na rota de forma dinâmica usando banco/cookie de permissões
+  // Duração curta de propósito (era 1h) — isso é o que faz um bloqueio de usuário (camada 1/2)
+  // valer rápido mesmo sem reload manual, complementando o bloqueio imediato de verdade que
+  // já acontece na camada 3 (RLS: user_is_active()/user_has_module() são avaliadas a cada
+  // consulta real ao banco, não dependem de cookie).
+  const COOKIE_MAX_AGE = 300
+
+  // 5. Verifica autorização na rota via permissões INDIVIDUAIS do usuário
+  // (user_module_permissions — substitui o antigo role_permissions por cargo).
   let userPerms: string[] = []
   const currentRoleCookie = request.cookies.get('x-user-role')?.value;
   // Só usa o cookie se o cargo não mudou nesta requisição
   const permsCookie = currentRoleCookie === userRole ? request.cookies.get('x-user-permissions')?.value : null
 
   if (permsCookie) {
-    userPerms = permsCookie.split(',')
-  } else if (userRole !== 'admin') {
-    // Busca do banco se o cookie não estiver presente e não for admin
+    userPerms = permsCookie.split(',').filter(Boolean)
+  } else if (userRole !== 'admin' && user) {
     try {
-      const { data: rolePerm } = await comTimeout(
+      const { data: perms } = await comTimeout(
         supabase
-          .from('role_permissions')
-          .select('allowed_tabs')
-          .eq('role', userRole)
-          .single(),
+          .from('user_module_permissions')
+          .select('modulo')
+          .eq('user_id', user.id),
         4000
       )
 
-      if (rolePerm?.allowed_tabs) {
-        userPerms = rolePerm.allowed_tabs.map((t: string) => t === '/' ? '/dashboard' : t)
-        response.cookies.set('x-user-permissions', userPerms.join(','), {
-          maxAge: 3600, httpOnly: false, sameSite: 'lax', path: '/',
-        })
-      }
+      userPerms = (perms || []).map((p: any) => p.modulo)
+      response.cookies.set('x-user-permissions', userPerms.join(','), {
+        maxAge: COOKIE_MAX_AGE, httpOnly: false, sameSite: 'lax', path: '/',
+      })
     } catch {
-      // Fallbacks locais de segurança se der erro de conexão
-      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/controladoria-frota', '/checklist-frota', '/controle-filtros'];
-      if (userRole === 'visitante') userPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
-      else if (userRole === 'mecanico') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos', '/checklist-frota', '/controle-filtros'];
-      else if (userRole === 'supervisor_manutencao') userPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos', '/checklist-frota', '/controle-filtros'];
-      else if (userRole === 'motorista') userPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-frota'];
-      else if (userRole === 'financeiro') userPerms = ['/dashboard', '/custos'];
-      else userPerms = allTabs;
+      // Timeout/erro de conexão: nenhum fallback hardcoded por cargo (ficaria sempre
+      // desatualizado em relação a permissões por indivíduo) — falha fechado, só as
+      // rotas sempre permitidas ficam acessíveis até a próxima requisição conseguir
+      // consultar o banco.
+      userPerms = []
     }
   }
 
   // Se for admin, pula verificação de rotas (acesso total)
   if (userRole !== 'admin') {
-    // Rotas sempre permitidas para qualquer autenticado
-    const routesSemprePermitidas = ['/', '/perfil'];
-    const isPublicOrProfile = routesSemprePermitidas.some(route => pathname === route || pathname.startsWith('/perfil'));
-    
+    const isPublicOrProfile = ROTAS_SEMPRE_PERMITIDAS.some(route => pathname === route || pathname.startsWith('/perfil'));
+
     if (!isPublicOrProfile) {
       // Verifica se a rota requisitada começa com alguma das rotas permitidas do usuário
       const hasAccess = userPerms.some(allowedRoute => {
@@ -242,7 +223,7 @@ export async function middleware(request: NextRequest) {
   // Sincroniza os cookies x-user-role, x-user-filial e limpa/atualiza permissões se mudou o cargo
   if (currentRoleCookie !== userRole) {
     response.cookies.set('x-user-role', userRole, {
-      maxAge: 3600, httpOnly: true, sameSite: 'lax', path: '/',
+      maxAge: COOKIE_MAX_AGE, httpOnly: true, sameSite: 'lax', path: '/',
     })
     // Força limpeza do cookie de permissões antigas
     response.cookies.delete('x-user-permissions')
@@ -250,7 +231,7 @@ export async function middleware(request: NextRequest) {
   const currentFilialCookie = request.cookies.get('x-user-filial')?.value;
   if (currentFilialCookie !== userFilial) {
     response.cookies.set('x-user-filial', userFilial, {
-      maxAge: 3600, httpOnly: false, sameSite: 'lax', path: '/',
+      maxAge: COOKIE_MAX_AGE, httpOnly: false, sameSite: 'lax', path: '/',
     })
   }
 

@@ -81,6 +81,8 @@ export default function LoginPage({
           throw new Error(
             profileRes.data.status === 'rejeitado'
               ? 'Seu cadastro foi rejeitado. Fale com um administrador para mais informações.'
+              : profileRes.data.status === 'bloqueado'
+              ? 'Seu acesso foi bloqueado por um administrador. Fale com ele para mais informações.'
               : 'Seu cadastro ainda está aguardando aprovação de um administrador.'
           );
         }

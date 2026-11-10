@@ -33,8 +33,15 @@ import {
   BadgeDollarSign,
   Fuel,
   Filter,
+  BarChart3,
+  History,
+  ShieldAlert,
+  Timer,
+  ListChecks,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { MODULOS_SISTEMA } from "@/lib/modulos";
 import { PremiumLoader } from './premium-loader';
 import AlterarSenhaModal from './AlterarSenhaModal';
 import NotificacoesBell from './NotificacoesBell';
@@ -53,59 +60,70 @@ const ModernWaterIcon = (props: any) => (
   </svg>
 );
 
-const navigation = [
-  { name: 'Dashboard',                path: '/dashboard',              icon: LayoutDashboard },
-  { name: 'Ficha Mão de Obra',         path: '/mao-de-obra',            icon: Wrench },
-  { name: 'Controle de OS',           path: '/os',                     icon: ClipboardList },
-  { name: 'Checklist Mecânicos',      path: '/checklist-mecanicos',    icon: ClipboardList, offlineCapable: false },
-  { name: 'Programação Mecânica',     path: '/programacao-mecanica',  icon: Gauge, offlineCapable: false },
-  { name: 'Controle de Horímetros',   path: '/preventivas',            icon: Calendar },
-  { name: 'Boletim de Pneus',         path: '/pneus',                  icon: CircleDot },
-  { name: 'Backlog',                  path: '/backlog',                icon: FileText },
-  { name: 'Prog. Preventiva',         path: '/programacao-preventiva', icon: Settings2 },
-  { name: 'Base de Frota',            path: '/base-frotas',            icon: Truck },
-  { name: 'Base de Dados',            path: '/base-dados',             icon: Database },
-  { name: 'Calendário Suzano',        path: '/calendario',             icon: Calendar },
-  { name: 'Controle de Lavagens',     path: '/lavagens',               icon: ModernWaterIcon },
-  { name: 'Captação de Água',         path: '/captacao',               icon: ModernWaterIcon },
-  { name: 'Documentos da Frota',      path: '/documentos',             icon: ClipboardList },
-  { name: 'Controladoria de Gestão',  path: '/controladoria-frota',    icon: ShieldCheck },
-  { name: 'Checklist de Frota',       path: '/checklist-frota',        icon: ClipboardCheck },
-  { name: 'Controle de Filtros',      path: '/controle-filtros',      icon: Filter },
-  { name: 'Afiação',                   path: '/afiacao',                icon: Wrench },
-  { name: 'Controle de Custos',        path: '/custos',                 icon: BadgeDollarSign },
-  { name: 'Controle de Insumos',       path: '/insumos',                icon: Fuel },
-];
+// Ícone por módulo — a lista de módulos em si vem de lib/modulos.ts (fonte única,
+// também usada pelo middleware e pela Gestão de Usuários). Um módulo sem ícone aqui
+// ainda aparece, só com um ícone genérico (ver DEFAULT_ICON), nunca desaparece.
+const DEFAULT_ICON = Settings2;
+const ICON_POR_MODULO: Record<string, React.ElementType> = {
+  '/dashboard': LayoutDashboard,
+  '/mao-de-obra': Wrench,
+  '/os': ClipboardList,
+  '/checklist-mecanicos': ClipboardList,
+  '/programacao-mecanica': Gauge,
+  '/preventivas': Calendar,
+  '/horimetro': Timer,
+  '/pneus': CircleDot,
+  '/backlog': FileText,
+  '/programacao-preventiva': Settings2,
+  '/base-frotas': Truck,
+  '/base-dados': Database,
+  '/calendario': Calendar,
+  '/lavagens': ModernWaterIcon,
+  '/lubrificacao': Droplets,
+  '/captacao': ModernWaterIcon,
+  '/documentos': ClipboardList,
+  '/controladoria-frota': ShieldCheck,
+  '/checklist-frota': ClipboardCheck,
+  '/controle-filtros': Filter,
+  '/afiacao': Wrench,
+  '/custos': BadgeDollarSign,
+  '/insumos': Fuel,
+  '/indicadores': BarChart3,
+  '/pcm': ListChecks,
+  '/semanal': CalendarDays,
+  '/historico-exclusoes': History,
+  '/tentativas-acesso': ShieldAlert,
+  '/admin/usuarios': Users,
+};
 
-function getFilteredNavigation(permissions: string[], role?: string, isOnline: boolean = true) {
-  let result = navigation;
+// Módulos sem fallback de leitura offline nem fila de sincronização de escrita —
+// somem do menu quando sem internet (hoje: Checklist Mecânicos e Programação Mecânica).
+const SEM_SUPORTE_OFFLINE = ['/checklist-mecanicos', '/programacao-mecanica'];
 
-  // Segurança: Visitante sempre vê as 5 abas obrigatórias (Dashboard, Horímetros, Backlog, Calendário, Documentos)
-  if (role === 'visitante') {
-    result = navigation.filter(item =>
-      ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'].includes(item.path)
-    );
-  } else if (role !== 'admin') {
-    // Se não houver permissões salvas no BD ainda, mantém todas as abas por padrão
-    if (permissions && permissions.length > 0) {
-      result = navigation.filter(item => permissions.includes(item.path) || item.path === '/mao-de-obra');
-    }
-  }
-  // Admin sempre vê tudo (role === 'admin' mantém `result` como `navigation` completa)
-
-  // Sem internet: some com as abas que não funcionam offline (não têm fallback de
-  // leitura nem fila de sincronização pra escrita) — ver levantamento do Controle de Custos
-  // e demais módulos offline-first. Hoje só Checklist Mecânicos se encaixa nisso.
-  if (!isOnline) {
-    result = result.filter(item => item.offlineCapable !== false);
-  }
-
-  return result;
-}
+const navigation = MODULOS_SISTEMA
+  .filter(m => m.path !== '/admin/usuarios')
+  .map(m => ({ name: m.label, path: m.path, icon: ICON_POR_MODULO[m.path] || DEFAULT_ICON }));
 
 const adminNavigation = [
   { name: 'Gestão de Usuários', path: '/admin/usuarios', icon: Users },
 ];
+
+function getFilteredNavigation(permissions: string[], role?: string, isOnline: boolean = true) {
+  // Acesso é só o que está efetivamente concedido por indivíduo (user_module_permissions,
+  // já resolvido em `permissions` pelo auth-context) — nenhuma lista fixa de cargo aqui.
+  // Admin sempre vê tudo (bypass já embutido na resolução de `permissions`, mas reforçado
+  // aqui também, consistente com o middleware e o RLS).
+  let result = role === 'admin'
+    ? navigation
+    : navigation.filter(item => permissions.includes(item.path));
+
+  // Sem internet: some com as abas que não funcionam offline.
+  if (!isOnline) {
+    result = result.filter(item => !SEM_SUPORTE_OFFLINE.includes(item.path));
+  }
+
+  return result;
+}
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

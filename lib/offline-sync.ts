@@ -199,6 +199,9 @@ const syncTasks: Record<
   role_permissions: (supabase) =>
     supabase.from("role_permissions").select("*"),
 
+  user_module_permissions: (supabase) =>
+    supabase.from("user_module_permissions").select("*"),
+
   filiais: (supabase) =>
     supabase.from("filiais").select("id, nome, ativo").order("id"),
 

@@ -64,10 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (cachedProfile) {
         const profile = JSON.parse(cachedProfile);
-        let permissions = cachedPerms ? JSON.parse(cachedPerms) : [];
-        if (Array.isArray(permissions) && !permissions.includes('/lubrificacao')) {
-          permissions.push('/lubrificacao');
-        }
+        const permissions = cachedPerms ? JSON.parse(cachedPerms) : [];
         return {
           user,
           profile,
@@ -132,11 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cachedProfile) {
         try {
           const parsedProfile = JSON.parse(cachedProfile);
-          let parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : [];
-          if (Array.isArray(parsedPerms) && !parsedPerms.includes('/lubrificacao')) {
-            parsedPerms.push('/lubrificacao');
-          }
-          
+          const parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : [];
+
           setProfile(parsedProfile);
           setPermissions(parsedPerms);
           
@@ -178,8 +172,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Busca profile e permissões em PARALELO com Timeout de 5s para evitar travar na tela de "Carregando Acessos"
       // caso o banco esteja em pausa (cold start) ou a rede do usuário esteja instável.
       const dbPromise = Promise.all([
-        supabase.from('profiles').select('id, full_name, role, avatar_url, filial_id, filiais(nome)').eq('id', u.id).maybeSingle(),
-        supabase.from('role_permissions').select('role, allowed_tabs')
+        supabase.from('profiles').select('id, full_name, role, avatar_url, filial_id, status, filiais(nome)').eq('id', u.id).maybeSingle(),
+        supabase.from('user_module_permissions').select('modulo').eq('user_id', u.id)
       ]);
 
       const timeoutPromise = new Promise<never>((_, reject) =>
@@ -216,31 +210,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         filial_nome: filialNome,
       };
 
-      // 4. Determinação das Permissões
-      const rolePerm = allPerms.find((p: any) => p.role === finalRole);
-      let finalPerms: string[] = [];
-
-      const allTabs = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/lubrificacao', '/backlog', '/programacao-preventiva', '/base-frotas', '/base-dados', '/calendario', '/lavagens', '/captacao', '/documentos', '/checklist-mecanicos', '/admin/usuarios'];
-      if (rolePerm?.allowed_tabs && rolePerm.allowed_tabs.length > 0) {
-        // Map '/' to '/dashboard' for backward compatibility
-        finalPerms = rolePerm.allowed_tabs.map((t: string) => t === '/' ? '/dashboard' : t);
-      } else {
-        if (finalRole === 'admin') finalPerms = allTabs;
-        else if (finalRole === 'visitante') finalPerms = ['/dashboard', '/preventivas', '/backlog', '/calendario', '/documentos'];
-        else if (finalRole === 'mecanico') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/afiacao', '/lubrificacao', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/checklist-mecanicos'];
-        else if (finalRole === 'supervisor_manutencao') finalPerms = ['/dashboard', '/os', '/preventivas', '/pneus', '/backlog', '/programacao-preventiva', '/calendario', '/captacao', '/documentos', '/afiacao', '/checklist-mecanicos'];
-        else if (finalRole === 'motorista') finalPerms = ['/dashboard', '/pneus', '/calendario', '/lavagens', '/captacao', '/documentos'];
-        else if (finalRole === 'afiador') finalPerms = ['/dashboard', '/afiacao'];
-        else if (finalRole === 'financeiro') finalPerms = ['/dashboard', '/custos'];
-        else finalPerms = allTabs.filter(t => t !== '/admin/usuarios');
+      // 4. Bloqueado/rejeitado com sessão já aberta (Cenário F): desloga na hora, mesmo
+      // que o front ainda tivesse cache válido. Isso cobre quem já estava logado quando
+      // um admin bloqueou — o RLS (user_is_active()) já barra qualquer dado real antes
+      // disso, mas aqui tiramos a pessoa da tela de vez.
+      const statusAtual = (profileData as any)?.status;
+      if (statusAtual && statusAtual !== 'aprovado') {
+        console.warn('[Auth] Status não aprovado detectado em sessão ativa — encerrando sessão.');
+        await signOut();
+        return;
       }
 
-      // Garantir que /lubrificacao seja sempre incluída para perfis autorizados
-      if (['admin', 'pcm', 'gestao', 'mecanico', 'tecnico', 'gestor', 'supervisor_manutencao'].includes(finalRole) && !finalPerms.includes('/lubrificacao')) {
-        finalPerms.push('/lubrificacao');
-      }
+      // 5. Determinação das Permissões — por INDIVÍDUO (user_module_permissions), não
+      // mais por cargo. Admin sempre tem acesso total, independente do que está gravado.
+      const MODULOS_ADMIN = ['/dashboard','/mao-de-obra','/os','/checklist-mecanicos','/programacao-mecanica','/preventivas','/horimetro','/pneus','/backlog','/programacao-preventiva','/base-frotas','/base-dados','/calendario','/lavagens','/lubrificacao','/captacao','/documentos','/controladoria-frota','/checklist-frota','/controle-filtros','/afiacao','/custos','/insumos','/indicadores','/pcm','/semanal','/historico-exclusoes','/tentativas-acesso','/admin/usuarios'];
+      const finalPerms: string[] = finalRole === 'admin'
+        ? MODULOS_ADMIN
+        : (allPerms as any[]).map(p => p.modulo).filter(Boolean);
 
-      // 5. Atualiza State e Cache
+      // 6. Atualiza State e Cache
       setProfile(finalProfile);
       setPermissions(finalPerms);
 
@@ -248,13 +236,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(`eunaman_profile_${u.id}`, JSON.stringify(finalProfile));
         localStorage.setItem(`eunaman_perms_${u.id}`, JSON.stringify(finalPerms));
 
-        // Sincroniza cookies para o middleware
-        document.cookie = `x-user-role=${finalRole}; path=/; max-age=3600; SameSite=Lax;`;
-        document.cookie = `x-user-filial=${filialId}; path=/; max-age=3600; SameSite=Lax;`;
-        document.cookie = `x-user-permissions=${finalPerms.join(',')}; path=/; max-age=3600; SameSite=Lax;`;
+        // Sincroniza cookies para o middleware — validade curta (era 1h) para que um
+        // bloqueio/retirada de permissão feito por um admin noutra máquina valha rápido
+        // aqui também, sem depender só do Realtime (ver sincronizarPermissoesRealtime).
+        document.cookie = `x-user-role=${finalRole}; path=/; max-age=300; SameSite=Lax;`;
+        document.cookie = `x-user-filial=${filialId}; path=/; max-age=300; SameSite=Lax;`;
+        document.cookie = `x-user-permissions=${finalPerms.join(',')}; path=/; max-age=300; SameSite=Lax;`;
       }
 
-      // 6. Redirecionamento final (se necessário)
+      // 7. Redirecionamento final (se necessário)
       if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/auth/callback')) {
         router.replace('/');
       }
@@ -363,6 +353,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, [supabase, router]); // Removido user daqui para evitar loops e garantir registro único do listener
+
+  // Sincronização de permissões entre máquinas (item 5 do pedido de segurança): um admin
+  // pode bloquear o usuário ou retirar um módulo em outro computador enquanto esta sessão
+  // já está aberta — Realtime entrega isso na hora; a revalidação periódica abaixo é o
+  // reforço pedido explicitamente para não depender só do Realtime (rede instável, aba em
+  // segundo plano que perde o websocket, etc.).
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`auth-sync-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_module_permissions', filter: `user_id=eq.${user.id}` }, () => {
+        console.log('[Auth] Permissões alteradas por um admin — revalidando...');
+        fetchProfile(user, true, true, true);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, () => {
+        console.log('[Auth] Perfil alterado por um admin — revalidando...');
+        fetchProfile(user, true, true, true);
+      })
+      .subscribe();
+
+    // Reforço: revalida mesmo sem Realtime (ex: rede instável, aba sem foco perdendo o
+    // websocket) — não é tão imediato quanto o evento acima, mas garante que em até alguns
+    // minutos um bloqueio/retirada de permissão feito em outra máquina sempre pega aqui.
+    const interval = setInterval(() => {
+      fetchProfile(user, true, true, true);
+    }, 3 * 60 * 1000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const signOut = async () => {
     console.log('[Auth] Iniciando Logout...');
