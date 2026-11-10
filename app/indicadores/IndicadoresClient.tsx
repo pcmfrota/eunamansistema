@@ -303,6 +303,30 @@ export default function IndicadoresClient({ initialData }: Props) {
     setFiltroIndisp('todos')
   }
 
+  // Os dois useMemo abaixo precisam rodar em TODO render, mesmo com data ainda nulo —
+  // regra dos Hooks do React. Antes eles vinham DEPOIS do "if (!data) return", então no
+  // primeiro render (data=null) esses hooks nem eram chamados, e assim que os dados
+  // chegavam e o componente renderizava de novo, o React via 2 hooks "novos" aparecendo
+  // no meio do render e derrubava a tela inteira com "Algo deu errado ao carregar esta
+  // tela" — sempre que esses dados terminassem de carregar, sem exceção.
+  const veiculosFiltradosAba = useMemo(() => {
+    if (!data) return []
+    return data.veiculos.filter(v => {
+      if (abaAtiva === 'leves') return v.categoria?.toLowerCase().includes('leve') || v.categoria?.toLowerCase().includes('carro')
+      if (abaAtiva === 'pesados') return v.categoria?.toLowerCase().includes('pesad') || v.categoria?.toLowerCase().includes('caminh')
+      return true
+    })
+  }, [data, abaAtiva])
+
+  // Filtro por indisponibilidade
+  const veiculosFinal = useMemo(() => {
+    return veiculosFiltradosAba.filter(v => {
+      if (filtroIndisp === 'apenas_indisp') return v.dm < 100
+      if (filtroIndisp === 'apenas_100') return v.dm >= 100
+      return true
+    })
+  }, [veiculosFiltradosAba, filtroIndisp])
+
   if (!data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] w-full bg-[#0f1115]">
@@ -313,24 +337,6 @@ export default function IndicadoresClient({ initialData }: Props) {
       </div>
     )
   }
-
-  // Filtro por aba (categoria)
-  const veiculosFiltradosAba = useMemo(() => {
-    return data.veiculos.filter(v => {
-      if (abaAtiva === 'leves') return v.categoria?.toLowerCase().includes('leve') || v.categoria?.toLowerCase().includes('carro')
-      if (abaAtiva === 'pesados') return v.categoria?.toLowerCase().includes('pesad') || v.categoria?.toLowerCase().includes('caminh')
-      return true
-    })
-  }, [data.veiculos, abaAtiva])
-
-  // Filtro por indisponibilidade
-  const veiculosFinal = useMemo(() => {
-    return veiculosFiltradosAba.filter(v => {
-      if (filtroIndisp === 'apenas_indisp') return v.dm < 100
-      if (filtroIndisp === 'apenas_100') return v.dm >= 100
-      return true
-    })
-  }, [veiculosFiltradosAba, filtroIndisp])
 
   // Dados para gráficos
   const dadosDM = veiculosFinal.map(v => ({ name: v.placa, value: v.dm }))
