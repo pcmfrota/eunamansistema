@@ -223,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 5. Determinação das Permissões — por INDIVÍDUO (user_module_permissions), não
       // mais por cargo. Admin sempre tem acesso total, independente do que está gravado.
-      const MODULOS_ADMIN = ['/dashboard','/mao-de-obra','/os','/checklist-mecanicos','/programacao-mecanica','/preventivas','/horimetro','/pneus','/backlog','/programacao-preventiva','/base-frotas','/base-dados','/calendario','/lavagens','/lubrificacao','/captacao','/documentos','/controladoria-frota','/checklist-frota','/controle-filtros','/afiacao','/custos','/insumos','/indicadores','/pcm','/semanal','/historico-exclusoes','/tentativas-acesso','/admin/usuarios'];
+      const MODULOS_ADMIN = ['/dashboard','/mao-de-obra','/os','/checklist-mecanicos','/programacao-mecanica','/preventivas','/horimetro','/pneus','/backlog','/programacao-preventiva','/base-frotas','/base-dados','/calendario','/lavagens','/lubrificacao','/captacao','/documentos','/controladoria-frota','/checklist-frota','/controle-filtros','/custos','/insumos','/historico-exclusoes','/tentativas-acesso','/admin/usuarios'];
       const finalPerms: string[] = finalRole === 'admin'
         ? MODULOS_ADMIN
         : (allPerms as any[]).map(p => p.modulo).filter(Boolean);

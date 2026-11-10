@@ -22,11 +22,11 @@ const PUBLIC_DIR = path.join(ROOT, "public");
 // de build — o sw.js consome o resultado já pronto).
 const ROUTES = [
   "/", "/login", "/login/cadastro", "/offline.html",
-  "/os", "/preventivas", "/pneus", "/backlog", "/afiacao", "/calendario",
-  "/dashboard", "/indicadores", "/lavagens", "/captacao", "/programacao-preventiva",
+  "/os", "/preventivas", "/pneus", "/backlog", "/calendario",
+  "/dashboard", "/lavagens", "/captacao", "/programacao-preventiva",
   "/base-frotas", "/base-dados", "/documentos", "/checklist-mecanicos",
   "/mao-de-obra", "/lubrificacao", "/admin/usuarios", "/historico-exclusoes",
-  "/horimetro", "/pcm", "/perfil", "/custos", "/semanal", "/insumos", "/privacidade",
+  "/horimetro", "/perfil", "/custos", "/insumos", "/privacidade",
 ];
 
 function main() {

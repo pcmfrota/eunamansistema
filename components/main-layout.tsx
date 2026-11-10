@@ -33,12 +33,9 @@ import {
   BadgeDollarSign,
   Fuel,
   Filter,
-  BarChart3,
   History,
   ShieldAlert,
   Timer,
-  ListChecks,
-  CalendarDays,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { MODULOS_SISTEMA } from "@/lib/modulos";
@@ -85,12 +82,8 @@ const ICON_POR_MODULO: Record<string, React.ElementType> = {
   '/controladoria-frota': ShieldCheck,
   '/checklist-frota': ClipboardCheck,
   '/controle-filtros': Filter,
-  '/afiacao': Wrench,
   '/custos': BadgeDollarSign,
   '/insumos': Fuel,
-  '/indicadores': BarChart3,
-  '/pcm': ListChecks,
-  '/semanal': CalendarDays,
   '/historico-exclusoes': History,
   '/tentativas-acesso': ShieldAlert,
   '/admin/usuarios': Users,

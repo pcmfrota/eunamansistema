@@ -101,15 +101,8 @@ const portalItems = [
     icon: Droplets, 
     color: "from-emerald-500 to-teal-600 bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
   },
-  { 
-    name: "Afiação", 
-    path: "/afiacao", 
-    desc: "Registros de estado, baixa e substituição de materiais de afiação.", 
-    icon: Settings2, 
-    color: "from-fuchsia-500 to-purple-600 bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20" 
-  },
-  { 
-    name: "Backlog", 
+  {
+    name: "Backlog",
     path: "/backlog", 
     desc: "Gerenciamento de pendências, criticidades e prazos (aging).", 
     icon: FileText, 
