@@ -181,8 +181,7 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
 
     const original = data.find(p => p.id === id)
     if (original && dataToSave.horimetro_atual < original.horimetro_atual) {
-      alert(`O horímetro/km não pode ser menor que o último valor registrado (${original.horimetro_atual}${unidade}).`)
-      return
+      alert(`Atenção: o horímetro/km informado (${dataToSave.horimetro_atual}${unidade}) é menor que o último valor registrado (${original.horimetro_atual}${unidade}). O registro será salvo mesmo assim.`)
     }
 
     startTransition(async () => {

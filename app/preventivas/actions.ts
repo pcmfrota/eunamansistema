@@ -55,12 +55,6 @@ export async function atualizarPreventiva(id: string, dados: {
       .maybeSingle();
     if (fetchError) throw fetchError;
 
-    if (dados.horimetro_atual !== undefined) {
-      if (atual?.horimetro_atual != null && dados.horimetro_atual < atual.horimetro_atual) {
-        throw new Error(`O horímetro/km não pode ser menor que o último valor registrado (${atual.horimetro_atual}).`);
-      }
-    }
-
     const { error } = await supabase
       .from('preventivas')
       .update({ ...dados, data_atualizacao: dados.data_atualizacao || new Date().toISOString().split('T')[0] })
