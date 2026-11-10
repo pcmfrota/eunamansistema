@@ -20,7 +20,8 @@ import {
   ChevronUp,
   CheckSquare,
   Square,
-  CheckCircle2
+  CheckCircle2,
+  Printer
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
@@ -326,6 +327,133 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
     () => new Set(selectedItems.map(i => i.frota).filter(Boolean)),
     [selectedItems]
   );
+
+  // Imprime, em uma única visualização A4 paisagem, exclusivamente os itens marcados
+  // em selectedIds (resolvidos a partir de "items", não "filteredItems" — a seleção deve
+  // valer mesmo que o usuário troque os filtros depois de marcar os itens).
+  const handleImprimirListaBacklog = () => {
+    if (selectedItems.length === 0) {
+      alert('Selecione pelo menos um Backlog para imprimir.');
+      return;
+    }
+
+    const win = window.open('', '_blank', 'width=1100,height=800');
+    if (!win) return;
+
+    const placasMap = new Map(localPlacas.map(p => [p.placa, p]));
+    const fmtData = (d: string | null | undefined) => d ? d.split('T')[0].split('-').reverse().join('/') : '—';
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const CRIT_STYLE: Record<string, string> = {
+      A: 'background:#fde8e8;color:#e74c3c;',
+      B: 'background:#ebf5fb;color:#2563eb;',
+    };
+    const STATUS_STYLE: Record<string, string> = {
+      ENCERRADO: 'background:#e2e8f0;color:#475569;',
+      ENCERRADA: 'background:#e2e8f0;color:#475569;',
+      CONCLUIDO: 'background:#e2e8f0;color:#475569;',
+      PROGRAMADO: 'background:#dcfce7;color:#16a34a;',
+      PROGRAMADA: 'background:#dcfce7;color:#16a34a;',
+      PENDENTE: 'background:#fef9c3;color:#ca8a04;',
+    };
+
+    const filtrosAtivos: string[] = [];
+    if (search) filtrosAtivos.push(`Busca: "${search}"`);
+    if (filterPlaca.length) filtrosAtivos.push(`Placa: ${filterPlaca.join(', ')}`);
+    if (filterModulo.length) filtrosAtivos.push(`Módulo: ${filterModulo.join(', ')}`);
+    if (filterArea.length) filtrosAtivos.push(`Área: ${filterArea.join(', ')}`);
+    if (filterStatuses.length) filtrosAtivos.push(`Status: ${filterStatuses.join(', ')}`);
+    if (filterCriticidade.length) filtrosAtivos.push(`Criticidade: ${filterCriticidade.join(', ')}`);
+    if (filterDetalhamento.length) filtrosAtivos.push(`Detalhamento: ${filterDetalhamento.join(', ')}`);
+    if (filterMes) filtrosAtivos.push(`Mês: ${filterMes}`);
+    if (filterAno) filtrosAtivos.push(`Ano: ${filterAno}`);
+    if (filterDataInicio) filtrosAtivos.push(`De: ${filterDataInicio.split('-').reverse().join('/')}`);
+    if (filterDataFim) filtrosAtivos.push(`Até: ${filterDataFim.split('-').reverse().join('/')}`);
+
+    const totalRegistros = selectedItems.length;
+
+    const linhas = selectedItems.map((item, idx) => {
+      const critUpper = String(item.criticidade || 'B').toUpperCase().trim();
+      const critMapped = (critUpper === 'A' || critUpper === 'INTERDIÇÃO' || critUpper === 'INTERDICAO' || critUpper === 'ALTA') ? 'A' : 'B';
+      const statusUpper = String(item.status || 'PENDENTE').toUpperCase().trim();
+      const statusStyle = STATUS_STYLE[statusUpper] || STATUS_STYLE.PENDENTE;
+      const area = placasMap.get(item.frota)?.area || '—';
+
+      return `
+        <tr>
+          <td style="text-align:center;">${idx + 1}</td>
+          <td style="font-weight:800;font-family:monospace;">${esc(item.frota) || '—'}</td>
+          <td>${esc(item.modulo) || '—'}</td>
+          <td style="text-align:center;"><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-weight:800;font-size:9px;${CRIT_STYLE[critMapped]}">${critMapped}</span></td>
+          <td style="text-align:center;"><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-weight:800;font-size:9px;white-space:nowrap;${statusStyle}">${esc(item.status) || 'PENDENTE'}</span></td>
+          <td style="white-space:nowrap;">${fmtData(item.data_evidencia)}</td>
+          <td>${esc(item.descricao) || '—'}</td>
+          <td>${esc(area)}</td>
+          <td>${esc(item.colaborador) || '—'}</td>
+          <td style="text-align:center;">${esc(item.tag) || '—'}</td>
+          <td>${esc(item.detalhamento) || '—'}</td>
+          <td style="text-align:center;white-space:nowrap;">${esc(item.tempo_execucao) || '—'}</td>
+        </tr>`;
+    }).join('');
+
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head>
+      <meta charset="UTF-8"/>
+      <title>Relatório de Backlog - Frota</title>
+      <style>
+        @page { size: A4 landscape; margin: 10mm 10mm 18mm 10mm; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Arial, sans-serif; font-size: 10px; color: #111; margin: 0; padding: 0; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px 6px; text-align: left; vertical-align: top; word-break: break-word; }
+        th { background: #1a5c1a; color: #fff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+        tbody tr:nth-child(even) { background: #f8fafc; }
+        .footer-fixo { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; padding: 4px 2px; font-size: 8px; color: #6b7280; border-top: 1px solid #cbd5e1; background: #fff; }
+      </style>
+      </head><body>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px;">
+          <div>
+            <h1 style="font-size:16px;font-weight:900;letter-spacing:2px;text-transform:uppercase;margin:0;">Relatório de Backlog – Frota</h1>
+            <p style="font-size:9px;color:#6b7280;margin:3px 0 0;">EUNAMAN — Controle de Manutenção de Frotas</p>
+            ${filtrosAtivos.length ? `<p style="font-size:8px;color:#9ca3af;margin:4px 0 0;max-width:720px;">Filtros aplicados: ${esc(filtrosAtivos.join(' · '))}</p>` : ''}
+          </div>
+          <div style="text-align:right;white-space:nowrap;">
+            <p style="font-size:9px;color:#6b7280;margin:0;">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+            <p style="font-size:11px;font-weight:900;margin:3px 0 0;">${totalRegistros} Backlog${totalRegistros !== 1 ? 's' : ''} selecionado${totalRegistros !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:24px;">Nº</th>
+              <th>Frota</th>
+              <th>Módulo</th>
+              <th style="width:68px;">Criticidade</th>
+              <th style="width:80px;">Status</th>
+              <th style="width:62px;">Data</th>
+              <th style="min-width:200px;">Descrição</th>
+              <th>Área</th>
+              <th>Solicitante</th>
+              <th>Tag</th>
+              <th>Detalhamento do Pedido</th>
+              <th style="width:62px;">Tempo Est.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${linhas}
+          </tbody>
+        </table>
+
+        <div class="footer-fixo">
+          <span>EUNAMAN — Sistema de Controle de Manutenção</span>
+          <span>Gerado em ${new Date().toLocaleString('pt-BR')} · ${totalRegistros} registro${totalRegistros !== 1 ? 's' : ''}</span>
+        </div>
+      </body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); win.close(); }, 400);
+  };
 
   const handleGerarOS = async () => {
     if (selectedItems.length === 0) return;
@@ -1042,6 +1170,9 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
                      </button>
                      <button onClick={handleBatchDelete} className="flex items-center gap-2 text-xs font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest">
                        <Plus size={18} className="rotate-45" /> {isAdmin ? 'EXCLUIR SELEÇÃO' : 'SOLICITAR EXCLUSÃO'}
+                     </button>
+                     <button onClick={handleImprimirListaBacklog} className="flex items-center gap-2 text-xs font-black text-sky-400 hover:text-sky-300 transition-colors uppercase tracking-widest">
+                       <Printer size={18} /> IMPRIMIR LISTA
                      </button>
                      <button onClick={() => setSelectedIds(new Set())} className="text-xs font-black text-zinc-400 hover:text-white transition-colors uppercase tracking-widest">
                        LIMPAR
