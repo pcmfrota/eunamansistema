@@ -202,9 +202,6 @@ function blankForm() {
     descricoes_atividade: [blankDescricaoAtividade()] as DescricaoAtividadeForm[],
     motivo: "",
     observacoes: "",
-    mecanicos: [""] as string[],
-    assinaturas: [""] as string[],
-    matriculas: [""] as string[],
     cargos: blankCargos(),
     cargosPulados: [] as string[],
     fotos: [] as string[],
@@ -262,6 +259,9 @@ export default function OSClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(blankForm());
   const [salvando, setSalvando] = useState(false);
+  // Qual cargo de "Aprovações" está com os campos abertos agora — as linhas começam
+  // suspensas (só o nome do papel) e só abrem nome/matrícula/assinatura ao tocar.
+  const [cargoExpandido, setCargoExpandido] = useState<string | null>(null);
 
   const [actionItem, setActionItem] = useState<any>(null);
   const [viewItem, setViewItem] = useState<any>(null);
@@ -359,11 +359,13 @@ export default function OSClient({
   const abrirNovo = () => {
     setEditingId(null);
     setForm(blankForm());
+    setCargoExpandido(null);
     setSheetOpen(true);
   };
 
   const abrirEdicao = async (o: any) => {
     setEditingId(o.id);
+    setCargoExpandido(null);
     let fotosExtra: any = {};
     if (isOnline && !String(o.id).startsWith("temp_")) {
       const res = await getOSImagensClient(o.id);
@@ -387,7 +389,11 @@ export default function OSClient({
         });
       }
     } catch {}
-    const mecanicosSalvos = Array.isArray(o.mecanicos) && o.mecanicos.length > 0 ? o.mecanicos : [""];
+    // Mecânicos "legado" (de antes da assinatura por descrição existir, quando havia uma
+    // lista separada "Mecânicos Executores") — sem seção própria pra editar mais, só usados
+    // abaixo pra pré-preencher o mecânico de cada bloco de descrição que ainda não tiver um
+    // (por índice), pra não esconder/perder uma assinatura antiga já feita.
+    const mecanicosLegado = Array.isArray(o.mecanicos) ? o.mecanicos : [];
     // descricoes_atividade (como fotos/foto_horimetro/foto_km) fica de fora da listagem em
     // massa por ter fotos — só vem em fotosExtra, buscado sob demanda acima. OS antigas
     // (gravadas antes desse campo existir) continuam editáveis: monta um único bloco a
@@ -397,16 +403,16 @@ export default function OSClient({
       : o.descricoes_atividade;
     const descricoesSalvas: DescricaoAtividadeForm[] =
       Array.isArray(descricoesOrigem) && descricoesOrigem.length > 0
-        ? descricoesOrigem.map((d: any) => ({
+        ? descricoesOrigem.map((d: any, i: number) => ({
             descricao: d?.descricao || "",
             hora_inicio: d?.hora_inicio || "",
             hora_fim: d?.hora_fim || "",
             foto: d?.foto || "",
-            mecanico_nome: d?.mecanico_nome || "",
-            mecanico_matricula: d?.mecanico_matricula || "",
-            mecanico_assinatura: d?.mecanico_assinatura || "",
+            mecanico_nome: d?.mecanico_nome || mecanicosLegado[i] || "",
+            mecanico_matricula: d?.mecanico_matricula || matriculasSalvas[i] || "",
+            mecanico_assinatura: d?.mecanico_assinatura || assinaturasSalvas[i] || "",
           }))
-        : [{ ...blankDescricaoAtividade(), descricao: o.descricao || "" }];
+        : [{ ...blankDescricaoAtividade(), descricao: o.descricao || "", mecanico_nome: mecanicosLegado[0] || "", mecanico_matricula: matriculasSalvas[0] || "", mecanico_assinatura: assinaturasSalvas[0] || "" }];
     setForm({
       horario_parada: (o.horario_parada || "").slice(0, 16),
       data_abertura: (o.data_abertura || "").slice(0, 16),
@@ -424,9 +430,6 @@ export default function OSClient({
       descricoes_atividade: descricoesSalvas,
       motivo: o.motivo || "",
       observacoes: o.observacoes || "",
-      mecanicos: mecanicosSalvos,
-      assinaturas: mecanicosSalvos.map((_: string, i: number) => assinaturasSalvas[i] || ""),
-      matriculas: mecanicosSalvos.map((_: string, i: number) => matriculasSalvas[i] || ""),
       cargos: cargosSalvos,
       cargosPulados: cargosPuladosSalvos,
       fotos: fotosExtra.fotos || o.fotos || [],
@@ -455,6 +458,26 @@ export default function OSClient({
     const diffMin = Math.floor((new Date(form.data_fechamento).getTime() - new Date(form.data_abertura).getTime()) / 60000);
     return diffMin > 0 ? Number((diffMin / 60).toFixed(2)) : 0;
   }, [form.data_abertura, form.data_fechamento]);
+
+  // Lista de mecânicos/matrículas/assinaturas da OS — derivada das assinaturas por
+  // descrição de atividade (não existe mais um campo separado "Mecânicos Executores": cada
+  // descrição já é a atividade de um mecânico específico, então repetir a mesma pessoa numa
+  // lista à parte era redundante). Um mesmo nome em descrições diferentes conta uma vez só,
+  // com a primeira matrícula/assinatura preenchida que aparecer.
+  const mecanicosDerivados = useMemo(() => {
+    const vistos = new Map<string, { matricula: string; assinatura: string }>();
+    form.descricoes_atividade.forEach((d) => {
+      const nome = d.mecanico_nome.trim();
+      if (!nome || vistos.has(nome)) return;
+      vistos.set(nome, { matricula: d.mecanico_matricula.trim(), assinatura: d.mecanico_assinatura });
+    });
+    const nomes = Array.from(vistos.keys());
+    return {
+      nomes,
+      matriculas: nomes.map((n) => vistos.get(n)!.matricula),
+      assinaturas: nomes.map((n) => vistos.get(n)!.assinatura),
+    };
+  }, [form.descricoes_atividade]);
 
   // Monta o mapa de campos "achatado" (mesma convenção de app/os/actions.ts: mecanico_1..5,
   // fotos como múltiplos valores) usado tanto pro FormData (caminho online) quanto pro
@@ -497,15 +520,15 @@ export default function OSClient({
       horario_parada: form.horario_parada,
       horas_manutencao: horasManutencao,
       assinatura_mecanico: JSON.stringify({
-        mecanicos: form.assinaturas,
-        matriculas: form.matriculas,
+        mecanicos: mecanicosDerivados.assinaturas,
+        matriculas: mecanicosDerivados.matriculas,
         cargos: form.cargos,
         cargosPulados: form.cargosPulados,
       }),
       fotos: form.fotos.filter(Boolean),
     };
-    form.mecanicos.forEach((nome, idx) => {
-      if (nome.trim()) fields[`mecanico_${idx + 1}`] = nome.trim();
+    mecanicosDerivados.nomes.forEach((nome, idx) => {
+      fields[`mecanico_${idx + 1}`] = nome;
     });
     return fields;
   };
@@ -523,7 +546,7 @@ export default function OSClient({
     setSalvando(true);
     try {
       const fields = buildFields();
-      const mecanicosArray = form.mecanicos.map((m) => m.trim()).filter(Boolean);
+      const mecanicosArray = mecanicosDerivados.nomes;
 
       if (isOnline) {
         const fd = deserializeToFormData(fields);
@@ -910,65 +933,6 @@ export default function OSClient({
             </select>
           </div>
 
-          {/* Mecânicos + assinaturas */}
-          <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-900/40 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-black text-emerald-400 uppercase tracking-wide">Mecânicos Executores</p>
-              {form.mecanicos.length < 5 && (
-                <button
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, mecanicos: [...p.mecanicos, ""], assinaturas: [...p.assinaturas, ""], matriculas: [...p.matriculas, ""] }))}
-                  className="text-[10px] font-black text-emerald-400 uppercase"
-                >
-                  + Adicionar
-                </button>
-              )}
-            </div>
-            {form.mecanicos.map((nome, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <SearchableSelect
-                      value={nome}
-                      onChange={(v) => setForm((p) => { const arr = [...p.mecanicos]; arr[idx] = v; return { ...p, mecanicos: arr }; })}
-                      options={colaboradoresOptions}
-                      placeholder={`Mecânico ${idx + 1}...`}
-                    />
-                  </div>
-                  {form.mecanicos.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setForm((p) => ({
-                        ...p,
-                        mecanicos: p.mecanicos.filter((_, i) => i !== idx),
-                        assinaturas: p.assinaturas.filter((_, i) => i !== idx),
-                        matriculas: p.matriculas.filter((_, i) => i !== idx),
-                      }))}
-                      className="text-red-400 text-lg leading-none px-1"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                {nome.trim() && (
-                  <>
-                    <input
-                      value={form.matriculas[idx] || ""}
-                      onChange={(e) => setForm((p) => { const arr = [...p.matriculas]; arr[idx] = e.target.value; return { ...p, matriculas: arr }; })}
-                      placeholder={`Matrícula — ${nome}`}
-                      className={inputCls}
-                    />
-                    <SignaturePad
-                      label={`Assinatura — ${nome}`}
-                      value={form.assinaturas[idx] || ""}
-                      onChange={(v) => setForm((p) => { const arr = [...p.assinaturas]; arr[idx] = v; return { ...p, assinaturas: arr }; })}
-                    />
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
           {/* Aprovações / Assinaturas de Responsáveis — mesmos 5 papéis do site (Encarregado,
               PCM, Operador, Supervisor/Suzano, Supervisor de Manutenção), cada um com
               nome + matrícula + assinatura própria. Quem efetivamente aprova a OS no fluxo
@@ -979,49 +943,87 @@ export default function OSClient({
             {Object.entries(CARGOS_LABELS).map(([key, label]) => {
               const dado = form.cargos[key] || blankCargoDado();
               const pulado = form.cargosPulados.includes(key);
-              return (
-                <div key={key} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2.5">
-                  <div className="flex items-center justify-between">
+              const expandido = cargoExpandido === key;
+
+              // Pulado — linha compacta, só com a opção de reabrir.
+              if (pulado) {
+                return (
+                  <div key={key} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
                     <span className="text-[10px] font-black text-zinc-400 uppercase">{label}</span>
                     <button
                       type="button"
-                      onClick={() =>
-                        setForm((p) => ({
-                          ...p,
-                          cargosPulados: pulado ? p.cargosPulados.filter((k) => k !== key) : [...p.cargosPulados, key],
-                        }))
-                      }
-                      className={`text-[10px] font-black uppercase ${pulado ? "text-amber-500" : "text-zinc-500"}`}
+                      onClick={() => setForm((p) => ({ ...p, cargosPulados: p.cargosPulados.filter((k) => k !== key) }))}
+                      className="text-[10px] font-black text-amber-500 uppercase"
                     >
-                      {pulado ? "Pulado — reabrir" : "Pular"}
+                      Pulado — reabrir
                     </button>
                   </div>
-                  {!pulado && (
-                    <>
-                      <input
-                        value={dado.nome}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, nome: e.target.value } } }))
-                        }
-                        placeholder="Nome completo"
-                        className={inputCls}
-                      />
-                      <input
-                        value={dado.matricula}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, matricula: e.target.value } } }))
-                        }
-                        placeholder="Matrícula"
-                        className={inputCls}
-                      />
-                      {dado.nome.trim() && (
-                        <SignaturePad
-                          label={`Assinatura — ${label}`}
-                          value={dado.assinatura}
-                          onChange={(v) => setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, assinatura: v } } }))}
-                        />
+                );
+              }
+
+              // Suspenso (padrão) — só o nome do cargo + status; toca pra abrir os campos.
+              if (!expandido) {
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setCargoExpandido(key)}
+                    className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] font-black text-zinc-400 uppercase block">{label}</span>
+                      {dado.assinatura ? (
+                        <span className="text-[10px] font-bold text-emerald-400">
+                          ✅ {dado.nome}{dado.matricula ? ` — Mat. ${dado.matricula}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-zinc-500">Toque para assinar</span>
                       )}
-                    </>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForm((p) => ({ ...p, cargosPulados: [...p.cargosPulados, key] }));
+                      }}
+                      className="text-[10px] font-black text-zinc-500 uppercase shrink-0 ml-2"
+                    >
+                      Pular
+                    </button>
+                  </div>
+                );
+              }
+
+              // Expandido — campos de nome/matrícula/assinatura abertos pra edição.
+              return (
+                <div key={key} className="p-3 rounded-xl bg-zinc-900 border border-amber-700/50 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-amber-500 uppercase">{label}</span>
+                    <button type="button" onClick={() => setCargoExpandido(null)} className="text-[10px] font-black text-zinc-500 uppercase">
+                      Fechar
+                    </button>
+                  </div>
+                  <input
+                    value={dado.nome}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, nome: e.target.value } } }))
+                    }
+                    placeholder="Nome completo"
+                    className={inputCls}
+                  />
+                  <input
+                    value={dado.matricula}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, matricula: e.target.value } } }))
+                    }
+                    placeholder="Matrícula"
+                    className={inputCls}
+                  />
+                  {dado.nome.trim() && (
+                    <SignaturePad
+                      label={`Assinatura — ${label}`}
+                      value={dado.assinatura}
+                      onChange={(v) => setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, assinatura: v } } }))}
+                    />
                   )}
                 </div>
               );
