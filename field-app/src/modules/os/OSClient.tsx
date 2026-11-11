@@ -59,6 +59,13 @@ const blankDescricaoAtividade = (): DescricaoAtividadeForm => ({
   mecanico_assinatura: "",
 });
 
+// Qual bloco de "Descrições da Atividade" deve abrir primeiro: o primeiro ainda sem texto
+// (continua de onde parou), ou o último se todos já estiverem preenchidos.
+function indexPrimeiraDescricaoIncompleta(blocos: DescricaoAtividadeForm[]): number {
+  const idx = blocos.findIndex((b) => !b.descricao.trim());
+  return idx >= 0 ? idx : Math.max(0, blocos.length - 1);
+}
+
 // 5 papéis de aprovação — "Supervisor de Manutenção" é o único realmente novo; os outros 4
 // já existiam no site (app/os/NovoModal.tsx, CARGOS_LABELS) e agora também aqui, com os
 // mesmos campos (nome + matrícula + assinatura) pra ficar idêntico nas duas plataformas.
@@ -264,6 +271,10 @@ export default function OSClient({
   // Qual cargo de "Aprovações" está com os campos abertos agora — as linhas começam
   // suspensas (só o nome do papel) e só abrem nome/matrícula/assinatura ao tocar.
   const [cargoExpandido, setCargoExpandido] = useState<string | null>(null);
+  // Mesma ideia, pra "Descrições da Atividade": só um bloco aberto por vez. Ao concluir um
+  // (botão "Concluir Descrição"), recolhe e abre o próximo — criando um novo em branco se
+  // esse era o último. null = nenhum aberto (ex: ao editar uma OS já toda preenchida).
+  const [descricaoExpandida, setDescricaoExpandida] = useState<number | null>(0);
 
   const [actionItem, setActionItem] = useState<any>(null);
   // Ficha oficial (mesmo layout do site, ver pdfFichaOS.ts) — visualizar/baixar/compartilhar.
@@ -399,13 +410,15 @@ export default function OSClient({
         if (parsed && typeof parsed === "object" && parsed.form) {
           // Mescla com blankForm() pra rascunhos salvos antes dos campos novos (matriculas/
           // cargos/cargosPulados/mecanico_* por descrição) não ficarem undefined.
+          const descricoesRestauradas = (parsed.form.descricoes_atividade || []).map((d: any) => ({ ...blankDescricaoAtividade(), ...d }));
           setForm({
             ...blankForm(),
             ...parsed.form,
             cargos: { ...blankCargos(), ...(parsed.form.cargos || {}) },
-            descricoes_atividade: (parsed.form.descricoes_atividade || []).map((d: any) => ({ ...blankDescricaoAtividade(), ...d })),
+            descricoes_atividade: descricoesRestauradas,
           });
           setEditingId(parsed.editingId ?? null);
+          setDescricaoExpandida(indexPrimeiraDescricaoIncompleta(descricoesRestauradas));
           setSheetOpen(true);
         }
       }
@@ -422,8 +435,10 @@ export default function OSClient({
 
   const abrirNovo = () => {
     setEditingId(null);
-    setForm(blankForm());
+    const novoForm = blankForm();
+    setForm(novoForm);
     setCargoExpandido(null);
+    setDescricaoExpandida(indexPrimeiraDescricaoIncompleta(novoForm.descricoes_atividade));
     setSheetOpen(true);
   };
 
@@ -498,6 +513,7 @@ export default function OSClient({
       cargosPulados: cargosPuladosSalvos,
       fotos: fotosExtra.fotos || o.fotos || [],
     });
+    setDescricaoExpandida(indexPrimeiraDescricaoIncompleta(descricoesSalvas));
     setSheetOpen(true);
   };
 
@@ -906,23 +922,56 @@ export default function OSClient({
               <button
                 type="button"
                 onClick={() =>
-                  setForm((p) => ({ ...p, descricoes_atividade: [...p.descricoes_atividade, blankDescricaoAtividade()] }))
+                  setForm((p) => {
+                    const arr = [...p.descricoes_atividade, blankDescricaoAtividade()];
+                    setDescricaoExpandida(arr.length - 1);
+                    return { ...p, descricoes_atividade: arr };
+                  })
                 }
                 className="text-[10px] font-black text-amber-500 uppercase"
               >
                 + Adicionar Descrição
               </button>
             </div>
-            {form.descricoes_atividade.map((bloco, idx) => (
+            {form.descricoes_atividade.map((bloco, idx) => {
+              const removerBloco = () => {
+                setDescricaoExpandida((atual) => {
+                  if (atual === null) return atual;
+                  if (atual === idx) return Math.max(0, idx - 1);
+                  return atual > idx ? atual - 1 : atual;
+                });
+                setForm((p) => ({ ...p, descricoes_atividade: p.descricoes_atividade.filter((_, i) => i !== idx) }));
+              };
+
+              // Recolhida (padrão) — só um resumo + status; toca pra reabrir e editar.
+              if (idx !== descricaoExpandida) {
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setDescricaoExpandida(idx)}
+                    className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-black text-zinc-500 uppercase">Descrição {idx + 1}</span>
+                      {bloco.descricao.trim() && <p className="text-xs text-zinc-300 truncate mt-0.5">{bloco.descricao.trim()}</p>}
+                    </div>
+                    {bloco.descricao.trim() ? (
+                      <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                    ) : (
+                      <span className="text-[10px] font-black text-amber-500 uppercase shrink-0">Preencher</span>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
               <div key={idx} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black text-zinc-500 uppercase">Descrição {idx + 1}</span>
                   {form.descricoes_atividade.length > 1 && (
                     <button
                       type="button"
-                      onClick={() =>
-                        setForm((p) => ({ ...p, descricoes_atividade: p.descricoes_atividade.filter((_, i) => i !== idx) }))
-                      }
+                      onClick={removerBloco}
                       className="text-red-400 text-lg leading-none px-1"
                     >
                       ×
@@ -1028,8 +1077,25 @@ export default function OSClient({
                     />
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!bloco.descricao.trim()) {
+                      toast.show("Descreva a atividade antes de concluir.", "error");
+                      return;
+                    }
+                    if (idx === form.descricoes_atividade.length - 1) {
+                      setForm((p) => ({ ...p, descricoes_atividade: [...p.descricoes_atividade, blankDescricaoAtividade()] }));
+                    }
+                    setDescricaoExpandida(idx + 1);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-amber-600 active:bg-amber-700 text-white text-xs font-black uppercase tracking-wide"
+                >
+                  Concluir Descrição
+                </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div>

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
@@ -31,12 +32,21 @@ export function BottomSheet({
 
   if (!open) return null;
 
-  return (
+  // Portal pra document.body: um BottomSheet aberto a partir do botão de status de
+  // sincronização (AppBar -> OfflineStatusBadge) ficava preso dentro da caixinha do
+  // próprio cabeçalho (uns 150px de altura, colado na status bar) em vez de cobrir a tela
+  // inteira — mesmo sendo "fixed inset-0". Causa: o <header> da AppBar tem backdrop-blur
+  // (CSS backdrop-filter), e um backdrop-filter/filter/transform num ancestral cria um
+  // novo "containing block" pra descendentes position:fixed, que passam a se posicionar
+  // relativos a ESSE ancestral (o header) em vez do viewport. Renderizando fora da árvore
+  // do header via portal, o sheet escapa desse problema (mesmo padrão já usado em
+  // modules/captacao/CaptacaoClient.tsx).
+  return createPortal(
     <div className="fixed inset-0 z-40 flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div
         className={`relative flex flex-col bg-zinc-900 border-t border-zinc-800 ${
-          fullHeight ? "h-[92vh]" : "max-h-[85vh]"
+          fullHeight ? "h-[92vh] h-[92dvh]" : "max-h-[85vh] max-h-[85dvh]"
         }`}
         style={{
           borderTopLeftRadius: "var(--radius-sheet-top)",
@@ -62,6 +72,7 @@ export function BottomSheet({
         )}
         <div className="flex-1 overflow-y-auto px-4 pb-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
