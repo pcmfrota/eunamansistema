@@ -23,44 +23,64 @@ function buildEquipamentos(raw: any[]) {
   }));
 }
 
+// Mesma derivação do site (app/os/page.tsx): a lista de Motivos não é fixa, é a união dos
+// valores já usados em OS existentes com o catálogo administrável (aux_config, tipo
+// "Motivo") — sem isso, o campo "Motivo" aqui só mostrava um fallback de 3 itens pra
+// sempre, escondendo motivos reais já cadastrados (BASE TEMPO, MOBILIZAÇÃO, etc.).
+function buildMotivos(ordens: any[], auxConfigs: any[]): string[] {
+  const motivosSet = new Set<string>();
+  ordens.forEach((o: any) => {
+    if (o.motivo) motivosSet.add(o.motivo);
+  });
+  auxConfigs.forEach((a: any) => {
+    if (a.tipo === "Motivo" && a.valor) motivosSet.add(a.valor);
+  });
+  return Array.from(motivosSet).sort();
+}
+
 export default function OSPage() {
   const { isOnline } = useOffline();
   const [loading, setLoading] = useState(true);
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [ordens, setOrdens] = useState<any[]>([]);
+  const [motivos, setMotivos] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
 
     const loadData = async () => {
       try {
-        const stores = await localDb.getManyStores<{ equipamentos: any[]; colaboradores: any[]; ordens_servico: any[] }>([
+        const stores = await localDb.getManyStores<{ equipamentos: any[]; colaboradores: any[]; ordens_servico: any[]; aux_config: any[] }>([
           "equipamentos",
           "colaboradores",
           "ordens_servico",
+          "aux_config",
         ]);
 
         if (active) {
           setEquipamentos(buildEquipamentos(stores.equipamentos || []));
           setColaboradores(stores.colaboradores || []);
           setOrdens(stores.ordens_servico || []);
+          setMotivos(buildMotivos(stores.ordens_servico || [], stores.aux_config || []));
           setLoading(false);
         }
 
         if (isOnline) {
           const { syncTables } = await import("@/lib/offline-sync");
-          const syncSuccess = await syncTables(["equipamentos", "colaboradores", "ordens_servico"]);
+          const syncSuccess = await syncTables(["equipamentos", "colaboradores", "ordens_servico", "aux_config"]);
           if (syncSuccess) {
-            const fresh = await localDb.getManyStores<{ equipamentos: any[]; colaboradores: any[]; ordens_servico: any[] }>([
+            const fresh = await localDb.getManyStores<{ equipamentos: any[]; colaboradores: any[]; ordens_servico: any[]; aux_config: any[] }>([
               "equipamentos",
               "colaboradores",
               "ordens_servico",
+              "aux_config",
             ]);
             if (active) {
               setEquipamentos(buildEquipamentos(fresh.equipamentos || []));
               setColaboradores(fresh.colaboradores || []);
               setOrdens(fresh.ordens_servico || []);
+              setMotivos(buildMotivos(fresh.ordens_servico || [], fresh.aux_config || []));
             }
           }
         }
@@ -89,5 +109,5 @@ export default function OSPage() {
     );
   }
 
-  return <OSClient equipamentos={equipamentos} colaboradores={colaboradores} ordensIniciais={ordens} />;
+  return <OSClient equipamentos={equipamentos} colaboradores={colaboradores} ordensIniciais={ordens} motivos={motivos} />;
 }

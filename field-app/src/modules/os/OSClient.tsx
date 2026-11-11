@@ -25,6 +25,12 @@ import {
 } from "./actions";
 
 const STATUS_OPTIONS = ["Aberta", "Programado", "Fechada"] as const;
+// Só usado quando a prop `motivos` (lista real, derivada em OSPage.tsx a partir de
+// ordens_servico + aux_config — mesma fonte do site, app/os/page.tsx) ainda está vazia —
+// mesmo fallback do site (app/os/NovoModal.tsx). Bug anterior: este array chegou a ser a
+// ÚNICA lista usada aqui, sem nunca tentar a real, escondendo do mecânico motivos de
+// verdade já cadastrados (BASE TEMPO, MOBILIZAÇÃO, OPORTUNIDADE, PROJETO/MELHORIA,
+// REVITALIZAÇÃO, FALHA MECÂNICA/OPERACIONAL).
 const MOTIVOS_FALLBACK = ["Desgaste Natural", "Quebra Operacional", "Falha Elétrica"];
 
 // Forma "de formulário" de DescricaoAtividade (campos sempre string, nunca null/undefined,
@@ -173,10 +179,12 @@ export default function OSClient({
   equipamentos,
   colaboradores,
   ordensIniciais,
+  motivos = [],
 }: {
   equipamentos: any[];
   colaboradores: any[];
   ordensIniciais: any[];
+  motivos?: string[];
 }) {
   const { isOnline } = useOffline();
   const { profile } = useAuth();
@@ -747,7 +755,10 @@ export default function OSClient({
             <label className={labelCls}>Motivo</label>
             <select value={form.motivo} onChange={(e) => setForm((p) => ({ ...p, motivo: e.target.value }))} className={inputCls}>
               <option value="">Selecione...</option>
-              {MOTIVOS_FALLBACK.map((m) => (
+              {motivos.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+              {motivos.length === 0 && MOTIVOS_FALLBACK.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
