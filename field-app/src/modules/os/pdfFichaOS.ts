@@ -354,8 +354,8 @@ export function gerarHtmlFichaOS(os: OSParaFicha): string {
               const sig = assinaturas[i] || "";
               const mat = matriculas[i] || "";
               const isLast = i === (os.mecanicos?.length ?? 1) - 1;
-              return `<div style="flex:1;min-width:140px;padding:6px;min-height:85px;display:flex;flex-direction:column;justify-content:space-between;${!isLast ? "border-right:1px solid #ddd;" : ""}">
-                <p style="font-size:8px;color:#1a5c1a;font-weight:700;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${nome}">${nome}${mat ? ` — Mat. ${mat}` : ""}</p>
+              return `<div style="flex:1;min-width:140px;padding:6px;min-height:95px;display:flex;flex-direction:column;justify-content:space-between;${!isLast ? "border-right:1px solid #ddd;" : ""}">
+                <p style="font-size:8px;color:#1a5c1a;font-weight:700;margin:0 0 4px 0;line-height:1.3;word-break:break-word;">${nome}${mat ? ` — Mat. ${mat}` : ""}</p>
                 <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;">
                   ${sig ? `<img src="${sig}" style="height:32px;object-fit:contain;" />` : '<span style="font-size:8px;color:#d1d5db;">(sem assinatura)</span>'}
                 </div>

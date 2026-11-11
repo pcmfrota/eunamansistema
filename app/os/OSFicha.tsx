@@ -511,8 +511,8 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 const sig = assinaturas[i] || "";
                 const mat = matriculas[i] || "";
                 const isLast = i === (os.mecanicos?.length ?? 1) - 1;
-                return `<div style="flex:1;min-width:140px;padding:6px;min-height:85px;display:flex;flex-direction:column;justify-content:space-between;${!isLast ? 'border-right:1px solid #ddd;' : ''}">
-                  <p style="font-size:8px;color:#1a5c1a;font-weight:700;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${nome}">${nome}${mat ? ` — Mat. ${mat}` : ''}</p>
+                return `<div style="flex:1;min-width:140px;padding:6px;min-height:95px;display:flex;flex-direction:column;justify-content:space-between;${!isLast ? 'border-right:1px solid #ddd;' : ''}">
+                  <p style="font-size:8px;color:#1a5c1a;font-weight:700;margin:0 0 4px 0;line-height:1.3;word-break:break-word;">${nome}${mat ? ` — Mat. ${mat}` : ''}</p>
                   <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;">
                     ${sig ? `<img src="${sig}" style="height:32px;object-fit:contain;" />` : '<span style="font-size:8px;color:#d1d5db;">(sem assinatura)</span>'}
                   </div>
@@ -985,11 +985,11 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                         return (
                           <div
                             key={i}
-                            className={`flex-1 min-w-[120px] px-3 py-2 flex flex-col justify-between min-h-[90px] ${
+                            className={`flex-1 min-w-[120px] px-3 py-2 flex flex-col justify-between min-h-[100px] ${
                               !isLast ? "border-r border-gray-300" : ""
                             }`}
                           >
-                            <p className="text-[8px] font-bold text-[#1a5c1a] mb-1 truncate" title={nome}>{nome}{mat ? ` — Mat. ${mat}` : ""}</p>
+                            <p className="text-[8px] font-bold text-[#1a5c1a] mb-1 leading-snug break-words">{nome}{mat ? ` — Mat. ${mat}` : ""}</p>
                             <div className="flex-1 flex items-center justify-center min-h-[36px]">
                               {sig
                                 ? <img src={sig} alt={`Assinatura ${nome}`} className="h-9 object-contain max-w-full" />
