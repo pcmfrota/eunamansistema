@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { X, FileDown, Share2 } from 'lucide-react'
 
 interface FichaPreviewModalProps {
@@ -25,6 +25,8 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
   const contentRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   const [scaledHeight, setScaledHeight] = useState<number | undefined>(undefined)
+  // Foto/assinatura/logo em que o usuário tocou na ficha — mostrada ampliada por cima de tudo.
+  const [imagemAmpliada, setImagemAmpliada] = useState<string | null>(null)
 
   // useLayoutEffect (não useEffect): mede e aplica a escala ANTES do navegador pintar a
   // tela. Com useEffect, a primeira pintura saía sempre em escala 1 (ficha "no zoom",
@@ -63,6 +65,17 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
     }
   }, [html, designWidth])
 
+  // Delegação de evento: o conteúdo da ficha vem de um HTML cru (dangerouslySetInnerHTML),
+  // então um onClick em cada <img> individual não dá — um único listener no container pai,
+  // checando o alvo do clique, cobre todas as fotos/assinaturas/logo sem precisar tocar nos
+  // geradores de HTML de cada módulo (pdfBoletim.ts, pdfFichaOS.ts, etc.).
+  const handleContentClick = (e: MouseEvent<HTMLDivElement>) => {
+    const alvo = e.target as HTMLElement
+    if (alvo.tagName === 'IMG') {
+      setImagemAmpliada((alvo as HTMLImageElement).src)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white dark:bg-zinc-950 w-full min-w-0 max-w-3xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-4 max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in duration-200">
@@ -76,18 +89,26 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
           </button>
         </div>
 
-        <div ref={wrapperRef} className="p-4 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900">
-          {/* Wrapper com a altura já encolhida — sem isso, o scale no filho (que não muda o
-              espaço reservado no layout) deixaria uma folga em branco do tamanho original. */}
-          <div className="mx-auto" style={{ width: designWidth * scale, height: scaledHeight }}>
+        <div
+          ref={wrapperRef}
+          className="p-4 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900 flex justify-center"
+        >
+          {/* flex justify-center (não mx-auto): centraliza pelo espaço real do wrapper em vez
+              de depender dos dois lados (pai/filho) concordarem em px exatos — com mx-auto,
+              qualquer diferença mínima entre a largura calculada e a renderizada de fato
+              (sub-pixel, scrollbar, etc.) deixava a ficha visivelmente puxada pra um lado.
+              shrink-0: impede o próprio flex de encolher essa largura já calculada. */}
+          <div className="shrink-0" style={{ width: designWidth * scale, height: scaledHeight }}>
             <div
               ref={contentRef}
-              className="bg-white shadow-md origin-top-left"
+              onClick={handleContentClick}
+              className="ficha-preview-content bg-white shadow-md origin-top-left"
               style={{ width: designWidth, transform: `scale(${scale})` }}
               dangerouslySetInnerHTML={{ __html: html }}
             />
           </div>
         </div>
+        <style>{'.ficha-preview-content img { cursor: zoom-in; }'}</style>
 
         <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3 shrink-0">
           <button
@@ -114,6 +135,27 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
           </button>
         </div>
       </div>
+
+      {/* Imagem ampliada — fica por cima do próprio modal (z maior), fecha tocando em qualquer
+          lugar ou no X. Mesma foto/assinatura/logo que veio da ficha, só maior pra conferir. */}
+      {imagemAmpliada && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-150"
+          onClick={() => setImagemAmpliada(null)}
+        >
+          <button
+            onClick={() => setImagemAmpliada(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+          <img
+            src={imagemAmpliada}
+            alt=""
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
     </div>
   )
 }
