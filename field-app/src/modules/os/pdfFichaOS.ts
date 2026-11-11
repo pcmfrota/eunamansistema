@@ -405,27 +405,35 @@ export async function gerarBlobFichaOS(os: OSParaFicha): Promise<Blob> {
   document.body.appendChild(container);
 
   try {
-    // scale 1 (não 1.5+): as fotos já chegam aqui encolhidas por comprimirFotosParaFicha, então
-    // um canvas maior só deixaria a geração mais lenta sem ganho real de legibilidade.
-    const canvas = await html2canvas(container, { scale: 1, useCORS: true, backgroundColor: "#ffffff", logging: false });
+    // scale 1.5 (não 1, mesmo valor usado no site — app/os/OSFicha.tsx): as fotos já chegam
+    // aqui encolhidas por comprimirFotosParaFicha (o que de fato pesava), então dá pra manter
+    // a nitidez do texto sem reintroduzir a lentidão — em 1 o texto saía borrado/"tremido" ao
+    // abrir o PDF de verdade (visível ao dar zoom). 2 deixava nítido mas quase dobrava o tempo
+    // de geração numa ficha com fotos; 1.5 é o ponto que o site já usa sem reclamação de borrão.
+    const canvas = await html2canvas(container, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff", logging: false });
 
     const pdf = new jsPDF("p", "mm", "a4");
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth;
+    // Margem de 5mm (mesmo padrão de lib/pdf-share.ts) — sem isso a ficha colava exatamente
+    // na borda da página, quase sem respiro visual e cortando ao imprimir em papel de verdade.
+    const margem = 5;
+    const usableWidth = pageWidth - margem * 2;
+    const usableHeight = pageHeight - margem * 2;
+    const imgWidth = usableWidth;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
     let heightLeft = imgHeight;
-    let position = 0;
-    pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
+    let position = margem;
+    pdf.addImage(imgData, "JPEG", margem, position, imgWidth, imgHeight);
+    heightLeft -= usableHeight;
 
     while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
+      position = margem - (imgHeight - heightLeft);
       pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      pdf.addImage(imgData, "JPEG", margem, position, imgWidth, imgHeight);
+      heightLeft -= usableHeight;
     }
 
     return pdf.output("blob");
