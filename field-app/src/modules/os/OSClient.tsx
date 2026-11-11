@@ -287,6 +287,11 @@ export default function OSClient({
     fichaPdfCacheRef.current.set(os.id, { assinatura, promise });
     return promise;
   };
+  // Cache dos dados já buscados (fotos/assinatura/descrições — o que demora é a ida ao
+  // Supabase, não ficou no card da lista de propósito) e já comprimidos pra ficha — reabrir a
+  // MESMA OS na mesma sessão fica instantâneo (sem o spinner "Carregando ficha..." de novo).
+  // Uma vez fechada/validada, a OS não muda mais, então reusar aqui é seguro.
+  const fichaDadosCacheRef = useRef<Map<string, OSParaFicha>>(new Map());
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
 
   useEffect(() => setOrdens(ordensIniciais), [ordensIniciais]);
@@ -462,19 +467,34 @@ export default function OSClient({
   // "Ver Detalhes" também precisa buscar sob demanda (mesmo motivo de abrirEdicao acima):
   // fotos/foto_horimetro/foto_km/descricoes_atividade ficam fora da listagem em massa.
   const abrirVisualizacao = async (o: any) => {
-    setFichaBusyMsg("Carregando ficha...");
+    const cacheKey = String(o.id);
+    const jaPronta = fichaDadosCacheRef.current.get(cacheKey);
+    // Só mostra o spinner quando precisa mesmo buscar/processar algo — reabrir a mesma OS
+    // (já visitada nesta sessão) fica instantâneo.
+    if (!jaPronta) setFichaBusyMsg("Carregando ficha...");
     try {
-      let fotosExtra: any = {};
-      if (isOnline && !String(o.id).startsWith("temp_")) {
-        const res = await getOSImagensClient(o.id);
-        if (res && "data" in res && res.data) fotosExtra = res.data;
+      let comprimida: OSParaFicha;
+      if (jaPronta) {
+        comprimida = jaPronta;
+      } else {
+        let fotosExtra: any = {};
+        if (isOnline && !String(o.id).startsWith("temp_")) {
+          const res = await getOSImagensClient(o.id);
+          if (res && "data" in res && res.data) fotosExtra = res.data;
+        }
+        comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
+        fichaDadosCacheRef.current.set(cacheKey, comprimida);
       }
-      const comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
       setFichaData(comprimida);
-      // Prepara o PDF em segundo plano assim que a ficha abre — não trava a tela (o usuário
-      // já pode olhar a prévia) e, quando ele clicar em Baixar/Compartilhar, o arquivo
-      // provavelmente já está pronto no cache (ver getOrGerarBlobFicha acima).
-      getOrGerarBlobFicha(comprimida).catch(() => {});
+      // Prepara o PDF em segundo plano só depois que o navegador já pintou a prévia na tela
+      // (2 requestAnimationFrame) — sem isso, o html2canvas (que é pesado, trava a thread
+      // principal) começava a rodar no MESMO instante em que a ficha deveria aparecer,
+      // dando a sensação de "carregamento" ainda travado mesmo com os dados já prontos.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          getOrGerarBlobFicha(comprimida).catch(() => {});
+        });
+      });
     } catch (err: any) {
       console.error("Erro ao abrir a ficha da OS:", err);
       toast.show("Erro ao abrir a ficha: " + (err?.message || String(err)), "error");
