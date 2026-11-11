@@ -771,6 +771,23 @@ public class EunamanActivity extends AppCompatActivity {
         }
     }
 
+    // ACTION_SEND + chooser (não ACTION_VIEW) — abre direto o menu de compartilhamento do
+    // Android com o arquivo já anexado, pra cair com um toque no WhatsApp etc., em vez de
+    // abrir um visualizador que exige um passo a mais pra achar o botão de compartilhar dele.
+    private void shareDownloadedFile(Uri uri, String mimeType) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType(mimeType);
+            intent.putExtra(Intent.EXTRA_STREAM, uri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(Intent.createChooser(intent, "Compartilhar"));
+        } catch (Exception e) {
+            Log.e(TAG, "Erro ao compartilhar o arquivo", e);
+            Toast.makeText(this, "Arquivo salvo na pasta Downloads. Abra o app de arquivos para compartilhar manualmente.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private class EunamanJsBridge {
         @JavascriptInterface
         public void logout() { runOnUiThread(EunamanActivity.this::performNativeLogout); }
@@ -874,6 +891,75 @@ public class EunamanActivity extends AppCompatActivity {
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Erro ao salvar arquivo base64", e);
+                    Toast.makeText(EunamanActivity.this, "Erro ao salvar arquivo: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        // Mesma lógica de salvamento de saveBase64File, mas termina abrindo direto o menu
+        // nativo de compartilhamento do Android (ACTION_SEND + chooser) em vez de só
+        // visualizar o arquivo — usado quando o botão é "Compartilhar", não "Baixar". Antes
+        // disso, o lado JS tentava navigator.share() (Web Share API), que esse WebView não
+        // suporta pra arquivos — sempre caía num alerta de "não suportado" mesmo já tendo
+        // salvo o arquivo certinho.
+        @JavascriptInterface
+        public void shareBase64File(String base64Data, String filename, String mimeType) {
+            runOnUiThread(() -> {
+                try {
+                    String cleanBase64 = base64Data;
+                    if (base64Data.contains(",")) {
+                        cleanBase64 = base64Data.split(",")[1];
+                    }
+                    byte[] fileBytes = Base64.decode(cleanBase64, Base64.DEFAULT);
+
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                        values.put(MediaStore.Downloads.IS_PENDING, 1);
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                        if (uri != null) {
+                            OutputStream out = getContentResolver().openOutputStream(uri);
+                            if (out != null) {
+                                out.write(fileBytes);
+                                out.close();
+                            }
+                            values.clear();
+                            values.put(MediaStore.Downloads.IS_PENDING, 0);
+                            getContentResolver().update(uri, values, null, null);
+                            shareDownloadedFile(uri, mimeType);
+                        } else {
+                            Toast.makeText(EunamanActivity.this, "Erro ao salvar arquivo", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                        if (!downloadsDir.exists()) {
+                            downloadsDir.mkdirs();
+                        }
+                        File file = new File(downloadsDir, filename);
+                        java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
+                        fos.write(fileBytes);
+                        fos.close();
+
+                        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                        mediaScanIntent.setData(Uri.fromFile(file));
+                        sendBroadcast(mediaScanIntent);
+
+                        try {
+                            String authority = getPackageName() + ".provider";
+                            Uri contentUri = FileProvider.getUriForFile(EunamanActivity.this, authority, file);
+                            shareDownloadedFile(contentUri, mimeType);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Erro ao obter URI do FileProvider para compartilhar o arquivo", e);
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Erro ao salvar arquivo base64 para compartilhar", e);
                     Toast.makeText(EunamanActivity.this, "Erro ao salvar arquivo: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
             });

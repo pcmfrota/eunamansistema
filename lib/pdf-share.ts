@@ -39,6 +39,13 @@ function isAndroidApp() {
   );
 }
 
+// shareBase64File é mais novo que saveBase64File — feature-detect pra não quebrar em quem
+// ainda estiver com uma versão do APK de antes dele existir (nesse caso cai no fallback de
+// sempre: salvar + tentar navigator.share, que é o que já rodava).
+function temShareNativo() {
+  return typeof window !== "undefined" && typeof (window as any).EunamanApp?.shareBase64File === "function";
+}
+
 function blobParaBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -79,9 +86,16 @@ export async function salvarOuCompartilharBlob(
   if (isAndroidApp()) {
     try {
       const base64 = await blobParaBase64(blob);
-      (window as any).EunamanApp.saveBase64File(base64, filename, "application/pdf");
-      if (modo === "share") {
-        await tentarCompartilhar(blob, filename, shareTitle, shareText);
+      if (modo === "share" && temShareNativo()) {
+        // Pula o navigator.share() (Web Share API) — esse WebView não suporta compartilhar
+        // arquivo por ele, então sempre caía num alerta de "não suportado" mesmo com o
+        // arquivo já salvo certinho. shareBase64File já salva E abre o menu nativo direto.
+        (window as any).EunamanApp.shareBase64File(base64, filename, "application/pdf");
+      } else {
+        (window as any).EunamanApp.saveBase64File(base64, filename, "application/pdf");
+        if (modo === "share") {
+          await tentarCompartilhar(blob, filename, shareTitle, shareText);
+        }
       }
     } catch (err) {
       console.error("Erro ao salvar PDF no app:", err);

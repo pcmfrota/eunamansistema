@@ -475,6 +475,9 @@ export default function OSClient({
       // já pode olhar a prévia) e, quando ele clicar em Baixar/Compartilhar, o arquivo
       // provavelmente já está pronto no cache (ver getOrGerarBlobFicha acima).
       getOrGerarBlobFicha(comprimida).catch(() => {});
+    } catch (err: any) {
+      console.error("Erro ao abrir a ficha da OS:", err);
+      toast.show("Erro ao abrir a ficha: " + (err?.message || String(err)), "error");
     } finally {
       setFichaBusyMsg(null);
     }
