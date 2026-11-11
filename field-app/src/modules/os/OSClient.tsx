@@ -17,7 +17,7 @@ import { useToast } from "../../ui/primitives/Toast";
 import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import { useNativeCamera } from "../../lib/nativeCamera";
 import FichaPreviewModal from "@/components/FichaPreviewModal";
-import { gerarHtmlFichaOS, gerarFichaOSPDF, type OSParaFicha } from "./pdfFichaOS";
+import { gerarHtmlFichaOS, gerarFichaOSPDF, comprimirFotosParaFicha, type OSParaFicha } from "./pdfFichaOS";
 import {
   criarOrdemServico,
   atualizarOrdemServico,
@@ -268,7 +268,10 @@ export default function OSClient({
   const [actionItem, setActionItem] = useState<any>(null);
   // Ficha oficial (mesmo layout do site, ver pdfFichaOS.ts) — visualizar/baixar/compartilhar.
   const [fichaData, setFichaData] = useState<OSParaFicha | null>(null);
-  const [fichaBusy, setFichaBusy] = useState(false);
+  // Texto do overlay de carregamento — null = escondido. Cobre tanto "abrir a ficha" (busca +
+  // encolhe as fotos) quanto "gerar o PDF" (clique em Baixar/Compartilhar), que é a parte que
+  // demora de verdade quando a OS tem várias fotos.
+  const [fichaBusyMsg, setFichaBusyMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
 
   useEffect(() => setOrdens(ordensIniciais), [ordensIniciais]);
@@ -444,16 +447,17 @@ export default function OSClient({
   // "Ver Detalhes" também precisa buscar sob demanda (mesmo motivo de abrirEdicao acima):
   // fotos/foto_horimetro/foto_km/descricoes_atividade ficam fora da listagem em massa.
   const abrirVisualizacao = async (o: any) => {
-    setFichaBusy(true);
+    setFichaBusyMsg("Carregando ficha...");
     try {
       let fotosExtra: any = {};
       if (isOnline && !String(o.id).startsWith("temp_")) {
         const res = await getOSImagensClient(o.id);
         if (res && "data" in res && res.data) fotosExtra = res.data;
       }
-      setFichaData({ ...o, ...fotosExtra });
+      const comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
+      setFichaData(comprimida);
     } finally {
-      setFichaBusy(false);
+      setFichaBusyMsg(null);
     }
   };
 
@@ -1083,10 +1087,10 @@ export default function OSClient({
         </div>
       </BottomSheet>
 
-      {fichaBusy && (
+      {fichaBusyMsg && (
         <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white">
           <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-3 text-sm font-bold text-zinc-300">Carregando ficha...</p>
+          <p className="mt-3 text-sm font-bold text-zinc-300">{fichaBusyMsg}</p>
         </div>
       )}
 
@@ -1095,8 +1099,22 @@ export default function OSClient({
         <FichaPreviewModal
           html={gerarHtmlFichaOS(fichaData)}
           onClose={() => setFichaData(null)}
-          onDownload={() => gerarFichaOSPDF(fichaData)}
-          onShare={() => gerarFichaOSPDF(fichaData, "share")}
+          onDownload={async () => {
+            setFichaBusyMsg("Gerando PDF...");
+            try {
+              await gerarFichaOSPDF(fichaData);
+            } finally {
+              setFichaBusyMsg(null);
+            }
+          }}
+          onShare={async () => {
+            setFichaBusyMsg("Gerando PDF...");
+            try {
+              await gerarFichaOSPDF(fichaData, "share");
+            } finally {
+              setFichaBusyMsg(null);
+            }
+          }}
         />
       )}
 

@@ -14,6 +14,62 @@ import { salvarOuCompartilharBlob } from "@/lib/pdf-share";
 
 type CargoDadoFicha = { nome: string; matricula: string; assinatura: string };
 
+// Encolhe uma foto em base64 pro tamanho que ela realmente ocupa na ficha (as caixas são
+// pequenas: 90-160px) antes de montar o HTML — sem isso o html2canvas precisa decodificar e
+// pintar cada foto na resolução original da câmera (podem ser vários MB cada), o que é a
+// causa real de "demora muito pra carregar/gerar o PDF" num celular com várias fotos na OS.
+// Assinaturas (desenho simples, já pequenas) não passam por aqui.
+function encolherFotoBase64(dataUrl: string | null | undefined, maxDim = 480, qualidade = 0.6): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) {
+      resolve(dataUrl || "");
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const { width, height } = img;
+      if (width <= maxDim && height <= maxDim) {
+        resolve(dataUrl);
+        return;
+      }
+      const escala = Math.min(1, maxDim / Math.max(width, height));
+      const w = Math.round(width * escala);
+      const h = Math.round(height * escala);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", qualidade));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// Prepara uma cópia da OS com as fotos (horímetro/km, evidências e as de cada descrição de
+// atividade) já encolhidas — chamar uma vez ao abrir a ficha (não a cada clique em Baixar/
+// Compartilhar) pra deixar tanto a pré-visualização quanto a geração do PDF mais rápidas.
+export async function comprimirFotosParaFicha(os: OSParaFicha): Promise<OSParaFicha> {
+  const [foto_horimetro, foto_km, fotos, descricoes_atividade] = await Promise.all([
+    encolherFotoBase64(os.foto_horimetro),
+    encolherFotoBase64(os.foto_km),
+    Promise.all((os.fotos || []).map((f) => encolherFotoBase64(f))),
+    Promise.all((os.descricoes_atividade || []).map(async (b) => ({ ...b, foto: await encolherFotoBase64(b.foto) }))),
+  ]);
+  return {
+    ...os,
+    foto_horimetro: foto_horimetro || os.foto_horimetro,
+    foto_km: foto_km || os.foto_km,
+    fotos: os.fotos ? fotos : os.fotos,
+    descricoes_atividade: os.descricoes_atividade ? descricoes_atividade : os.descricoes_atividade,
+  };
+}
+
 export type DescricaoAtividadeFicha = {
   descricao: string;
   hora_inicio?: string | null;
@@ -351,7 +407,9 @@ export async function gerarFichaOSPDF(os: OSParaFicha, modo: "download" | "share
   const filename = `OS_${os.numero_os}.pdf`;
 
   try {
-    const canvas = await html2canvas(container, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff", logging: false });
+    // scale 1 (não 1.5+): as fotos já chegam aqui encolhidas por comprimirFotosParaFicha, então
+    // um canvas maior só deixaria a geração mais lenta sem ganho real de legibilidade.
+    const canvas = await html2canvas(container, { scale: 1, useCORS: true, backgroundColor: "#ffffff", logging: false });
     document.body.removeChild(container);
 
     const pdf = new jsPDF("p", "mm", "a4");
