@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Wrench, ChevronRight, Plus, Trash2, Eye, Search, Pencil, CheckCircle2, Camera } from "lucide-react";
 import { useAuth } from "@/components/auth-context";
 import { useOffline } from "@/components/offline-provider";
@@ -17,7 +17,7 @@ import { useToast } from "../../ui/primitives/Toast";
 import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import { useNativeCamera } from "../../lib/nativeCamera";
 import FichaPreviewModal from "@/components/FichaPreviewModal";
-import { gerarHtmlFichaOS, gerarFichaOSPDF, comprimirFotosParaFicha, type OSParaFicha } from "./pdfFichaOS";
+import { gerarHtmlFichaOS, gerarFichaOSPDF, gerarBlobFichaOS, comprimirFotosParaFicha, type OSParaFicha } from "./pdfFichaOS";
 import {
   criarOrdemServico,
   atualizarOrdemServico,
@@ -269,9 +269,24 @@ export default function OSClient({
   // Ficha oficial (mesmo layout do site, ver pdfFichaOS.ts) — visualizar/baixar/compartilhar.
   const [fichaData, setFichaData] = useState<OSParaFicha | null>(null);
   // Texto do overlay de carregamento — null = escondido. Cobre tanto "abrir a ficha" (busca +
-  // encolhe as fotos) quanto "gerar o PDF" (clique em Baixar/Compartilhar), que é a parte que
-  // demora de verdade quando a OS tem várias fotos.
+  // encolhe as fotos) quanto o raro caso de ainda não ter o PDF em cache ao clicar em Baixar/
+  // Compartilhar.
   const [fichaBusyMsg, setFichaBusyMsg] = useState<string | null>(null);
+  // Cache do PDF já gerado por OS — evita rodar html2canvas/jsPDF de novo (o gargalo real) a
+  // cada clique em Baixar/Compartilhar da MESMA ficha sem mudanças. Guarda a Promise (não só
+  // o Blob) pra também cobrir o caso de clicar enquanto a geração em segundo plano ainda está
+  // rodando — nesse caso só espera a mesma Promise em vez de começar uma segunda em paralelo.
+  // A chave inclui uma assinatura do conteúdo (JSON.stringify da própria ficha): qualquer
+  // alteração (foto nova, assinatura, validação) já muda a assinatura e invalida sozinho.
+  const fichaPdfCacheRef = useRef<Map<string, { assinatura: string; promise: Promise<Blob> }>>(new Map());
+  const getOrGerarBlobFicha = (os: OSParaFicha): Promise<Blob> => {
+    const assinatura = JSON.stringify(os);
+    const cache = fichaPdfCacheRef.current.get(os.id);
+    if (cache && cache.assinatura === assinatura) return cache.promise;
+    const promise = gerarBlobFichaOS(os);
+    fichaPdfCacheRef.current.set(os.id, { assinatura, promise });
+    return promise;
+  };
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
 
   useEffect(() => setOrdens(ordensIniciais), [ordensIniciais]);
@@ -456,6 +471,10 @@ export default function OSClient({
       }
       const comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
       setFichaData(comprimida);
+      // Prepara o PDF em segundo plano assim que a ficha abre — não trava a tela (o usuário
+      // já pode olhar a prévia) e, quando ele clicar em Baixar/Compartilhar, o arquivo
+      // provavelmente já está pronto no cache (ver getOrGerarBlobFicha acima).
+      getOrGerarBlobFicha(comprimida).catch(() => {});
     } finally {
       setFichaBusyMsg(null);
     }
@@ -1100,17 +1119,26 @@ export default function OSClient({
           html={gerarHtmlFichaOS(fichaData)}
           onClose={() => setFichaData(null)}
           onDownload={async () => {
-            setFichaBusyMsg("Gerando PDF...");
+            // Só mostra "preparando" se o PDF ainda não estiver pronto no cache (o normal é já
+            // estar, gerado em segundo plano quando a ficha foi aberta) — compartilhamento
+            // repetido da mesma OS sem mudanças fica quase instantâneo.
+            const assinatura = JSON.stringify(fichaData);
+            const jaPronto = fichaPdfCacheRef.current.get(fichaData.id)?.assinatura === assinatura;
+            if (!jaPronto) setFichaBusyMsg("Gerando PDF...");
             try {
-              await gerarFichaOSPDF(fichaData);
+              const blob = await getOrGerarBlobFicha(fichaData);
+              await gerarFichaOSPDF(fichaData, "download", blob);
             } finally {
               setFichaBusyMsg(null);
             }
           }}
           onShare={async () => {
-            setFichaBusyMsg("Gerando PDF...");
+            const assinatura = JSON.stringify(fichaData);
+            const jaPronto = fichaPdfCacheRef.current.get(fichaData.id)?.assinatura === assinatura;
+            if (!jaPronto) setFichaBusyMsg("Preparando ficha para compartilhamento...");
             try {
-              await gerarFichaOSPDF(fichaData, "share");
+              const blob = await getOrGerarBlobFicha(fichaData);
+              await gerarFichaOSPDF(fichaData, "share", blob);
             } finally {
               setFichaBusyMsg(null);
             }

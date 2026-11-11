@@ -392,9 +392,9 @@ export function gerarHtmlFichaOS(os: OSParaFicha): string {
 
 // Renderiza o HTML fora da tela, converte em imagem (html2canvas) e monta um PDF A4
 // paginado (jsPDF) — mesmo mecanismo de field-app/src/modules/pneus/pdfBoletim.ts, sem
-// depender de nenhum script externo (funciona offline). `modo: "share"` abre o menu nativo
-// de compartilhamento do Android (WhatsApp etc.) já com o PDF anexado.
-export async function gerarFichaOSPDF(os: OSParaFicha, modo: "download" | "share" = "download") {
+// depender de nenhum script externo (funciona offline). Só monta o Blob — quem chama decide
+// se baixa, compartilha, ou guarda em cache pra reusar depois (ver gerarFichaOSPDF/useFichaPdfCache).
+export async function gerarBlobFichaOS(os: OSParaFicha): Promise<Blob> {
   const container = document.createElement("div");
   container.style.position = "absolute";
   container.style.left = "-9999px";
@@ -404,13 +404,10 @@ export async function gerarFichaOSPDF(os: OSParaFicha, modo: "download" | "share
   container.innerHTML = gerarHtmlFichaOS(os);
   document.body.appendChild(container);
 
-  const filename = `OS_${os.numero_os}.pdf`;
-
   try {
     // scale 1 (não 1.5+): as fotos já chegam aqui encolhidas por comprimirFotosParaFicha, então
     // um canvas maior só deixaria a geração mais lenta sem ganho real de legibilidade.
     const canvas = await html2canvas(container, { scale: 1, useCORS: true, backgroundColor: "#ffffff", logging: false });
-    document.body.removeChild(container);
 
     const pdf = new jsPDF("p", "mm", "a4");
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -431,16 +428,26 @@ export async function gerarFichaOSPDF(os: OSParaFicha, modo: "download" | "share
       heightLeft -= pageHeight;
     }
 
-    const blob: Blob = pdf.output("blob");
+    return pdf.output("blob");
+  } finally {
+    if (document.body.contains(container)) document.body.removeChild(container);
+  }
+}
+
+// Baixa e/ou compartilha a ficha. Aceita um Blob já pronto (vindo do cache em OSClient.tsx,
+// gerado antecipadamente assim que a ficha é aberta) pra pular o html2canvas/jsPDF — é essa
+// etapa, não o compartilhamento em si, que demorava a cada clique em Compartilhar/Baixar.
+export async function gerarFichaOSPDF(os: OSParaFicha, modo: "download" | "share" = "download", blobPronto?: Blob) {
+  try {
+    const blob = blobPronto || (await gerarBlobFichaOS(os));
     await salvarOuCompartilharBlob(
       blob,
-      filename,
+      `OS_${os.numero_os}.pdf`,
       `OS ${os.numero_os}`,
       `Ficha da Ordem de Serviço ${os.numero_os}`,
       modo
     );
   } catch (err: any) {
-    if (document.body.contains(container)) document.body.removeChild(container);
     console.error("Erro ao gerar/compartilhar PDF da OS:", err);
     alert("Erro ao gerar o PDF da OS: " + (err?.message || String(err)));
   }
