@@ -278,6 +278,11 @@ export default function OSClient({
   // rodando — nesse caso só espera a mesma Promise em vez de começar uma segunda em paralelo.
   // A chave inclui uma assinatura do conteúdo (JSON.stringify da própria ficha): qualquer
   // alteração (foto nova, assinatura, validação) já muda a assinatura e invalida sozinho.
+  // Espera 2 frames de animação — tempo suficiente pro navegador pintar um estado (ex: o
+  // overlay de spinner) já aplicado por um setState antes de rodar algo pesado em seguida
+  // (html2canvas), que trava a thread principal e não deixa nenhuma pintura pendente aparecer.
+  const aguardarRepaint = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   const fichaPdfCacheRef = useRef<Map<string, { assinatura: string; promise: Promise<Blob> }>>(new Map());
   const getOrGerarBlobFicha = (os: OSParaFicha): Promise<Blob> => {
     const assinatura = JSON.stringify(os);
@@ -505,15 +510,12 @@ export default function OSClient({
     try {
       const comprimida = await entry.promise;
       setFichaData(comprimida);
-      // Prepara o PDF em segundo plano só depois que o navegador já pintou a prévia na tela
-      // (2 requestAnimationFrame) — sem isso, o html2canvas (que é pesado, trava a thread
-      // principal) começava a rodar no MESMO instante em que a ficha deveria aparecer,
-      // dando a sensação de "carregamento" ainda travado mesmo com os dados já prontos.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          getOrGerarBlobFicha(comprimida).catch(() => {});
-        });
-      });
+      // NÃO gera o PDF em segundo plano aqui: html2canvas trava a thread principal por um
+      // tempo perceptível (mesmo com fotos já comprimidas), e como isso rodava assim que a
+      // prévia aparecia, qualquer toque no X pra fechar ou em Compartilhar logo em seguida
+      // ficava sem resposta até o html2canvas terminar — parecendo o app travado. A geração
+      // só acontece agora quando o usuário de fato clica em Baixar/Compartilhar (com o
+      // spinner "Gerando PDF..."/"Preparando..." já previsto pra essa espera).
     } catch (err: any) {
       console.error("Erro ao abrir a ficha da OS:", err);
       toast.show("Erro ao abrir a ficha: " + (err?.message || String(err)), "error");
@@ -1167,12 +1169,17 @@ export default function OSClient({
           html={gerarHtmlFichaOS(fichaData)}
           onClose={() => setFichaData(null)}
           onDownload={async () => {
-            // Só mostra "preparando" se o PDF ainda não estiver pronto no cache (o normal é já
-            // estar, gerado em segundo plano quando a ficha foi aberta) — compartilhamento
-            // repetido da mesma OS sem mudanças fica quase instantâneo.
+            // Repetir Baixar/Compartilhar da MESMA ficha sem mudanças reusa o PDF do cache
+            // (quase instantâneo); senão, o html2canvas (pesado) vai rodar agora.
             const assinatura = JSON.stringify(fichaData);
             const jaPronto = fichaPdfCacheRef.current.get(fichaData.id)?.assinatura === assinatura;
-            if (!jaPronto) setFichaBusyMsg("Gerando PDF...");
+            if (!jaPronto) {
+              setFichaBusyMsg("Gerando PDF...");
+              // Dá 2 frames pro navegador pintar o spinner ANTES do html2canvas travar a
+              // thread principal — sem isso o clique parecia não fazer nada (sem spinner
+              // nenhum) até o PDF terminar de gerar.
+              await aguardarRepaint();
+            }
             try {
               const blob = await getOrGerarBlobFicha(fichaData);
               await gerarFichaOSPDF(fichaData, "download", blob);
@@ -1183,7 +1190,10 @@ export default function OSClient({
           onShare={async () => {
             const assinatura = JSON.stringify(fichaData);
             const jaPronto = fichaPdfCacheRef.current.get(fichaData.id)?.assinatura === assinatura;
-            if (!jaPronto) setFichaBusyMsg("Preparando ficha para compartilhamento...");
+            if (!jaPronto) {
+              setFichaBusyMsg("Preparando ficha para compartilhamento...");
+              await aguardarRepaint();
+            }
             try {
               const blob = await getOrGerarBlobFicha(fichaData);
               await gerarFichaOSPDF(fichaData, "share", blob);

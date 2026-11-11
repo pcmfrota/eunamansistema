@@ -19,8 +19,8 @@ android {
         applicationId "com.eunaman.pcm"
         minSdk 21
         targetSdk 36
-        versionCode 17
-        versionName "1.5.7"
+        versionCode 20
+        versionName "1.5.10"
     }
 
     buildTypes {

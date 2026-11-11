@@ -37,7 +37,11 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
       const content = contentRef.current
       if (!wrapper || !content) return
       const disponivel = wrapper.clientWidth
-      const novaEscala = disponivel > 0 ? Math.min(1, disponivel / designWidth) : 1
+      // 0.95 (não a razão exata): arredondamento de sub-pixel do transform:scale deixava o
+      // conteúdo escalado alguns px MAIOR que o espaço medido, vazando pra fora do cartão à
+      // direita (sem nada cortando, já que nada aqui tinha overflow-x definido) — essa margem
+      // de segurança de 5% garante que sempre sobre uma folga, mesmo com esse arredondamento.
+      const novaEscala = disponivel > 0 ? Math.min(1, (disponivel / designWidth) * 0.95) : 1
       setScale(novaEscala)
       setScaledHeight(content.scrollHeight * novaEscala)
     }
@@ -61,7 +65,7 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-zinc-950 w-full min-w-0 max-w-3xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-4 max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] animate-in zoom-in duration-200">
+      <div className="bg-white dark:bg-zinc-950 w-full min-w-0 max-w-3xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col my-4 max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
           <h2 className="text-sm font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-300">Pré-visualização da Ficha</h2>
           <button
@@ -72,7 +76,7 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
           </button>
         </div>
 
-        <div ref={wrapperRef} className="p-4 overflow-y-auto custom-scrollbar flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900">
+        <div ref={wrapperRef} className="p-4 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900">
           {/* Wrapper com a altura já encolhida — sem isso, o scale no filho (que não muda o
               espaço reservado no layout) deixaria uma folga em branco do tamanho original. */}
           <div className="mx-auto" style={{ width: designWidth * scale, height: scaledHeight }}>
