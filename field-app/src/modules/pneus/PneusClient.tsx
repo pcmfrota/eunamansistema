@@ -138,6 +138,7 @@ export default function PneusClient({
       window.removeEventListener("offline-sync-completed", loadFromDb);
     };
   }, []);
+
   // Sem Next.js aqui: "router.refresh()" virou disparar o mesmo evento que o próprio
   // loadFromDb() já escuta (useEffect acima) — recarrega do IndexedDB local, que é o
   // que a navegação real faria de qualquer forma neste app offline-first.
@@ -152,9 +153,48 @@ export default function PneusClient({
   // Filtros (placa/data/status) ficam ocultos por padrão dentro de cada seção.
   const [showFiltros, setShowFiltros] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // ── Reabre a folha de Registrar/Editar sozinha se a Activity foi recriada (MIUI é
+  // agressivo nisso ao voltar da câmera nativa) — mesmo bug/correção de
+  // BacklogClient.tsx: useFormDraft (dentro de PneusModal.tsx) já guarda os VALORES do
+  // formulário sozinho, foto inclusive, mas não se a folha está aberta.
+  const SHEET_OPEN_KEY_PNEUS = "eunaman_pneus_sheet_open";
+  const EDITING_ID_KEY_PNEUS = "eunaman_pneus_editing_id";
+  const hasRestoredModalRefPneus = React.useRef(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAIReportOpen, setIsAIReportOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Inspecao | null>(null);
+
+  useEffect(() => {
+    // Mesma guarda de BacklogClient.tsx: sem isso, este efeito corre no mount (isModalOpen
+    // ainda "false") ANTES do de restauração conseguir ler a flag, apagando-a sempre.
+    if (!hasRestoredModalRefPneus.current) return;
+    if (isModalOpen) {
+      localStorage.setItem(SHEET_OPEN_KEY_PNEUS, "true");
+      if ((editingItem as any)?.id) localStorage.setItem(EDITING_ID_KEY_PNEUS, (editingItem as any).id);
+      else localStorage.removeItem(EDITING_ID_KEY_PNEUS);
+    } else {
+      localStorage.removeItem(SHEET_OPEN_KEY_PNEUS);
+      localStorage.removeItem(EDITING_ID_KEY_PNEUS);
+    }
+  }, [isModalOpen, editingItem]);
+
+  useEffect(() => {
+    if (hasRestoredModalRefPneus.current) return;
+    if (typeof window === "undefined") return;
+    const wasOpen = localStorage.getItem(SHEET_OPEN_KEY_PNEUS) === "true";
+    if (!wasOpen) {
+      hasRestoredModalRefPneus.current = true;
+      return;
+    }
+    const editingId = localStorage.getItem(EDITING_ID_KEY_PNEUS);
+    if (editingId) {
+      const found = inspecoes.find((i: any) => i.id === editingId);
+      if (found) setEditingItem(found as any);
+    }
+    setIsModalOpen(true);
+    hasRestoredModalRefPneus.current = true;
+  }, [inspecoes]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moduloFiltro, setModuloFiltro] = useState<string>("TODOS");
   // "TODOS" ou um dos rótulos dos cartões de KPI (BOM/RECAPAGEM/CRITICO/PENDENTE) —

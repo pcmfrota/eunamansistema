@@ -69,6 +69,36 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+
+  // ── Reabre a folha de Novo/Editar Lançamento sozinha se a Activity do Android foi
+  // recriada (comum no MIUI mesmo com RAM de sobra, ao voltar da câmera nativa) —
+  // confirmado em teste real: sem isso, os VALORES do formulário sobrevivem (useFormDraft,
+  // dentro de BacklogModal.tsx, já persiste tudo sozinho, foto inclusive), mas a folha em
+  // si fica fechada e o usuário cai de volta no Dashboard, parecendo que "o app esqueceu"
+  // o que estava preenchendo — mesmo bug que o padrão de OSClient.tsx/CaptacaoClient.tsx
+  // já resolve pros módulos deles, só que BacklogModal (Fase 5) nunca tinha ganhado essa
+  // persistência porque usa o useFormDraft genérico (só guarda os VALORES, não se a folha
+  // está aberta).
+  const SHEET_OPEN_KEY = "eunaman_backlog_sheet_open";
+  const EDITING_ID_KEY = "eunaman_backlog_editing_id";
+  const hasRestoredModalRef = React.useRef(false);
+
+  useEffect(() => {
+    // Sem essa guarda, o próprio mount (isModalOpen ainda no valor inicial "false")
+    // disparava este efeito ANTES do de restauração (mais abaixo, condicionado a items/
+    // loading) conseguir ler a flag — apagando "true" um instante antes dele ser lido,
+    // sempre perdendo a corrida. Confirmado em teste real no aparelho: a foto sobrevivia
+    // no rascunho, mas a folha nunca reabria porque essa flag chegava sempre nula.
+    if (!hasRestoredModalRef.current) return;
+    if (isModalOpen) {
+      localStorage.setItem(SHEET_OPEN_KEY, "true");
+      if (editingItem?.id) localStorage.setItem(EDITING_ID_KEY, editingItem.id);
+      else localStorage.removeItem(EDITING_ID_KEY);
+    } else {
+      localStorage.removeItem(SHEET_OPEN_KEY);
+      localStorage.removeItem(EDITING_ID_KEY);
+    }
+  }, [isModalOpen, editingItem]);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [filtrosOpen, setFiltrosOpen] = useState(false);
 
@@ -229,6 +259,27 @@ export default function BacklogClient({ placas, colaboradores, calendario = [] }
       window.removeEventListener("offline-sync-completed", loadFromDb);
     };
   }, []);
+
+  useEffect(() => {
+    if (hasRestoredModalRef.current) return;
+    if (typeof window === "undefined") return;
+    const wasOpen = localStorage.getItem(SHEET_OPEN_KEY) === "true";
+    if (!wasOpen) {
+      hasRestoredModalRef.current = true;
+      return;
+    }
+    const editingId = localStorage.getItem(EDITING_ID_KEY);
+    if (editingId) {
+      // Só marca como restaurado quando os itens já carregaram (ou quando não há mais
+      // o que esperar, offline sem cache) — senão o item buscado aqui embaixo pode vir
+      // vazio só porque o IndexedDB ainda não respondeu.
+      if (items.length === 0 && loading) return;
+      const found = items.find((i) => i.id === editingId);
+      if (found) setEditingItem(found);
+    }
+    setIsModalOpen(true);
+    hasRestoredModalRef.current = true;
+  }, [items, loading]);
 
   const handleEdit = (item: any) => {
     setEditingItem(item);
