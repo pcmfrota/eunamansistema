@@ -16,6 +16,7 @@ import {
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { useNativeCamera } from "../../lib/nativeCamera";
 import { ListRow } from "../../ui/primitives/ListRow";
 import { BottomSheet } from "../../ui/primitives/BottomSheet";
 import { ActionSheet, ActionSheetItem } from "../../ui/primitives/ActionSheet";
@@ -104,34 +105,6 @@ function blankForm() {
   };
 }
 
-// Compressão de imagem via canvas — mesmo helper usado em Lavagens (field-app/src/modules/lavagens/LavagensClient.tsx).
-function compressBase64(dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.6): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = dataUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width;
-      let h = img.height;
-      if (w > h) {
-        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
-      } else {
-        if (h > maxHeight) { w = Math.round((w * maxHeight) / h); h = maxHeight; }
-      }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      } else {
-        resolve(dataUrl);
-      }
-    };
-    img.onerror = () => resolve(dataUrl);
-  });
-}
-
 type View = "menu" | "historico";
 
 export default function LubrificacaoClient({
@@ -174,41 +147,16 @@ export default function LubrificacaoClient({
       .sort((a, b) => (b.data_registro || "").localeCompare(a.data_registro || ""));
   }, [fichas, busca]);
 
-  // ── Ponte nativa da câmera (EunamanCamera) — mesmo padrão do módulo Lavagens ──
-  useEffect(() => {
-    (window as any).onEunamanCameraResult = async (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        if (result.success && result.dataUrl) {
-          const activeField = localStorage.getItem("eunaman_lubrificacao_active_field");
-          if (activeField) {
-            const compressed = await compressBase64(result.dataUrl);
-            const [grupo, idxStr] = activeField.split(":");
-            const idx = Number(idxStr);
-            setForm((prev) => {
-              const arr = [...(prev as any)[grupo]];
-              arr[idx] = compressed;
-              return { ...prev, [grupo]: arr };
-            });
-          }
-        }
-      } catch (e) {
-        console.error("[EunamanCamera] Erro ao processar resultado:", e);
-      }
-    };
-    const timer = setTimeout(() => {
-      if ((window as any).EunamanCamera?.getPendingPhoto) {
-        try {
-          const pending = (window as any).EunamanCamera.getPendingPhoto();
-          if (pending) (window as any).onEunamanCameraResult(pending);
-        } catch {}
-      }
-    }, 500);
-    return () => {
-      clearTimeout(timer);
-      delete (window as any).onEunamanCameraResult;
-    };
-  }, []);
+  // ── Ponte nativa da câmera (EunamanCamera) — serviço único em lib/nativeCamera.ts ──
+  const { openCamera: abrirCameraNativa } = useNativeCamera("eunaman_lubrificacao_active_field", (activeField, compressed) => {
+    const [grupo, idxStr] = activeField.split(":");
+    const idx = Number(idxStr);
+    setForm((prev) => {
+      const arr = [...(prev as any)[grupo]];
+      arr[idx] = compressed;
+      return { ...prev, [grupo]: arr };
+    });
+  });
 
   // ── Rascunho do formulário (sobrevive ao reload que o Android dá na Activity
   // enquanto o app de Câmera nativo está em primeiro plano) — mesmo padrão de
@@ -251,16 +199,7 @@ export default function LubrificacaoClient({
   }, [mounted]);
 
   const handleCapture = (grupo: "fotos_antes" | "fotos_depois", idx: number) => {
-    localStorage.setItem("eunaman_lubrificacao_active_field", `${grupo}:${idx}`);
-    if ((window as any).EunamanCamera?.openCamera) {
-      try {
-        (window as any).EunamanCamera.openCamera();
-      } catch {
-        toast.show("Erro ao abrir a câmera.", "error");
-      }
-    } else {
-      toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info");
-    }
+    abrirCameraNativa(`${grupo}:${idx}`, () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"));
   };
 
   const abrirNovo = () => {

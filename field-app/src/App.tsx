@@ -46,6 +46,19 @@ function useRastrearRota() {
   }, [location.pathname]);
 }
 
+// Camada 2 (client): mesma fonte de permissões do auth-context, agora também aplicada na
+// rota em si — antes, só o menu/BottomNav escondiam o atalho, mas digitar o hash de uma
+// rota não autorizada direto na URL (#/os, por ex.) ainda renderizava a tela normalmente.
+// RLS no Supabase já bloqueia a leitura/escrita de dados (camada 3), mas a tela não devia
+// nem abrir pra começo de conversa.
+function RotaProtegida({ path, children }: { path: string; children: React.ReactNode }) {
+  const { permissions, isAdmin } = useAuth();
+  if (!isAdmin && !permissions.includes(path)) {
+    return <Navigate to="/menu" replace />;
+  }
+  return <>{children}</>;
+}
+
 function Conteudo() {
   const { user, loading } = useAuth();
   useRastrearRota();
@@ -65,16 +78,16 @@ function Conteudo() {
       <Routes>
         <Route path="/" element={<Navigate to={lerUltimaRota()} replace />} />
         <Route path="/menu" element={<MenuScreen />} />
-        <Route path="/pneus" element={<PneusPage />} />
-        <Route path="/backlog" element={<BacklogPage />} />
-        <Route path="/captacao" element={<CaptacaoPage />} />
-        <Route path="/mao-de-obra" element={<MaoDeObraPage />} />
-        <Route path="/lavagens" element={<LavagensPage />} />
-        <Route path="/preventivas" element={<PreventivasPage />} />
-        <Route path="/lubrificacao" element={<LubrificacaoPage />} />
-        <Route path="/insumos" element={<InsumosPage />} />
-        <Route path="/checklist-mecanicos" element={<ChecklistMecanicosPage />} />
-        <Route path="/os" element={<OSPage />} />
+        <Route path="/pneus" element={<RotaProtegida path="/pneus"><PneusPage /></RotaProtegida>} />
+        <Route path="/backlog" element={<RotaProtegida path="/backlog"><BacklogPage /></RotaProtegida>} />
+        <Route path="/captacao" element={<RotaProtegida path="/captacao"><CaptacaoPage /></RotaProtegida>} />
+        <Route path="/mao-de-obra" element={<RotaProtegida path="/mao-de-obra"><MaoDeObraPage /></RotaProtegida>} />
+        <Route path="/lavagens" element={<RotaProtegida path="/lavagens"><LavagensPage /></RotaProtegida>} />
+        <Route path="/preventivas" element={<RotaProtegida path="/preventivas"><PreventivasPage /></RotaProtegida>} />
+        <Route path="/lubrificacao" element={<RotaProtegida path="/lubrificacao"><LubrificacaoPage /></RotaProtegida>} />
+        <Route path="/insumos" element={<RotaProtegida path="/insumos"><InsumosPage /></RotaProtegida>} />
+        <Route path="/checklist-mecanicos" element={<RotaProtegida path="/checklist-mecanicos"><ChecklistMecanicosPage /></RotaProtegida>} />
+        <Route path="/os" element={<RotaProtegida path="/os"><OSPage /></RotaProtegida>} />
         <Route path="/equipamentos" element={<EquipamentosScreen />} />
         <Route path="*" element={<Navigate to="/menu" replace />} />
       </Routes>

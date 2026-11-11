@@ -15,6 +15,7 @@ import { EmptyState } from "../../ui/primitives/EmptyState";
 import { Fab } from "../../ui/primitives/Fab";
 import { useToast } from "../../ui/primitives/Toast";
 import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
+import { useNativeCamera } from "../../lib/nativeCamera";
 import {
   criarOrdemServico,
   atualizarOrdemServico,
@@ -31,33 +32,6 @@ const MOTIVOS_FALLBACK = ["Desgaste Natural", "Quebra Operacional", "Falha Elét
 // na hora de montar o payload (buildFields).
 type DescricaoAtividadeForm = { descricao: string; hora_inicio: string; hora_fim: string; foto: string };
 const blankDescricaoAtividade = (): DescricaoAtividadeForm => ({ descricao: "", hora_inicio: "", hora_fim: "", foto: "" });
-
-function compressBase64(dataUrl: string, maxWidth = 900, maxHeight = 900, quality = 0.65): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = dataUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width;
-      let h = img.height;
-      if (w > h) {
-        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
-      } else {
-        if (h > maxHeight) { w = Math.round((w * maxHeight) / h); h = maxHeight; }
-      }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      } else {
-        resolve(dataUrl);
-      }
-    };
-    img.onerror = () => resolve(dataUrl);
-  });
-}
 
 function FotoSlot({ label, url, onCapture, onClear }: { label: string; url?: string; onCapture: () => void; onClear: () => void }) {
   return (
@@ -244,49 +218,26 @@ export default function OSClient({
       .sort((a, b) => (b.data_abertura || "").localeCompare(a.data_abertura || ""));
   }, [ordens, pendentesValidacao, aba, busca]);
 
-  // ── Ponte nativa da câmera (EunamanCamera) — mesmo padrão de Lubrificação/Lavagens ──
-  useEffect(() => {
-    (window as any).onEunamanCameraResult = async (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        if (!result.success || !result.dataUrl) return;
-        const alvo = localStorage.getItem("eunaman_os_active_photo_field");
-        if (!alvo) return;
-        const compressed = await compressBase64(result.dataUrl);
-        if (alvo === "foto_horimetro" || alvo === "foto_km") {
-          setForm((p) => ({ ...p, [alvo]: compressed }));
-        } else if (alvo.startsWith("fotos:")) {
-          const idx = Number(alvo.split(":")[1]);
-          setForm((p) => {
-            const arr = [...p.fotos];
-            arr[idx] = compressed;
-            return { ...p, fotos: arr };
-          });
-        } else if (alvo.startsWith("descricao:")) {
-          const idx = Number(alvo.split(":")[1]);
-          setForm((p) => {
-            const arr = [...p.descricoes_atividade];
-            if (arr[idx]) arr[idx] = { ...arr[idx], foto: compressed };
-            return { ...p, descricoes_atividade: arr };
-          });
-        }
-      } catch (e) {
-        console.error("[EunamanCamera] Erro ao processar resultado:", e);
-      }
-    };
-    const timer = setTimeout(() => {
-      if ((window as any).EunamanCamera?.getPendingPhoto) {
-        try {
-          const pending = (window as any).EunamanCamera.getPendingPhoto();
-          if (pending) (window as any).onEunamanCameraResult(pending);
-        } catch {}
-      }
-    }, 500);
-    return () => {
-      clearTimeout(timer);
-      delete (window as any).onEunamanCameraResult;
-    };
-  }, []);
+  // ── Ponte nativa da câmera (EunamanCamera) — serviço único em lib/nativeCamera.ts ──
+  const { openCamera: abrirCameraNativa } = useNativeCamera("eunaman_os_active_photo_field", (alvo, compressed) => {
+    if (alvo === "foto_horimetro" || alvo === "foto_km") {
+      setForm((p) => ({ ...p, [alvo]: compressed }));
+    } else if (alvo.startsWith("fotos:")) {
+      const idx = Number(alvo.split(":")[1]);
+      setForm((p) => {
+        const arr = [...p.fotos];
+        arr[idx] = compressed;
+        return { ...p, fotos: arr };
+      });
+    } else if (alvo.startsWith("descricao:")) {
+      const idx = Number(alvo.split(":")[1]);
+      setForm((p) => {
+        const arr = [...p.descricoes_atividade];
+        if (arr[idx]) arr[idx] = { ...arr[idx], foto: compressed };
+        return { ...p, descricoes_atividade: arr };
+      });
+    }
+  });
 
   // ── Rascunho do formulário (sobrevive ao reload que o Android dá na Activity
   // enquanto o app de Câmera nativo está em primeiro plano, pra liberar memória —
@@ -332,16 +283,7 @@ export default function OSClient({
   }, [mounted]);
 
   const abrirCamera = (alvo: string) => {
-    localStorage.setItem("eunaman_os_active_photo_field", alvo);
-    if ((window as any).EunamanCamera?.openCamera) {
-      try {
-        (window as any).EunamanCamera.openCamera();
-      } catch {
-        toast.show("Erro ao abrir a câmera.", "error");
-      }
-    } else {
-      toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info");
-    }
+    abrirCameraNativa(alvo, () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"));
   };
 
   const abrirNovo = () => {

@@ -45,6 +45,7 @@ import { useOffline } from '@/components/offline-provider';
 import { localDb } from '@/lib/offline-db';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { baixarOuCompartilharPdf } from '@/lib/pdf-share';
+import { useNativeCamera } from '../../lib/nativeCamera';
 import {
   criarFicha,
   fecharFicha,
@@ -713,74 +714,10 @@ export default function CaptacaoClient({
     foto_ponto: null as string | null
   });
 
-  // ── Registra o callback da ponte nativa do APK (EunamanCamera) para Captação ──
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    (window as any).onEunamanCameraResult = (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        if (result.success && result.dataUrl) {
-          // Comprime via canvas antes de adicionar
-          const img = new Image();
-          img.src = result.dataUrl;
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            const MAX = 800;
-            let w = img.width;
-            let h = img.height;
-            if (w > h) {
-              if (w > MAX) {
-                h = Math.round((h * MAX) / w);
-                w = MAX;
-              }
-            } else {
-              if (h > MAX) {
-                w = Math.round((w * MAX) / h);
-                h = MAX;
-              }
-            }
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, w, h);
-              const compressed = canvas.toDataURL("image/jpeg", 0.6);
-              setNewLancamentoData(prev => ({ ...prev, foto_ponto: compressed }));
-            } else {
-              setNewLancamentoData(prev => ({ ...prev, foto_ponto: result.dataUrl }));
-            }
-          };
-          img.onerror = () => {
-            setNewLancamentoData(prev => ({ ...prev, foto_ponto: result.dataUrl }));
-          };
-        } else if (!result.success) {
-          console.warn("[EunamanCamera] Erro na ponte nativa:", result.error);
-        }
-      } catch (e) {
-        console.error("[EunamanCamera] Erro ao processar resultado:", e);
-      }
-    };
-
-    // Recupera foto pendente se a Activity tiver sido recriada pelo Android
-    const timer = setTimeout(() => {
-      if ((window as any).EunamanCamera && (window as any).EunamanCamera.getPendingPhoto) {
-        try {
-          const pending = (window as any).EunamanCamera.getPendingPhoto();
-          if (pending) {
-            (window as any).onEunamanCameraResult(pending);
-          }
-        } catch (e) {
-          console.warn("[EunamanCamera] Erro ao buscar foto pendente:", e);
-        }
-      }
-    }, 500);
-
-    return () => {
-      clearTimeout(timer);
-      delete (window as any).onEunamanCameraResult;
-    };
-  }, []);
+  // ── Ponte nativa da câmera (EunamanCamera) — serviço único em lib/nativeCamera.ts ──
+  const { openCamera: abrirCameraNativa } = useNativeCamera("eunaman_captacao_active_field", (_alvo, compressed) => {
+    setNewLancamentoData(prev => ({ ...prev, foto_ponto: compressed }));
+  });
 
   const hasRestoredRef = useRef(false);
 
@@ -2274,13 +2211,7 @@ export default function CaptacaoClient({
                   <UploadBox 
                     label="Tirar Foto do Ponto"
                     url={newLancamentoData.foto_ponto}
-                    onCapture={() => {
-                      if (typeof window !== "undefined" && (window as any).EunamanCamera) {
-                        (window as any).EunamanCamera.openCamera();
-                      } else {
-                        setShowCamera(true);
-                      }
-                    }}
+                    onCapture={() => abrirCameraNativa("foto_ponto", () => setShowCamera(true))}
                     onFileSelect={(base64) => setNewLancamentoData({ ...newLancamentoData, foto_ponto: base64 })}
                     showCameraOption={true}
                   />

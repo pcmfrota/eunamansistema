@@ -10,7 +10,12 @@
 //   era feito no middleware; aqui, sem servidor, precisa entrar no próprio fetchProfile.
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { modulosPaths } from "@/lib/modulos";
 import type { User } from "@supabase/supabase-js";
+
+// Mesma fonte única de módulos do app principal (components/auth-context.tsx) — admin
+// sempre vê tudo, e a lista nunca fica desatualizada quando um módulo é criado/removido.
+const MODULOS_ADMIN = modulosPaths();
 
 type Profile = {
   id: string;
@@ -64,8 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (cachedProfile) {
         const profile = JSON.parse(cachedProfile);
-        let permissions = cachedPerms ? JSON.parse(cachedPerms) : [];
-        if (Array.isArray(permissions) && !permissions.includes("/lubrificacao")) permissions.push("/lubrificacao");
+        const permissions = cachedPerms ? JSON.parse(cachedPerms) : [];
         return { user, profile, permissions, loading: false };
       }
     } catch (e) {
@@ -117,8 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cachedProfile) {
         try {
           const parsedProfile = JSON.parse(cachedProfile);
-          let parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : [];
-          if (Array.isArray(parsedPerms) && !parsedPerms.includes("/lubrificacao")) parsedPerms.push("/lubrificacao");
+          const parsedPerms = cachedPerms ? JSON.parse(cachedPerms) : [];
 
           setProfile(parsedProfile);
           setPermissions(parsedPerms);
@@ -143,26 +146,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const syncWithDatabase = async (u: any, isMasterAdmin: boolean, currentProfile: Profile) => {
     let profileData: any = null;
-    let allPerms: any[] = [];
+    let userPerms: any[] = [];
 
     try {
       const dbPromise = Promise.all([
         supabase.from("profiles").select("id, full_name, role, avatar_url, filial_id, status, filiais(nome)").eq("id", u.id).maybeSingle(),
-        supabase.from("role_permissions").select("role, allowed_tabs"),
+        supabase.from("user_module_permissions").select("modulo").eq("user_id", u.id),
       ]);
       const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Timeout de 5 segundos ao conectar ao banco")), 5000));
       const [profileRes, permRes]: any = await Promise.race([dbPromise, timeoutPromise]);
 
       if (profileRes && !profileRes.error) profileData = profileRes.data;
-      if (permRes && !permRes.error) allPerms = permRes.data || [];
+      if (permRes && !permRes.error) userPerms = permRes.data || [];
     } catch (err) {
       console.warn("[Auth] Erro ou Timeout na sincronização com o Supabase. Usando fallbacks locais:", err);
     }
 
-    // Cadastro autoservido ainda pendente/rejeitado não entra no app de campo — mesma
-    // regra que o middleware.ts do app principal aplica em toda rota protegida.
+    // Cadastro autoservido ainda pendente/rejeitado, ou usuário bloqueado pelo admin, não
+    // entra no app de campo — mesma regra que components/auth-context.tsx (app principal)
+    // aplica no site.
     if (profileData?.status && profileData.status !== "aprovado") {
-      console.warn("[Auth] Cadastro não aprovado — encerrando sessão.");
+      console.warn("[Auth] Cadastro não aprovado/bloqueado — encerrando sessão.");
       await signOutInternal();
       return;
     }
@@ -184,25 +188,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         filial_nome: filialNome,
       };
 
-      const rolePerm = allPerms.find((p: any) => p.role === finalRole);
-      let finalPerms: string[] = [];
-      const allTabs = ["/dashboard", "/os", "/preventivas", "/pneus", "/afiacao", "/lubrificacao", "/backlog", "/programacao-preventiva", "/base-frotas", "/base-dados", "/calendario", "/lavagens", "/captacao", "/documentos", "/checklist-mecanicos", "/admin/usuarios"];
-      if (rolePerm?.allowed_tabs && rolePerm.allowed_tabs.length > 0) {
-        finalPerms = rolePerm.allowed_tabs.map((t: string) => (t === "/" ? "/dashboard" : t));
-      } else {
-        if (finalRole === "admin") finalPerms = allTabs;
-        else if (finalRole === "visitante") finalPerms = ["/dashboard", "/preventivas", "/backlog", "/calendario", "/documentos"];
-        else if (finalRole === "mecanico") finalPerms = ["/dashboard", "/os", "/preventivas", "/pneus", "/afiacao", "/lubrificacao", "/backlog", "/programacao-preventiva", "/calendario", "/captacao", "/documentos", "/checklist-mecanicos"];
-        else if (finalRole === "supervisor_manutencao") finalPerms = ["/dashboard", "/os", "/preventivas", "/pneus", "/backlog", "/programacao-preventiva", "/calendario", "/captacao", "/documentos", "/afiacao", "/checklist-mecanicos"];
-        else if (finalRole === "motorista") finalPerms = ["/dashboard", "/pneus", "/calendario", "/lavagens", "/captacao", "/documentos"];
-        else if (finalRole === "afiador") finalPerms = ["/dashboard", "/afiacao"];
-        else if (finalRole === "financeiro") finalPerms = ["/dashboard", "/custos"];
-        else finalPerms = allTabs.filter((t) => t !== "/admin/usuarios");
-      }
-
-      if (["admin", "pcm", "gestao", "mecanico", "tecnico", "gestor", "supervisor_manutencao"].includes(finalRole) && !finalPerms.includes("/lubrificacao")) {
-        finalPerms.push("/lubrificacao");
-      }
+      // Permissões por indivíduo (user_module_permissions) — mesma fonte única do app
+      // principal, não mais por cargo genérico. Admin sempre vê tudo.
+      const finalPerms: string[] = finalRole === "admin" ? MODULOS_ADMIN : userPerms.map((p: any) => p.modulo);
 
       setProfile(finalProfile);
       setPermissions(finalPerms);
@@ -225,6 +213,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, fetchProfile]);
+
+  // ── Sincronização em tempo real de permissões/bloqueio — mesmo padrão de
+  // components/auth-context.tsx (app principal): revogar um módulo ou bloquear o usuário
+  // precisa valer mesmo com o app já aberto em outro aparelho, sem esperar reabrir ou o
+  // token expirar (~1h). Realtime cobre o caso comum; o setInterval cobre quedas de
+  // Realtime (reconexão, app em segundo plano há muito tempo) — nenhum dos dois sozinho é
+  // garantia suficiente.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`auth-sync-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_module_permissions", filter: `user_id=eq.${user.id}` }, () => {
+        fetchProfile(user, true, true, true);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` }, () => {
+        fetchProfile(user, true, true, true);
+      })
+      .subscribe();
+
+    const interval = setInterval(() => {
+      fetchProfile(user, true, true, true);
+    }, 3 * 60 * 1000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {

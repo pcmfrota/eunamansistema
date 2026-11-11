@@ -21,6 +21,7 @@ import { useOffline } from "@/components/offline-provider";
 import { useAuth } from "@/components/auth-context";
 import { localDb } from "@/lib/offline-db";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { useNativeCamera } from "../../lib/nativeCamera";
 import { ListRow, Card } from "../../ui/primitives/ListRow";
 import { BottomSheet } from "../../ui/primitives/BottomSheet";
 import { ActionSheet, ActionSheetItem } from "../../ui/primitives/ActionSheet";
@@ -73,34 +74,6 @@ const BLANK_FORM = {
   imagem_horimetro_url: "",
   assinatura_url: "",
 };
-
-// Compressão de imagem via canvas pra ~50KB — mesmo helper do app principal.
-function compressBase64(dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.6): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = dataUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width;
-      let h = img.height;
-      if (w > h) {
-        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
-      } else {
-        if (h > maxHeight) { w = Math.round((w * maxHeight) / h); h = maxHeight; }
-      }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      } else {
-        resolve(dataUrl);
-      }
-    };
-    img.onerror = () => resolve(dataUrl);
-  });
-}
 
 type View = "menu" | "historico" | "painel";
 
@@ -180,35 +153,10 @@ export default function LavagensClient({
     return { pesados: porFrota(isPesado), leves: porFrota(isLeve) };
   }, [lavagens, equipamentos]);
 
-  // ── Ponte nativa da câmera (EunamanCamera) — mesmo padrão do app principal ──
-  useEffect(() => {
-    (window as any).onEunamanCameraResult = async (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        if (result.success && result.dataUrl) {
-          const activeField = localStorage.getItem("eunaman_lavagens_active_field");
-          if (activeField) {
-            const compressed = await compressBase64(result.dataUrl);
-            setForm((prev) => ({ ...prev, [activeField]: compressed }));
-          }
-        }
-      } catch (e) {
-        console.error("[EunamanCamera] Erro ao processar resultado:", e);
-      }
-    };
-    const timer = setTimeout(() => {
-      if ((window as any).EunamanCamera?.getPendingPhoto) {
-        try {
-          const pending = (window as any).EunamanCamera.getPendingPhoto();
-          if (pending) (window as any).onEunamanCameraResult(pending);
-        } catch {}
-      }
-    }, 500);
-    return () => {
-      clearTimeout(timer);
-      delete (window as any).onEunamanCameraResult;
-    };
-  }, []);
+  // ── Ponte nativa da câmera (EunamanCamera) — serviço único em lib/nativeCamera.ts ──
+  const { openCamera: abrirCameraNativa } = useNativeCamera("eunaman_lavagens_active_field", (activeField, compressed) => {
+    setForm((prev) => ({ ...prev, [activeField]: compressed }));
+  });
 
   // ── Rascunho do formulário (sobrevive ao reload que o Android dá na Activity
   // enquanto o app de Câmera nativo está em primeiro plano, pra liberar memória) —
@@ -280,16 +228,7 @@ export default function LavagensClient({
   };
 
   const handleCapture = (field: string) => {
-    localStorage.setItem("eunaman_lavagens_active_field", field);
-    if ((window as any).EunamanCamera?.openCamera) {
-      try {
-        (window as any).EunamanCamera.openCamera();
-      } catch (e) {
-        toast.show("Erro ao abrir a câmera.", "error");
-      }
-    } else {
-      toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info");
-    }
+    abrirCameraNativa(field, () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"));
   };
 
   const handleSalvar = async () => {

@@ -23,6 +23,7 @@ import {
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { useNativeCamera } from "../../lib/nativeCamera";
 import { ListRow, Card } from "../../ui/primitives/ListRow";
 import { BottomSheet } from "../../ui/primitives/BottomSheet";
 import { ActionSheet, ActionSheetItem } from "../../ui/primitives/ActionSheet";
@@ -53,25 +54,6 @@ function formatarPlaca(placa: string) {
 }
 function hoje() { return getCurrentLocalDate(); }
 function uid() { return (crypto as any).randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`; }
-
-// ── Compressão de imagem + ponte da câmera nativa — mesmo padrão de Lavagens ──
-function compressBase64(dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.6): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = dataUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width, h = img.height;
-      if (w > h) { if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; } }
-      else { if (h > maxHeight) { w = Math.round((w * maxHeight) / h); h = maxHeight; } }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL("image/jpeg", quality)); }
-      else resolve(dataUrl);
-    };
-    img.onerror = () => resolve(dataUrl);
-  });
-}
 
 function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -130,38 +112,6 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
       </div>
     </div>
   );
-}
-
-function useCameraBridge(onResult: (field: string, dataUrl: string) => void, storageKey: string) {
-  useEffect(() => {
-    (window as any).onEunamanCameraResult = async (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr);
-        if (result.success && result.dataUrl) {
-          const activeField = localStorage.getItem(storageKey);
-          if (activeField) onResult(activeField, await compressBase64(result.dataUrl));
-        }
-      } catch (e) { console.error("[EunamanCamera] Erro ao processar resultado:", e); }
-    };
-    const timer = setTimeout(() => {
-      if ((window as any).EunamanCamera?.getPendingPhoto) {
-        try {
-          const pending = (window as any).EunamanCamera.getPendingPhoto();
-          if (pending) (window as any).onEunamanCameraResult(pending);
-        } catch {}
-      }
-    }, 500);
-    return () => { clearTimeout(timer); delete (window as any).onEunamanCameraResult; };
-  }, []);
-}
-
-function abrirCamera(field: string, storageKey: string, toast: ReturnType<typeof useToast>) {
-  localStorage.setItem(storageKey, field);
-  if ((window as any).EunamanCamera?.openCamera) {
-    try { (window as any).EunamanCamera.openCamera(); } catch { toast.show("Erro ao abrir a câmera.", "error"); }
-  } else {
-    toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info");
-  }
 }
 
 const STATUS_BADGE = {
@@ -824,7 +774,7 @@ function LinhaForm({ linhaInicial, equipamentos, temTanque2, salvando, onSalvar 
     return init;
   });
 
-  useCameraBridge((_field, dataUrl) => setAssinatura(dataUrl), "eunaman_insumos_active_field");
+  const camera = useNativeCamera("eunaman_insumos_active_field", (_field, dataUrl) => setAssinatura(dataUrl));
 
   // ── Rascunho dos campos da linha (sobrevive ao reload que o Android dá na Activity
   // enquanto o app de Câmera nativo está em primeiro plano) — mesmo padrão de
@@ -965,11 +915,11 @@ function LinhaForm({ linhaInicial, equipamentos, temTanque2, salvando, onSalvar 
       <div className="space-y-2">
         <label className="text-xs font-bold text-zinc-400 block">Assinatura ou Foto do Operador</label>
         {assinatura ? (
-          <button onClick={() => abrirCamera("assinatura", "eunaman_insumos_active_field", toast)} className="relative aspect-video w-full rounded-xl overflow-hidden border border-zinc-800">
+          <button onClick={() => camera.openCamera("assinatura", () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))} className="relative aspect-video w-full rounded-xl overflow-hidden border border-zinc-800">
             <img src={assinatura} className="w-full h-full object-contain bg-white" />
           </button>
         ) : (
-          <button onClick={() => abrirCamera("assinatura", "eunaman_insumos_active_field", toast)}
+          <button onClick={() => camera.openCamera("assinatura", () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
             className="w-full aspect-video rounded-xl border border-dashed border-zinc-700 bg-zinc-900 flex flex-col items-center justify-center gap-1">
             <Camera size={20} className="text-zinc-500" />
             <span className="text-[10px] font-bold text-zinc-500">Tirar foto</span>
