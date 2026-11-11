@@ -60,6 +60,12 @@ type OS = {
   aprovado_por?: string | null;
   aprovado_por_nome?: string | null;
   aprovado_em?: string | null;
+  aprovado_pcm?: boolean | null;
+  aprovado_pcm_por_nome?: string | null;
+  aprovado_pcm_em?: string | null;
+  aprovado_supervisor?: boolean | null;
+  aprovado_supervisor_por_nome?: string | null;
+  aprovado_supervisor_em?: string | null;
 };
 
 type Equipamento = {
@@ -738,15 +744,37 @@ export default function ControleOSClient({
       });
   }, [ordens, busca, filtroStatus, filtroModulo, filtroArea, filtroPeriodo, filtroAprovacao, filtroSuzano, filtroOrdem, periodos, equipamentos]);
 
-  // Quem pode validar/aprovar OS lançadas por mecânico — mesma regra já usada em
-  // aprovarOrdemServico (app/os/actions.ts) e no botão "Aprovar" de cada linha.
-  const podeAprovar = profile?.role === 'admin' || profile?.role === 'pcm';
+  // Aprovação em duas etapas — PCM e Supervisor de Manutenção validam separadamente (ver
+  // etapasExigidas() em app/os/actions.ts). Admin pode validar qualquer etapa pendente.
+  const podeAprovarPcm = profile?.role === 'admin' || profile?.role === 'pcm';
+  const podeAprovarSupervisor = profile?.role === 'admin' || profile?.role === 'supervisor_manutencao';
+  const podeAprovar = podeAprovarPcm || podeAprovarSupervisor;
 
-  // Todas as OS pendentes de aprovação, sem nenhum filtro da Lista aplicado — a aba
-  // Validação é sempre a lista completa/canônica, pra garantir que nada passe despercebido.
+  // A etapa (se houver) que o cargo do usuário autoriza validar NESTA OS especificamente —
+  // controla tanto a visibilidade do botão "Aprovar" quanto a lista da aba Validação, pra
+  // PCM só ver o que falta o PCM validar e o Supervisor só o que falta ele validar.
+  const podeAprovarEstaOS = (os: OS) => {
+    if (profile?.role === 'admin') return os.aprovado === false;
+    if (profile?.role === 'pcm') return (os as any).aprovado_pcm === false;
+    if (profile?.role === 'supervisor_manutencao') return (os as any).aprovado_supervisor === false;
+    return false;
+  };
+
+  // Etapa a enviar pro servidor: admin aprova de uma vez tudo que estiver pendente
+  // (etapa indefinida = aprovarOrdemServico resolve sozinho); PCM/Supervisor validam
+  // só a própria etapa.
+  const minhaEtapaAprovacao = (): 'pcm' | 'supervisor' | undefined => {
+    if (profile?.role === 'pcm') return 'pcm';
+    if (profile?.role === 'supervisor_manutencao') return 'supervisor';
+    return undefined;
+  };
+
+  // Todas as OS pendentes de aprovação que o cargo do usuário pode validar, sem nenhum
+  // filtro da Lista aplicado — a aba Validação é sempre a lista completa/canônica pra
+  // essa etapa, pra garantir que nada passe despercebido.
   const pendentesAprovacao = React.useMemo(
-    () => ordens.filter(o => o.aprovado === false).sort((a, b) => new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime()),
-    [ordens]
+    () => ordens.filter(o => podeAprovarEstaOS(o)).sort((a, b) => new Date(b.data_abertura).getTime() - new Date(a.data_abertura).getTime()),
+    [ordens, profile?.role]
   );
 
   // Se o PCM/admin tem OS pendentes de validação, a tela de entrada já abre direto
@@ -859,24 +887,28 @@ export default function ControleOSClient({
   };
 
   const handleApproveOS = (id: string) => {
+    const etapa = minhaEtapaAprovacao();
     startTransition(async () => {
       if (isOnline) {
-        const res = await aprovarOrdemServico(id);
+        const res = await aprovarOrdemServico(id, etapa);
         if (res && 'error' in res) {
           alert(res.error);
         } else {
-          const os = ordens.find(o => o.id === id);
-          if (os) {
-            await localDb.put('ordens_servico', { ...os, aprovado: true });
-            window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
-          }
+          await localDb.put('ordens_servico', res);
+          window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
         }
       } else {
         const os = ordens.find(o => o.id === id);
         if (os) {
-          const updated = { ...os, aprovado: true, _isPendingSync: true };
+          const updated = {
+            ...os,
+            ...(!etapa || etapa === 'pcm' ? { aprovado_pcm: true } : {}),
+            ...(!etapa || etapa === 'supervisor' ? { aprovado_supervisor: true } : {}),
+            _isPendingSync: true,
+          };
+          (updated as any).aprovado = (updated as any).aprovado_pcm === true && (updated as any).aprovado_supervisor === true;
           await localDb.put('ordens_servico', updated);
-          await localDb.addToQueue('os', 'approve', { id });
+          await localDb.addToQueue('os', 'approve', { id, etapa });
           window.dispatchEvent(new CustomEvent('offline-db-updated-sync_queue'));
           window.dispatchEvent(new CustomEvent('offline-db-updated-ordens_servico'));
         }
@@ -1318,7 +1350,7 @@ export default function ControleOSClient({
                         <div className="flex flex-wrap gap-1.5 mt-0.5">
                           {os.aprovado === false && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30 whitespace-nowrap">
-                              Pendente ⚠️
+                              Pendente{os.aprovado_pcm === false ? " · PCM" : ""}{os.aprovado_supervisor === false ? " · Supervisor" : ""} ⚠️
                             </span>
                           )}
                           {temAssinaturaSuzano(os) && (
@@ -1365,7 +1397,7 @@ export default function ControleOSClient({
                         )}
                         {!isVisitante && (
                           <>
-                            {os.aprovado === false && podeAprovar && (
+                            {podeAprovarEstaOS(os) && (
                               <button
                                 title="Aprovar Lançamento"
                                 onClick={() => handleApproveOS(os.id)}
@@ -1738,7 +1770,7 @@ export default function ControleOSClient({
             {/* List of actions */}
             <div className="p-4 flex flex-col gap-2 bg-zinc-50/50 dark:bg-zinc-950/50">
               {/* Option: Aprovar */}
-              {selectedOSActions.aprovado === false && podeAprovar && (
+              {podeAprovarEstaOS(selectedOSActions) && (
                 <button
                   onClick={() => {
                     handleApproveOS(selectedOSActions.id);

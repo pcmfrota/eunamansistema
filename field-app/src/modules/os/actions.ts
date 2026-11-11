@@ -77,6 +77,18 @@ const extractMecanicos = (formData: FormData): string[] => {
   return mecanicos;
 };
 
+// Aprovação em duas etapas (ver migration 20261112000100_aprovacao_os_duas_etapas.sql e
+// app/os/actions.ts, mesma regra no app principal):
+//   - admin e supervisor_manutencao: dispensam as DUAS etapas na própria OS.
+//   - pcm: dispensa só a própria etapa; ainda precisa do Supervisor de Manutenção.
+//   - qualquer outro cargo (mecânico, encarregado etc. — inclusive lançamento via APK):
+//     precisa das duas etapas.
+function etapasExigidas(role: string): { precisaPcm: boolean; precisaSupervisor: boolean } {
+  if (role === 'admin' || role === 'supervisor_manutencao') return { precisaPcm: false, precisaSupervisor: false };
+  if (role === 'pcm') return { precisaPcm: false, precisaSupervisor: true };
+  return { precisaPcm: true, precisaSupervisor: true };
+}
+
 async function getUsuarioAtual(supabase: any) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { id: null as string | null, nome: null as string | null, role: 'visitante' };
@@ -143,9 +155,15 @@ export async function criarOrdemServico(formData: FormData) {
       (data as any).created_by_nome = usuario.nome;
     }
 
-    // Só admin e PCM lançam já validado; qualquer outro cargo (mecânico, encarregado,
-    // gestão, supervisor, ou lançamento feito pelo app de campo) entra pendente de validação.
-    data.aprovado = usuario.role === 'admin' || usuario.role === 'pcm';
+    const { precisaPcm, precisaSupervisor } = etapasExigidas(usuario.role);
+    (data as any).aprovado_pcm = !precisaPcm;
+    (data as any).aprovado_supervisor = !precisaSupervisor;
+    data.aprovado = !precisaPcm && !precisaSupervisor;
+    if (data.aprovado && usuario.id) {
+      (data as any).aprovado_por = usuario.id;
+      (data as any).aprovado_por_nome = usuario.nome;
+      (data as any).aprovado_em = getCurrentLocalDatetime();
+    }
 
     const result = await OSService.createOS(data);
     if (result.success && result.data) return result.data;
@@ -178,10 +196,16 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
     const supabase = createClient();
     const usuario = await getUsuarioAtual(supabase);
 
-    // Se editado por quem não é admin/PCM, volta a requerer validação (aprovado = false)
-    const precisaValidar = usuario.role !== 'admin' && usuario.role !== 'pcm';
-    if (precisaValidar) {
-      data.aprovado = false;
+    // Editar reabre a validação como se fosse um novo lançamento feito por quem editou —
+    // mesma regra de etapasExigidas() usada na criação.
+    const { precisaPcm, precisaSupervisor } = etapasExigidas(usuario.role);
+    (data as any).aprovado_pcm = !precisaPcm;
+    (data as any).aprovado_supervisor = !precisaSupervisor;
+    data.aprovado = !precisaPcm && !precisaSupervisor;
+    if (data.aprovado && usuario.id) {
+      (data as any).aprovado_por = usuario.id;
+      (data as any).aprovado_por_nome = usuario.nome;
+      (data as any).aprovado_em = getCurrentLocalDatetime();
     }
 
     const result = await OSService.updateOS(id, data as OSUpdate);
@@ -197,22 +221,64 @@ export async function atualizarOrdemServico(id: string, formData: FormData) {
   }
 }
 
-export async function aprovarOrdemServico(id: string) {
+export async function aprovarOrdemServico(id: string, etapa?: 'pcm' | 'supervisor') {
   try {
     const supabase = createClient();
     const usuario = await getUsuarioAtual(supabase);
     if (!usuario.id) return { error: 'Não autenticado' };
 
-    if (usuario.role !== 'admin' && usuario.role !== 'pcm') {
-      return { error: 'Apenas administradores ou PCM podem validar ordens de serviço.' };
+    const podeAprovarPcm = usuario.role === 'admin' || usuario.role === 'pcm';
+    const podeAprovarSupervisor = usuario.role === 'admin' || usuario.role === 'supervisor_manutencao';
+    if (!podeAprovarPcm && !podeAprovarSupervisor) {
+      return { error: 'Você não tem permissão para validar ordens de serviço.' };
     }
 
-    const result = await OSService.updateOS(id, {
-      aprovado: true,
-      aprovado_por: usuario.id,
-      aprovado_por_nome: usuario.nome,
-      aprovado_em: getCurrentLocalDatetime(),
-    } as any);
+    const { data: osAtual, error: fetchError } = await supabase
+      .from('ordens_servico')
+      .select('aprovado_pcm, aprovado_supervisor')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchError || !osAtual) return { error: 'OS não encontrada.' };
+
+    const etapasParaAprovar: Array<'pcm' | 'supervisor'> = etapa
+      ? [etapa]
+      : [
+          ...(podeAprovarPcm && osAtual.aprovado_pcm === false ? (['pcm'] as const) : []),
+          ...(podeAprovarSupervisor && osAtual.aprovado_supervisor === false ? (['supervisor'] as const) : []),
+        ];
+
+    if (etapasParaAprovar.length === 0) {
+      return { error: 'Não há etapa pendente que você possa validar nesta OS.' };
+    }
+
+    const agora = getCurrentLocalDatetime();
+    const update: any = {};
+    for (const et of etapasParaAprovar) {
+      if (et === 'pcm') {
+        if (!podeAprovarPcm) return { error: 'Apenas PCM ou administradores podem validar a etapa do PCM.' };
+        update.aprovado_pcm = true;
+        update.aprovado_pcm_por = usuario.id;
+        update.aprovado_pcm_por_nome = usuario.nome;
+        update.aprovado_pcm_em = agora;
+      } else {
+        if (!podeAprovarSupervisor) return { error: 'Apenas o Supervisor de Manutenção ou administradores podem validar esta etapa.' };
+        update.aprovado_supervisor = true;
+        update.aprovado_supervisor_por = usuario.id;
+        update.aprovado_supervisor_por_nome = usuario.nome;
+        update.aprovado_supervisor_em = agora;
+      }
+    }
+
+    const pcmFinal = update.aprovado_pcm ?? osAtual.aprovado_pcm;
+    const supervisorFinal = update.aprovado_supervisor ?? osAtual.aprovado_supervisor;
+    if (pcmFinal && supervisorFinal) {
+      update.aprovado = true;
+      update.aprovado_por = usuario.id;
+      update.aprovado_por_nome = usuario.nome;
+      update.aprovado_em = agora;
+    }
+
+    const result = await OSService.updateOS(id, update as any);
     if (result.success && result.data) return result.data;
     return { success: true };
   } catch (error: any) {

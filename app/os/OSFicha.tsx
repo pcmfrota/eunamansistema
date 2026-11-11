@@ -40,7 +40,15 @@ export type OSFichaData = {
   aprovado?: boolean | null;
   aprovado_por_nome?: string | null;
   aprovado_em?: string | null;
-  // Pode ser JSON array de strings (novo) ou string simples (antigo)
+  aprovado_pcm?: boolean | null;
+  aprovado_pcm_por_nome?: string | null;
+  aprovado_pcm_em?: string | null;
+  aprovado_supervisor?: boolean | null;
+  aprovado_supervisor_por_nome?: string | null;
+  aprovado_supervisor_em?: string | null;
+  // Pode ser JSON { mecanicos: string[], matriculas: string[], cargos: Record<string,
+  // {nome,matricula,assinatura}> } (novo) ou { mecanicos: string[], cargos: Record<string,
+  // string> } (formato anterior) ou string simples (bem antigo)
   assinatura_mecanico?: string | null;
   fotos?: string[] | null;
   // fallback fields from OrdemServicoResumo
@@ -213,18 +221,26 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
   const os = { ...osProp, ...(imagensOS || {}) };
 
-  // Desserializa assinaturas: suporta JSON estruturado (novo), JSON array ou string simples
-  const { assinaturas, sigCargos } = (() => {
+  // Desserializa assinaturas: suporta JSON estruturado (novo, com matrículas/cargos{nome,
+  // matricula,assinatura}), o formato anterior (cargo = string simples só com a assinatura),
+  // JSON array ou string simples bem antiga.
+  type CargoDadoFicha = { nome: string; matricula: string; assinatura: string };
+  const { assinaturas, matriculas, sigCargos } = (() => {
     const raw = os.assinatura_mecanico || "";
-    if (!raw) return { assinaturas: [] as string[], sigCargos: {} as Record<string, string> };
+    if (!raw) return { assinaturas: [] as string[], matriculas: [] as string[], sigCargos: {} as Record<string, CargoDadoFicha> };
     try {
       const p = JSON.parse(raw);
       if (p && typeof p === 'object' && !Array.isArray(p) && 'mecanicos' in p) {
-        return { assinaturas: p.mecanicos || [], sigCargos: p.cargos || {} };
+        const cargosRaw: Record<string, any> = p.cargos || {};
+        const cargos: Record<string, CargoDadoFicha> = {};
+        Object.entries(cargosRaw).forEach(([key, val]) => {
+          cargos[key] = typeof val === 'string' ? { nome: '', matricula: '', assinatura: val } : (val as CargoDadoFicha);
+        });
+        return { assinaturas: p.mecanicos || [], matriculas: p.matriculas || [], sigCargos: cargos };
       }
-      if (Array.isArray(p)) return { assinaturas: p, sigCargos: {} };
+      if (Array.isArray(p)) return { assinaturas: p, matriculas: [], sigCargos: {} };
     } catch {}
-    return { assinaturas: [raw], sigCargos: {} }; // string simples antiga
+    return { assinaturas: [raw], matriculas: [], sigCargos: {} }; // string simples antiga
   })();
 
   const CARGOS_LABELS: Record<string, string> = {
@@ -455,8 +471,12 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
           <div style="display:flex;padding:8px 2px 4px 2px;">
             ${os.created_by_nome ? rows("Lançado por", os.created_by_nome) : ""}
             ${os.aprovado != null ? rows("Status de Validação", os.aprovado ? "✅ Validada" : "⏳ Pendente de Validação", true, !!os.aprovado) : ""}
-            ${(os.aprovado && os.aprovado_por_nome) ? rows("Validado por", `${os.aprovado_por_nome}${os.aprovado_em ? ` em ${fmtDT(os.aprovado_em)}` : ""}`) : ""}
           </div>
+          ${(os.aprovado_pcm != null || os.aprovado_supervisor != null) ? `
+          <div style="display:flex;padding:0 2px 8px 2px;">
+            ${os.aprovado_pcm != null ? rows("Validação PCM", os.aprovado_pcm ? `✅ ${os.aprovado_pcm_por_nome || "Validado"}${os.aprovado_pcm_em ? ` em ${fmtDT(os.aprovado_pcm_em)}` : ""}` : "⏳ Pendente", false, !!os.aprovado_pcm) : ""}
+            ${os.aprovado_supervisor != null ? rows("Validação Supervisor Manutenção", os.aprovado_supervisor ? `✅ ${os.aprovado_supervisor_por_nome || "Validado"}${os.aprovado_supervisor_em ? ` em ${fmtDT(os.aprovado_supervisor_em)}` : ""}` : "⏳ Pendente", false, !!os.aprovado_supervisor) : ""}
+          </div>` : ''}
         </div>` : ''}
 
         <!-- Classificação -->
@@ -525,9 +545,10 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
             <div style="display:flex;flex-wrap:wrap;">
               ${(os.mecanicos && os.mecanicos.length > 0 ? os.mecanicos : ["Mecânico"]).map((nome, i) => {
                 const sig = assinaturas[i] || "";
+                const mat = matriculas[i] || "";
                 const isLast = i === (os.mecanicos?.length ?? 1) - 1;
                 return `<div style="flex:1;min-width:140px;padding:6px;min-height:85px;display:flex;flex-direction:column;justify-content:space-between;${!isLast ? 'border-right:1px solid #ddd;' : ''}">
-                  <p style="font-size:8px;color:#1a5c1a;font-weight:700;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${nome}">${nome}</p>
+                  <p style="font-size:8px;color:#1a5c1a;font-weight:700;margin:0 0 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${nome}">${nome}${mat ? ` — Mat. ${mat}` : ''}</p>
                   <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;">
                     ${sig ? `<img src="${sig}" style="height:32px;object-fit:contain;" />` : '<span style="font-size:8px;color:#d1d5db;">(sem assinatura)</span>'}
                   </div>
@@ -544,15 +565,17 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
               { key: 'pcm', l: "PCM / Planejamento", s: "Data de Encerramento" },
               { key: 'operador', l: "Operador / Motorista", s: "Recebimento" },
               { key: 'supervisor_suzano', l: "Supervisor / Autorizador / Suzano", s: "Autorização" },
+              { key: 'supervisor_manutencao', l: "Supervisor de Manutenção", s: "Validação" },
             ]).map((a, i, arr) => {
-              const sig = sigCargos[a.key] || "";
+              const dado = sigCargos[a.key];
+              const sig = dado?.assinatura || "";
               return `<div style="flex:1;min-width:120px;padding:6px;min-height:90px;display:flex;flex-direction:column;justify-content:space-between;${i < arr.length - 1 ? 'border-right:1px solid #333;' : ''}">
                 <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin:0 0 4px 0;">${a.l}</p>
                 <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:35px;">
                   ${sig ? `<img src="${sig}" style="height:32px;object-fit:contain;" />` : ''}
                 </div>
                 <div style="border-bottom:1px solid #111;margin-top:2px;"></div>
-                <p style="font-size:8px;text-align:center;color:#9ca3af;margin:3px 0 0 0;">${a.s}</p>
+                <p style="font-size:7px;text-align:center;color:#374151;margin:3px 0 0 0;">${dado?.nome ? `${dado.nome}${dado.matricula ? ` — Mat. ${dado.matricula}` : ''}` : a.s}</p>
               </div>`;
             }).join("")}
           </div>
@@ -825,10 +848,18 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                           highlight={!!os.aprovado}
                         />
                       )}
-                      {os.aprovado && os.aprovado_por_nome && (
+                      {os.aprovado_pcm != null && (
                         <FP
-                          label="Validado por"
-                          value={`${os.aprovado_por_nome}${os.aprovado_em ? ` em ${fmtDT(os.aprovado_em)}` : ""}`}
+                          label="Validação PCM"
+                          value={os.aprovado_pcm ? `✅ ${os.aprovado_pcm_por_nome || "Validado"}${os.aprovado_pcm_em ? ` em ${fmtDT(os.aprovado_pcm_em)}` : ""}` : "⏳ Pendente"}
+                          highlight={!!os.aprovado_pcm}
+                        />
+                      )}
+                      {os.aprovado_supervisor != null && (
+                        <FP
+                          label="Validação Supervisor Manutenção"
+                          value={os.aprovado_supervisor ? `✅ ${os.aprovado_supervisor_por_nome || "Validado"}${os.aprovado_supervisor_em ? ` em ${fmtDT(os.aprovado_supervisor_em)}` : ""}` : "⏳ Pendente"}
+                          highlight={!!os.aprovado_supervisor}
                         />
                       )}
                     </div>
@@ -927,6 +958,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                     <div className="flex flex-wrap border-t border-gray-200">
                       {(os.mecanicos && os.mecanicos.length > 0 ? os.mecanicos : ["Mecânico"]).map((nome, i) => {
                         const sig = assinaturas[i] || "";
+                        const mat = matriculas[i] || "";
                         const isLast = i === (os.mecanicos?.length ?? 1) - 1;
                         return (
                           <div
@@ -935,7 +967,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                               !isLast ? "border-r border-gray-300" : ""
                             }`}
                           >
-                            <p className="text-[8px] font-bold text-[#1a5c1a] mb-1 truncate" title={nome}>{nome}</p>
+                            <p className="text-[8px] font-bold text-[#1a5c1a] mb-1 truncate" title={nome}>{nome}{mat ? ` — Mat. ${mat}` : ""}</p>
                             <div className="flex-1 flex items-center justify-center min-h-[36px]">
                               {sig
                                 ? <img src={sig} alt={`Assinatura ${nome}`} className="h-9 object-contain max-w-full" />
@@ -957,8 +989,10 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                       { key: "pcm", label: "PCM / Planejamento", sub: "Data de Encerramento" },
                       { key: "operador", label: "Operador / Motorista", sub: "Recebimento" },
                       { key: "supervisor_suzano", label: "Supervisor / Autorizador / Suzano", sub: "Autorização" },
+                      { key: "supervisor_manutencao", label: "Supervisor de Manutenção", sub: "Validação" },
                     ].map((a, i, arr) => {
-                      const sig = sigCargos[a.key] || "";
+                      const dado = sigCargos[a.key];
+                      const sig = dado?.assinatura || "";
                       return (
                         <div
                           key={a.key}
@@ -974,7 +1008,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                             }
                           </div>
                           <div className="border-b border-gray-800 mt-1" />
-                          <p className="text-[8px] text-center text-gray-400 mt-1">{a.sub}</p>
+                          <p className="text-[8px] text-center text-gray-400 mt-1">{dado?.nome ? `${dado.nome}${dado.matricula ? ` — Mat. ${dado.matricula}` : ""}` : a.sub}</p>
                         </div>
                       );
                     })}

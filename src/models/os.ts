@@ -8,6 +8,11 @@ export interface DescricaoAtividade {
   hora_inicio?: string | null;
   hora_fim?: string | null;
   foto?: string | null;
+  // Cada descrição é de um mecânico diferente — assinatura própria (nome + matrícula +
+  // desenho), não a assinatura única da OS inteira (ver `assinatura_mecanico`/`mecanicos`).
+  mecanico_nome?: string | null;
+  mecanico_matricula?: string | null;
+  mecanico_assinatura?: string | null;
 }
 
 export interface OS {
@@ -47,6 +52,18 @@ export interface OS {
   aprovado_por?: string | null;
   aprovado_por_nome?: string | null;
   aprovado_em?: string | null;
+  // Aprovação em duas etapas: OS aberta por mecânico precisa de PCM + Supervisor de
+  // Manutenção; OS aberta pelo PCM precisa só do Supervisor. `aprovado` (acima) continua
+  // sendo o resultado final (true só quando todas as etapas exigidas estiverem ok), mantido
+  // por compatibilidade com quem já filtra/lê por ele.
+  aprovado_pcm?: boolean | null;
+  aprovado_pcm_por?: string | null;
+  aprovado_pcm_por_nome?: string | null;
+  aprovado_pcm_em?: string | null;
+  aprovado_supervisor?: boolean | null;
+  aprovado_supervisor_por?: string | null;
+  aprovado_supervisor_por_nome?: string | null;
+  aprovado_supervisor_em?: string | null;
   created_at?: string;
 }
 

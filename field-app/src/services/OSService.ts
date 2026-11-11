@@ -42,6 +42,9 @@ const OSSchema = z.object({
         hora_inicio: z.string().optional().nullable(),
         hora_fim: z.string().optional().nullable(),
         foto: z.string().optional().nullable(),
+        mecanico_nome: z.string().optional().nullable(),
+        mecanico_matricula: z.string().optional().nullable(),
+        mecanico_assinatura: z.string().optional().nullable(),
       })
     )
     .optional()
@@ -65,6 +68,14 @@ const OSSchema = z.object({
   aprovado_por: z.string().optional().nullable(),
   aprovado_por_nome: z.string().optional().nullable(),
   aprovado_em: z.string().optional().nullable(),
+  aprovado_pcm: z.boolean().optional().nullable(),
+  aprovado_pcm_por: z.string().optional().nullable(),
+  aprovado_pcm_por_nome: z.string().optional().nullable(),
+  aprovado_pcm_em: z.string().optional().nullable(),
+  aprovado_supervisor: z.boolean().optional().nullable(),
+  aprovado_supervisor_por: z.string().optional().nullable(),
+  aprovado_supervisor_por_nome: z.string().optional().nullable(),
+  aprovado_supervisor_em: z.string().optional().nullable(),
 });
 
 export class OSService {

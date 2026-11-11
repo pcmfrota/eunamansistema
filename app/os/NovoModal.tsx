@@ -266,38 +266,52 @@ export default function OSFormModal({
   const [mecanicos, setMecanicos] = useState<string[]>(
     (initialData as any)?.mecanicos?.length ? (initialData as any).mecanicos : [""]
   );
-  type SigPadTarget = number | 'encarregado' | 'pcm' | 'operador' | 'supervisor_suzano' | false;
+  type SigPadTarget = number | 'encarregado' | 'pcm' | 'operador' | 'supervisor_suzano' | 'supervisor_manutencao' | false;
   // showSigPad: índice numérico = mecânico, string = cargo fixo, false = fechado
   const [showSigPad, setShowSigPad] = useState<SigPadTarget>(false);
+  // Nome/matrícula sendo digitados no sig-pad ativo no momento (mecânico: nome vem travado
+  // do dropdown já escolhido; cargo: nome é digitado livremente, é quem assinou aquele papel).
+  const [sigNome, setSigNome] = useState("");
+  const [sigMatricula, setSigMatricula] = useState("");
 
   // Assinaturas dos mecânicos (array indexado)
-  // Assinaturas dos cargos fixos (objeto)
+  // Assinaturas dos cargos fixos (objeto, por nome/matrícula/assinatura — ver CargoDado)
   const CARGOS_LABELS: Record<string, string> = {
     encarregado: "Encarregado / Supervisor",
     pcm: "PCM / Planejamento",
     operador: "Operador / Motorista",
     supervisor_suzano: "Supervisor / Autorizador / Suzano",
+    supervisor_manutencao: "Supervisor de Manutenção",
   };
+  type CargoDado = { nome: string; matricula: string; assinatura: string };
+  const blankCargoDado = (): CargoDado => ({ nome: "", matricula: "", assinatura: "" });
   const parseInitialSigsAndCargos = () => {
     const raw = initialData?.assinatura_mecanico || "";
-    if (!raw) return { mecanicos: [] as string[], cargos: {} as Record<string, string> };
+    if (!raw) return { mecanicos: [] as string[], matriculas: [] as string[], cargos: {} as Record<string, CargoDado> };
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return { mecanicos: parsed, cargos: {} };
+      if (Array.isArray(parsed)) return { mecanicos: parsed, matriculas: [], cargos: {} };
       if (parsed && typeof parsed === 'object' && 'mecanicos' in parsed) {
-        return { mecanicos: parsed.mecanicos || [], cargos: parsed.cargos || {} };
+        const cargosRaw: Record<string, any> = parsed.cargos || {};
+        const cargos: Record<string, CargoDado> = {};
+        // Compat: formato anterior gravava cada cargo como string simples (só a assinatura).
+        Object.entries(cargosRaw).forEach(([key, val]) => {
+          cargos[key] = typeof val === 'string' ? { nome: '', matricula: '', assinatura: val } : { ...blankCargoDado(), ...(val as any) };
+        });
+        return { mecanicos: parsed.mecanicos || [], matriculas: parsed.matriculas || [], cargos };
       }
     } catch {}
-    return { mecanicos: [raw], cargos: {} }; // compat. string simples
+    return { mecanicos: [raw], matriculas: [], cargos: {} }; // compat. string simples
   };
   const initParsed = parseInitialSigsAndCargos();
   const [assinaturas, setAssinaturas] = useState<string[]>(initParsed.mecanicos);
-  const [sigCargos, setSigCargos] = useState<Record<string, string>>(initParsed.cargos);
+  const [matriculas, setMatriculas] = useState<string[]>(initParsed.matriculas);
+  const [sigCargos, setSigCargos] = useState<Record<string, CargoDado>>(initParsed.cargos);
   // Aprovações dos cargos fixos ficam suspensas (uma por vez, na ordem de CARGOS_LABELS):
   // assina ou pula, e só então a próxima aparece. "pularCargos" marca quem foi pulado
   // (sem assinatura) pra não travar o fluxo esperando por alguém que não vai assinar.
   const [pularCargos, setPularCargos] = useState<Set<string>>(new Set());
-  const cargoResolvido = (key: string) => !!sigCargos[key] || pularCargos.has(key);
+  const cargoResolvido = (key: string) => !!sigCargos[key]?.assinatura || pularCargos.has(key);
   const cargoAtivo = Object.keys(CARGOS_LABELS).find(key => !cargoResolvido(key)) || null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -386,6 +400,7 @@ export default function OSFormModal({
       dataFechamento,
       mecanicos,
       assinaturas,
+      matriculas,
       sigCargos,
       resolvedBacklogs: Array.from(resolvedBacklogs),
       fotos,
@@ -436,7 +451,16 @@ export default function OSFormModal({
           if (d.mecanicos !== undefined) setMecanicos(d.mecanicos);
           if (d.assinaturas !== undefined) setAssinaturas(d.assinaturas);
           else if (d.assinaturaDataUrl !== undefined) setAssinaturas(d.assinaturaDataUrl ? [d.assinaturaDataUrl] : []);
-          if (d.sigCargos !== undefined) setSigCargos(d.sigCargos);
+          if (d.matriculas !== undefined) setMatriculas(d.matriculas);
+          if (d.sigCargos !== undefined) {
+            // Mescla com blankCargoDado() pra rascunhos salvos antes de nome/matrícula
+            // existirem (formato antigo: cada cargo era só uma string de assinatura).
+            const migrado: Record<string, CargoDado> = {};
+            Object.entries(d.sigCargos as Record<string, any>).forEach(([key, val]) => {
+              migrado[key] = typeof val === 'string' ? { nome: '', matricula: '', assinatura: val } : { ...blankCargoDado(), ...val };
+            });
+            setSigCargos(migrado);
+          }
           if (d.resolvedBacklogs !== undefined) setResolvedBacklogs(new Set(d.resolvedBacklogs));
           if (d.fotos !== undefined) {
             setFotos((prev) => {
@@ -548,7 +572,7 @@ export default function OSFormModal({
     if (isInitialized) {
       saveDraft();
     }
-  }, [isInitialized, fotos, assinaturas, sigCargos, fotoHorimetro, fotoKm]);
+  }, [isInitialized, fotos, assinaturas, matriculas, sigCargos, fotoHorimetro, fotoKm]);
 
   // Filter open backlogs for the selected vehicle (equip?.placa)
   const openBacklogs = useMemo(() => {
@@ -741,17 +765,24 @@ export default function OSFormModal({
       alert("Por favor, faça a assinatura antes de salvar.");
       return;
     }
+    if (!sigNome.trim() || !sigMatricula.trim()) {
+      alert("Preencha Nome e Matrícula antes de assinar.");
+      return;
+    }
 
     if (typeof showSigPad === 'number') {
       // Mecânico
       const idx = showSigPad;
       setAssinaturas(prev => { const next = [...prev]; next[idx] = canvas.toDataURL(); return next; });
+      setMatriculas(prev => { const next = [...prev]; next[idx] = sigMatricula.trim(); return next; });
     } else {
       // Cargo fixo
       const key = showSigPad;
-      setSigCargos(prev => ({ ...prev, [key]: canvas.toDataURL() }));
+      setSigCargos(prev => ({ ...prev, [key]: { nome: sigNome.trim(), matricula: sigMatricula.trim(), assinatura: canvas.toDataURL() } }));
     }
     setShowSigPad(false);
+    setSigNome("");
+    setSigMatricula("");
   };
 
 
@@ -793,7 +824,7 @@ export default function OSFormModal({
       fd.set("foto_horimetro", fotoHorimetro);
       fd.set("foto_km", fotoKm);
       // Serializa assinaturas (mecânicos + cargos) num JSON estruturado
-      fd.set("assinatura_mecanico", JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos }));
+      fd.set("assinatura_mecanico", JSON.stringify({ mecanicos: assinaturas, matriculas, cargos: sigCargos }));
 
       // Mecânicos: envia cada nome individualmente
       mecanicos.forEach((nome, idx) => {
@@ -903,7 +934,7 @@ export default function OSFormModal({
             horas_reserva_chegou: (fd.get("horas_reserva_chegou") as string) || null,
             observacoes: fd.get("observacoes") as string,
             equipamento_id: fd.get("equipamento_id") as string,
-            assinatura_mecanico: JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos }),
+            assinatura_mecanico: JSON.stringify({ mecanicos: assinaturas, matriculas, cargos: sigCargos }),
             fotos: fotos,
             foto_horimetro: fotoHorimetro,
             foto_km: fotoKm,
@@ -1283,7 +1314,7 @@ export default function OSFormModal({
               {mecanicos.length < 5 && (
                 <button
                   type="button"
-                  onClick={() => setMecanicos(prev => [...prev, ""])}
+                  onClick={() => { setMecanicos(prev => [...prev, ""]); setMatriculas(prev => [...prev, ""]); }}
                   className="text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 font-medium flex items-center gap-1 transition-colors"
                 >
                   <span className="text-base leading-none">+</span> Adicionar mecânico
@@ -1309,7 +1340,11 @@ export default function OSFormModal({
                   {mecanicos.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => setMecanicos(prev => prev.filter((_, i) => i !== idx))}
+                      onClick={() => {
+                        setMecanicos(prev => prev.filter((_, i) => i !== idx));
+                        setAssinaturas(prev => prev.filter((_, i) => i !== idx));
+                        setMatriculas(prev => prev.filter((_, i) => i !== idx));
+                      }}
                       className="text-red-400 hover:text-red-600 transition-colors text-lg leading-none px-1"
                       title="Remover"
                     >
@@ -1370,7 +1405,7 @@ export default function OSFormModal({
                     <div key={idx} className="flex items-center justify-between gap-3 p-3 bg-white dark:bg-zinc-900/50 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 truncate">
-                          🔧 {nome}
+                          🔧 {nome}{matriculas[idx] ? ` — Mat. ${matriculas[idx]}` : ""}
                         </p>
                         {sig ? (
                           <div className="mt-1.5 flex items-center gap-2">
@@ -1401,6 +1436,8 @@ export default function OSFormModal({
                               ctx?.clearRect(0, 0, canvas.width, canvas.height);
                             }
                           }, 50);
+                          setSigNome(nome);
+                          setSigMatricula(matriculas[idx] || "");
                           setShowSigPad(idx);
                         }}
                         className="shrink-0 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
@@ -1421,7 +1458,8 @@ export default function OSFormModal({
                 📋 Aprovações / Assinaturas de Responsáveis
               </p>
               {(Object.entries(CARGOS_LABELS) as [string, string][]).map(([key, label]) => {
-                const sig = sigCargos[key] || "";
+                const dado = sigCargos[key];
+                const sig = dado?.assinatura || "";
                 const pulado = pularCargos.has(key);
                 const resolvido = !!sig || pulado;
                 const ativo = key === cargoAtivo;
@@ -1431,6 +1469,8 @@ export default function OSFormModal({
                     const canvas = canvasRef.current;
                     if (canvas) { const ctx = canvas.getContext('2d'); ctx?.clearRect(0, 0, canvas.width, canvas.height); }
                   }, 50);
+                  setSigNome(dado?.nome || "");
+                  setSigMatricula(dado?.matricula || "");
                   setShowSigPad(key as SigPadTarget);
                 };
 
@@ -1452,6 +1492,10 @@ export default function OSFormModal({
                         <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 truncate">{label}</p>
                         {sig ? (
                           <div className="mt-1.5 flex items-center gap-2">
+                            <div className="shrink-0">
+                              <p className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 truncate max-w-[140px]">{dado?.nome}</p>
+                              {dado?.matricula && <p className="text-[9px] text-zinc-400">Mat. {dado.matricula}</p>}
+                            </div>
                             <div className="p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm">
                               <img src={sig} alt={`Assinatura ${label}`} className="h-9 object-contain max-w-[140px]" />
                             </div>
@@ -1505,7 +1549,7 @@ export default function OSFormModal({
               })}
             </div>
 
-            <input type="hidden" name="assinatura_mecanico" value={JSON.stringify({ mecanicos: assinaturas, cargos: sigCargos })} />
+            <input type="hidden" name="assinatura_mecanico" value={JSON.stringify({ mecanicos: assinaturas, matriculas, cargos: sigCargos })} />
           </div>
 
           {/* Componente / Sistema / Sub-Sistema — busca começa pelo componente — só Escritório (Web) */}
@@ -1676,6 +1720,32 @@ export default function OSFormModal({
               </p>
             </div>
 
+            {/* Nome + Matrícula — mecânico já vem com o nome travado (escolhido no
+                dropdown acima); cargo fixo digita livremente quem está assinando */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Nome</label>
+                <input
+                  type="text"
+                  value={sigNome}
+                  onChange={e => setSigNome(e.target.value)}
+                  readOnly={typeof showSigPad === 'number'}
+                  placeholder="Nome completo"
+                  className={`${I} text-sm ${typeof showSigPad === 'number' ? 'bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed' : ''}`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Matrícula</label>
+                <input
+                  type="text"
+                  value={sigMatricula}
+                  onChange={e => setSigMatricula(e.target.value)}
+                  placeholder="Matrícula"
+                  className={`${I} text-sm`}
+                />
+              </div>
+            </div>
+
             {/* Canvas Area */}
             <div className="relative border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 rounded-xl overflow-hidden h-[180px] flex items-center justify-center">
               <canvas
@@ -1713,6 +1783,8 @@ export default function OSFormModal({
                 onClick={() => {
                   setShowSigPad(false);
                   setIsDrawing(false);
+                  setSigNome("");
+                  setSigMatricula("");
                 }}
                 className="px-4 py-2 text-xs font-bold rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
               >

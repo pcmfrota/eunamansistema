@@ -35,9 +35,42 @@ const MOTIVOS_FALLBACK = ["Desgaste Natural", "Quebra Operacional", "Falha Elét
 
 // Forma "de formulário" de DescricaoAtividade (campos sempre string, nunca null/undefined,
 // pra ligar direto em inputs controlados) — convertida pra DescricaoAtividade de verdade só
-// na hora de montar o payload (buildFields).
-type DescricaoAtividadeForm = { descricao: string; hora_inicio: string; hora_fim: string; foto: string };
-const blankDescricaoAtividade = (): DescricaoAtividadeForm => ({ descricao: "", hora_inicio: "", hora_fim: "", foto: "" });
+// na hora de montar o payload (buildFields). Cada bloco de descrição é a atividade de um
+// mecânico específico — por isso carrega sua própria assinatura (nome/matrícula/desenho),
+// separada da assinatura "Mecânicos Executores" (lista de quem trabalhou na OS como um todo).
+type DescricaoAtividadeForm = {
+  descricao: string;
+  hora_inicio: string;
+  hora_fim: string;
+  foto: string;
+  mecanico_nome: string;
+  mecanico_matricula: string;
+  mecanico_assinatura: string;
+};
+const blankDescricaoAtividade = (): DescricaoAtividadeForm => ({
+  descricao: "",
+  hora_inicio: "",
+  hora_fim: "",
+  foto: "",
+  mecanico_nome: "",
+  mecanico_matricula: "",
+  mecanico_assinatura: "",
+});
+
+// 5 papéis de aprovação — "Supervisor de Manutenção" é o único realmente novo; os outros 4
+// já existiam no site (app/os/NovoModal.tsx, CARGOS_LABELS) e agora também aqui, com os
+// mesmos campos (nome + matrícula + assinatura) pra ficar idêntico nas duas plataformas.
+const CARGOS_LABELS: Record<string, string> = {
+  encarregado: "Encarregado / Supervisor",
+  pcm: "PCM / Planejamento",
+  operador: "Operador / Motorista",
+  supervisor_suzano: "Supervisor / Autorizador / Suzano",
+  supervisor_manutencao: "Supervisor de Manutenção",
+};
+type CargoDado = { nome: string; matricula: string; assinatura: string };
+const blankCargoDado = (): CargoDado => ({ nome: "", matricula: "", assinatura: "" });
+const blankCargos = (): Record<string, CargoDado> =>
+  Object.fromEntries(Object.keys(CARGOS_LABELS).map((k) => [k, blankCargoDado()]));
 
 function FotoSlot({ label, url, onCapture, onClear }: { label: string; url?: string; onCapture: () => void; onClear: () => void }) {
   return (
@@ -171,6 +204,9 @@ function blankForm() {
     observacoes: "",
     mecanicos: [""] as string[],
     assinaturas: [""] as string[],
+    matriculas: [""] as string[],
+    cargos: blankCargos(),
+    cargosPulados: [] as string[],
     fotos: [] as string[],
   };
 }
@@ -191,9 +227,28 @@ export default function OSClient({
   const toast = useToast();
 
   const role = (profile?.role || "").toLowerCase().trim();
-  const podeAprovar = role === "admin" || role === "pcm";
+  // Aprovação em duas etapas — PCM e Supervisor de Manutenção validam separadamente (mesma
+  // regra de actions.ts/etapasExigidas; admin valida qualquer etapa pendente).
+  const podeAprovarPcm = role === "admin" || role === "pcm";
+  const podeAprovarSupervisor = role === "admin" || role === "supervisor_manutencao";
+  const podeAprovar = podeAprovarPcm || podeAprovarSupervisor;
   const podeCriar = role !== "visitante";
   const podeExcluir = role === "admin" || role === "pcm" || role === "gestao";
+
+  // Etapa (se houver) que o cargo do usuário autoriza validar NESTA OS especificamente.
+  const podeAprovarEstaOS = (o: any) => {
+    if (role === "admin") return o.aprovado === false;
+    if (role === "pcm") return o.aprovado_pcm === false;
+    if (role === "supervisor_manutencao") return o.aprovado_supervisor === false;
+    return false;
+  };
+  // Etapa a enviar pro servidor: admin aprova de uma vez tudo que estiver pendente (etapa
+  // indefinida = aprovarOrdemServico resolve sozinho); PCM/Supervisor validam só a própria.
+  const minhaEtapaAprovacao = (): "pcm" | "supervisor" | undefined => {
+    if (role === "pcm") return "pcm";
+    if (role === "supervisor_manutencao") return "supervisor";
+    return undefined;
+  };
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -217,7 +272,7 @@ export default function OSClient({
   const placasOptions = useMemo(() => equipamentos.map((e) => ({ value: e.id, label: e.placa })), [equipamentos]);
   const colaboradoresOptions = useMemo(() => colaboradores.map((c) => ({ value: c.nome, label: c.nome })), [colaboradores]);
 
-  const pendentesValidacao = useMemo(() => ordens.filter((o) => o.aprovado === false), [ordens]);
+  const pendentesValidacao = useMemo(() => ordens.filter((o) => podeAprovarEstaOS(o)), [ordens, role]);
 
   const listaFiltrada = useMemo(() => {
     const base = aba === "validacao" ? pendentesValidacao : ordens;
@@ -278,7 +333,14 @@ export default function OSClient({
       if (sheetWasOpen === "true" && draft) {
         const parsed = JSON.parse(draft);
         if (parsed && typeof parsed === "object" && parsed.form) {
-          setForm(parsed.form);
+          // Mescla com blankForm() pra rascunhos salvos antes dos campos novos (matriculas/
+          // cargos/cargosPulados/mecanico_* por descrição) não ficarem undefined.
+          setForm({
+            ...blankForm(),
+            ...parsed.form,
+            cargos: { ...blankCargos(), ...(parsed.form.cargos || {}) },
+            descricoes_atividade: (parsed.form.descricoes_atividade || []).map((d: any) => ({ ...blankDescricaoAtividade(), ...d })),
+          });
           setEditingId(parsed.editingId ?? null);
           setSheetOpen(true);
         }
@@ -308,9 +370,22 @@ export default function OSClient({
       if (res && "data" in res && res.data) fotosExtra = res.data;
     }
     let assinaturasSalvas: string[] = [];
+    let matriculasSalvas: string[] = [];
+    let cargosSalvos: Record<string, CargoDado> = blankCargos();
+    let cargosPuladosSalvos: string[] = [];
     try {
       const parsed = JSON.parse(o.assinatura_mecanico || fotosExtra.assinatura_mecanico || "{}");
       assinaturasSalvas = Array.isArray(parsed.mecanicos) ? parsed.mecanicos : [];
+      matriculasSalvas = Array.isArray(parsed.matriculas) ? parsed.matriculas : [];
+      if (Array.isArray(parsed.cargosPulados)) cargosPuladosSalvos = parsed.cargosPulados;
+      if (parsed.cargos && typeof parsed.cargos === "object") {
+        // Compatibilidade: formato anterior gravava cada cargo como string simples (só a
+        // assinatura, sem nome/matrícula) — tanto vindo do site quanto de versões antigas.
+        Object.entries(parsed.cargos as Record<string, any>).forEach(([key, val]) => {
+          if (!(key in cargosSalvos)) return;
+          cargosSalvos[key] = typeof val === "string" ? { nome: "", matricula: "", assinatura: val } : { ...blankCargoDado(), ...val };
+        });
+      }
     } catch {}
     const mecanicosSalvos = Array.isArray(o.mecanicos) && o.mecanicos.length > 0 ? o.mecanicos : [""];
     // descricoes_atividade (como fotos/foto_horimetro/foto_km) fica de fora da listagem em
@@ -327,6 +402,9 @@ export default function OSClient({
             hora_inicio: d?.hora_inicio || "",
             hora_fim: d?.hora_fim || "",
             foto: d?.foto || "",
+            mecanico_nome: d?.mecanico_nome || "",
+            mecanico_matricula: d?.mecanico_matricula || "",
+            mecanico_assinatura: d?.mecanico_assinatura || "",
           }))
         : [{ ...blankDescricaoAtividade(), descricao: o.descricao || "" }];
     setForm({
@@ -348,6 +426,9 @@ export default function OSClient({
       observacoes: o.observacoes || "",
       mecanicos: mecanicosSalvos,
       assinaturas: mecanicosSalvos.map((_: string, i: number) => assinaturasSalvas[i] || ""),
+      matriculas: mecanicosSalvos.map((_: string, i: number) => matriculasSalvas[i] || ""),
+      cargos: cargosSalvos,
+      cargosPulados: cargosPuladosSalvos,
       fotos: fotosExtra.fotos || o.fotos || [],
     });
     setSheetOpen(true);
@@ -399,13 +480,28 @@ export default function OSClient({
         .map((texto, i) => `${i + 1}) ${texto}`)
         .join("\n\n"),
       descricoes_atividade: JSON.stringify(
-        form.descricoes_atividade.filter((d) => d.descricao.trim() || d.hora_inicio || d.hora_fim || d.foto)
+        form.descricoes_atividade
+          .filter((d) => d.descricao.trim() || d.hora_inicio || d.hora_fim || d.foto || d.mecanico_nome || d.mecanico_assinatura)
+          .map((d) => ({
+            descricao: d.descricao,
+            hora_inicio: d.hora_inicio || null,
+            hora_fim: d.hora_fim || null,
+            foto: d.foto || null,
+            mecanico_nome: d.mecanico_nome || null,
+            mecanico_matricula: d.mecanico_matricula || null,
+            mecanico_assinatura: d.mecanico_assinatura || null,
+          }))
       ),
       motivo: form.motivo,
       observacoes: form.observacoes,
       horario_parada: form.horario_parada,
       horas_manutencao: horasManutencao,
-      assinatura_mecanico: JSON.stringify({ mecanicos: form.assinaturas, cargos: {} }),
+      assinatura_mecanico: JSON.stringify({
+        mecanicos: form.assinaturas,
+        matriculas: form.matriculas,
+        cargos: form.cargos,
+        cargosPulados: form.cargosPulados,
+      }),
       fotos: form.fotos.filter(Boolean),
     };
     form.mecanicos.forEach((nome, idx) => {
@@ -476,8 +572,9 @@ export default function OSClient({
   };
 
   const handleAprovar = async (o: any) => {
+    const etapa = minhaEtapaAprovacao();
     if (isOnline) {
-      const res = await aprovarOrdemServico(o.id);
+      const res = await aprovarOrdemServico(o.id, etapa);
       if (res && "error" in res) {
         toast.show("Erro ao aprovar: " + res.error, "error");
         return;
@@ -486,9 +583,15 @@ export default function OSClient({
       await localDb.put("ordens_servico", saved);
       setOrdens((prev) => prev.map((x) => (x.id === o.id ? saved : x)));
     } else {
-      const updated = { ...o, aprovado: true, _isPendingSync: true };
+      const updated = {
+        ...o,
+        ...(!etapa || etapa === "pcm" ? { aprovado_pcm: true } : {}),
+        ...(!etapa || etapa === "supervisor" ? { aprovado_supervisor: true } : {}),
+        _isPendingSync: true,
+      };
+      updated.aprovado = updated.aprovado_pcm === true && updated.aprovado_supervisor === true;
       await localDb.put("ordens_servico", updated);
-      await localDb.addToQueue("os", "approve", { id: o.id });
+      await localDb.addToQueue("os", "approve", { id: o.id, etapa });
       setOrdens((prev) => prev.map((x) => (x.id === o.id ? updated : x)));
       window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"));
     }
@@ -529,7 +632,7 @@ export default function OSClient({
     ? [
         { key: "ver", label: "Ver Detalhes", icon: Eye, onSelect: () => abrirVisualizacao(actionItem) },
         ...(podeCriar ? [{ key: "editar", label: "Editar", icon: Pencil, onSelect: () => abrirEdicao(actionItem) } as ActionSheetItem] : []),
-        ...(podeAprovar && actionItem.aprovado === false
+        ...(podeAprovarEstaOS(actionItem)
           ? [{ key: "aprovar", label: "Aprovar", icon: CheckCircle2, onSelect: () => handleAprovar(actionItem) } as ActionSheetItem]
           : []),
         ...(podeExcluir
@@ -571,7 +674,8 @@ export default function OSClient({
               subtitle={(o.data_abertura || "").slice(0, 10).split("-").reverse().join("/")}
               badge={
                 <span className={`text-[9px] font-black uppercase tracking-wide ${statusColor(o.status)}`}>
-                  {o.status || "Aberta"}{o.aprovado === false ? " · Pendente" : ""}
+                  {o.status || "Aberta"}
+                  {o.aprovado === false ? ` · Pendente${o.aprovado_pcm === false ? " PCM" : ""}${o.aprovado_supervisor === false ? " Supervisor" : ""}` : ""}
                 </span>
               }
               onClick={() => setActionItem(o)}
@@ -747,6 +851,48 @@ export default function OSClient({
                     })
                   }
                 />
+                {/* Assinatura do mecânico responsável POR ESTA atividade — cada descrição
+                    pode ser de um mecânico diferente, por isso a assinatura é por bloco. */}
+                <div className="pt-2.5 border-t border-zinc-800 space-y-2">
+                  <label className="block text-[10px] font-bold text-emerald-500 uppercase">Assinatura do Mecânico desta Atividade</label>
+                  <SearchableSelect
+                    value={bloco.mecanico_nome}
+                    onChange={(v) =>
+                      setForm((p) => {
+                        const arr = [...p.descricoes_atividade];
+                        arr[idx] = { ...arr[idx], mecanico_nome: v };
+                        return { ...p, descricoes_atividade: arr };
+                      })
+                    }
+                    options={colaboradoresOptions}
+                    placeholder="Nome do mecânico..."
+                  />
+                  <input
+                    value={bloco.mecanico_matricula}
+                    onChange={(e) =>
+                      setForm((p) => {
+                        const arr = [...p.descricoes_atividade];
+                        arr[idx] = { ...arr[idx], mecanico_matricula: e.target.value };
+                        return { ...p, descricoes_atividade: arr };
+                      })
+                    }
+                    placeholder="Matrícula"
+                    className={inputCls}
+                  />
+                  {bloco.mecanico_nome.trim() && (
+                    <SignaturePad
+                      label={`Assinatura — ${bloco.mecanico_nome}`}
+                      value={bloco.mecanico_assinatura}
+                      onChange={(v) =>
+                        setForm((p) => {
+                          const arr = [...p.descricoes_atividade];
+                          arr[idx] = { ...arr[idx], mecanico_assinatura: v };
+                          return { ...p, descricoes_atividade: arr };
+                        })
+                      }
+                    />
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -771,7 +917,7 @@ export default function OSClient({
               {form.mecanicos.length < 5 && (
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, mecanicos: [...p.mecanicos, ""], assinaturas: [...p.assinaturas, ""] }))}
+                  onClick={() => setForm((p) => ({ ...p, mecanicos: [...p.mecanicos, ""], assinaturas: [...p.assinaturas, ""], matriculas: [...p.matriculas, ""] }))}
                   className="text-[10px] font-black text-emerald-400 uppercase"
                 >
                   + Adicionar
@@ -796,6 +942,7 @@ export default function OSClient({
                         ...p,
                         mecanicos: p.mecanicos.filter((_, i) => i !== idx),
                         assinaturas: p.assinaturas.filter((_, i) => i !== idx),
+                        matriculas: p.matriculas.filter((_, i) => i !== idx),
                       }))}
                       className="text-red-400 text-lg leading-none px-1"
                     >
@@ -804,14 +951,81 @@ export default function OSClient({
                   )}
                 </div>
                 {nome.trim() && (
-                  <SignaturePad
-                    label={`Assinatura — ${nome}`}
-                    value={form.assinaturas[idx] || ""}
-                    onChange={(v) => setForm((p) => { const arr = [...p.assinaturas]; arr[idx] = v; return { ...p, assinaturas: arr }; })}
-                  />
+                  <>
+                    <input
+                      value={form.matriculas[idx] || ""}
+                      onChange={(e) => setForm((p) => { const arr = [...p.matriculas]; arr[idx] = e.target.value; return { ...p, matriculas: arr }; })}
+                      placeholder={`Matrícula — ${nome}`}
+                      className={inputCls}
+                    />
+                    <SignaturePad
+                      label={`Assinatura — ${nome}`}
+                      value={form.assinaturas[idx] || ""}
+                      onChange={(v) => setForm((p) => { const arr = [...p.assinaturas]; arr[idx] = v; return { ...p, assinaturas: arr }; })}
+                    />
+                  </>
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Aprovações / Assinaturas de Responsáveis — mesmos 5 papéis do site (Encarregado,
+              PCM, Operador, Supervisor/Suzano, Supervisor de Manutenção), cada um com
+              nome + matrícula + assinatura própria. Quem efetivamente aprova a OS no fluxo
+              de validação (duas etapas) é feito por cargo de login (ver podeAprovar acima) —
+              esta seção é o registro em papel/assinatura de quem esteve envolvido. */}
+          <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+            <p className="text-[11px] font-black text-zinc-300 uppercase tracking-wide">Aprovações / Assinaturas de Responsáveis</p>
+            {Object.entries(CARGOS_LABELS).map(([key, label]) => {
+              const dado = form.cargos[key] || blankCargoDado();
+              const pulado = form.cargosPulados.includes(key);
+              return (
+                <div key={key} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-zinc-400 uppercase">{label}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          cargosPulados: pulado ? p.cargosPulados.filter((k) => k !== key) : [...p.cargosPulados, key],
+                        }))
+                      }
+                      className={`text-[10px] font-black uppercase ${pulado ? "text-amber-500" : "text-zinc-500"}`}
+                    >
+                      {pulado ? "Pulado — reabrir" : "Pular"}
+                    </button>
+                  </div>
+                  {!pulado && (
+                    <>
+                      <input
+                        value={dado.nome}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, nome: e.target.value } } }))
+                        }
+                        placeholder="Nome completo"
+                        className={inputCls}
+                      />
+                      <input
+                        value={dado.matricula}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, matricula: e.target.value } } }))
+                        }
+                        placeholder="Matrícula"
+                        className={inputCls}
+                      />
+                      {dado.nome.trim() && (
+                        <SignaturePad
+                          label={`Assinatura — ${label}`}
+                          value={dado.assinatura}
+                          onChange={(v) => setForm((p) => ({ ...p, cargos: { ...p.cargos, [key]: { ...dado, assinatura: v } } }))}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div>
@@ -892,6 +1106,16 @@ export default function OSClient({
                       </p>
                     )}
                     {bloco.foto && <img src={bloco.foto} className="w-full rounded-lg object-cover max-h-40" />}
+                    {bloco.mecanico_nome && (
+                      <div className="pt-2 border-t border-zinc-800">
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase">
+                          {bloco.mecanico_nome}{bloco.mecanico_matricula ? ` — Mat. ${bloco.mecanico_matricula}` : ""}
+                        </p>
+                        {bloco.mecanico_assinatura && (
+                          <img src={bloco.mecanico_assinatura} className="h-10 mt-1 bg-white rounded object-contain" />
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -907,6 +1131,48 @@ export default function OSClient({
                 <p className="text-sm text-zinc-200">{viewItem.mecanicos.join(", ")}</p>
               </div>
             )}
+            {(viewItem.aprovado_pcm != null || viewItem.aprovado_supervisor != null) && (
+              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-1">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Validação</p>
+                {viewItem.aprovado_pcm != null && (
+                  <p className={`text-sm font-bold ${viewItem.aprovado_pcm ? "text-emerald-400" : "text-amber-400"}`}>
+                    PCM: {viewItem.aprovado_pcm ? `✅ ${viewItem.aprovado_pcm_por_nome || "Validado"}` : "⏳ Pendente"}
+                  </p>
+                )}
+                {viewItem.aprovado_supervisor != null && (
+                  <p className={`text-sm font-bold ${viewItem.aprovado_supervisor ? "text-emerald-400" : "text-amber-400"}`}>
+                    Supervisor Manutenção: {viewItem.aprovado_supervisor ? `✅ ${viewItem.aprovado_supervisor_por_nome || "Validado"}` : "⏳ Pendente"}
+                  </p>
+                )}
+              </div>
+            )}
+            {(() => {
+              let cargos: Record<string, CargoDado> = {};
+              try {
+                const parsed = JSON.parse(viewItem.assinatura_mecanico || "{}");
+                if (parsed?.cargos && typeof parsed.cargos === "object") {
+                  Object.entries(parsed.cargos as Record<string, any>).forEach(([key, val]) => {
+                    cargos[key] = typeof val === "string" ? { nome: "", matricula: "", assinatura: val } : val;
+                  });
+                }
+              } catch {}
+              const preenchidos = Object.entries(cargos).filter(([, v]) => v?.nome || v?.assinatura);
+              if (preenchidos.length === 0) return null;
+              return (
+                <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase">Aprovações / Assinaturas de Responsáveis</p>
+                  {preenchidos.map(([key, dado]) => (
+                    <div key={key} className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[11px] font-bold text-zinc-300">{CARGOS_LABELS[key] || key}</p>
+                        <p className="text-[10px] text-zinc-500">{dado.nome}{dado.matricula ? ` — Mat. ${dado.matricula}` : ""}</p>
+                      </div>
+                      {dado.assinatura && <img src={dado.assinatura} className="h-8 bg-white rounded object-contain" />}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             {viewItem.observacoes && (
               <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
                 <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Observações</p>

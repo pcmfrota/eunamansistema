@@ -177,8 +177,8 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         const res = await atualizarStatusOS(id, status);
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "approve") {
-        const { id } = payload;
-        const res = await aprovarOrdemServico(id);
+        const { id, etapa } = payload;
+        const res = await aprovarOrdemServico(id, etapa);
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirOrdemServico(payload);

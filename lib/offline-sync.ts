@@ -78,6 +78,8 @@ const syncTasks: Record<
         observacoes, horario_parada, equipamento_id, qual_reserva, horas_reserva_chegou,
         mecanicos,
         aprovado, created_by, created_by_nome, aprovado_por, aprovado_por_nome, aprovado_em,
+        aprovado_pcm, aprovado_pcm_por_nome, aprovado_pcm_em,
+        aprovado_supervisor, aprovado_supervisor_por_nome, aprovado_supervisor_em,
         equipamento:equipamento_id (placa, modulo)
       `)
       .not("equipamento_id", "is", null)
