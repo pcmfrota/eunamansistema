@@ -88,6 +88,8 @@ export async function registrarInspecaoCompleta(formData: FormData) {
     const condicao = PneusService.sanitizeCondicao(rawCondicao, PneusService.calcCondicao(posicoes));
     const usuario = await getUsuarioAtual();
 
+    const fotosRaw = formData.get('fotos') as string | null;
+
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
       data_inspecao: formData.get('data_inspecao')?.toString().split('T')[0] + 'T12:00:00',
@@ -95,6 +97,7 @@ export async function registrarInspecaoCompleta(formData: FormData) {
       horimetro_registro: formData.get('horimetro_registro') ? parseFloat(formData.get('horimetro_registro') as string) : null,
       observacoes: formData.get('observacoes') as string,
       condicao,
+      fotos: fotosRaw ? JSON.parse(fotosRaw) : null,
       ...posicoes,
       ...usuario
     };
@@ -115,6 +118,7 @@ export async function atualizarInspecao(id: string, formData: FormData) {
 
     const rawCondicao = formData.get('condicao') as string;
     const condicao = PneusService.sanitizeCondicao(rawCondicao, PneusService.calcCondicao(posicoes));
+    const fotosRaw = formData.get('fotos') as string | null;
 
     const data = {
       equipamento_id: formData.get('equipamento_id') as string,
@@ -123,6 +127,7 @@ export async function atualizarInspecao(id: string, formData: FormData) {
       horimetro_registro: formData.get('horimetro_registro') ? parseFloat(formData.get('horimetro_registro') as string) : null,
       observacoes: formData.get('observacoes') as string,
       condicao,
+      ...(fotosRaw ? { fotos: JSON.parse(fotosRaw) } : {}),
       ...posicoes
     };
 

@@ -28,7 +28,7 @@ import { SearchableSelect } from '@/components/SearchableSelect'
 import { useNativeCamera, compressPhoto } from '../../lib/nativeCamera'
 import { BottomSheet } from '../../ui/primitives/BottomSheet'
 import { useToast } from '../../ui/primitives/Toast'
-import { Camera, Image as ImageIcon, Maximize2, X } from 'lucide-react'
+import { FotosEvidencia, FotoExpandidaOverlay } from '../../ui/primitives/FotosEvidencia'
 
 // ─── Types and Config ────────────────────────────────────────────────────────
 type Placa = { id: string; placa: string; modulo: string | null; area?: string | null }
@@ -77,80 +77,6 @@ function Field({ label, children, span = 1 }: { label: string, children: React.R
 const inputCls = "w-full px-3.5 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-bold text-zinc-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-zinc-600"
 // Campos que vem automaticamente do cadastro da placa (Módulo/Área) — somente leitura.
 const readOnlyCls = "w-full px-3.5 py-3 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm font-bold text-zinc-500 outline-none cursor-not-allowed placeholder:text-zinc-700"
-
-// Grupo de até 2 fotos de evidência — mesmo recorte do app WEB (app/backlog/BacklogModal.tsx),
-// reaproveitado pra evidência de Atividade e pra evidência de Conclusão. Toque abre a câmera
-// nativa direto (não a galeria) — ver skill de padronização de câmera; "Galeria" fica como
-// opção secundária explícita, só pra quando a foto já existe em outro app.
-function GrupoFotosEvidencia({
-  fotos,
-  processando,
-  onCapturar,
-  onGaleria,
-  onRemover,
-  onExpandir,
-}: {
-  fotos: string[]
-  processando: boolean
-  onCapturar: () => void
-  onGaleria: (file: File) => void
-  onRemover: (idx: number) => void
-  onExpandir: (foto: string) => void
-}) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {fotos.map((foto, idx) => (
-        <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-zinc-800 bg-black">
-          <img src={foto} alt={`Evidência ${idx + 1}`} className="w-full h-full object-cover" onClick={() => onExpandir(foto)} />
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemover(idx) }}
-            className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 active:bg-red-700 text-white rounded-full shadow"
-            style={{ minWidth: "28px", minHeight: "28px" }}
-          >
-            <X size={12} className="stroke-[3]" />
-          </button>
-        </div>
-      ))}
-      {fotos.length < 2 && (
-        <button
-          type="button"
-          onClick={onCapturar}
-          disabled={processando}
-          className="aspect-video rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50"
-        >
-          {processando ? (
-            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Processando...</span>
-          ) : (
-            <>
-              <Camera size={20} className="text-zinc-500" />
-              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Tirar Foto</span>
-              <span
-                role="button"
-                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
-                className="flex items-center gap-1 text-[9px] font-bold text-zinc-500 underline underline-offset-2 mt-0.5"
-              >
-                <ImageIcon size={10} /> ou escolher da galeria
-              </span>
-            </>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) onGaleria(file)
-              e.target.value = ''
-            }}
-          />
-        </button>
-      )}
-    </div>
-  )
-}
 
 type Colaborador = { id: string; nome: string }
 
@@ -555,7 +481,7 @@ export default function BacklogModal({
               </select>
             </Field>
             <Field label={`Evidência (Foto) — ${(form.evidencia_imagens || []).length}/2`}>
-              <GrupoFotosEvidencia
+              <FotosEvidencia
                 fotos={form.evidencia_imagens || []}
                 processando={fotoProcessando}
                 onCapturar={() => capturarEvidencia('evidencia_imagens', () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
@@ -612,7 +538,7 @@ export default function BacklogModal({
               <textarea className={cn(inputCls, "min-h-[80px] resize-none")} value={form.observacao || ''} onChange={e => setForm({...form, observacao: e.target.value})} />
             </Field>
             <Field label={`Evidência Após Conclusão — ${(form.evidencia_imagens_conclusao || []).length}/2`}>
-              <GrupoFotosEvidencia
+              <FotosEvidencia
                 fotos={form.evidencia_imagens_conclusao || []}
                 processando={fotoProcessando}
                 onCapturar={() => capturarEvidencia('evidencia_imagens_conclusao', () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
@@ -666,18 +592,7 @@ export default function BacklogModal({
         </div>
       </div>
 
-      {fotoExpandida && (
-        <div className="fixed inset-0 z-[700] flex items-center justify-center bg-black/95 p-4" onClick={() => setFotoExpandida(null)}>
-          <button
-            onClick={() => setFotoExpandida(null)}
-            className="absolute top-6 right-6 p-3 bg-zinc-900 text-white rounded-full border border-zinc-800"
-            style={{ minWidth: "44px", minHeight: "44px" }}
-          >
-            <X size={18} />
-          </button>
-          <img src={fotoExpandida} className="max-w-full max-h-full object-contain rounded-xl" onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
+      <FotoExpandidaOverlay foto={fotoExpandida} onClose={() => setFotoExpandida(null)} />
     </BottomSheet>
   )
 }

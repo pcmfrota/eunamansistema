@@ -24,6 +24,8 @@ import {
 } from "@/app/checklist-mecanicos/checklistConfig";
 import { salvarChecklistMecanico, excluirChecklistMecanico } from "./actions";
 import { getCurrentLocalDate, getCurrentLocalDatetime } from "@/src/utils/dateUtils";
+import { useNativeCamera, compressPhoto } from "../../lib/nativeCamera";
+import { FotosEvidencia, FotoExpandidaOverlay } from "../../ui/primitives/FotosEvidencia";
 
 const TIPOS = ["Comboio", "Pipa", "Multifuncional", "Munck"] as const;
 
@@ -194,7 +196,7 @@ function ChecklistItemCard({
 }
 
 function blankForm() {
-  return { tipo: "", placa: "", co: "", local: "", respostas: {} as Record<string, string>, pendencias: "" };
+  return { tipo: "", placa: "", co: "", local: "", respostas: {} as Record<string, string>, pendencias: "", fotos: [] as string[] };
 }
 
 export default function ChecklistMecanicosClient({
@@ -222,6 +224,30 @@ export default function ChecklistMecanicosClient({
   const [actionItem, setActionItem] = useState<any>(null);
   const [viewItem, setViewItem] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
+
+  // ── Fotos de evidência (Pendências Adicionais) — mesmo componente/ponte de câmera do
+  // Backlog (ui/primitives/FotosEvidencia.tsx + lib/nativeCamera.ts).
+  const [fotoProcessando, setFotoProcessando] = useState(false);
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
+  const { openCamera: capturarFoto } = useNativeCamera("eunaman_checklist_mecanico_active_field", (_alvo, compressed) => {
+    setForm((p) => (p.fotos.length >= 4 ? p : { ...p, fotos: [...p.fotos, compressed] }));
+  });
+  const adicionarFotoGaleria = async (file: File) => {
+    setFotoProcessando(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const compressed = await compressPhoto(dataUrl);
+      setForm((p) => (p.fotos.length >= 4 ? p : { ...p, fotos: [...p.fotos, compressed] }));
+    } finally {
+      setFotoProcessando(false);
+    }
+  };
+  const removerFoto = (idx: number) => setForm((p) => ({ ...p, fotos: p.fotos.filter((_, i) => i !== idx) }));
 
   useEffect(() => setChecklists(checklistsIniciais), [checklistsIniciais]);
 
@@ -287,6 +313,7 @@ export default function ChecklistMecanicosClient({
       fd.append("local", form.local);
       fd.append("respostas", JSON.stringify(form.respostas));
       fd.append("pendencias_adicionais", form.pendencias);
+      fd.append("fotos", JSON.stringify(form.fotos));
       fd.append("questionsLabels", JSON.stringify(labelsMap));
 
       if (isOnline) {
@@ -312,6 +339,7 @@ export default function ChecklistMecanicosClient({
           status: "Fechado",
           respostas: form.respostas,
           pendencias_adicionais: form.pendencias,
+          fotos: form.fotos,
           criado_em: getCurrentLocalDatetime(),
           _isPendingSync: true,
         };
@@ -441,6 +469,16 @@ export default function ChecklistMecanicosClient({
                     className={inputCls}
                     placeholder={"Ex: Parachoque arranhado lado esquerdo\nLogo da empresa rasgado"}
                   />
+                  <label className={labelCls + " mt-4"}>Fotos — {form.fotos.length}/4</label>
+                  <FotosEvidencia
+                    fotos={form.fotos}
+                    max={4}
+                    processando={fotoProcessando}
+                    onCapturar={() => capturarFoto("geral", () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
+                    onGaleria={adicionarFotoGaleria}
+                    onRemover={removerFoto}
+                    onExpandir={setFotoExpandida}
+                  />
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -496,6 +534,18 @@ export default function ChecklistMecanicosClient({
                 </p>
               </div>
             )}
+            {viewItem.fotos?.length > 0 && (
+              <div>
+                <p className={labelCls}>Fotos</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {viewItem.fotos.map((foto: string, idx: number) => (
+                    <button key={idx} type="button" onClick={() => setFotoExpandida(foto)} className="aspect-video rounded-xl overflow-hidden border border-zinc-800">
+                      <img src={foto} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </BottomSheet>
@@ -510,6 +560,8 @@ export default function ChecklistMecanicosClient({
         description="As OS e Backlogs gerados por ele não serão excluídos automaticamente."
         destructive
       />
+
+      <FotoExpandidaOverlay foto={fotoExpandida} onClose={() => setFotoExpandida(null)} />
     </div>
   );
 }

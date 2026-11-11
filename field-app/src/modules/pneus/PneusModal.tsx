@@ -11,6 +11,7 @@ import { gerarFichaPneusPDF, gerarHtmlFichaPneus } from './pdfBoletim'
 import FichaPreviewModal from '@/components/FichaPreviewModal'
 import { useAuth } from '@/components/auth-context'
 import { condicaoPorSulco } from '@/src/models/pneus'
+import { useNativeCamera, compressPhoto } from '../../lib/nativeCamera'
 import { BottomSheet } from '../../ui/primitives/BottomSheet'
 
 interface PneusModalProps {
@@ -53,6 +54,7 @@ const INITIAL_FORM: Record<string, string> = {
   horimetro_registro: '',
   condicao: 'BOM',
   observacoes: '',
+  fotos: '',
   ...Object.fromEntries(SULCO_FIELDS.map(f => [f, '']))
 }
 
@@ -98,6 +100,7 @@ export default function PneusModal({
         horimetro_registro: editData.horimetro_registro?.toString() || '',
         condicao: editData.condicao || 'BOM',
         observacoes: editData.observacoes || '',
+        fotos: editData.fotos ? JSON.stringify(editData.fotos) : '',
         ...Object.fromEntries(SULCO_FIELDS.map(f => [f, editData[f] != null ? String(editData[f]) : '']))
       })
     } else if (isLoaded && !hasContent) {
@@ -120,6 +123,11 @@ export default function PneusModal({
       setForm(prev => ({ ...prev, condicao: autoCond }));
     }
   }, [...MEIO_FIELDS.map(f => (form as any)[f])]);
+
+  const galeriaInputRef = useRef<HTMLInputElement>(null)
+  const { openCamera: capturarFotoPneu } = useNativeCamera('eunaman_pneus_active_field', async (_alvo, compressedDataUrl) => {
+    setForm(prev => ({ ...prev, fotos: JSON.stringify({ geral: compressedDataUrl }) }))
+  })
 
   if (!isOpen) return null
 
@@ -148,6 +156,7 @@ export default function PneusModal({
             ...form,
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            fotos: form.fotos ? JSON.parse(form.fotos) : null,
             ...parseSulcosForm(form),
             equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : editData.equipamentos,
             _isPendingSync: true
@@ -163,6 +172,7 @@ export default function PneusModal({
             ...form,
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            fotos: form.fotos ? JSON.parse(form.fotos) : null,
             ...parseSulcosForm(form),
             registrado_por_nome: registradoPorLocal,
             equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : undefined,
@@ -201,6 +211,7 @@ export default function PneusModal({
               ...form,
               km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
               horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+              fotos: form.fotos ? JSON.parse(form.fotos) : null,
               ...parseSulcosForm(form),
               registrado_por_nome: registradoPorLocal,
               equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : undefined
@@ -454,14 +465,59 @@ export default function PneusModal({
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
                    <Camera size={14} className="text-orange-500" /> Câmera / Foto
                 </label>
-                <div className="relative flex items-center">
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    capture="environment"
-                    className="w-full text-[10px] sm:text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-orange-500/10 file:text-orange-600 hover:file:bg-orange-500/20 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl"
-                  />
-                </div>
+                {(() => {
+                  const fotoAtual = form.fotos ? (JSON.parse(form.fotos).geral as string | undefined) : undefined
+                  if (fotoAtual) {
+                    return (
+                      <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-zinc-800">
+                        <img src={fotoAtual} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, fotos: '' }))}
+                          className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 active:bg-red-700 text-white rounded-full shadow"
+                        >
+                          <X size={12} className="stroke-[3]" />
+                        </button>
+                      </div>
+                    )
+                  }
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => capturarFotoPneu('geral', () => galeriaInputRef.current?.click())}
+                      className="w-full aspect-video rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900 flex flex-col items-center justify-center gap-1"
+                    >
+                      <Camera size={18} className="text-zinc-500" />
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Tirar Foto</span>
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); galeriaInputRef.current?.click() }}
+                        className="text-[9px] font-bold text-zinc-500 underline underline-offset-2"
+                      >
+                        ou escolher da galeria
+                      </span>
+                      <input
+                        ref={galeriaInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            const compressed = await compressPhoto(await new Promise<string>((resolve, reject) => {
+                              const reader = new FileReader()
+                              reader.onload = () => resolve(reader.result as string)
+                              reader.onerror = () => reject(reader.error)
+                              reader.readAsDataURL(file)
+                            }))
+                            setForm(prev => ({ ...prev, fotos: JSON.stringify({ geral: compressed }) }))
+                          }
+                          e.target.value = ''
+                        }}
+                      />
+                    </button>
+                  )
+                })()}
               </div>
               <div className="flex flex-col gap-1.5 md:w-1/3">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Observações</label>

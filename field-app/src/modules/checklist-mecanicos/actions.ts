@@ -29,6 +29,7 @@ export async function salvarChecklistMecanico(formData: FormData) {
     const co = formData.get('co') as string
     const respostas = JSON.parse(formData.get('respostas') as string || '{}')
     const pendencias_adicionais = formData.get('pendencias_adicionais') as string || ''
+    const fotos = JSON.parse(formData.get('fotos') as string || '[]')
     const questionsLabels = JSON.parse(formData.get('questionsLabels') as string || '{}')
 
     // 1. Salvar o Checklist
@@ -43,6 +44,7 @@ export async function salvarChecklistMecanico(formData: FormData) {
         status: 'Fechado',
         respostas,
         pendencias_adicionais,
+        fotos,
         criado_por: usuario.id
       }])
       .select()

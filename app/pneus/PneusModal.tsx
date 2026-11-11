@@ -52,7 +52,37 @@ const INITIAL_FORM: Record<string, string> = {
   horimetro_registro: '',
   condicao: 'BOM',
   observacoes: '',
+  fotos: '',
   ...Object.fromEntries(SULCO_FIELDS.map(f => [f, '']))
+}
+
+// Comprime a foto antes de guardar — mesmo helper (canvas, 800px, JPEG 60%) já usado em
+// app/backlog/BacklogModal.tsx. form.fotos guarda sempre uma STRING JSON (useFormDraft é
+// Record<string,string>) representando um InspecaoPneu['fotos'] (jsonb posição -> base64);
+// por ora só a chave "geral" existe, já que o botão de hoje é um só, não por posição.
+function comprimirFotoPneu(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const MAX = 800
+        let w = img.width, h = img.height
+        if (w > h) { if (w > MAX) { h = Math.round((h * MAX) / w); w = MAX } }
+        else { if (h > MAX) { w = Math.round((w * MAX) / h); h = MAX } }
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.6)) }
+        else resolve(src)
+      }
+      img.onerror = () => resolve(src)
+      img.src = src
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }
 
 // Converte os campos de sulco do form (strings) pra número (ou null se vazio) — usado
@@ -97,6 +127,7 @@ export default function PneusModal({
         horimetro_registro: editData.horimetro_registro?.toString() || '',
         condicao: editData.condicao || 'BOM',
         observacoes: editData.observacoes || '',
+        fotos: editData.fotos ? JSON.stringify(editData.fotos) : '',
         ...Object.fromEntries(SULCO_FIELDS.map(f => [f, editData[f] != null ? String(editData[f]) : '']))
       })
     } else if (isLoaded && !hasContent) {
@@ -147,6 +178,7 @@ export default function PneusModal({
             ...form,
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            fotos: form.fotos ? JSON.parse(form.fotos) : null,
             ...parseSulcosForm(form),
             equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : editData.equipamentos,
             _isPendingSync: true
@@ -162,6 +194,7 @@ export default function PneusModal({
             ...form,
             km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
             horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+            fotos: form.fotos ? JSON.parse(form.fotos) : null,
             ...parseSulcosForm(form),
             registrado_por_nome: registradoPorLocal,
             equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : undefined,
@@ -200,6 +233,7 @@ export default function PneusModal({
               ...form,
               km_atual: form.km_atual ? parseFloat(form.km_atual) : null,
               horimetro_registro: form.horimetro_registro ? parseFloat(form.horimetro_registro) : null,
+              fotos: form.fotos ? JSON.parse(form.fotos) : null,
               ...parseSulcosForm(form),
               registrado_por_nome: registradoPorLocal,
               equipamentos: eq ? { placa: eq.placa, tipo: eq.tipo, modulo: eq.modulo, categoria: eq.categoria } : undefined
@@ -470,14 +504,40 @@ export default function PneusModal({
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
                    <Camera size={14} className="text-orange-500" /> Câmera / Foto
                 </label>
-                <div className="relative flex items-center">
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    capture="environment"
-                    className="w-full text-[10px] sm:text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-orange-500/10 file:text-orange-600 hover:file:bg-orange-500/20 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl"
-                  />
-                </div>
+                {(() => {
+                  const fotoAtual = form.fotos ? (JSON.parse(form.fotos).geral as string | undefined) : undefined
+                  if (fotoAtual) {
+                    return (
+                      <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                        <img src={fotoAtual} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, fotos: '' }))}
+                          className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full shadow"
+                        >
+                          <X size={12} className="stroke-[3]" />
+                        </button>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="relative flex items-center">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const compressed = await comprimirFotoPneu(file)
+                          setForm(prev => ({ ...prev, fotos: JSON.stringify({ geral: compressed }) }))
+                          e.target.value = ''
+                        }}
+                        className="w-full text-[10px] sm:text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-orange-500/10 file:text-orange-600 hover:file:bg-orange-500/20 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl"
+                      />
+                    </div>
+                  )
+                })()}
               </div>
               <div className="flex flex-col gap-1.5 md:w-1/3">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Observações</label>
