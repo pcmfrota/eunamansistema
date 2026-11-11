@@ -119,7 +119,7 @@ export function gerarHtmlFichaPneus(ins: InspecaoParaPDF) {
          <!-- Header -->
          <div style="display:flex; align-items:center; border: 2px solid #166534; margin-bottom: 8px;">
             <div style="width: 24%; border-right: 2px solid #166534; text-align: center; padding: 6px;">
-               <img src="/logo-eunaman-full.png" style="height: 42px; object-fit: contain;" />
+               <img src="logo-eunaman-full.png" style="height: 42px; object-fit: contain;" />
             </div>
             <div style="width: 50%; border-right: 2px solid #166534; text-align: center; padding: 6px;">
                <h1 style="margin: 0; font-size: 21px; font-weight: 900; letter-spacing: 1px; color:#000;">BOLETIM DE PNEUS</h1>

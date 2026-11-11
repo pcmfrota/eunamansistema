@@ -16,6 +16,8 @@ import { Fab } from "../../ui/primitives/Fab";
 import { useToast } from "../../ui/primitives/Toast";
 import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import { useNativeCamera } from "../../lib/nativeCamera";
+import FichaPreviewModal from "@/components/FichaPreviewModal";
+import { gerarHtmlFichaOS, gerarFichaOSPDF, type OSParaFicha } from "./pdfFichaOS";
 import {
   criarOrdemServico,
   atualizarOrdemServico,
@@ -264,7 +266,9 @@ export default function OSClient({
   const [cargoExpandido, setCargoExpandido] = useState<string | null>(null);
 
   const [actionItem, setActionItem] = useState<any>(null);
-  const [viewItem, setViewItem] = useState<any>(null);
+  // Ficha oficial (mesmo layout do site, ver pdfFichaOS.ts) — visualizar/baixar/compartilhar.
+  const [fichaData, setFichaData] = useState<OSParaFicha | null>(null);
+  const [fichaBusy, setFichaBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
 
   useEffect(() => setOrdens(ordensIniciais), [ordensIniciais]);
@@ -440,12 +444,17 @@ export default function OSClient({
   // "Ver Detalhes" também precisa buscar sob demanda (mesmo motivo de abrirEdicao acima):
   // fotos/foto_horimetro/foto_km/descricoes_atividade ficam fora da listagem em massa.
   const abrirVisualizacao = async (o: any) => {
-    let fotosExtra: any = {};
-    if (isOnline && !String(o.id).startsWith("temp_")) {
-      const res = await getOSImagensClient(o.id);
-      if (res && "data" in res && res.data) fotosExtra = res.data;
+    setFichaBusy(true);
+    try {
+      let fotosExtra: any = {};
+      if (isOnline && !String(o.id).startsWith("temp_")) {
+        const res = await getOSImagensClient(o.id);
+        if (res && "data" in res && res.data) fotosExtra = res.data;
+      }
+      setFichaData({ ...o, ...fotosExtra });
+    } finally {
+      setFichaBusy(false);
     }
-    setViewItem({ ...o, ...fotosExtra });
   };
 
   const onSelecionarPlaca = (equipamentoId: string) => {
@@ -653,7 +662,7 @@ export default function OSClient({
 
   const actionSheetItems: ActionSheetItem[] = actionItem
     ? [
-        { key: "ver", label: "Ver Detalhes", icon: Eye, onSelect: () => abrirVisualizacao(actionItem) },
+        { key: "ver", label: "Ver Ficha / Compartilhar", icon: Eye, onSelect: () => abrirVisualizacao(actionItem) },
         ...(podeCriar ? [{ key: "editar", label: "Editar", icon: Pencil, onSelect: () => abrirEdicao(actionItem) } as ActionSheetItem] : []),
         ...(podeAprovarEstaOS(actionItem)
           ? [{ key: "aprovar", label: "Aprovar", icon: CheckCircle2, onSelect: () => handleAprovar(actionItem) } as ActionSheetItem]
@@ -1074,116 +1083,22 @@ export default function OSClient({
         </div>
       </BottomSheet>
 
-      {/* ─── VISUALIZAÇÃO (SOMENTE LEITURA) ─── */}
-      <BottomSheet open={!!viewItem} onClose={() => setViewItem(null)} title={viewItem ? `OS ${viewItem.numero_os}` : undefined} fullHeight>
-        {viewItem && (
-          <div className="space-y-3 pb-4">
-            <div className="grid grid-cols-2 gap-2.5 text-xs">
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Placa</p>
-                <p className="font-black text-zinc-100">{viewItem.placa}</p>
-              </div>
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Status</p>
-                <p className={`font-black ${statusColor(viewItem.status)}`}>{viewItem.status}{viewItem.aprovado === false ? " · Pendente de validação" : ""}</p>
-              </div>
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Abertura</p>
-                <p className="font-black text-zinc-100">{(viewItem.data_abertura || "").slice(0, 16).replace("T", " ")}</p>
-              </div>
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Fechamento</p>
-                <p className="font-black text-zinc-100">{viewItem.data_fechamento ? viewItem.data_fechamento.slice(0, 16).replace("T", " ") : "—"}</p>
-              </div>
-            </div>
-            {Array.isArray(viewItem.descricoes_atividade) && viewItem.descricoes_atividade.length > 0 ? (
-              <div className="space-y-2">
-                {viewItem.descricoes_atividade.map((bloco: any, idx: number) => (
-                  <div key={idx} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Descrição {idx + 1}</p>
-                    <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bloco.descricao}</p>
-                    {(bloco.hora_inicio || bloco.hora_fim) && (
-                      <p className="text-[11px] text-zinc-400 font-bold">
-                        {bloco.hora_inicio || "—"} às {bloco.hora_fim || "—"}
-                      </p>
-                    )}
-                    {bloco.foto && <img src={bloco.foto} className="w-full rounded-lg object-cover max-h-40" />}
-                    {bloco.mecanico_nome && (
-                      <div className="pt-2 border-t border-zinc-800">
-                        <p className="text-[10px] font-bold text-emerald-500 uppercase">
-                          {bloco.mecanico_nome}{bloco.mecanico_matricula ? ` — Mat. ${bloco.mecanico_matricula}` : ""}
-                        </p>
-                        {bloco.mecanico_assinatura && (
-                          <img src={bloco.mecanico_assinatura} className="h-10 mt-1 bg-white rounded object-contain" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Descrição</p>
-                <p className="text-sm text-zinc-200 whitespace-pre-wrap">{viewItem.descricao}</p>
-              </div>
-            )}
-            {Array.isArray(viewItem.mecanicos) && viewItem.mecanicos.length > 0 && (
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Mecânicos</p>
-                <p className="text-sm text-zinc-200">{viewItem.mecanicos.join(", ")}</p>
-              </div>
-            )}
-            {(viewItem.aprovado_pcm != null || viewItem.aprovado_supervisor != null) && (
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-1">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Validação</p>
-                {viewItem.aprovado_pcm != null && (
-                  <p className={`text-sm font-bold ${viewItem.aprovado_pcm ? "text-emerald-400" : "text-amber-400"}`}>
-                    PCM: {viewItem.aprovado_pcm ? `✅ ${viewItem.aprovado_pcm_por_nome || "Validado"}` : "⏳ Pendente"}
-                  </p>
-                )}
-                {viewItem.aprovado_supervisor != null && (
-                  <p className={`text-sm font-bold ${viewItem.aprovado_supervisor ? "text-emerald-400" : "text-amber-400"}`}>
-                    Supervisor Manutenção: {viewItem.aprovado_supervisor ? `✅ ${viewItem.aprovado_supervisor_por_nome || "Validado"}` : "⏳ Pendente"}
-                  </p>
-                )}
-              </div>
-            )}
-            {(() => {
-              let cargos: Record<string, CargoDado> = {};
-              try {
-                const parsed = JSON.parse(viewItem.assinatura_mecanico || "{}");
-                if (parsed?.cargos && typeof parsed.cargos === "object") {
-                  Object.entries(parsed.cargos as Record<string, any>).forEach(([key, val]) => {
-                    cargos[key] = typeof val === "string" ? { nome: "", matricula: "", assinatura: val } : val;
-                  });
-                }
-              } catch {}
-              const preenchidos = Object.entries(cargos).filter(([, v]) => v?.nome || v?.assinatura);
-              if (preenchidos.length === 0) return null;
-              return (
-                <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase">Aprovações / Assinaturas de Responsáveis</p>
-                  {preenchidos.map(([key, dado]) => (
-                    <div key={key} className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-[11px] font-bold text-zinc-300">{CARGOS_LABELS[key] || key}</p>
-                        <p className="text-[10px] text-zinc-500">{dado.nome}{dado.matricula ? ` — Mat. ${dado.matricula}` : ""}</p>
-                      </div>
-                      {dado.assinatura && <img src={dado.assinatura} className="h-8 bg-white rounded object-contain" />}
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-            {viewItem.observacoes && (
-              <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Observações</p>
-                <p className="text-sm text-zinc-200 whitespace-pre-wrap">{viewItem.observacoes}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </BottomSheet>
+      {fichaBusy && (
+        <div className="fixed inset-0 z-[1300] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md text-white">
+          <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-3 text-sm font-bold text-zinc-300">Carregando ficha...</p>
+        </div>
+      )}
+
+      {/* ─── FICHA OFICIAL (visualizar / baixar / compartilhar) — mesmo layout do site ─── */}
+      {fichaData && (
+        <FichaPreviewModal
+          html={gerarHtmlFichaOS(fichaData)}
+          onClose={() => setFichaData(null)}
+          onDownload={() => gerarFichaOSPDF(fichaData)}
+          onShare={() => gerarFichaOSPDF(fichaData, "share")}
+        />
+      )}
 
       <ActionSheet open={!!actionItem} onClose={() => setActionItem(null)} title={actionItem ? `OS ${actionItem.numero_os}` : undefined} items={actionSheetItems} />
 

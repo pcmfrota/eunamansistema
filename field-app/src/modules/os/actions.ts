@@ -110,7 +110,7 @@ export async function getOSImagensClient(id: string) {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('ordens_servico')
-      .select('foto_horimetro, foto_km, fotos, assinatura_mecanico, descricoes_atividade')
+      .select('foto_horimetro, foto_km, fotos, assinatura_mecanico, descricoes_atividade, created_at')
       .eq('id', id)
       .maybeSingle();
     if (error) throw new Error(error.message);
