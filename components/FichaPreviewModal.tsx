@@ -1,7 +1,8 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { X, FileDown, Share2 } from 'lucide-react'
+import { usePinchZoom } from '@/hooks/use-pinch-zoom'
 
 interface FichaPreviewModalProps {
   html: string
@@ -23,10 +24,16 @@ interface FichaPreviewModalProps {
 export default function FichaPreviewModal({ html, onClose, onDownload, onShare, designWidth = 800 }: FichaPreviewModalProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const lightboxRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   const [scaledHeight, setScaledHeight] = useState<number | undefined>(undefined)
   // Foto/assinatura/logo em que o usuário tocou na ficha — mostrada ampliada por cima de tudo.
   const [imagemAmpliada, setImagemAmpliada] = useState<string | null>(null)
+
+  // Zoom por pinça (dois dedos) + arrastar — um na própria ficha (por cima do encaixe à tela
+  // já calculado) e outro na foto ampliada (lightbox). Ver hooks/use-pinch-zoom.ts.
+  const fichaZoom = usePinchZoom(wrapperRef)
+  const lightboxZoom = usePinchZoom(lightboxRef, { onTap: () => setImagemAmpliada(null) })
 
   // useLayoutEffect (não useEffect): mede e aplica a escala ANTES do navegador pintar a
   // tela. Com useEffect, a primeira pintura saía sempre em escala 1 (ficha "no zoom",
@@ -65,6 +72,13 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
     }
   }, [html, designWidth])
 
+  // Troca de ficha (novo html) com o modal já montado — zera o zoom por pinça pra não abrir
+  // a próxima ficha já ampliada/deslocada por causa de um zoom anterior.
+  useEffect(() => {
+    fichaZoom.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html])
+
   // Delegação de evento: o conteúdo da ficha vem de um HTML cru (dangerouslySetInnerHTML),
   // então um onClick em cada <img> individual não dá — um único listener no container pai,
   // checando o alvo do clique, cobre todas as fotos/assinaturas/logo sem precisar tocar nos
@@ -72,6 +86,7 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
   const handleContentClick = (e: MouseEvent<HTMLDivElement>) => {
     const alvo = e.target as HTMLElement
     if (alvo.tagName === 'IMG') {
+      lightboxZoom.reset()
       setImagemAmpliada((alvo as HTMLImageElement).src)
     }
   }
@@ -91,14 +106,25 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
 
         <div
           ref={wrapperRef}
-          className="p-4 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900 flex justify-center"
+          className="p-4 overflow-x-hidden custom-scrollbar flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900 flex justify-center"
+          // Scroll vertical normal enquanto no tamanho padrão; ao ampliar com a pinça, quem
+          // move o conteúdo passa a ser o próprio transform (arrastar com um dedo) — manter o
+          // scroll nativo ligado ao mesmo tempo faria os dois gestos brigarem entre si.
+          style={{ overflowY: fichaZoom.estaAmpliado ? 'hidden' : 'auto' }}
         >
           {/* flex justify-center (não mx-auto): centraliza pelo espaço real do wrapper em vez
               de depender dos dois lados (pai/filho) concordarem em px exatos — com mx-auto,
               qualquer diferença mínima entre a largura calculada e a renderizada de fato
               (sub-pixel, scrollbar, etc.) deixava a ficha visivelmente puxada pra um lado.
               shrink-0: impede o próprio flex de encolher essa largura já calculada. */}
-          <div className="shrink-0" style={{ width: designWidth * scale, height: scaledHeight }}>
+          <div
+            className="shrink-0"
+            style={{
+              width: designWidth * scale,
+              height: scaledHeight,
+              transform: `translate(${fichaZoom.transform.x}px, ${fichaZoom.transform.y}px) scale(${fichaZoom.transform.scale})`,
+            }}
+          >
             <div
               ref={contentRef}
               onClick={handleContentClick}
@@ -136,16 +162,18 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
         </div>
       </div>
 
-      {/* Imagem ampliada — fica por cima do próprio modal (z maior), fecha tocando em qualquer
-          lugar ou no X. Mesma foto/assinatura/logo que veio da ficha, só maior pra conferir. */}
+      {/* Imagem ampliada — fica por cima do próprio modal (z maior). Com a pinça dá pra dar
+          zoom nela também; um toque simples (sem arrastar, já no tamanho normal) fecha —
+          ver onTap em usePinchZoom, que só dispara nesse caso específico (nunca durante um
+          arrastar com a foto já ampliada, pra não fechar sem querer ao mover). */}
       {imagemAmpliada && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-150"
-          onClick={() => setImagemAmpliada(null)}
+          ref={lightboxRef}
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 overflow-hidden animate-in fade-in duration-150"
         >
           <button
             onClick={() => setImagemAmpliada(null)}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors z-10"
           >
             <X size={24} />
           </button>
@@ -153,6 +181,9 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
             src={imagemAmpliada}
             alt=""
             className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            style={{
+              transform: `translate(${lightboxZoom.transform.x}px, ${lightboxZoom.transform.y}px) scale(${lightboxZoom.transform.scale})`,
+            }}
           />
         </div>
       )}
