@@ -51,22 +51,65 @@ function encolherFotoBase64(dataUrl: string | null | undefined, maxDim = 480, qu
   });
 }
 
+// Registros de OS criados/editados offline guardavam descricoes_atividade como a STRING
+// JSON (formato que a fila de sincronização/FormData espera, ver OSClient.tsx) em vez de já
+// voltar a ser array no registro local — isso quebrava aqui com ".map is not a function".
+// Normaliza os dois formatos (e qualquer outra coisa inesperada vira lista vazia) tanto pra
+// corrigir a causa quanto pra abrir sem erro OS já salvas localmente com esse problema.
+function normalizarDescricoesAtividade(val: unknown): DescricaoAtividadeFicha[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+export interface FichaComprimida {
+  ficha: OSParaFicha;
+  // Foto pequena (a que efetivamente vai pra ficha/PDF) -> original em resolução cheia. Só
+  // usado pela pré-visualização: ao tocar numa foto pra ver ampliada (FichaPreviewModal),
+  // mostra a original em vez da versão comprimida pra caber na ficha — sem isso, "ampliar
+  // pra ver melhor" só deixava a MESMA imagem pequena esticada, visivelmente borrada.
+  altaResolucao: Map<string, string>;
+}
+
 // Prepara uma cópia da OS com as fotos (horímetro/km, evidências e as de cada descrição de
 // atividade) já encolhidas — chamar uma vez ao abrir a ficha (não a cada clique em Baixar/
 // Compartilhar) pra deixar tanto a pré-visualização quanto a geração do PDF mais rápidas.
-export async function comprimirFotosParaFicha(os: OSParaFicha): Promise<OSParaFicha> {
+export async function comprimirFotosParaFicha(os: OSParaFicha): Promise<FichaComprimida> {
+  const altaResolucao = new Map<string, string>();
+  const comprimirEMapear = async (original: string | null | undefined): Promise<string | null | undefined> => {
+    if (!original) return original;
+    const pequena = await encolherFotoBase64(original);
+    // Só mapeia quando a foto realmente foi encolhida — já pequena o bastante, pequena ===
+    // original, e usar o próprio src de novo (sem entrada no mapa) já abre em resolução cheia.
+    if (pequena && pequena !== original) altaResolucao.set(pequena, original);
+    return pequena;
+  };
+
+  const descricoesNormalizadas = normalizarDescricoesAtividade(os.descricoes_atividade);
+
   const [foto_horimetro, foto_km, fotos, descricoes_atividade] = await Promise.all([
-    encolherFotoBase64(os.foto_horimetro),
-    encolherFotoBase64(os.foto_km),
-    Promise.all((os.fotos || []).map((f) => encolherFotoBase64(f))),
-    Promise.all((os.descricoes_atividade || []).map(async (b) => ({ ...b, foto: await encolherFotoBase64(b.foto) }))),
+    comprimirEMapear(os.foto_horimetro),
+    comprimirEMapear(os.foto_km),
+    Promise.all((os.fotos || []).map((f) => comprimirEMapear(f))),
+    Promise.all(descricoesNormalizadas.map(async (b) => ({ ...b, foto: await comprimirEMapear(b.foto) }))),
   ]);
+
   return {
-    ...os,
-    foto_horimetro: foto_horimetro || os.foto_horimetro,
-    foto_km: foto_km || os.foto_km,
-    fotos: os.fotos ? fotos : os.fotos,
-    descricoes_atividade: os.descricoes_atividade ? descricoes_atividade : os.descricoes_atividade,
+    ficha: {
+      ...os,
+      foto_horimetro: foto_horimetro || os.foto_horimetro,
+      foto_km: foto_km || os.foto_km,
+      fotos: os.fotos ? (fotos as string[]) : os.fotos,
+      descricoes_atividade: os.descricoes_atividade != null ? descricoes_atividade : os.descricoes_atividade,
+    },
+    altaResolucao,
   };
 }
 

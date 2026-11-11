@@ -16,12 +16,18 @@ interface FichaPreviewModalProps {
   // encolher a pré-visualização até caber na tela (celular/tablet) sem cortar nada nas bordas
   // nem precisar de scroll lateral — o PDF de verdade sempre sai no tamanho cheio.
   designWidth?: number
+  // Opcional: dado o src (já comprimido, pequeno pra caber na ficha/PDF) de uma imagem
+  // tocada na ficha, retorna uma versão em resolução mais alta pra mostrar ampliada — sem
+  // isso, tocar numa foto pra "ver melhor" só mostra a MESMA versão pequena esticada, visi-
+  // velmente borrada. Usado pela ficha de OS, que guarda as fotos originais à parte (ver
+  // comprimirFotosParaFicha em field-app/src/modules/os/pdfFichaOS.ts).
+  resolverImagemAmpliada?: (srcComprimido: string) => string
 }
 
 // Mostra o mesmo HTML usado na geração de uma ficha em PDF (pdfBoletim.ts, pdfFicha.ts, etc.),
 // dentro de um modal com fundo branco simulando a página — pra conferir antes de baixar.
 // Compartilhado entre módulos (Pneus, Lavagens, OS, ...) que geram fichas em PDF.
-export default function FichaPreviewModal({ html, onClose, onDownload, onShare, designWidth = 800 }: FichaPreviewModalProps) {
+export default function FichaPreviewModal({ html, onClose, onDownload, onShare, designWidth = 800, resolverImagemAmpliada }: FichaPreviewModalProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const lightboxRef = useRef<HTMLDivElement>(null)
@@ -86,8 +92,9 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
   const handleContentClick = (e: MouseEvent<HTMLDivElement>) => {
     const alvo = e.target as HTMLElement
     if (alvo.tagName === 'IMG') {
+      const src = (alvo as HTMLImageElement).src
       lightboxZoom.reset()
-      setImagemAmpliada((alvo as HTMLImageElement).src)
+      setImagemAmpliada(resolverImagemAmpliada ? resolverImagemAmpliada(src) : src)
     }
   }
 

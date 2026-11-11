@@ -17,7 +17,7 @@ import { useToast } from "../../ui/primitives/Toast";
 import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
 import { useNativeCamera } from "../../lib/nativeCamera";
 import FichaPreviewModal from "@/components/FichaPreviewModal";
-import { gerarHtmlFichaOS, gerarFichaOSPDF, gerarBlobFichaOS, comprimirFotosParaFicha, type OSParaFicha } from "./pdfFichaOS";
+import { gerarHtmlFichaOS, gerarFichaOSPDF, gerarBlobFichaOS, comprimirFotosParaFicha, type OSParaFicha, type FichaComprimida } from "./pdfFichaOS";
 import {
   criarOrdemServico,
   atualizarOrdemServico,
@@ -268,6 +268,9 @@ export default function OSClient({
   const [actionItem, setActionItem] = useState<any>(null);
   // Ficha oficial (mesmo layout do site, ver pdfFichaOS.ts) — visualizar/baixar/compartilhar.
   const [fichaData, setFichaData] = useState<OSParaFicha | null>(null);
+  // Foto pequena (na ficha) -> original em resolução cheia — pra foto ampliada não ficar
+  // borrada (ver comprimirFotosParaFicha/FichaPreviewModal).
+  const [fichaAltaResolucao, setFichaAltaResolucao] = useState<Map<string, string> | null>(null);
   // Texto do overlay de carregamento — null = escondido. Cobre tanto "abrir a ficha" (busca +
   // encolhe as fotos) quanto o raro caso de ainda não ter o PDF em cache ao clicar em Baixar/
   // Compartilhar.
@@ -299,21 +302,21 @@ export default function OSClient({
   // pode ter terminado em segundo plano, sem nem precisar mostrar o spinner. `resolvido`
   // marca quando já terminou, só pra decidir se mostra "Carregando ficha..." ou não. Uma vez
   // fechada/validada, a OS não muda mais, então reusar aqui é seguro.
-  const fichaDadosCacheRef = useRef<Map<string, { promise: Promise<OSParaFicha>; resolvido?: OSParaFicha }>>(new Map());
+  const fichaDadosCacheRef = useRef<Map<string, { promise: Promise<FichaComprimida>; resolvido?: FichaComprimida }>>(new Map());
   const carregarDadosFicha = (o: any) => {
     const cacheKey = String(o.id);
     const existente = fichaDadosCacheRef.current.get(cacheKey);
     if (existente) return existente;
-    const entry = {} as { promise: Promise<OSParaFicha>; resolvido?: OSParaFicha };
+    const entry = {} as { promise: Promise<FichaComprimida>; resolvido?: FichaComprimida };
     entry.promise = (async () => {
       let fotosExtra: any = {};
       if (isOnline && !cacheKey.startsWith("temp_")) {
         const res = await getOSImagensClient(o.id);
         if (res && "data" in res && res.data) fotosExtra = res.data;
       }
-      const comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
-      entry.resolvido = comprimida;
-      return comprimida;
+      const resultado = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
+      entry.resolvido = resultado;
+      return resultado;
     })();
     fichaDadosCacheRef.current.set(cacheKey, entry);
     return entry;
@@ -508,8 +511,9 @@ export default function OSClient({
     // Ficha", isso aqui já pode estar pronto, e abre instantâneo sem spinner nenhum.
     if (!entry.resolvido) setFichaBusyMsg("Carregando ficha...");
     try {
-      const comprimida = await entry.promise;
-      setFichaData(comprimida);
+      const resultado = await entry.promise;
+      setFichaData(resultado.ficha);
+      setFichaAltaResolucao(resultado.altaResolucao);
       // NÃO gera o PDF em segundo plano aqui: html2canvas trava a thread principal por um
       // tempo perceptível (mesmo com fotos já comprimidas), e como isso rodava assim que a
       // prévia aparecia, qualquer toque no X pra fechar ou em Compartilhar logo em seguida
@@ -555,6 +559,21 @@ export default function OSClient({
       assinaturas: nomes.map((n) => vistos.get(n)!.assinatura),
     };
   }, [form.descricoes_atividade]);
+
+  // Desfaz o JSON.stringify de descricoes_atividade (ver buildFields) pro registro local
+  // otimista (lista/ficha) — a fila/FormData precisa da string (mesmo parse do caminho
+  // online em actions.ts), mas guardar a string direto no registro local quebrava a ficha
+  // (comprimirFotosParaFicha espera um array de verdade).
+  const parseDescricoesAtividadeJSON = (raw: unknown): any[] => {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw !== "string") return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
 
   // Monta o mapa de campos "achatado" (mesma convenção de app/os/actions.ts: mecanico_1..5,
   // fotos como múltiplos valores) usado tanto pro FormData (caminho online) quanto pro
@@ -639,7 +658,17 @@ export default function OSClient({
         toast.show(editingId ? "OS atualizada!" : "OS criada!", "success");
       } else if (editingId) {
         const current = ordens.find((o) => o.id === editingId);
-        const updated = { ...current, ...fields, mecanicos: mecanicosArray, _isPendingSync: true };
+        // fields.descricoes_atividade é uma STRING (JSON.stringify, ver buildFields — é o
+        // formato que o FormData/fila offline espera pra reaproveitar o mesmo parse do
+        // caminho online). Pro registro LOCAL exibido na lista/ficha precisa virar array de
+        // novo, senão comprimirFotosParaFicha (que espera array) quebra ao abrir a ficha.
+        const updated = {
+          ...current,
+          ...fields,
+          descricoes_atividade: parseDescricoesAtividadeJSON(fields.descricoes_atividade),
+          mecanicos: mecanicosArray,
+          _isPendingSync: true,
+        };
         await localDb.put("ordens_servico", updated);
         await localDb.addToQueue("os", "update", { id: editingId, ...fields });
         setOrdens((prev) => prev.map((o) => (o.id === editingId ? updated : o)));
@@ -652,6 +681,7 @@ export default function OSClient({
           id: tempId,
           numero_os: tempNum,
           ...fields,
+          descricoes_atividade: parseDescricoesAtividadeJSON(fields.descricoes_atividade),
           classe: "CORRETIVA",
           foi_enviado_reserva: false,
           mecanicos: mecanicosArray,
@@ -1167,6 +1197,7 @@ export default function OSClient({
       {fichaData && (
         <FichaPreviewModal
           html={gerarHtmlFichaOS(fichaData)}
+          resolverImagemAmpliada={(src) => fichaAltaResolucao?.get(src) || src}
           onClose={() => setFichaData(null)}
           onDownload={async () => {
             // Repetir Baixar/Compartilhar da MESMA ficha sem mudanças reusa o PDF do cache
