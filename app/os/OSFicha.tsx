@@ -36,7 +36,20 @@ export type OSFichaData = {
   equipamento_id: string;
   horas_impacto_do?: number;
   mecanicos?: string[] | null;
+  created_at?: string | null;
   created_by_nome?: string | null;
+  // Várias atividades na mesma OS (cada uma pode ser de um mecânico diferente) — quando
+  // presente, substitui `descricao` (texto único concatenado) na seção "Descrição das
+  // Atividades" da ficha. OS antigas/sem esse campo continuam exibindo só `descricao`.
+  descricoes_atividade?: {
+    descricao: string;
+    hora_inicio?: string | null;
+    hora_fim?: string | null;
+    foto?: string | null;
+    mecanico_nome?: string | null;
+    mecanico_matricula?: string | null;
+    mecanico_assinatura?: string | null;
+  }[] | null;
   aprovado?: boolean | null;
   aprovado_por_nome?: string | null;
   aprovado_em?: string | null;
@@ -128,71 +141,6 @@ function getPlaca(os: OSFichaData): string {
   return p || "—";
 }
 
-// ─── Logo Eunaman SVG ─────────────────────────────────────────────────────────
-function EunamanLogo({ size = 64 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 120 120"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Gear outer */}
-      <path
-        d="M60 8
-          L66 18 L78 14 L78 26 L90 28 L86 40 L96 48 L88 56
-          L92 68 L80 70 L78 82 L66 80 L60 90
-          L54 80 L42 82 L40 70 L28 68 L32 56
-          L24 48 L34 40 L30 28 L42 26 L42 14 L54 18 Z"
-        fill="none"
-        stroke="#1a5c1a"
-        strokeWidth="4"
-        strokeLinejoin="round"
-      />
-      {/* Inner circle */}
-      <circle cx="60" cy="49" r="26" fill="#1a5c1a" />
-      {/* E letter */}
-      <text
-        x="60"
-        y="62"
-        textAnchor="middle"
-        fontSize="32"
-        fontWeight="900"
-        fill="#ffffff"
-        fontFamily="Arial, sans-serif"
-      >
-        E
-      </text>
-      {/* EUNAMAN text */}
-      <text
-        x="60"
-        y="102"
-        textAnchor="middle"
-        fontSize="13"
-        fontWeight="900"
-        fill="#1a1a1a"
-        fontFamily="Arial, sans-serif"
-        letterSpacing="1"
-      >
-        EUNAMAN
-      </text>
-      {/* Forest Support Expert */}
-      <text
-        x="60"
-        y="114"
-        textAnchor="middle"
-        fontSize="7"
-        fontWeight="700"
-        fill="#1a5c1a"
-        fontFamily="Arial, sans-serif"
-        letterSpacing="1"
-      >
-        FOREST SUPPORT EXPERT
-      </text>
-    </svg>
-  );
-}
-
 // ─── OSFichaModal  ────────────────────────────────────────────────────────────
 interface OSFichaModalProps {
   os: OSFichaData;
@@ -212,7 +160,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
     const supabase = createClient();
     supabase
       .from("ordens_servico")
-      .select("foto_horimetro, foto_km, fotos, assinatura_mecanico")
+      .select("foto_horimetro, foto_km, fotos, assinatura_mecanico, descricoes_atividade, created_at")
       .eq("id", osProp.id)
       .maybeSingle()
       .then(({ data }: { data: any }) => { if (data) setImagensOS(data as Partial<OSFichaData>); })
@@ -242,6 +190,14 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
     } catch {}
     return { assinaturas: [raw], matriculas: [], sigCargos: {} }; // string simples antiga
   })();
+
+  // Blocos de "Descrição das Atividades" — cada um pode ser de um mecânico diferente (ver
+  // field-app, onde cada bloco tem sua própria assinatura). OS sem esse campo (lançadas
+  // antes dele existir, ou pelo site que ainda só tem um textarea único) caem no fallback
+  // de um bloco único com o texto legado de `descricao`.
+  const blocosDescricao = Array.isArray(os.descricoes_atividade) && os.descricoes_atividade.length > 0
+    ? os.descricoes_atividade
+    : null;
 
   const CARGOS_LABELS: Record<string, string> = {
     encarregado: "Encarregado / Supervisor",
@@ -359,14 +315,9 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
   const placa = getPlaca(os);
 
   const handlePrint = () => {
-    const logoSVG = `<svg width="90" height="130" viewBox="0 0 200 290" xmlns="http://www.w3.org/2000/svg">
-      <path d="M100 10 l10 18 20-6v20l20 4-6 18 16 12-12 14 8 20-20 4-4 20-18-6-14 14-14-14-18 6-4-20-20-4 8-20-12-14 16-12-6-18 20-4V22l20 6Z" fill="#2d8a2d"/>
-      <circle cx="100" cy="102" r="52" fill="#1a5c1a"/>
-      <circle cx="100" cy="102" r="48" fill="none" stroke="#ffffff" stroke-width="2"/>
-      <text x="100" y="125" text-anchor="middle" font-size="72" font-weight="900" fill="#ffffff" font-family="Arial Black,Arial,sans-serif">E</text>
-      <text x="100" y="220" text-anchor="middle" font-size="30" font-weight="900" fill="#111111" font-family="Arial Black,Arial,sans-serif" letter-spacing="3">EUNAMAN</text>
-      <text x="100" y="248" text-anchor="middle" font-size="13" font-weight="700" fill="#2d8a2d" font-family="Arial,sans-serif" letter-spacing="2">FOREST SUPPORT EXPERT</text>
-    </svg>`;
+    // Logo oficial de verdade (arquivo original, nunca recriada) — URL absoluta porque a
+    // janela de impressão é um documento novo (about:blank), não herda o path relativo.
+    const logoUrl = `${window.location.origin}/logo-eunaman-full.png`;
 
     const statusColor = (os.status === "Fechada" || os.status === "Concluída")
       ? { bg: "#d1fae5", text: "#065f46", border: "#6ee7b7" }
@@ -385,7 +336,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
     const fotosHTML = os.fotos && os.fotos.length > 0
       ? `<div style="border-bottom:1px solid #111;">
-          ${secTitle("Evidências / Fotos do Serviço")}
+          ${secTitle("07. Evidências Fotográficas")}
           <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:8px;padding:8px 10px;">
             ${os.fotos.map(foto => `
               <div style="border:1px solid #e2e8f0;border-radius:4px;overflow:hidden;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#000;height:100px;">
@@ -412,21 +363,22 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
         <!-- Cabeçalho -->
         <div style="display:flex;align-items:center;border-bottom:2px solid #111;padding:8px 12px;gap:12px;">
-          <div style="width:72px;height:72px;flex-shrink:0;">${logoSVG}</div>
+          <div style="width:140px;height:60px;flex-shrink:0;"><img src="${logoUrl}" style="width:100%;height:100%;object-fit:contain;" /></div>
           <div style="flex:1;text-align:center;">
-            <h1 style="font-size:17px;font-weight:900;letter-spacing:3px;text-transform:uppercase;">ORDEM DE MANUTENÇÃO</h1>
-            <p style="font-size:10px;color:#6b7280;margin-top:3px;">EUNAMAN — CONTROLE DE MANUTENÇÃO DE FROTAS</p>
+            <h1 style="font-size:17px;font-weight:900;letter-spacing:3px;text-transform:uppercase;">FICHA DE ORDEM DE SERVIÇO</h1>
+            <p style="font-size:10px;color:#6b7280;margin-top:3px;">CONTROLE DE MANUTENÇÃO DE FROTAS</p>
           </div>
           <div style="min-width:120px;text-align:right;">
             <p style="font-size:9px;color:#6b7280;text-transform:uppercase;font-weight:600;">Nº O.S</p>
             <p style="font-size:14px;font-weight:900;font-family:monospace;">${os.numero_os}</p>
+            <p style="font-size:8px;color:#9ca3af;margin-top:2px;">Emitida em ${fmtDT(os.created_at || os.data_abertura)}</p>
             <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:800;margin-top:4px;background:${statusColor.bg};color:${statusColor.text};border:1px solid ${statusColor.border};">${os.status || "Aberta"}</span>
           </div>
         </div>
 
         <!-- Identificação -->
         <div style="border-bottom:1px solid #111;">
-          ${secTitle("Identificação do Equipamento")}
+          ${secTitle("01. Identificação do Equipamento")}
           <div style="display:flex;padding:8px 2px 4px 2px;">
             ${rows("Placa", placa, true)}
             ${rows("Módulo / Operação", os.modulo ? `${os.modulo}${os.operacao_tipo ? ` — ${os.operacao_tipo}` : ''}` : os.operacao_tipo || "—")}
@@ -455,7 +407,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
         <!-- Datas -->
         <div style="border-bottom:1px solid #111;">
-          ${secTitle("Datas e Tempos")}
+          ${secTitle("02. Datas e Tempos")}
           <div style="display:flex;padding:8px 2px 4px 2px;">
             ${os.horario_parada ? rows("Horário Real da Parada", fmtDT(os.horario_parada)) : ""}
             ${rows("Início Manutenção", fmtDT(os.data_abertura))}
@@ -467,7 +419,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
         <!-- Lançamento e Validação Interna -->
         ${(os.created_by_nome || os.aprovado != null) ? `
         <div style="border-bottom:1px solid #111;">
-          ${secTitle("Lançamento e Validação Interna")}
+          ${secTitle("03. Lançamento e Validação Interna")}
           <div style="display:flex;padding:8px 2px 4px 2px;">
             ${os.created_by_nome ? rows("Lançado por", os.created_by_nome) : ""}
             ${os.aprovado != null ? rows("Status de Validação", os.aprovado ? "✅ Validada" : "⏳ Pendente de Validação", true, !!os.aprovado) : ""}
@@ -481,7 +433,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
         <!-- Classificação -->
         <div style="border-bottom:1px solid #111;">
-          ${secTitle("Classificação da Manutenção")}
+          ${secTitle("04. Classificação da Manutenção")}
           <div style="display:flex;padding:8px 2px 4px 2px;">
             ${rows("Tipo", os.classe || "CORRETIVA", true)}
             ${rows("Sistema", os.sistema || "—")}
@@ -496,15 +448,27 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
         <!-- Descrição -->
         <div style="border-bottom:1px solid #111;">
-          ${secTitle("Descrição da Atividade")}
-          <div style="padding:8px 10px;min-height:56px;">
-            <p style="font-size:11px;font-weight:600;color:#b45309;line-height:1.6;">${os.descricao || "—"}</p>
-          </div>
+          ${secTitle("05. Descrição das Atividades")}
+          ${blocosDescricao ? blocosDescricao.map((b, i) => `
+            <div style="padding:7px 10px;${i < blocosDescricao.length - 1 ? 'border-bottom:1px dashed #d1d5db;' : ''}">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
+                <span style="font-size:8px;color:#9ca3af;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">Atividade ${i + 1}</span>
+                ${(b.hora_inicio || b.hora_fim) ? `<span style="font-size:9px;color:#6b7280;font-weight:700;">${b.hora_inicio || "—"} às ${b.hora_fim || "—"}</span>` : ''}
+              </div>
+              <p style="font-size:11px;font-weight:600;color:#b45309;line-height:1.5;">${b.descricao || "—"}</p>
+              ${b.mecanico_nome ? `<p style="font-size:9px;font-weight:700;color:#1a5c1a;margin-top:2px;">Executado por: ${b.mecanico_nome}${b.mecanico_matricula ? ` — Mat. ${b.mecanico_matricula}` : ''}</p>` : ''}
+              ${b.foto ? `<div style="margin-top:4px;width:160px;height:90px;border:1px solid #e2e8f0;border-radius:4px;overflow:hidden;background:#000;"><img src="${b.foto}" style="width:100%;height:100%;object-fit:cover;" /></div>` : ''}
+            </div>
+          `).join("") : `
+            <div style="padding:8px 10px;min-height:56px;">
+              <p style="font-size:11px;font-weight:600;color:#b45309;line-height:1.6;">${os.descricao || "—"}</p>
+            </div>
+          `}
         </div>
 
         <!-- Observações -->
         <div style="border-bottom:1px solid #111;">
-          ${secTitle("Observações / Pendências")}
+          ${secTitle("06. Observações / Pendências")}
           <div style="padding:6px 10px;min-height:30px;">
             <p style="font-size:10px;color:#374151;line-height:1.4;">${os.observacoes || "—"}</p>
           </div>
@@ -538,7 +502,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
         <!-- Assinaturas -->
         <div>
-          ${secTitle("Controle e Assinaturas")}
+          ${secTitle("08. Controle e Assinaturas")}
           <!-- Mecânicos com assinaturas individuais -->
           <div style="border-bottom:1px solid #333;">
             <p style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;padding:4px 8px 2px;background:#f0fdf4;">Executantes / Mecânicos</p>
@@ -710,8 +674,8 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
           {/* Toolbar — oculto no print */}
           <div className="no-print flex items-center justify-between px-5 py-3 bg-[#1a5c1a] shrink-0">
             <div className="flex items-center gap-3">
-              <div className="bg-white rounded-full p-1 flex items-center justify-center w-10 h-10 overflow-hidden">
-                <EunamanLogo size={36} />
+              <div className="bg-white rounded-lg p-1 flex items-center justify-center w-16 h-10 overflow-hidden">
+                <img src="/logo-eunaman-full.png" alt="EUNAMAN" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-white font-black text-base tracking-widest uppercase">
@@ -744,20 +708,21 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
 
                 {/* ── Cabeçalho ── */}
                 <div className="flex items-center border-b-2 border-gray-900 p-3 gap-4">
-                  <div className="shrink-0 flex items-center justify-center w-20 h-28">
-                    <EunamanLogo size={80} />
+                  <div className="shrink-0 flex items-center justify-center w-32 h-16">
+                    <img src="/logo-eunaman-full.png" alt="EUNAMAN Forest Support Expert" className="w-full h-full object-contain" />
                   </div>
                   <div className="flex-1 text-center">
                     <h1 className="text-[17px] font-black tracking-widest uppercase text-gray-900">
-                      ORDEM DE MANUTENÇÃO
+                      FICHA DE ORDEM DE SERVIÇO
                     </h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">
-                      EUNAMAN — CONTROLE DE MANUTENÇÃO DE FROTAS
+                      CONTROLE DE MANUTENÇÃO DE FROTAS
                     </p>
                   </div>
                   <div className="min-w-[110px] text-right">
                     <p className="text-[9px] text-gray-500 uppercase font-semibold">Nº O.S</p>
                     <p className="text-[13px] font-black text-gray-900 font-mono">{os.numero_os}</p>
+                    <p className="text-[8px] text-gray-400 mt-0.5">Emitida em {fmtDT(os.created_at || os.data_abertura)}</p>
                     <span
                       className={`status-badge-print inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
                         os.status === "Fechada" || os.status === "Concluída"
@@ -775,7 +740,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 {/* ── Bloco 1 — Identificação do Equipamento ── */}
                 <div className="border-b border-gray-900">
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                    Identificação do Equipamento
+                    01. Identificação do Equipamento
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 px-3 py-2">
                     <FP label="Placa" value={placa} bold />
@@ -820,7 +785,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 {/* ── Bloco 2 — Datas e Tempos ── */}
                 <div className="border-b border-gray-900">
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                    Datas e Tempos
+                    02. Datas e Tempos
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-3 py-2">
                     {os.horario_parada && (
@@ -836,7 +801,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 {(os.created_by_nome || os.aprovado != null) && (
                   <div className="border-b border-gray-900">
                     <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                      Lançamento e Validação Interna
+                      03. Lançamento e Validação Interna
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 px-3 py-2">
                       {os.created_by_nome && <FP label="Lançado por" value={os.created_by_nome} />}
@@ -869,7 +834,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 {/* ── Bloco 3 — Classificação ── */}
                 <div className="border-b border-gray-900">
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                    Classificação da Manutenção
+                    04. Classificação da Manutenção
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-3 py-2">
                     <FP label="Tipo" value={os.classe || "CORRETIVA"} bold />
@@ -896,22 +861,79 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                   </div>
                 </div>
 
-                {/* ── Bloco 4 — Descrição ── */}
+                {/* ── Análise PCM — Disponibilidade (DM/DO) ── */}
+                <div className="border-b border-gray-900 bg-slate-50">
+                  <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
+                    Análise PCM — Disponibilidade
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 px-3 py-2">
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <p className="text-[9px] font-black text-blue-800 uppercase">Impacto desta O.S:</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black">Indisp. Mecânica (DM):</span>
+                        <span className="font-mono bg-gray-900 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">{horasCalc}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black">Indisp. Operacional (DO):</span>
+                        <span className={`font-mono text-white px-1.5 py-0.5 rounded text-[10px] font-bold ${minutosDO && minutosDO > 0 ? "bg-red-700" : "bg-emerald-700"}`}>
+                          {minutosDO != null ? formatMinutesToHms(minutosDO) : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-[1.5] bg-white border border-gray-200 rounded px-2 py-1.5">
+                      <p className="text-[8px] font-black text-blue-900 uppercase mb-0.5">Regras PCM (Shift Context):</p>
+                      <p className="text-[8px] text-gray-500 leading-tight">
+                        A DO considera apenas o tempo entre abertura e fechamento coincidente com o turno operacional. Reservas enviadas sem prejuízo zeram o impacto.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Bloco 4 — Descrição das Atividades (pode ter várias, cada uma com seu
+                     próprio horário e mecânico — ver field-app) ── */}
                 <div className="border-b border-gray-900">
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                    Descrição da Atividade
+                    05. Descrição das Atividades
                   </div>
-                  <div className="px-3 py-2 min-h-[56px]">
-                    <p className="desc-text-print text-[11px] text-amber-700 font-semibold leading-relaxed whitespace-pre-wrap">
-                      {os.descricao || "—"}
-                    </p>
-                  </div>
+                  {blocosDescricao ? (
+                    <div className="divide-y divide-dashed divide-gray-300">
+                      {blocosDescricao.map((b, i) => (
+                        <div key={i} className="px-3 py-2">
+                          <div className="flex items-baseline justify-between mb-0.5">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-wide">Atividade {i + 1}</span>
+                            {(b.hora_inicio || b.hora_fim) && (
+                              <span className="text-[9px] font-bold text-gray-500">{b.hora_inicio || "—"} às {b.hora_fim || "—"}</span>
+                            )}
+                          </div>
+                          <p className="desc-text-print text-[11px] text-amber-700 font-semibold leading-relaxed whitespace-pre-wrap">
+                            {b.descricao || "—"}
+                          </p>
+                          {b.mecanico_nome && (
+                            <p className="text-[9px] font-bold text-[#1a5c1a] mt-1">
+                              Executado por: {b.mecanico_nome}{b.mecanico_matricula ? ` — Mat. ${b.mecanico_matricula}` : ""}
+                            </p>
+                          )}
+                          {b.foto && (
+                            <div className="mt-1.5 h-24 w-40 rounded-md overflow-hidden border border-gray-300 bg-black">
+                              <img src={b.foto} alt={`Foto atividade ${i + 1}`} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2 min-h-[56px]">
+                      <p className="desc-text-print text-[11px] text-amber-700 font-semibold leading-relaxed whitespace-pre-wrap">
+                        {os.descricao || "—"}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Bloco 5 — Observações ── */}
                 <div className="border-b border-gray-900">
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                    Observações / Pendências
+                    06. Observações / Pendências
                   </div>
                   <div className="px-3 py-2 min-h-[40px]">
                     <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">
@@ -924,7 +946,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 {os.fotos && os.fotos.length > 0 && (
                   <div className="border-b border-gray-900 bg-white">
                     <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                      Evidências / Fotos do Serviço
+                      07. Evidências Fotográficas
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-3 py-3">
                       {os.fotos.map((foto, idx) => (
@@ -947,7 +969,7 @@ export default function OSFichaModal({ os: osProp, onClose, pdfAction = null }: 
                 {/* ── Bloco 6 — Assinaturas ── */}
                 <div>
                   <div className="section-title-print bg-[#1a5c1a] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5">
-                    Controle e Assinaturas
+                    08. Controle e Assinaturas
                   </div>
 
                   {/* Mecânicos com assinaturas individuais */}
