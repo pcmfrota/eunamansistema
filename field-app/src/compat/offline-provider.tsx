@@ -234,6 +234,31 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOnline, pendingCount]);
 
+  // Sincronização PRIORITÁRIA e imediata (sem o delay de 1.5s do boot sync completo logo
+  // abaixo) das tabelas de referência que praticamente todo módulo depende pra funcionar
+  // (placa e colaborador/mecânico em seletores de Backlog, O.S., Pneus, Captação etc.).
+  // Sem isso, um usuário que loga com sinal e entra em modo avião rápido demais (relatado
+  // de verdade: foi exatamente o que aconteceu, testando O.S. offline) podia nunca chegar
+  // a sincronizar "colaboradores" — o boot sync completo (syncAllTables, dezenas de
+  // tabelas do sistema inteiro) é importante mas não tem pressa nenhuma pra terminar;
+  // estas duas tabelas pequenas e universais sim.
+  const priorityRefSyncRef = useRef(false);
+  useEffect(() => {
+    if (!isOnline || priorityRefSyncRef.current) return;
+    priorityRefSyncRef.current = true;
+    (async () => {
+      try {
+        const { syncTables } = await import("@/lib/offline-sync");
+        await syncTables(["colaboradores", "equipamentos"]);
+        window.dispatchEvent(new CustomEvent("offline-sync-completed"));
+      } catch (err) {
+        console.warn("[OfflineProvider] Falha na sincronização prioritária de referência:", err);
+      } finally {
+        priorityRefSyncRef.current = false;
+      }
+    })();
+  }, [isOnline]);
+
   // Boot Sync proativo diferido ao iniciar online ou reatar conexão (1.5s de delay para não concorrer com a página atual)
   useEffect(() => {
     if (isOnline && !syncing) {
