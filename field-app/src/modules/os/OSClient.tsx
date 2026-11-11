@@ -288,10 +288,39 @@ export default function OSClient({
     return promise;
   };
   // Cache dos dados já buscados (fotos/assinatura/descrições — o que demora é a ida ao
-  // Supabase, não ficou no card da lista de propósito) e já comprimidos pra ficha — reabrir a
-  // MESMA OS na mesma sessão fica instantâneo (sem o spinner "Carregando ficha..." de novo).
-  // Uma vez fechada/validada, a OS não muda mais, então reusar aqui é seguro.
-  const fichaDadosCacheRef = useRef<Map<string, OSParaFicha>>(new Map());
+  // Supabase, não ficou no card da lista de propósito) e já comprimidos pra ficha. Guarda a
+  // Promise (não só o resultado) pra dar pra PRÉ-buscar assim que o usuário toca na linha da
+  // OS (abre o ActionSheet) — na hora em que ele de fato toca em "Ver Ficha", a busca já
+  // pode ter terminado em segundo plano, sem nem precisar mostrar o spinner. `resolvido`
+  // marca quando já terminou, só pra decidir se mostra "Carregando ficha..." ou não. Uma vez
+  // fechada/validada, a OS não muda mais, então reusar aqui é seguro.
+  const fichaDadosCacheRef = useRef<Map<string, { promise: Promise<OSParaFicha>; resolvido?: OSParaFicha }>>(new Map());
+  const carregarDadosFicha = (o: any) => {
+    const cacheKey = String(o.id);
+    const existente = fichaDadosCacheRef.current.get(cacheKey);
+    if (existente) return existente;
+    const entry = {} as { promise: Promise<OSParaFicha>; resolvido?: OSParaFicha };
+    entry.promise = (async () => {
+      let fotosExtra: any = {};
+      if (isOnline && !cacheKey.startsWith("temp_")) {
+        const res = await getOSImagensClient(o.id);
+        if (res && "data" in res && res.data) fotosExtra = res.data;
+      }
+      const comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
+      entry.resolvido = comprimida;
+      return comprimida;
+    })();
+    fichaDadosCacheRef.current.set(cacheKey, entry);
+    return entry;
+  };
+  // Dispara a busca assim que o usuário toca na OS na lista (antes mesmo de tocar em "Ver
+  // Ficha" no ActionSheet) — puro ganho de tempo, não mostra nada na tela por si só.
+  const prefetchFichaDados = (o: any) => {
+    if (!o?.id || String(o.id).startsWith("temp_")) return;
+    carregarDadosFicha(o).promise.catch(() => {
+      fichaDadosCacheRef.current.delete(String(o.id));
+    });
+  };
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
 
   useEffect(() => setOrdens(ordensIniciais), [ordensIniciais]);
@@ -468,23 +497,13 @@ export default function OSClient({
   // fotos/foto_horimetro/foto_km/descricoes_atividade ficam fora da listagem em massa.
   const abrirVisualizacao = async (o: any) => {
     const cacheKey = String(o.id);
-    const jaPronta = fichaDadosCacheRef.current.get(cacheKey);
-    // Só mostra o spinner quando precisa mesmo buscar/processar algo — reabrir a mesma OS
-    // (já visitada nesta sessão) fica instantâneo.
-    if (!jaPronta) setFichaBusyMsg("Carregando ficha...");
+    const entry = carregarDadosFicha(o);
+    // Só mostra o spinner quando a busca/compressão ainda não terminou — se o usuário já
+    // tinha tocado na linha da OS (ver prefetchFichaDados) e demorou pra tocar em "Ver
+    // Ficha", isso aqui já pode estar pronto, e abre instantâneo sem spinner nenhum.
+    if (!entry.resolvido) setFichaBusyMsg("Carregando ficha...");
     try {
-      let comprimida: OSParaFicha;
-      if (jaPronta) {
-        comprimida = jaPronta;
-      } else {
-        let fotosExtra: any = {};
-        if (isOnline && !String(o.id).startsWith("temp_")) {
-          const res = await getOSImagensClient(o.id);
-          if (res && "data" in res && res.data) fotosExtra = res.data;
-        }
-        comprimida = await comprimirFotosParaFicha({ ...o, ...fotosExtra });
-        fichaDadosCacheRef.current.set(cacheKey, comprimida);
-      }
+      const comprimida = await entry.promise;
       setFichaData(comprimida);
       // Prepara o PDF em segundo plano só depois que o navegador já pintou a prévia na tela
       // (2 requestAnimationFrame) — sem isso, o html2canvas (que é pesado, trava a thread
@@ -498,6 +517,7 @@ export default function OSClient({
     } catch (err: any) {
       console.error("Erro ao abrir a ficha da OS:", err);
       toast.show("Erro ao abrir a ficha: " + (err?.message || String(err)), "error");
+      fichaDadosCacheRef.current.delete(cacheKey);
     } finally {
       setFichaBusyMsg(null);
     }
@@ -756,7 +776,12 @@ export default function OSClient({
                   {o.aprovado === false ? ` · Pendente${o.aprovado_pcm === false ? " PCM" : ""}${o.aprovado_supervisor === false ? " Supervisor" : ""}` : ""}
                 </span>
               }
-              onClick={() => setActionItem(o)}
+              onClick={() => {
+                setActionItem(o);
+                // Já começa a buscar/comprimir a ficha assim que o ActionSheet abre — ganha o
+                // tempo de reação do usuário até ele de fato tocar em "Ver Ficha".
+                prefetchFichaDados(o);
+              }}
               rightSlot={<ChevronRight size={16} className="text-zinc-600" />}
             />
           ))}

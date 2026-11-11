@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { X, FileDown, Share2 } from 'lucide-react'
 
 interface FichaPreviewModalProps {
@@ -26,7 +26,12 @@ export default function FichaPreviewModal({ html, onClose, onDownload, onShare, 
   const [scale, setScale] = useState(1)
   const [scaledHeight, setScaledHeight] = useState<number | undefined>(undefined)
 
-  useEffect(() => {
+  // useLayoutEffect (não useEffect): mede e aplica a escala ANTES do navegador pintar a
+  // tela. Com useEffect, a primeira pintura saía sempre em escala 1 (ficha "no zoom",
+  // cortada) e só um instante depois é que a escala certa entrava — dava pra ver os dois
+  // tamanhos em sequência. Com useLayoutEffect, quem abre o modal já vê direto no tamanho
+  // final, sem esse "pulo".
+  useLayoutEffect(() => {
     const medir = () => {
       const wrapper = wrapperRef.current
       const content = contentRef.current
