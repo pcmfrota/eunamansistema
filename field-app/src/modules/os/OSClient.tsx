@@ -16,7 +16,9 @@ import { EmptyState } from "../../ui/primitives/EmptyState";
 import { Fab } from "../../ui/primitives/Fab";
 import { useToast } from "../../ui/primitives/Toast";
 import { getCurrentLocalDatetime } from "@/src/utils/dateUtils";
-import { useNativeCamera } from "../../lib/nativeCamera";
+import { useNativeCamera, hasNativeCamera } from "../../lib/nativeCamera";
+
+const MAX_FOTOS_SERVICO = 5;
 import FichaPreviewModal from "@/components/FichaPreviewModal";
 import { gerarHtmlFichaOS, gerarFichaOSPDF, gerarBlobFichaOS, comprimirFotosParaFicha, type OSParaFicha, type FichaComprimida } from "./pdfFichaOS";
 import {
@@ -377,6 +379,13 @@ export default function OSClient({
   const { openCamera: abrirCameraNativa } = useNativeCamera("eunaman_os_active_photo_field", (alvo, compressed) => {
     if (alvo === "foto_horimetro" || alvo === "foto_km") {
       setForm((p) => ({ ...p, [alvo]: compressed }));
+    } else if (alvo === "fotos:+") {
+      // Várias de uma vez (botão "+ Adicionar"): cada foto do lote chega aqui separada.
+      setForm((p) => {
+        const atuais = p.fotos.filter(Boolean);
+        if (atuais.length >= MAX_FOTOS_SERVICO) return p;
+        return { ...p, fotos: [...atuais, compressed] };
+      });
     } else if (alvo.startsWith("fotos:")) {
       const idx = Number(alvo.split(":")[1]);
       setForm((p) => {
@@ -446,8 +455,8 @@ export default function OSClient({
     }
   }, [mounted]);
 
-  const abrirCamera = (alvo: string) => {
-    abrirCameraNativa(alvo, () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"));
+  const abrirCamera = (alvo: string, max = 1) => {
+    abrirCameraNativa(alvo, () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"), { max });
   };
 
   const abrirNovo = () => {
@@ -1264,11 +1273,19 @@ export default function OSClient({
           {/* Fotos do serviço */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className={labelCls}>Fotos do Serviço ({form.fotos.filter(Boolean).length}/5)</label>
-              {form.fotos.filter(Boolean).length < 5 && (
+              <label className={labelCls}>Fotos do Serviço ({form.fotos.filter(Boolean).length}/{MAX_FOTOS_SERVICO})</label>
+              {form.fotos.filter(Boolean).length < MAX_FOTOS_SERVICO && (
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, fotos: [...p.fotos, ""] }))}
+                  onClick={() => {
+                    const restantes = MAX_FOTOS_SERVICO - form.fotos.filter(Boolean).length;
+                    if (hasNativeCamera()) {
+                      abrirCamera("fotos:+", restantes);
+                    } else {
+                      // Navegador (fora do APK): mantém o slot vazio pra escolher arquivo.
+                      setForm((p) => ({ ...p, fotos: [...p.fotos, ""] }));
+                    }
+                  }}
                   className="text-[10px] font-black text-amber-500 uppercase"
                 >
                   + Adicionar

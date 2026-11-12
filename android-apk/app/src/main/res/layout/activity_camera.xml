@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/raiz"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
@@ -9,45 +10,283 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Flash branco rápido ao capturar (feedback visual) -->
+    <View
+        android:id="@+id/flashCaptura"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:background="#FFFFFF" />
+
+    <!-- Sem permissão / câmera indisponível: a galeria continua funcionando -->
     <TextView
-        android:id="@+id/btnFechar"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|start"
-        android:layout_margin="20dp"
-        android:background="@drawable/bg_camera_close_button"
+        android:id="@+id/txtSemCamera"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginLeft="32dp"
+        android:layout_marginRight="32dp"
         android:gravity="center"
-        android:text="✕"
+        android:lineSpacingExtra="4dp"
+        android:padding="16dp"
         android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:clickable="true"
-        android:focusable="true" />
+        android:textSize="15sp"
+        android:visibility="gone" />
 
     <TextView
-        android:id="@+id/txtDica"
+        android:id="@+id/txtZoom"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="128dp"
-        android:background="@drawable/bg_camera_close_button"
-        android:paddingLeft="16dp"
-        android:paddingRight="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:text="Toque para capturar"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_cam_pill_dark"
+        android:paddingLeft="14dp"
+        android:paddingTop="6dp"
+        android:paddingRight="14dp"
+        android:paddingBottom="6dp"
         android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
-    <View
-        android:id="@+id/btnCapturar"
-        android:layout_width="76dp"
-        android:layout_height="76dp"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="36dp"
-        android:background="@drawable/bg_camera_capture_button"
+    <!-- Topo: fechar / flash -->
+    <LinearLayout
+        android:id="@+id/barraTopo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="16dp">
+
+        <ImageView
+            android:id="@+id/btnFechar"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_camera_close_button"
+            android:contentDescription="Fechar câmera"
+            android:padding="10dp"
+            android:src="@drawable/ic_cam_close" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <ImageView
+            android:id="@+id/btnFlash"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_camera_close_button"
+            android:contentDescription="Flash"
+            android:padding="10dp"
+            android:src="@drawable/ic_cam_flash_off" />
+    </LinearLayout>
+
+    <!-- Base: miniaturas + galeria / captura / trocar câmera -->
+    <LinearLayout
+        android:id="@+id/barraBase"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#66000000"
+        android:orientation="vertical"
+        android:paddingTop="10dp"
+        android:paddingBottom="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp">
+
+            <HorizontalScrollView
+                android:id="@+id/scrollMiniaturas"
+                android:layout_width="0dp"
+                android:layout_height="64dp"
+                android:layout_weight="1"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/containerMiniaturas"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:id="@+id/btnContinuar"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginLeft="8dp"
+                android:background="@drawable/bg_cam_pill_amber"
+                android:gravity="center"
+                android:paddingLeft="18dp"
+                android:paddingRight="18dp"
+                android:text="Continuar"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtDica"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:textColor="#CCFFFFFF"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="32dp"
+            android:paddingRight="32dp">
+
+            <ImageView
+                android:id="@+id/btnGaleria"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_camera_close_button"
+                android:contentDescription="Abrir galeria"
+                android:padding="13dp"
+                android:src="@drawable/ic_cam_gallery" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <View
+                android:id="@+id/btnCapturar"
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:background="@drawable/bg_camera_capture_button"
+                android:clickable="true"
+                android:contentDescription="Capturar foto"
+                android:focusable="true" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/btnTrocarCamera"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_camera_close_button"
+                android:contentDescription="Alternar câmera frontal/traseira"
+                android:padding="13dp"
+                android:src="@drawable/ic_cam_switch" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Revisão: ver em tamanho grande, excluir, adicionar mais, confirmar -->
+    <LinearLayout
+        android:id="@+id/painelRevisao"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
         android:clickable="true"
-        android:focusable="true" />
+        android:focusable="true"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <ImageView
+                android:id="@+id/btnVoltarCamera"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:contentDescription="Voltar para a câmera"
+                android:padding="10dp"
+                android:src="@drawable/ic_cam_back" />
+
+            <TextView
+                android:id="@+id/txtTituloRevisao"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:layout_weight="1"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btnExcluirFoto"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:contentDescription="Excluir esta foto"
+                android:padding="10dp"
+                android:src="@drawable/ic_cam_delete" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/imgRevisao"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:contentDescription="Foto em revisão"
+            android:scaleType="fitCenter" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="76dp"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/containerMiniaturasRevisao"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/btnAdicionarMais"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginRight="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_cam_pill_dark"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnConfirmar"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginLeft="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_cam_pill_amber"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
 
 </FrameLayout>

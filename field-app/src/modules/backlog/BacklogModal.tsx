@@ -484,7 +484,7 @@ export default function BacklogModal({
               <FotosEvidencia
                 fotos={form.evidencia_imagens || []}
                 processando={fotoProcessando}
-                onCapturar={() => capturarEvidencia('evidencia_imagens', () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
+                onCapturar={() => capturarEvidencia('evidencia_imagens', () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"), { max: 2 - ((form as any).evidencia_imagens || []).length })}
                 onGaleria={(file) => adicionarFoto(file, 'evidencia_imagens')}
                 onRemover={(idx) => removerFoto('evidencia_imagens', idx)}
                 onExpandir={setFotoExpandida}
@@ -541,7 +541,7 @@ export default function BacklogModal({
               <FotosEvidencia
                 fotos={form.evidencia_imagens_conclusao || []}
                 processando={fotoProcessando}
-                onCapturar={() => capturarEvidencia('evidencia_imagens_conclusao', () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
+                onCapturar={() => capturarEvidencia('evidencia_imagens_conclusao', () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"), { max: 2 - ((form as any).evidencia_imagens_conclusao || []).length })}
                 onGaleria={(file) => adicionarFoto(file, 'evidencia_imagens_conclusao')}
                 onRemover={(idx) => removerFoto('evidencia_imagens_conclusao', idx)}
                 onExpandir={setFotoExpandida}

@@ -474,7 +474,7 @@ export default function ChecklistMecanicosClient({
                     fotos={form.fotos}
                     max={4}
                     processando={fotoProcessando}
-                    onCapturar={() => capturarFoto("geral", () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"))}
+                    onCapturar={() => capturarFoto("geral", () => toast.show("Câmera nativa disponível apenas no aplicativo instalado.", "info"), { max: 4 - form.fotos.length })}
                     onGaleria={adicionarFotoGaleria}
                     onRemover={removerFoto}
                     onExpandir={setFotoExpandida}

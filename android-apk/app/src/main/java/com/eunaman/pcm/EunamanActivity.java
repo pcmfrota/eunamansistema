@@ -54,6 +54,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
@@ -65,15 +66,16 @@ public class EunamanActivity extends AppCompatActivity {
 
     private static final String TAG = "EunamanPCM";
     private static final int REQUEST_CAMERA        = 1001;
-    private static final int REQUEST_CAMERA_PERM   = 1002;
-    private static final int MAX_IMAGE_SIZE_PX     = 1280;
+    // 1600px / 80%: nítido o bastante pra ler placa/documento, e leve o bastante pra viajar
+    // dentro do próprio registro (base64) na sincronização offline. Compressão única — o JS
+    // não recomprime mais (antes reduzia de novo pra 900px/65%, por isso a foto saía ruim).
+    private static final int MAX_IMAGE_SIZE_PX     = 1600;
     private static final int JPEG_QUALITY          = 80;
     private static final long PAGE_LOAD_TIMEOUT_MS = 12000;
 
     private WebView     webView;
     private ProgressBar progressBar;
     private ImageView   splashScreen;
-    private String      currentPhotoPath;
 
     // Trava de seguranca para navegacao pendurada: ao retomar do segundo plano no Android,
     // a ConnectivityManager pode reportar rede disponivel antes do radio realmente terminar
@@ -110,16 +112,10 @@ public class EunamanActivity extends AppCompatActivity {
     private float keyboardHeightDp = 0f;
     private static final int REQUEST_FILE_CHOOSER = 1004;
     private ValueCallback<Uri[]> filePathCallback;
-    private String pendingPhotoDataUrl = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        if (savedInstanceState != null) {
-            currentPhotoPath = savedInstanceState.getString("currentPhotoPath");
-            pendingPhotoDataUrl = savedInstanceState.getString("pendingPhotoDataUrl");
-        }
 
         setContentView(R.layout.activity_main);
 
@@ -279,8 +275,6 @@ public class EunamanActivity extends AppCompatActivity {
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         if (webView != null) webView.saveState(outState);
-        outState.putString("currentPhotoPath", currentPhotoPath);
-        outState.putString("pendingPhotoDataUrl", pendingPhotoDataUrl);
     }
 
     private void configureWebView() {
@@ -504,32 +498,18 @@ public class EunamanActivity extends AppCompatActivity {
             filePathCallback.onReceiveValue(results);
             filePathCallback = null;
         } else if (requestCode == REQUEST_CAMERA) {
-            if (resultCode == Activity.RESULT_OK) {
-                new Thread(this::processAndSendPhoto).start();
-            } else {
-                sendCameraResultError("Captura de foto cancelada ou falhou.");
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                ArrayList<String> caminhos = data.getStringArrayListExtra(EunamanCameraActivity.EXTRA_RESULT_PATHS);
+                boolean[] daCamera = data.getBooleanArrayExtra(EunamanCameraActivity.EXTRA_RESULT_FROM_CAMERA);
+                if (caminhos != null && !caminhos.isEmpty()) {
+                    final ArrayList<String> c = caminhos;
+                    final boolean[] d = daCamera != null ? daCamera : new boolean[caminhos.size()];
+                    new Thread(() -> processarFotos(c, d)).start();
+                    return;
+                }
             }
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CAMERA_PERM) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                launchCameraIntent();
-            } else {
-                Toast.makeText(this, "Permissão de câmera negada", Toast.LENGTH_SHORT).show();
-                sendCameraResultError("Permissão de câmera negada");
-            }
-        }
-    }
-
-    private void checkCameraPermissionAndOpen() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERM);
-        } else {
-            launchCameraIntent();
+            apagarPastaCaptura();
+            sendCameraResultError("Captura de foto cancelada ou falhou.");
         }
     }
 
@@ -538,18 +518,17 @@ public class EunamanActivity extends AppCompatActivity {
     // ACTION_IMAGE_CAPTURE; isso foi trocado porque o Android podia encerrar esta Activity em
     // segundo plano enquanto o app de Câmera (outro processo) estava em primeiro plano, pra
     // liberar memória em aparelhos com pouca RAM — ao voltar, a WebView recarregava do zero.
-    private void launchCameraIntent() {
-        File photoFile = null;
+    // A permissão de câmera agora é pedida DENTRO da tela da câmera — assim, se negada, a
+    // galeria continua disponível lá mesmo.
+    private void abrirCameraEmbutida(int maxFotos) {
         try {
-            photoFile = createImageFile();
-        } catch (IOException ex) {
-            Log.e(TAG, "Erro ao criar arquivo de imagem", ex);
-            sendCameraResultError("Erro ao criar arquivo para salvar a foto.");
-            return;
-        }
-        try {
+            File pasta = pastaCaptura();
+            apagarPastaCaptura();
+            //noinspection ResultOfMethodCallIgnored
+            pasta.mkdirs();
             Intent intent = new Intent(this, EunamanCameraActivity.class);
-            intent.putExtra(EunamanCameraActivity.EXTRA_OUTPUT_PATH, photoFile.getAbsolutePath());
+            intent.putExtra(EunamanCameraActivity.EXTRA_OUTPUT_DIR, pasta.getAbsolutePath());
+            intent.putExtra(EunamanCameraActivity.EXTRA_MAX_FOTOS, Math.max(1, Math.min(maxFotos, 20)));
             startActivityForResult(intent, REQUEST_CAMERA);
         } catch (Exception e) {
             Log.e(TAG, "Erro ao iniciar a câmera embutida", e);
@@ -557,41 +536,99 @@ public class EunamanActivity extends AppCompatActivity {
         }
     }
 
-    private File createImageFile() throws IOException {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        String imageFileName = "JPEG_" + timeStamp + "_";
-        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
-            imageFileName,  /* prefix */
-            ".jpg",         /* suffix */
-            storageDir      /* directory */
-        );
-        currentPhotoPath = image.getAbsolutePath();
-        return image;
+    private File pastaCaptura() {
+        return new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "captura_atual");
     }
 
-    private void processAndSendPhoto() {
-        if (currentPhotoPath == null) {
-            sendCameraResultError("Caminho da foto não encontrado.");
-            return;
+    private void apagarPastaCaptura() {
+        File[] arquivos = pastaCaptura().listFiles();
+        if (arquivos != null) {
+            for (File f : arquivos) {
+                //noinspection ResultOfMethodCallIgnored
+                f.delete();
+            }
         }
+    }
 
-        File file = new File(currentPhotoPath);
-        if (!file.exists()) {
-            sendCameraResultError("Arquivo de foto não encontrado.");
-            return;
+    // ── Fotos pendentes ──
+    // Guardadas em arquivo (não no Bundle do onSaveInstanceState): várias fotos de ~300KB
+    // estourariam o limite de transação do Bundle (TransactionTooLargeException = crash).
+    // Arquivo também sobrevive se o Android matar o processo enquanto a câmera está aberta.
+    // O JS confirma o recebimento (clearPendingPhotos) — sem isso, a mesma foto podia ser
+    // entregue de novo ao reabrir a tela (getPendingPhoto no mount) e virar anexo duplicado.
+
+    private File arquivoPendentes() {
+        return new File(getCacheDir(), "eunaman_fotos_pendentes.txt");
+    }
+
+    private synchronized void limparPendentes() {
+        //noinspection ResultOfMethodCallIgnored
+        arquivoPendentes().delete();
+    }
+
+    private synchronized void adicionarPendente(String dataUrl) {
+        try (java.io.FileWriter w = new java.io.FileWriter(arquivoPendentes(), true)) {
+            w.write(dataUrl);
+            w.write("\n");
+        } catch (IOException e) {
+            Log.w(TAG, "Erro ao guardar foto pendente", e);
         }
+    }
 
+    private synchronized String lerPendentesJson() {
+        File arq = arquivoPendentes();
+        if (!arq.exists()) return "";
+        ArrayList<String> lista = new ArrayList<>();
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(arq))) {
+            String linha;
+            while ((linha = r.readLine()) != null) {
+                if (!linha.isEmpty()) lista.add(linha);
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "Erro ao ler fotos pendentes", e);
+            return "";
+        }
+        if (lista.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder("{\"success\":true,\"dataUrl\":\"").append(lista.get(0)).append("\",\"dataUrls\":[");
+        for (int i = 0; i < lista.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append('"').append(lista.get(i)).append('"');
+        }
+        return sb.append("]}").toString();
+    }
+
+    /** Processa cada foto (EXIF, 1600px, JPEG 80%) e entrega ao WebView uma por vez. */
+    private void processarFotos(ArrayList<String> caminhos, boolean[] daCamera) {
+        limparPendentes();
+        int total = caminhos.size();
+        try {
+            for (int i = 0; i < total; i++) {
+                boolean veioDaCamera = i < daCamera.length && daCamera[i];
+                String dataUrl = processarUmaFoto(caminhos.get(i), veioDaCamera);
+                if (dataUrl != null) {
+                    adicionarPendente(dataUrl);
+                    sendCameraResultToWeb("{\"success\":true,\"dataUrl\":\"" + dataUrl + "\",\"index\":" + i + ",\"total\":" + total + "}");
+                } else {
+                    sendCameraResultToWeb("{\"success\":false,\"error\":\"Erro ao processar uma das fotos.\",\"index\":" + i + ",\"total\":" + total + "}");
+                }
+            }
+        } finally {
+            apagarPastaCaptura();
+        }
+    }
+
+    private String processarUmaFoto(String caminho, boolean veioDaCamera) {
+        File file = new File(caminho);
+        if (!file.exists()) return null;
         Bitmap bitmap = null;
         try {
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(currentPhotoPath, options);
-
-            int srcWidth = options.outWidth;
-            int srcHeight = options.outHeight;
+            BitmapFactory.decodeFile(caminho, options);
 
             int inSampleSize = 1;
+            int srcWidth = options.outWidth;
+            int srcHeight = options.outHeight;
             if (srcWidth > MAX_IMAGE_SIZE_PX || srcHeight > MAX_IMAGE_SIZE_PX) {
                 int halfWidth = srcWidth / 2;
                 int halfHeight = srcHeight / 2;
@@ -602,45 +639,25 @@ public class EunamanActivity extends AppCompatActivity {
 
             options.inJustDecodeBounds = false;
             options.inSampleSize = inSampleSize;
-            bitmap = BitmapFactory.decodeFile(currentPhotoPath, options);
+            bitmap = BitmapFactory.decodeFile(caminho, options);
+            if (bitmap == null) return null;
 
-            if (bitmap == null) {
-                sendCameraResultError("Erro ao decodificar a foto.");
-                return;
-            }
+            bitmap = rotateImageIfRequired(bitmap, caminho);
 
-            bitmap = rotateImageIfRequired(bitmap, currentPhotoPath);
-            
-            // Salva na galeria pública antes de redimensionar
-            saveImageToGallery(bitmap);
+            // Cópia na galeria pública só pra foto tirada agora — a que veio da galeria já
+            // está lá, salvar de novo duplicaria.
+            if (veioDaCamera) saveImageToGallery(bitmap);
 
             bitmap = scaleBitmapIfRequired(bitmap);
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, baos);
-            byte[] imageBytes = baos.toByteArray();
-            String base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
-
-            String dataUrl = "data:image/jpeg;base64," + base64Image;
-            pendingPhotoDataUrl = dataUrl;
-
-            String jsonResponse = "{\"success\":true,\"dataUrl\":\"" + dataUrl + "\"}";
-            sendCameraResultToWeb(jsonResponse);
-
+            return "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
         } catch (Exception e) {
             Log.e(TAG, "Erro ao processar imagem", e);
-            sendCameraResultError("Erro ao processar imagem: " + e.getMessage());
+            return null;
         } finally {
-            if (bitmap != null && !bitmap.isRecycled()) {
-                bitmap.recycle();
-            }
-            try {
-                if (file.exists()) {
-                    file.delete();
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Erro ao deletar arquivo temporario", e);
-            }
+            if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
         }
     }
 
@@ -967,19 +984,28 @@ public class EunamanActivity extends AppCompatActivity {
     }
 
     private class EunamanCameraBridge {
+        /** Campo de foto única (horímetro, KM, foto da descrição...). */
         @JavascriptInterface
         public void openCamera() {
-            runOnUiThread(EunamanActivity.this::checkCameraPermissionAndOpen);
+            runOnUiThread(() -> abrirCameraEmbutida(1));
         }
 
+        /** Campo com várias fotos: permite capturar/escolher até `max` de uma vez. */
+        @JavascriptInterface
+        public void openCameraMulti(int max) {
+            runOnUiThread(() -> abrirCameraEmbutida(max));
+        }
+
+        /** Fotos que chegaram enquanto a WebView estava sendo recriada (lote inteiro). */
         @JavascriptInterface
         public String getPendingPhoto() {
-            String photo = pendingPhotoDataUrl;
-            pendingPhotoDataUrl = null; // consome
-            if (photo != null) {
-                return "{\"success\":true,\"dataUrl\":\"" + photo + "\"}";
-            }
-            return "";
+            return lerPendentesJson();
+        }
+
+        /** O JS chama depois de aplicar as fotos — evita entregar o mesmo lote duas vezes. */
+        @JavascriptInterface
+        public void clearPendingPhotos() {
+            limparPendentes();
         }
     }
 }
