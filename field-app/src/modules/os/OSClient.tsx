@@ -8,6 +8,7 @@ import { localDb, deserializeToFormData } from "@/lib/offline-db";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { ListRow } from "../../ui/primitives/ListRow";
 import { BottomSheet } from "../../ui/primitives/BottomSheet";
+import { CHAVE_ABRIR_OS_PENDENTE } from "../../ui/primitives/OfflineSyncSheet";
 import { ActionSheet, ActionSheetItem } from "../../ui/primitives/ActionSheet";
 import { ConfirmDialog } from "../../ui/primitives/ConfirmDialog";
 import { SegmentedTabs } from "../../ui/primitives/SegmentedTabs";
@@ -545,6 +546,29 @@ export default function OSClient({
     }
   };
 
+  // Veio de um toque num item pendente de OS no sheet de sincronização (ver
+  // ui/primitives/OfflineSyncSheet.tsx) — abre a ficha dessa OS específica assim que ela
+  // aparecer na lista local. Roda a cada mudança em `ordens` (não só no mount) porque a
+  // lista pode ainda estar carregando/sincronizando no instante exato da navegação.
+  useEffect(() => {
+    let pedido: { numero_os: string | null; id: string | null } | null = null;
+    try {
+      const raw = sessionStorage.getItem(CHAVE_ABRIR_OS_PENDENTE);
+      if (raw) pedido = JSON.parse(raw);
+    } catch {}
+    if (!pedido) return;
+    const alvo = ordens.find(
+      (o) => (pedido!.numero_os && o.numero_os === pedido!.numero_os) || (pedido!.id && o.id === pedido!.id)
+    );
+    if (alvo) {
+      abrirVisualizacao(alvo);
+      try {
+        sessionStorage.removeItem(CHAVE_ABRIR_OS_PENDENTE);
+      } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordens]);
+
   const onSelecionarPlaca = (equipamentoId: string) => {
     const eq = equipamentos.find((e) => e.id === equipamentoId);
     setForm((p) => ({ ...p, equipamento_id: equipamentoId, placa: eq?.placa || "", modulo: eq?.modulo || "", operacao_tipo: eq?.categoria || "" }));
@@ -965,18 +989,26 @@ export default function OSClient({
               }
 
               return (
-              <div key={idx} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-zinc-500 uppercase">Descrição {idx + 1}</span>
-                  {form.descricoes_atividade.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={removerBloco}
-                      className="text-red-400 text-lg leading-none px-1"
-                    >
-                      ×
+              <div key={idx} className="p-3 rounded-xl bg-zinc-900 border border-amber-700/50 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black text-amber-500 uppercase">Descrição {idx + 1}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Recolhe sem exigir nada preenchido — diferente de "Concluir Descrição"
+                        (mais abaixo), que valida o texto. Pra quando o usuário abriu esse
+                        bloco mas decidiu não usar agora, sem perder o que já tinha digitado. */}
+                    <button type="button" onClick={() => setDescricaoExpandida(null)} className="text-[10px] font-black text-zinc-500 uppercase">
+                      Fechar
                     </button>
-                  )}
+                    {form.descricoes_atividade.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={removerBloco}
+                        className="text-red-400 text-lg leading-none px-1"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <textarea
                   value={bloco.descricao}

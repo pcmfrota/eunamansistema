@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Wifi,
   WifiOff,
@@ -13,11 +14,18 @@ import {
   Clock,
   Droplets,
   Fuel,
+  ChevronRight,
 } from "lucide-react";
 import { useOffline } from "@/components/offline-provider";
 import { cn } from "@/lib/utils";
 import type { SyncItem } from "@/lib/offline-db";
 import { BottomSheet } from "./BottomSheet";
+
+// Chave de sessionStorage usada pra "avisar" a tela de OS (ver OSClient.tsx) que deve abrir
+// a ficha de uma OS específica assim que ela montar/carregar os dados locais — usado pelo
+// toque num item pendente de OS aqui no sheet (ver abrirItemOS abaixo). sessionStorage (não
+// localStorage) porque é um pedido de ação pontual, não um dado persistente de verdade.
+export const CHAVE_ABRIR_OS_PENDENTE = "eunaman_abrir_os_pendente";
 
 // Rótulos/ícones de item da fila de sincronização — movidos de
 // compat/offline-provider.tsx (Fase 3): são puramente apresentacionais, o
@@ -115,6 +123,11 @@ function getItemDescription(item: SyncItem) {
     if (p.id_ficha) return `Ficha ID: ${p.id_ficha}`;
   }
   if (item.entity === "os") {
+    // fields.placa/temp_numero_os (criação offline) ou id (edição offline) — ver
+    // buildFields/handleSalvar em modules/os/OSClient.tsx. p.numero/p.equipamento nunca
+    // existiram nesse payload (bug anterior: a descrição saía sempre em branco aqui).
+    if (p.placa) return `Placa: ${p.placa}${p.temp_numero_os ? ` (${p.temp_numero_os})` : ""}`;
+    if (p.temp_numero_os) return `O.S.: ${p.temp_numero_os}`;
     if (p.numero) return `O.S. Nº ${p.numero}`;
     if (p.equipamento) return `Equipamento: ${p.equipamento}`;
   }
@@ -143,6 +156,23 @@ function getItemDescription(item: SyncItem) {
 export function OfflineStatusBadge() {
   const { isOnline, pendingCount, syncing, triggerSync, queueItems, recentlySynced, showSyncSuccess } = useOffline();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Toque num item pendente de OS: guarda qual OS é (numero_os provisório "OS-OFF-..." pra
+  // criação, id de verdade pra edição) e navega pra tela de OS, que lê isso no mount e abre
+  // a ficha direto (ver useEffect em OSClient.tsx) — sem isso, o item só dizia "Ordem de
+  // Serviço / Novo Registro", sem nenhuma pista de qual OS era.
+  const abrirItemOS = (item: SyncItem) => {
+    const p: any = item.payload || {};
+    try {
+      sessionStorage.setItem(
+        CHAVE_ABRIR_OS_PENDENTE,
+        JSON.stringify({ numero_os: p.temp_numero_os || null, id: p.id || null })
+      );
+    } catch {}
+    setOpen(false);
+    navigate("/os");
+  };
 
   return (
     <>
@@ -202,27 +232,35 @@ export function OfflineStatusBadge() {
               </p>
             ) : (
               <div className="space-y-2">
-                {queueItems.map((item, idx) => (
-                  <div
-                    key={item.id ?? idx}
-                    className="flex items-center gap-2.5 p-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs"
-                  >
+                {queueItems.map((item, idx) => {
+                  const clicavel = item.entity === "os" && (item.action === "create" || item.action === "update");
+                  return (
                     <div
+                      key={item.id ?? idx}
+                      onClick={clicavel ? () => abrirItemOS(item) : undefined}
                       className={cn(
-                        "w-8 h-8 rounded-lg border flex items-center justify-center shrink-0",
-                        getEntityColor(item.entity)
+                        "flex items-center gap-2.5 p-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs",
+                        clicavel && "cursor-pointer active:bg-zinc-800"
                       )}
                     >
-                      {getEntityIcon(item.entity)}
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-lg border flex items-center justify-center shrink-0",
+                          getEntityColor(item.entity)
+                        )}
+                      >
+                        {getEntityIcon(item.entity)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-zinc-100 truncate">{getEntityLabel(item.entity)}</p>
+                        <p className="text-[10px] text-zinc-500 truncate">
+                          {getActionLabel(item.action)} · {getItemDescription(item)}
+                        </p>
+                      </div>
+                      {clicavel && <ChevronRight size={16} className="text-zinc-600 shrink-0" />}
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-zinc-100 truncate">{getEntityLabel(item.entity)}</p>
-                      <p className="text-[10px] text-zinc-500 truncate">
-                        {getActionLabel(item.action)} · {getItemDescription(item)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

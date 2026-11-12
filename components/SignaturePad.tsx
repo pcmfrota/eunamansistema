@@ -29,13 +29,27 @@ export function SignaturePad({
     ctx.lineJoin = "round";
   }, []);
 
-  // Se o valor for limpo por fora (ex: reabrir o formulário em branco), limpa o desenho também.
+  // Redesenha a assinatura já salva (e limpa quando o valor for apagado por fora). Sem isso,
+  // o canvas só mostrava o que o próprio usuário riscasse NA HORA — reabrir um bloco que
+  // tinha sido recolhido (cargo/descrição: o componente desmonta e remonta do zero) sempre
+  // vinha com o canvas em branco mesmo com a assinatura intacta em `value`, parecendo que
+  // tinha "sumido sozinha" quando na verdade só não tinha sido desenhada de novo.
   useEffect(() => {
-    if (!value && canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx || !canvas) return;
+    if (!value) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       hasDrawnRef.current = false;
+      return;
     }
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      hasDrawnRef.current = true;
+    };
+    img.src = value;
   }, [value]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
