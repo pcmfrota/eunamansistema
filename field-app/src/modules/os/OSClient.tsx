@@ -116,12 +116,28 @@ function SignaturePad({ label, value, onChange }: { label: string; value: string
     ctx.lineJoin = "round";
   }, []);
 
+  // Redesenha a assinatura já salva (e limpa quando o valor for apagado por fora). Sem isso,
+  // o canvas só mostrava o que o próprio usuário riscasse NA HORA — reabrir um cargo/
+  // descrição que tinha sido recolhido (o componente desmonta e remonta do zero) sempre
+  // vinha com o canvas em branco mesmo com a assinatura intacta em `value`, parecendo que
+  // tinha "sumido sozinha". Mesma correção aplicada em components/SignaturePad.tsx (usado
+  // pelo site) — esta aqui é uma cópia local só do field-app, por isso precisa do fix também.
   useEffect(() => {
-    if (!value && canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx || !canvas) return;
+    if (!value) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       hasDrawnRef.current = false;
+      return;
     }
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      hasDrawnRef.current = true;
+    };
+    img.src = value;
   }, [value]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {

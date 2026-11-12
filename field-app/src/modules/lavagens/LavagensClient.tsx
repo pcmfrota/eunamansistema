@@ -623,12 +623,25 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (dataUrl: 
     ctx.lineJoin = "round";
   }, []);
 
+  // Redesenha a assinatura já salva ao montar/trocar `value` (e limpa quando apagada por
+  // fora) — sem isso, reabrir uma seção que tinha recolhido (desmonta/remonta o componente)
+  // sempre mostrava o canvas em branco mesmo com a assinatura intacta no estado.
   useEffect(() => {
-    if (!value && canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx || !canvas) return;
+    if (!value) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       hasDrawnRef.current = false;
+      return;
     }
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      hasDrawnRef.current = true;
+    };
+    img.src = value;
   }, [value]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
