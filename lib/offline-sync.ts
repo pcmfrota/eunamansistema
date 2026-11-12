@@ -14,10 +14,29 @@ async function safeSyncStore(
     await localDb.saveMany(storeName, serverItems);
   }
 
+  // Backlog: uma cópia "pendente" só é pendente de verdade enquanto ainda existe na fila de
+  // sincronização. Depois de sincronizada, o servidor já tem o registro (com id novo) e a
+  // cópia temporária virou órfã — ficava aqui pra sempre, duplicando itens e inflando as
+  // contagens do painel só nos aparelhos onde o lançamento foi feito offline.
+  let idsNaFila: Set<string> | null = null;
+  if (storeName === "backlog") {
+    try {
+      const fila = await localDb.getAll<any>("sync_queue");
+      idsNaFila = new Set(
+        fila.filter((q) => q?.entity === "backlog" && q?.payload?.id).map((q) => String(q.payload.id))
+      );
+    } catch {
+      idsNaFila = null; // sem conseguir ler a fila, mantém o comportamento conservador
+    }
+  }
+
   // 2. Filtra itens locais para deletar: aqueles que não estão no servidor,
   // mas que NÃO sejam rascunhos ou registros criados offline pendentes de sync.
   const toDelete = localItems.filter((item: any) => {
-    const isPending = item._isPendingSync || 
+    if (idsNaFila && !serverIds.has(item[idField]) && (item._isPendingSync || String(item[idField]).startsWith("temp_"))) {
+      return !idsNaFila.has(String(item[idField]));
+    }
+    const isPending = item._isPendingSync ||
                       String(item[idField]).startsWith("temp_") ||
                       String(item[idField]).startsWith("os_draft_") || 
                       item.draftData;

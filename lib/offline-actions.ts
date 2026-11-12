@@ -252,6 +252,20 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         }
         const res = await upsertBacklogItem(payload);
         if (res && "error" in res) throw new Error(res.error);
+        // Criado offline: o banco gerou um id novo (o "temp_..." é descartado no upsert).
+        // A cópia local com o id temporário precisa sair — senão o item aparece DUAS vezes
+        // neste aparelho (a cópia temporária + a real que vem no próximo sync), e as
+        // contagens do painel ficam alternando entre o valor certo e o inflado.
+        if (payload?.id && String(payload.id).startsWith("temp_")) {
+          try {
+            await localDb.delete("backlog", payload.id);
+            const real = Array.isArray((res as any)?.data) ? (res as any).data[0] : (res as any)?.data;
+            if (real?.id) await localDb.put("backlog", real);
+            if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+          } catch (e) {
+            console.warn("[Sync] Falha ao trocar cópia temporária do backlog:", e);
+          }
+        }
       } else if (action === "delete") {
         const res = await deleteBacklogItems(payload);
         if (res && "error" in res) throw new Error(res.error);

@@ -6,7 +6,7 @@
 // existem fora do Next.js). Conforme cada módulo for portado numa próxima fase, replica
 // a branch correspondente do arquivo original aqui (mesmo formato, só trocando o import
 // pra cópia local do módulo).
-import { SyncItem, deserializeToFormData } from "@/lib/offline-db";
+import { SyncItem, deserializeToFormData, localDb } from "@/lib/offline-db";
 import {
   registrarInspecaoCompleta,
   atualizarInspecao,
@@ -131,6 +131,18 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         }
         const res = await upsertBacklogItem(payload);
         if (res && "error" in res) throw new Error(res.error);
+        // Criado offline: o banco gerou um id novo — remove a cópia "temp_..." local pra o
+        // item não aparecer duplicado (mesma correção de lib/offline-actions.ts).
+        if (payload?.id && String(payload.id).startsWith("temp_")) {
+          try {
+            await localDb.delete("backlog", payload.id);
+            const real = Array.isArray((res as any)?.data) ? (res as any).data[0] : (res as any)?.data;
+            if (real?.id) await localDb.put("backlog", real);
+            if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
+          } catch (e) {
+            console.warn("[Sync] Falha ao trocar cópia temporária do backlog:", e);
+          }
+        }
       } else if (action === "delete") {
         const res = await deleteBacklogItems(payload);
         if (res && "error" in res) throw new Error(res.error);
