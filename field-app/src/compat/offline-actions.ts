@@ -82,6 +82,23 @@ const tempToRealOSMap: Record<string, string> = {};
 // fechamento enfileirados depois na mesma ficha referenciam esse id antes dele existir.
 const tempToRealFichaMapInsumos: Record<string, string> = {};
 
+// Backlog criado offline: id "temp_..." → id real gerado no sync (mesmo esquema de
+// lib/offline-actions.ts), pra edições/exclusões enfileiradas depois irem pro registro real.
+const tempToRealBacklogMap: Record<string, string> = {};
+
+function registrarBacklogIdReal(tempId: string, realId: string) {
+  tempToRealBacklogMap[tempId] = realId;
+  try {
+    if (typeof window !== "undefined") localStorage.setItem(`sync_backlog_map_${tempId}`, realId);
+  } catch {}
+}
+
+function resolveBacklogId(id: string): string {
+  if (!id || !id.startsWith("temp_")) return id;
+  const mapeado = tempToRealBacklogMap[id] || (typeof window !== "undefined" ? localStorage.getItem(`sync_backlog_map_${id}`) : null);
+  return mapeado || id;
+}
+
 function resolveFichaIdInsumos(id: string): string {
   if (!id || !id.startsWith("temp_")) return id;
   const mapeado = tempToRealFichaMapInsumos[id] || (typeof window !== "undefined" ? localStorage.getItem(`sync_ficha_insumos_map_${id}`) : null);
@@ -129,14 +146,22 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
           const realOSNum = typeof window !== "undefined" ? localStorage.getItem(`sync_os_map_${tempOS}`) : null;
           if (realOSNum) payload.os = realOSNum;
         }
+        // Edição offline de item criado offline: usa o id real se o create já sincronizou —
+        // senão o upsert descartava o temp_ e inseria um SEGUNDO registro.
+        const idOriginal = payload?.id;
+        if (idOriginal && String(idOriginal).startsWith("temp_")) {
+          const idReal = resolveBacklogId(String(idOriginal));
+          if (idReal !== idOriginal) payload.id = idReal;
+        }
         const res = await upsertBacklogItem(payload);
         if (res && "error" in res) throw new Error(res.error);
-        // Criado offline: o banco gerou um id novo — remove a cópia "temp_..." local pra o
-        // item não aparecer duplicado (mesma correção de lib/offline-actions.ts).
-        if (payload?.id && String(payload.id).startsWith("temp_")) {
+        const real = Array.isArray((res as any)?.data) ? (res as any).data[0] : (res as any)?.data;
+        // Criado offline: o banco gerou um id novo — guarda temp→real e troca a cópia
+        // "temp_..." local pra o item não aparecer duplicado.
+        if (idOriginal && String(idOriginal).startsWith("temp_")) {
+          if (real?.id) registrarBacklogIdReal(String(idOriginal), String(real.id));
           try {
-            await localDb.delete("backlog", payload.id);
-            const real = Array.isArray((res as any)?.data) ? (res as any).data[0] : (res as any)?.data;
+            await localDb.delete("backlog", idOriginal);
             if (real?.id) await localDb.put("backlog", real);
             if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("offline-db-updated-backlog"));
           } catch (e) {
@@ -144,8 +169,15 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
           }
         }
       } else if (action === "delete") {
-        const res = await deleteBacklogItems(payload);
-        if (res && "error" in res) throw new Error(res.error);
+        // Exclusão offline de item criado offline: troca temp_ pelo id real; temp_ que nunca
+        // chegou ao banco não tem o que excluir (e quebraria a coluna uuid).
+        const ids = (Array.isArray(payload) ? payload : [payload])
+          .map((id: any) => resolveBacklogId(String(id)))
+          .filter((id: string) => !id.startsWith("temp_"));
+        if (ids.length > 0) {
+          const res = await deleteBacklogItems(ids);
+          if (res && "error" in res) throw new Error(res.error);
+        }
       } else if (action === "import") {
         const res = await importarBacklog(payload);
         if (res && "error" in res) throw new Error(res.error);
