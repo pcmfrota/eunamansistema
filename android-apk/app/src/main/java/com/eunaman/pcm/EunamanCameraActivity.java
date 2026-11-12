@@ -226,8 +226,10 @@ public class EunamanCameraActivity extends AppCompatActivity {
         findViewById(R.id.btnExcluirFoto).setOnClickListener(v -> excluirFotoAtual());
         btnAdicionarMais.setOnClickListener(v -> {
             if (maxFotos == 1) {
-                // "Tirar outra": descarta a atual e volta pra câmera.
+                // "Tirar outra": descarta a atual e volta pra câmera. Sem câmera ("Escolher
+                // outra"), já reabre a galeria.
                 excluirFotoAtual();
+                if (!cameraAtiva) abrirGaleria();
             } else {
                 fecharRevisao();
             }
@@ -372,18 +374,34 @@ public class EunamanCameraActivity extends AppCompatActivity {
 
     // ── Captura ──
 
+    /**
+     * Toques no botão enquanto a foto anterior ainda está sendo gravada (~0,5-1s) não são
+     * descartados: entram numa fila e disparam assim que a anterior termina — antes o toque
+     * simplesmente se perdia e o usuário achava que tinha tirado a foto.
+     */
+    private int capturasNaFila = 0;
+
     private void capturar() {
-        if (!cameraAtiva || imageCapture == null || capturando) return;
+        if (!cameraAtiva || imageCapture == null) return;
+        if (capturando) {
+            if (fotos.size() + 1 + capturasNaFila < maxFotos) {
+                capturasNaFila++;
+                piscarCaptura();
+                txtDica.setText("Salvando " + (1 + capturasNaFila) + " foto(s)...");
+            }
+            return;
+        }
         if (fotos.size() >= maxFotos) {
             Toast.makeText(this, limiteTexto(), Toast.LENGTH_SHORT).show();
             abrirRevisao(fotos.size() - 1);
             return;
         }
         capturando = true;
-        flashCaptura.setAlpha(0.8f);
-        flashCaptura.animate().alpha(0f).setDuration(220).start();
+        piscarCaptura();
+        btnCapturar.setAlpha(0.6f);
+        txtDica.setText("Salvando foto...");
 
-        File arquivo = new File(pastaSaida, "cam_" + System.currentTimeMillis() + ".jpg");
+        File arquivo = new File(pastaSaida, "cam_" + System.nanoTime() + ".jpg");
         ImageCapture.OutputFileOptions opcoes = new ImageCapture.OutputFileOptions.Builder(arquivo).build();
         imageCapture.takePicture(opcoes, ContextCompat.getMainExecutor(this), new ImageCapture.OnImageSavedCallback() {
             @Override
@@ -391,16 +409,32 @@ public class EunamanCameraActivity extends AppCompatActivity {
                 capturando = false;
                 fotos.add(new Foto(arquivo, true));
                 atualizarInterface();
-                if (maxFotos == 1 || fotos.size() >= maxFotos) abrirRevisao(fotos.size() - 1);
+                if (maxFotos == 1 || fotos.size() >= maxFotos) {
+                    capturasNaFila = 0;
+                    abrirRevisao(fotos.size() - 1);
+                } else if (capturasNaFila > 0 && painelRevisao.getVisibility() != View.VISIBLE) {
+                    capturasNaFila--;
+                    capturar();
+                } else {
+                    capturasNaFila = 0;
+                }
             }
 
             @Override
             public void onError(@NonNull ImageCaptureException exc) {
                 Log.e(TAG, "Erro ao capturar foto", exc);
                 capturando = false;
+                capturasNaFila = 0;
+                atualizarInterface();
                 Toast.makeText(EunamanCameraActivity.this, "Erro ao capturar a foto. Tente de novo.", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void piscarCaptura() {
+        flashCaptura.animate().cancel();
+        flashCaptura.setAlpha(0.8f);
+        flashCaptura.animate().alpha(0f).setDuration(220).start();
     }
 
     private String limiteTexto() {
@@ -481,7 +515,11 @@ public class EunamanCameraActivity extends AppCompatActivity {
 
         if (fotos.isEmpty()) {
             btnContinuar.setVisibility(View.GONE);
-            txtDica.setText(maxFotos == 1 ? "Toque no botão para fotografar" : "Tire até " + maxFotos + " fotos ou escolha da galeria");
+            if (!cameraAtiva) {
+                txtDica.setText(maxFotos == 1 ? "Escolha uma foto da galeria" : "Escolha até " + maxFotos + " fotos da galeria");
+            } else {
+                txtDica.setText(maxFotos == 1 ? "Toque no botão para fotografar" : "Tire até " + maxFotos + " fotos ou escolha da galeria");
+            }
         } else {
             btnContinuar.setVisibility(View.VISIBLE);
             btnContinuar.setText("Continuar (" + fotos.size() + ")");
@@ -546,7 +584,7 @@ public class EunamanCameraActivity extends AppCompatActivity {
         }
         txtTituloRevisao.setText(fotos.size() == 1 ? "1 foto" : "Foto " + (indiceRevisao + 1) + " de " + fotos.size());
         if (maxFotos == 1) {
-            btnAdicionarMais.setText("Tirar outra");
+            btnAdicionarMais.setText(cameraAtiva ? "Tirar outra" : "Escolher outra");
             btnAdicionarMais.setVisibility(View.VISIBLE);
             btnConfirmar.setText("Usar foto");
         } else {

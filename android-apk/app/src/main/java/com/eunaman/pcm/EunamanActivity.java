@@ -551,31 +551,33 @@ public class EunamanActivity extends AppCompatActivity {
     }
 
     // ── Fotos pendentes ──
-    // Guardadas em arquivo (não no Bundle do onSaveInstanceState): várias fotos de ~300KB
-    // estourariam o limite de transação do Bundle (TransactionTooLargeException = crash).
-    // Arquivo também sobrevive se o Android matar o processo enquanto a câmera está aberta.
-    // O JS confirma o recebimento (clearPendingPhotos) — sem isso, a mesma foto podia ser
-    // entregue de novo ao reabrir a tela (getPendingPhoto no mount) e virar anexo duplicado.
+    // O lote processado é gravado em arquivo e o JS BUSCA (getPendingPhoto), em vez de o Java
+    // empurrar foto por foto: ao voltar da câmera a tela do app costuma ser desmontada e
+    // montada de novo (re-sincronização ao voltar pro primeiro plano), e uma entrega que
+    // caía nesse intervalo se perdia — ou chegava parte na tela antiga e parte na nova,
+    // podendo duplicar. Agora: o lote só aparece pro JS quando está COMPLETO (grava num
+    // arquivo temporário e renomeia no fim), a leitura já o consome (não dá pra aplicar duas
+    // vezes), e o aviso "fotos prontas" é só um sinal — se a tela não estiver montada nessa
+    // hora, ela busca o lote assim que montar. Em arquivo (não no Bundle) porque várias fotos
+    // de ~300KB estourariam o limite de transação do Bundle (TransactionTooLargeException).
 
     private File arquivoPendentes() {
         return new File(getCacheDir(), "eunaman_fotos_pendentes.txt");
     }
 
+    private File arquivoPendentesTemp() {
+        return new File(getCacheDir(), "eunaman_fotos_pendentes.tmp");
+    }
+
     private synchronized void limparPendentes() {
         //noinspection ResultOfMethodCallIgnored
         arquivoPendentes().delete();
+        //noinspection ResultOfMethodCallIgnored
+        arquivoPendentesTemp().delete();
     }
 
-    private synchronized void adicionarPendente(String dataUrl) {
-        try (java.io.FileWriter w = new java.io.FileWriter(arquivoPendentes(), true)) {
-            w.write(dataUrl);
-            w.write("\n");
-        } catch (IOException e) {
-            Log.w(TAG, "Erro ao guardar foto pendente", e);
-        }
-    }
-
-    private synchronized String lerPendentesJson() {
+    /** Lê e CONSOME o lote completo (apaga o arquivo). Vazio se não houver lote pronto. */
+    private synchronized String consumirPendentesJson() {
         File arq = arquivoPendentes();
         if (!arq.exists()) return "";
         ArrayList<String> lista = new ArrayList<>();
@@ -587,9 +589,12 @@ public class EunamanActivity extends AppCompatActivity {
         } catch (IOException e) {
             Log.w(TAG, "Erro ao ler fotos pendentes", e);
             return "";
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            arq.delete();
         }
         if (lista.isEmpty()) return "";
-        StringBuilder sb = new StringBuilder("{\"success\":true,\"dataUrl\":\"").append(lista.get(0)).append("\",\"dataUrls\":[");
+        StringBuilder sb = new StringBuilder("{\"success\":true,\"dataUrls\":[");
         for (int i = 0; i < lista.size(); i++) {
             if (i > 0) sb.append(',');
             sb.append('"').append(lista.get(i)).append('"');
@@ -597,24 +602,53 @@ public class EunamanActivity extends AppCompatActivity {
         return sb.append("]}").toString();
     }
 
-    /** Processa cada foto (EXIF, 1600px, JPEG 80%) e entrega ao WebView uma por vez. */
+    /** Processa todas (EXIF, 1600px, JPEG 80%), publica o lote completo e avisa o JS. */
     private void processarFotos(ArrayList<String> caminhos, boolean[] daCamera) {
         limparPendentes();
         int total = caminhos.size();
-        try {
+        int ok = 0;
+        File temp = arquivoPendentesTemp();
+        try (java.io.FileWriter w = new java.io.FileWriter(temp, false)) {
             for (int i = 0; i < total; i++) {
                 boolean veioDaCamera = i < daCamera.length && daCamera[i];
                 String dataUrl = processarUmaFoto(caminhos.get(i), veioDaCamera);
                 if (dataUrl != null) {
-                    adicionarPendente(dataUrl);
-                    sendCameraResultToWeb("{\"success\":true,\"dataUrl\":\"" + dataUrl + "\",\"index\":" + i + ",\"total\":" + total + "}");
-                } else {
-                    sendCameraResultToWeb("{\"success\":false,\"error\":\"Erro ao processar uma das fotos.\",\"index\":" + i + ",\"total\":" + total + "}");
+                    w.write(dataUrl);
+                    w.write("\n");
+                    ok++;
                 }
             }
+        } catch (IOException e) {
+            Log.e(TAG, "Erro ao gravar fotos processadas", e);
+            ok = 0;
         } finally {
             apagarPastaCaptura();
         }
+
+        if (ok == 0) {
+            //noinspection ResultOfMethodCallIgnored
+            temp.delete();
+            sendCameraResultError("Não foi possível processar as fotos.");
+            return;
+        }
+        synchronized (this) {
+            //noinspection ResultOfMethodCallIgnored
+            arquivoPendentes().delete();
+            if (!temp.renameTo(arquivoPendentes())) {
+                Log.e(TAG, "Erro ao publicar o lote de fotos");
+                sendCameraResultError("Não foi possível processar as fotos.");
+                return;
+            }
+        }
+        if (ok < total) {
+            final int falhas = total - ok;
+            runOnUiThread(() -> Toast.makeText(this, falhas + " foto(s) não puderam ser processadas.", Toast.LENGTH_LONG).show());
+        }
+        runOnUiThread(() -> {
+            if (webView != null) {
+                webView.evaluateJavascript("if(window.onEunamanFotosProntas) window.onEunamanFotosProntas();", null);
+            }
+        });
     }
 
     private String processarUmaFoto(String caminho, boolean veioDaCamera) {
@@ -715,7 +749,7 @@ public class EunamanActivity extends AppCompatActivity {
         runOnUiThread(() -> {
             if (webView != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                    webView.evaluateJavascript("javascript:if(window.onEunamanCameraResult) { window.onEunamanCameraResult('" + jsonString.replace("\\", "\\\\").replace("'", "\\'") + "'); }", null);
+                    webView.evaluateJavascript("if(window.onEunamanCameraResult) { window.onEunamanCameraResult('" + jsonString.replace("\\", "\\\\").replace("'", "\\'") + "'); }", null);
                 } else {
                     webView.loadUrl("javascript:if(window.onEunamanCameraResult) { window.onEunamanCameraResult('" + jsonString.replace("\\", "\\\\").replace("'", "\\'") + "'); }");
                 }
@@ -996,10 +1030,10 @@ public class EunamanActivity extends AppCompatActivity {
             runOnUiThread(() -> abrirCameraEmbutida(max));
         }
 
-        /** Fotos que chegaram enquanto a WebView estava sendo recriada (lote inteiro). */
+        /** Lote completo de fotos processadas; a leitura já o consome (nunca entrega duas vezes). */
         @JavascriptInterface
         public String getPendingPhoto() {
-            return lerPendentesJson();
+            return consumirPendentesJson();
         }
 
         /** O JS chama depois de aplicar as fotos — evita entregar o mesmo lote duas vezes. */
