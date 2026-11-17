@@ -44,8 +44,10 @@ export default function ProgramacaoMecanicaClient({ initialEquipamentos, initial
   const [execucoes, setExecucoes] = useState<ExecucaoProgramacao[]>(initialExecucoes || []);
   const [abaAtiva, setAbaAtiva] = useState<AbaPrincipal>("inspecao");
 
-  const canEdit = (userRole === "admin" || userRole === "administrador") || userRole === "mecanico" || userRole === "gestao";
-  const canDelete = (userRole === "admin" || userRole === "administrador") || userRole === "gestao";
+  // A equipe de PCM é cadastrada com role "pcm" (não existe ninguém com "gestao" hoje) —
+  // sem "pcm" aqui, a gestão de PCM via a tela só em modo acompanhamento, sem lançar.
+  const canEdit = ["admin", "administrador", "pcm", "gestao", "mecanico"].includes(userRole);
+  const canDelete = ["admin", "administrador", "pcm", "gestao"].includes(userRole);
 
   const frota = useMemo(() => getFrotaPesadaAtiva(initialEquipamentos), [initialEquipamentos]);
 
