@@ -211,8 +211,9 @@ export default function ChecklistMecanicosClient({
   const toast = useToast();
 
   const role = (profile?.role || "").toLowerCase().trim();
-  const podeCriar = role === "mecanico" || role === "admin" || role === "administrador" || role === "gestao";
-  const podeExcluir = role === "admin" || role === "administrador" || role === "gestao";
+  // Equipe de PCM é cadastrada como "pcm" (ninguém tem "gestao") — precisa estar aqui.
+  const podeCriar = ["mecanico", "admin", "administrador", "pcm", "gestao"].includes(role);
+  const podeExcluir = ["admin", "administrador", "pcm", "gestao"].includes(role);
 
   const [checklists, setChecklists] = useState<any[]>(checklistsIniciais);
   const [busca, setBusca] = useState("");

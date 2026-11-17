@@ -311,7 +311,7 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
           <h1 className="text-2xl font-bold dark:text-white">Checklists Mecânicos</h1>
           <p className="text-zinc-500 text-sm">Inspeções de frota integradas a OS e Backlog.</p>
         </div>
-        {((userRole === 'admin' || userRole === 'administrador') || userRole === 'mecanico' || userRole === 'gestao') && (
+        {['admin', 'administrador', 'pcm', 'gestao', 'mecanico'].includes(userRole) && (
           <button
             onClick={() => {
               setTipo('')
@@ -368,7 +368,7 @@ export default function ChecklistClient({ initialChecklists, userRole, userId }:
                     <button onClick={() => handleExportPDF(item, "share")} className="p-1.5 bg-green-50 text-green-700 rounded hover:bg-green-100" title="Compartilhar PDF">
                       <Share2 size={16} />
                     </button>
-                    {((userRole === 'admin' || userRole === 'administrador') || userRole === 'gestao') && (
+                    {['admin', 'administrador', 'pcm', 'gestao'].includes(userRole) && (
                       <button onClick={() => handleDelete(item.id)} className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200">
                         <X size={16} />
                       </button>
