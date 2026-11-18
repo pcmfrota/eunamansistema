@@ -11,7 +11,7 @@ export interface SyncItem {
   // Next.js tolera erro de tipo; CaptacaoClient.tsx tinha o bug de usar 'update' em vez de
   // 'update_lancamento' pra editar lançamento, corrigido só no field-app — ver o comentário
   // lá). 'approve' é usado pela aprovação de OS, tanto aqui quanto no app principal.
-  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'approve' | 'register' | 'close' | 'add_lancamento' | 'update_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal' | 'abrir_ficha' | 'atualizar_cabecalho' | 'atualizar_insumo' | 'salvar_linha' | 'excluir_linha' | 'finalizar';
+  action: 'create' | 'update' | 'delete' | 'bulk_delete' | 'import' | 'update_status' | 'approve' | 'register' | 'close' | 'add_lancamento' | 'update_lancamento' | 'delete_lancamento' | 'validate' | 'save_calendario' | 'update_status_prog_semanal' | 'abrir_ficha' | 'atualizar_cabecalho' | 'atualizar_insumo' | 'salvar_linha' | 'excluir_linha' | 'finalizar' | 'atualizar_horimetro_km';
   payload: any;
   timestamp: number;
 }

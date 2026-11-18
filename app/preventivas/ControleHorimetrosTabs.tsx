@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { Search, Edit2, Check, X, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw, History } from 'lucide-react'
+import { Search, Edit2, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw, History, CalendarDays } from 'lucide-react'
 import Script from 'next/script'
-import { excluirPreventiva, atualizarPreventiva } from './actions'
+import { excluirPreventiva, atualizarHorimetroKm } from './actions'
 import DashboardHorimetros from './DashboardHorimetros'
 import HistoricoHorimetrosTab from './HistoricoHorimetrosTab'
+import CalendarioLeiturasTab from './CalendarioLeiturasTab'
+import AtualizarHorimetroKmModal, { DadosAtualizacao } from './AtualizarHorimetroKmModal'
 import { useEffect } from 'react'
 import { useOffline } from '@/components/offline-provider'
 import { localDb } from '@/lib/offline-db'
@@ -17,6 +19,8 @@ type Prev = {
   horimetro_atual: number
   intervalo_horas: number
   data_atualizacao: string | null
+  km_atual?: number | null
+  ultimo_km?: number | null
   equipamentos: {
     placa: string
     tipo: string
@@ -148,8 +152,7 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
   label: string
 }) {
   const { isOnline } = useOffline()
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editVals, setEditVals] = useState({ ultimo: '', atual: '', intervalo: '', data: '' })
+  const [modalPrev, setModalPrev] = useState<Prev | null>(null)
   const [search, setSearch] = useState('')
   // Multi-seleção — vazio = sem filtro (mostra tudo), igual ao padrão do Dashboard.
   const [statusFilter, setStatusFilter] = useState<string[]>([])
@@ -162,54 +165,38 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
     return falta < 0 ? 'ATRASADO' : falta <= Math.min(100, p.intervalo_horas * 0.15) ? 'ATENÇÃO' : 'NO PRAZO'
   }
 
-  const handleEdit = (p: Prev) => {
-    setEditId(p.id)
-    setEditVals({
-      ultimo: String(p.ultimo_horimetro), atual: String(p.horimetro_atual),
-      intervalo: String(p.intervalo_horas),
-      data: p.data_atualizacao?.split('T')[0] || new Date().toISOString().split('T')[0]
-    })
-  }
-
-  const handleSave = (id: string) => {
-    const dataToSave = {
-      ultimo_horimetro: parseFloat(editVals.ultimo),
-      horimetro_atual: parseFloat(editVals.atual),
-      intervalo_horas: parseFloat(editVals.intervalo),
-      data_atualizacao: editVals.data
+  // Modal "Atualizar Horímetro e KM": grava a leitura e registra no histórico (que alimenta
+  // o Calendário de Leituras).
+  const handleSalvarLeitura = (prev: Prev, dados: DadosAtualizacao) => {
+    const local = {
+      ...prev,
+      horimetro_atual: dados.horimetro_atual,
+      data_atualizacao: dados.data_referencia,
+      ultimo_horimetro: dados.ultimo_horimetro,
+      intervalo_horas: dados.intervalo_horas,
+      ...(unidade === 'h' ? { km_atual: dados.km_atual ?? prev.km_atual ?? null, ultimo_km: dados.ultimo_km ?? prev.ultimo_km ?? null } : {}),
     }
-
-    const original = data.find(p => p.id === id)
-    if (original && dataToSave.horimetro_atual < original.horimetro_atual) {
-      alert(`Atenção: o horímetro/km informado (${dataToSave.horimetro_atual}${unidade}) é menor que o último valor registrado (${original.horimetro_atual}${unidade}). O registro será salvo mesmo assim.`)
-    }
-
     startTransition(async () => {
       if (isOnline) {
-        const res = await atualizarPreventiva(id, dataToSave)
+        const res = await atualizarHorimetroKm(prev.id, dados)
         if ('error' in res) {
           alert('Erro: ' + res.error)
-        } else {
-          // Atualiza localmente no IndexedDB
-          const prev = data.find(p => p.id === id)
-          if (prev) {
-            await localDb.put("preventivas", { ...prev, ...dataToSave })
-            window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
-          }
-          setEditId(null)
+          return
+        }
+        await localDb.put("preventivas", local)
+        window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
+        window.dispatchEvent(new CustomEvent("horimetro-leitura-registrada"))
+        setModalPrev(null)
+        if (unidade === 'h' && res.kmGravado === false) {
+          alert('Horímetro salvo. O KM ainda não pôde ser gravado: falta aplicar a atualização do banco (migration 20261118000000_horimetro_km.sql).')
         }
       } else {
-        // Modo offline
-        const prev = data.find(p => p.id === id)
-        if (prev) {
-          const updated = { ...prev, ...dataToSave, _isPendingSync: true }
-          await localDb.put("preventivas", updated)
-          await localDb.addToQueue("preventiva", "update", { id, ...dataToSave })
-          window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
-          window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
-        }
-        setEditId(null)
-        alert("✅ Alterações salvas localmente! Serão enviadas assim que estiver online.")
+        await localDb.put("preventivas", { ...local, _isPendingSync: true })
+        await localDb.addToQueue("preventiva", "atualizar_horimetro_km", { id: prev.id, ...dados })
+        window.dispatchEvent(new CustomEvent("offline-db-updated-sync_queue"))
+        window.dispatchEvent(new CustomEvent("offline-db-updated-preventivas"))
+        setModalPrev(null)
+        alert("✅ Leitura salva localmente! Será enviada assim que estiver online.")
       }
     })
   }
@@ -251,7 +238,7 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
       (statusFilter.length === 0 || statusFilter.includes(status))
   })
 
-  const inp = "px-2 py-1 rounded border border-blue-300 dark:border-blue-700 bg-white dark:bg-zinc-800 text-xs outline-none focus:ring-1 focus:ring-blue-400 w-24"
+  const fmtKm = (v: number | null | undefined) => (v == null ? '-' : `${Number(v).toLocaleString('pt-BR')} km`)
 
   return (
     <div className="flex flex-col gap-3">
@@ -288,6 +275,7 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
               <th className="px-4 py-3 text-left">Próxima</th>
               <th className="px-4 py-3 text-left">Falta</th>
               <th className="px-4 py-3 text-left">Intervalo</th>
+              {unidade === 'h' && <th className="px-4 py-3 text-left">KM Atual</th>}
               <th className="px-4 py-3 text-left">Atualização</th>
               <th className="px-4 py-3 text-left">Status</th>
               {!isVisitante && <th className="px-4 py-3 text-center">Ações</th>}
@@ -303,7 +291,6 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
                 : status === 'ATENÇÃO'
                   ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                   : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-              const isEditing = editId === p.id
               const eq = p.equipamentos
 
               return (
@@ -320,29 +307,16 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{eq?.tipo}</td>
                   <td className="px-4 py-3 text-zinc-500 text-xs">{eq?.categoria}</td>
                   <td className="px-4 py-3 text-zinc-500 text-xs">{eq?.modulo || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-xs">
-                    {isEditing
-                      ? <input className={inp} value={editVals.ultimo} onChange={e => setEditVals(v => ({ ...v, ultimo: e.target.value }))} />
-                      : `${p.ultimo_horimetro}${unidade}`}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">
-                    {isEditing
-                      ? <input className={inp} value={editVals.atual} onChange={e => setEditVals(v => ({ ...v, atual: e.target.value }))} />
-                      : `${p.horimetro_atual}${unidade}`}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-xs">{`${p.ultimo_horimetro}${unidade}`}</td>
+                  <td className="px-4 py-3 font-mono text-xs">{`${p.horimetro_atual}${unidade}`}</td>
                   <td className="px-4 py-3 font-bold text-xs">{proxima}{unidade}</td>
                   <td className={`px-4 py-3 font-bold text-xs ${falta < 0 ? 'text-red-500' : falta <= Math.min(100, p.intervalo_horas * 0.15) ? 'text-amber-500' : 'text-emerald-600'}`}>
                     {falta}{unidade}
                   </td>
+                  <td className="px-4 py-3 text-zinc-500 text-xs">{`${p.intervalo_horas}${unidade}`}</td>
+                  {unidade === 'h' && <td className="px-4 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{fmtKm(p.km_atual)}</td>}
                   <td className="px-4 py-3 text-zinc-500 text-xs">
-                    {isEditing
-                      ? <input className={inp} value={editVals.intervalo} onChange={e => setEditVals(v => ({ ...v, intervalo: e.target.value }))} />
-                      : `${p.intervalo_horas}${unidade}`}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 text-xs">
-                    {isEditing
-                      ? <input type="date" className={inp + ' w-32'} value={editVals.data} onChange={e => setEditVals(v => ({ ...v, data: e.target.value }))} />
-                      : (p.data_atualizacao ? p.data_atualizacao.split('T')[0].split('-').reverse().join('/') : '-')}
+                    {p.data_atualizacao ? p.data_atualizacao.split('T')[0].split('-').reverse().join('/') : '-'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${badgeCls}`}>{status}</span>
@@ -350,17 +324,8 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
                   {!isVisitante && (
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
-                        {isEditing ? (
-                          <>
-                            <button onClick={() => handleSave(p.id)} disabled={isPending} className="p-1 rounded text-emerald-600 hover:bg-emerald-50"><Check size={14} /></button>
-                            <button onClick={() => setEditId(null)} className="p-1 rounded text-zinc-400 hover:bg-zinc-100"><X size={14} /></button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => handleEdit(p)} className="p-1 rounded text-zinc-400 hover:text-blue-600 hover:bg-blue-50"><Edit2 size={14} /></button>
-                            <button onClick={() => handleDelete(p.id, eq?.placa || '')} className="p-1 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
-                          </>
-                        )}
+                        <button onClick={() => setModalPrev(p)} title={unidade === 'h' ? 'Atualizar horímetro e KM' : 'Atualizar KM'} className="p-1 rounded text-zinc-400 hover:text-blue-600 hover:bg-blue-50"><Edit2 size={14} /></button>
+                        <button onClick={() => handleDelete(p.id, eq?.placa || '')} title="Excluir" className="p-1 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   )}
@@ -368,11 +333,21 @@ function PrevTable({ data, isVisitante, unidade = 'h', limites, label }: {
               )
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={12} className="py-12 text-center text-zinc-400 text-sm">Nenhum registro encontrado.</td></tr>
+              <tr><td colSpan={13} className="py-12 text-center text-zinc-400 text-sm">Nenhum registro encontrado.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {modalPrev && (
+        <AtualizarHorimetroKmModal
+          prev={modalPrev}
+          unidade={unidade}
+          salvando={isPending}
+          onClose={() => setModalPrev(null)}
+          onSave={dados => handleSalvarLeitura(modalPrev, dados)}
+        />
+      )}
     </div>
   )
 }
@@ -383,7 +358,7 @@ interface Props {
   isVisitante: boolean
 }
 
-type TabKey = 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves' | 'historico'
+type TabKey = 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves' | 'calendario' | 'historico'
 
 export default function ControleHorimetrosTabs({ data: initialData, isVisitante }: Props) {
   const { isOnline } = useOffline()
@@ -444,6 +419,7 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
     { key: 'dashboard-leves', label: 'Dashboard Leves', icon: <BarChart2 size={14} /> },
     { key: 'leves', label: `Leves (${leves.length})`, icon: <Gauge size={14} /> },
     { key: 'zocar', label: `Implemento Zocar (${zocar.length})`, icon: <Wrench size={14} /> },
+    { key: 'calendario', label: 'Calendário de Leituras', icon: <CalendarDays size={14} /> },
     { key: 'historico', label: 'Histórico', icon: <History size={14} /> },
   ]
 
@@ -534,6 +510,10 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
           </div>
           <PrevTable data={zocar} isVisitante={isVisitante} unidade="h" limites={[100, 500, 1000]} label="horimetros_zocar" />
         </div>
+      )}
+
+      {tab === 'calendario' && (
+        <CalendarioLeiturasTab preventivas={preventivas} />
       )}
 
       {tab === 'historico' && (

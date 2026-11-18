@@ -48,7 +48,7 @@ const routes = [
   { name: "Dashboard",                path: "/",                        icon: LayoutDashboard },
   { name: "Ficha Mão de Obra",        path: "/mao-de-obra",             icon: Wrench },
   { name: "Controle de OS",           path: "/os",                      icon: FileText },
-  { name: "Controle de Horímetros",   path: "/preventivas",             icon: Calendar },
+  { name: "Controle de Horímetro e KM", path: "/preventivas",             icon: Calendar },
   { name: "Boletim de Pneus",         path: "/pneus",                   icon: Disc },
   { name: "Lubrificação",             path: "/lubrificacao",            icon: Droplets },
   { name: "Backlog",                  path: "/backlog",                 icon: Wrench },

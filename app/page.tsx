@@ -81,9 +81,9 @@ const portalItems = [
     offlineCapable: false
   },
   { 
-    name: "Controle de Horímetros", 
+    name: "Controle de Horímetro e KM", 
     path: "/preventivas", 
-    desc: "Apontamentos diários de horômetros e paradas de frotas.", 
+    desc: "Atualização de horímetro e KM da frota, com calendário de leituras.", 
     icon: Calendar, 
     color: "from-emerald-500 to-teal-600 bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
   },

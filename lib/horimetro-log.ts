@@ -7,7 +7,7 @@
  * atualização que o usuário pediu.
  */
 
-export type OrigemAtualizacaoHorimetro = 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL';
+export type OrigemAtualizacaoHorimetro = 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL' | 'ATUALIZACAO_MODAL';
 
 export type RegistrarAtualizacaoHorimetroParams = {
   /** Cliente Supabase já autenticado da requisição atual (server action em curso) */

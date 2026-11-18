@@ -15,21 +15,26 @@ type HistoricoItem = {
   unidade: 'h' | 'km'
   valor_anterior: number | null
   valor_novo: number
-  origem: 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL'
+  origem: 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL' | 'ATUALIZACAO_MODAL'
+  km_anterior?: number | null
+  km_novo?: number | null
+  data_referencia?: string | null
   observacoes: string | null
   atualizado_por_nome: string | null
   atualizado_em: string
 }
 
+const ORIGENS: Record<string, { label: string; cls: string }> = {
+  NOVO_APONTAMENTO: { label: 'Novo Apontamento', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  EDICAO_MANUAL: { label: 'Edição na Tabela', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  ATUALIZACAO_MODAL: { label: 'Atualização H/KM', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+}
+
 function OrigemTag({ origem }: { origem: string }) {
-  const isApontamento = origem === 'NOVO_APONTAMENTO'
+  const o = ORIGENS[origem] || ORIGENS.EDICAO_MANUAL
   return (
-    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap ${
-      isApontamento
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-    }`}>
-      {isApontamento ? 'Novo Apontamento' : 'Edição na Tabela'}
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap ${o.cls}`}>
+      {o.label}
     </span>
   )
 }
@@ -111,6 +116,7 @@ export default function HistoricoHorimetrosTab() {
           options={[
             { value: 'NOVO_APONTAMENTO', label: 'Novo Apontamento' },
             { value: 'EDICAO_MANUAL', label: 'Edição na Tabela' },
+            { value: 'ATUALIZACAO_MODAL', label: 'Atualização H/KM' },
           ]}
           placeholder="Todas as Origens"
         />
@@ -157,6 +163,13 @@ export default function HistoricoHorimetrosTab() {
                       <ArrowRight size={11} className="text-zinc-300" />
                       <span className="font-bold text-zinc-700 dark:text-zinc-300">{r.valor_novo}{r.unidade}</span>
                     </div>
+                    {r.unidade === 'h' && r.km_novo != null && (
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[11px]">
+                        <span className="text-zinc-400">{r.km_anterior ?? '-'}km</span>
+                        <ArrowRight size={10} className="text-zinc-300" />
+                        <span className="font-semibold text-zinc-600 dark:text-zinc-400">{r.km_novo}km</span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3"><OrigemTag origem={r.origem} /></td>
                   <td className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">

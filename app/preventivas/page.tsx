@@ -95,7 +95,7 @@ export default function ControleHorimetrosPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
-        <PremiumLoader type="squares-sequential" text="Carregando Controle de Horímetros" subtext="Buscando registros locais..." />
+        <PremiumLoader type="squares-sequential" text="Carregando Controle de Horímetro e KM" subtext="Buscando registros locais..." />
       </div>
     );
   }
@@ -109,7 +109,7 @@ export default function ControleHorimetrosPage() {
           </div>
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100 uppercase">
-              CONTROLE DE HORÍMETROS
+              CONTROLE DE HORÍMETRO E KM
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
               Pesados (500h) • Leves (10.000 km) • Implemento Zocar (100/500/1.000h)

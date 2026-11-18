@@ -18,6 +18,7 @@ import {
   criarPreventiva,
   excluirPreventiva,
   atualizarPreventiva,
+  atualizarHorimetroKm,
   importarPreventivas,
   registrarHorimetro
 } from "@/app/preventivas/actions";
@@ -220,6 +221,11 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
       } else if (action === "update") {
         const { id, ...data } = payload;
         const res = await atualizarPreventiva(id, data);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "atualizar_horimetro_km") {
+        // Leitura do modal "Atualizar Horímetro e KM" feita offline.
+        const { id, ...dados } = payload;
+        const res = await atualizarHorimetroKm(id, dados);
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "import") {
         const res = await importarPreventivas(payload);
