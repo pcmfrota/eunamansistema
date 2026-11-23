@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, AlertOctagon, PencilLine } from 'lucide-react'
-import { fmtNum, fmtData, type LinhaPlaca, type Unidade } from '@/lib/horimetro-km-calc'
+import { X, AlertOctagon, PencilLine, ChevronDown, ChevronUp } from 'lucide-react'
+import { fmtNum, fmtData, type LinhaPlaca, type Unidade, type Periodo, type PontoClassificado } from '@/lib/horimetro-km-calc'
 import { EvolucaoChart } from './Graficos'
 import { StatusBadge } from './TabelaAnalitica'
 import { Segmentado } from './FiltrosBar'
 
-/** Painel lateral com o histórico de leituras da placa (até o fim do período) e mini gráfico. */
-export default function DrawerPlaca({ linha, onClose, onCorrigir }: { linha: LinhaPlaca; onClose: () => void; onCorrigir?: (idLeitura: string) => void }) {
+/**
+ * Painel lateral da placa: leituras DO PERÍODO filtrado + a leitura-base (última antes do início,
+ * de onde parte o cálculo do uso). O histórico mais antigo fica recolhido.
+ */
+export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { linha: LinhaPlaca; periodo: Periodo; onClose: () => void; onCorrigir?: (idLeitura: string) => void }) {
   const temKm = linha.pontosKm.length > 0
   const [serie, setSerie] = useState<Unidade>(linha.unidade)
   const [montado, setMontado] = useState(false)
+  const [verAntigas, setVerAntigas] = useState(false)
   useEffect(() => { setMontado(true) }, [])
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -24,6 +28,36 @@ export default function DrawerPlaca({ linha, onClose, onCorrigir }: { linha: Lin
   const pontos = serie === linha.unidade ? linha.pontos : linha.pontosKm
   const r = serie === linha.unidade ? linha.principal : linha.km
   const eq = linha.equipamento
+  const doPeriodo = pontos.filter(p => p.data >= periodo.inicio && p.data <= periodo.fim)
+  const antes = pontos.filter(p => p.data < periodo.inicio)
+  const base = [...antes].reverse().find(p => !p.inconsistente)
+  const antigas = antes.filter(p => p !== base)
+  const pontosGrafico = base ? [base, ...doPeriodo] : doPeriodo
+  const linhaTabela = (p: PontoClassificado, i: number, extra?: string) => (
+    <tr key={p.id || `${p.data}-${i}`} className={`border-b border-zinc-100 dark:border-zinc-800/60 ${p.inconsistente ? 'bg-red-50/60 dark:bg-red-900/10' : extra || ''}`} title={p.obs || undefined}>
+      <td className="py-1.5">{fmtData(p.data)}</td>
+      <td className="py-1.5 text-right font-semibold">{fmtNum(p.valor, 1)} {serie}</td>
+      <td className={`py-1.5 text-right ${p.inconsistente ? 'text-red-600 font-bold' : 'text-zinc-500'}`}>
+        {p.inconsistente && <AlertOctagon size={11} className="inline mr-1 -mt-0.5" />}
+        {p.diferenca == null ? '—' : `${p.diferenca > 0 ? '+' : ''}${fmtNum(p.diferenca, 1)}`}
+      </td>
+      <td className="py-1.5 pl-3 text-zinc-500 truncate max-w-[110px]">{p.por || '—'}</td>
+      {onCorrigir && (
+        <td className="py-1.5 text-right">
+          {p.id && (
+            <button type="button" onClick={() => onCorrigir(p.id as string)} title="Corrigir esta leitura" aria-label="Corrigir esta leitura"
+              className={`p-1 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/30 ${p.inconsistente ? 'text-amber-600' : 'text-zinc-400 hover:text-amber-600'}`}>
+              <PencilLine size={13} />
+            </button>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+  const colunas = onCorrigir ? 5 : 4
+  const separador = (texto: string) => (
+    <tr><td colSpan={colunas} className="pt-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-zinc-400">{texto}</td></tr>
+  )
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex justify-end bg-black/40" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -48,7 +82,7 @@ export default function DrawerPlaca({ linha, onClose, onCorrigir }: { linha: Lin
           </div>
 
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
-            <EvolucaoChart pontos={pontos} unidade={serie} altura={180} />
+            <EvolucaoChart pontos={pontosGrafico} unidade={serie} altura={180} />
           </div>
 
           <table className="w-full text-xs tabular-nums">
@@ -62,30 +96,25 @@ export default function DrawerPlaca({ linha, onClose, onCorrigir }: { linha: Lin
               </tr>
             </thead>
             <tbody>
-              {[...pontos].reverse().map((p, i) => (
-                <tr key={p.id || i} className={`border-b border-zinc-100 dark:border-zinc-800/60 ${p.inconsistente ? 'bg-red-50/60 dark:bg-red-900/10' : ''}`} title={p.obs || undefined}>
-                  <td className="py-1.5">{fmtData(p.data)}</td>
-                  <td className="py-1.5 text-right font-semibold">{fmtNum(p.valor, 1)} {serie}</td>
-                  <td className={`py-1.5 text-right ${p.inconsistente ? 'text-red-600 font-bold' : 'text-zinc-500'}`}>
-                    {p.inconsistente && <AlertOctagon size={11} className="inline mr-1 -mt-0.5" />}
-                    {p.diferenca == null ? '—' : `${p.diferenca > 0 ? '+' : ''}${fmtNum(p.diferenca, 1)}`}
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500 truncate max-w-[110px]">{p.por || '—'}</td>
-                  {onCorrigir && (
-                    <td className="py-1.5 text-right">
-                      {p.id && (
-                        <button type="button" onClick={() => onCorrigir(p.id as string)} title="Corrigir esta leitura" aria-label="Corrigir esta leitura"
-                          className={`p-1 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/30 ${p.inconsistente ? 'text-amber-600' : 'text-zinc-400 hover:text-amber-600'}`}>
-                          <PencilLine size={13} />
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {separador(`No período (${fmtData(periodo.inicio)} a ${fmtData(periodo.fim)}) · ${doPeriodo.length} leitura${doPeriodo.length === 1 ? '' : 's'}`)}
+              {[...doPeriodo].reverse().map((p, i) => linhaTabela(p, i))}
+              {!doPeriodo.length && (
+                <tr><td colSpan={colunas} className="py-3 text-center text-zinc-400">Nenhuma leitura lançada neste período.</td></tr>
+              )}
+              {base && separador('Base do cálculo (última leitura antes do período)')}
+              {base && linhaTabela(base, 0, 'bg-zinc-50 dark:bg-zinc-900/60 text-zinc-500')}
+              {verAntigas && antigas.length > 0 && separador('Histórico anterior')}
+              {verAntigas && [...antigas].reverse().map((p, i) => linhaTabela(p, i, 'text-zinc-400'))}
             </tbody>
           </table>
-          {!pontos.length && <p className="text-center text-sm text-zinc-400 py-6">Nenhuma leitura registrada.</p>}
+          {antigas.length > 0 && (
+            <button type="button" onClick={() => setVerAntigas(v => !v)} className="self-start flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline">
+              {verAntigas ? <><ChevronUp size={13} /> Ocultar histórico anterior</> : <><ChevronDown size={13} /> Ver histórico anterior ({antigas.length})</>}
+            </button>
+          )}
+          {doPeriodo.length > 0 && base && doPeriodo[0].data > periodo.inicio && (
+            <p className="text-[11px] text-zinc-500">O uso no período é a última leitura do período menos a base ({fmtData(base.data)}).</p>
+          )}
           {pontos.some(p => p.inconsistente) && (
             <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras menores que a anterior: ficam fora dos cálculos até serem corrigidas{onCorrigir ? ' (use o lápis para corrigir)' : ''}.</p>
           )}

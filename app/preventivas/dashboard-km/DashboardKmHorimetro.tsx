@@ -147,7 +147,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
         </>
       )}
 
-      {selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
+      {selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} periodo={periodo} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
       {corrigindo && <EditarLeituraModal leituras={[corrigindo]} onClose={() => setCorrigindo(null)} />}
     </div>
   )
