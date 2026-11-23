@@ -411,3 +411,108 @@ export async function getDashboardKmHorimetro(desde: string, fim: string): Promi
     return { error: error instanceof Error ? error.message : String(error) };
   }
 }
+
+export type CorrecaoLeitura = {
+  data_referencia: string
+  /** Horímetro (pesados) ou KM (leves) — o valor principal da leitura. */
+  valor_novo: number
+  /** KM dos pesados; ignorado nos leves (o valor principal já é o KM). */
+  km_novo: number | null
+  motivo?: string | null
+}
+
+/**
+ * Corrige uma leitura já lançada (erro de digitação) em historico_horimetros.
+ * - grava o novo valor/KM/data e anota na observação quem corrigiu, quando e o que mudou;
+ * - ajusta o "valor anterior" da leitura seguinte, se ele apontava pro valor errado;
+ * - se for a leitura mais recente da placa, corrige também o atual da preventiva
+ *   (só quando o atual ainda é o valor digitado errado).
+ * Precisa da política de UPDATE (migration 20261123000000_historico_horimetros_update.sql).
+ */
+export async function corrigirLeituraHorimetro(id: string, dados: CorrecaoLeitura): Promise<{ success: true } | { error: string }> {
+  try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    if (!dados.data_referencia || !/^\d{4}-\d{2}-\d{2}$/.test(dados.data_referencia)) return { error: 'Data da leitura inválida.' };
+    if (!Number.isFinite(dados.valor_novo)) return { error: 'Valor da leitura inválido.' };
+    if (dados.km_novo != null && !Number.isFinite(dados.km_novo)) return { error: 'KM inválido.' };
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Sessão expirada. Entre de novo no sistema.' };
+    const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).maybeSingle();
+    if (profile?.role === 'visitante') return { error: 'Perfil visitante não pode corrigir leituras.' };
+    const nome = profile?.full_name || user.email || 'Usuário';
+
+    const { data: atual, error: errAtual } = await supabase.from('historico_horimetros').select('*').eq('id', id).maybeSingle();
+    if (errAtual) throw new Error(errAtual.message);
+    if (!atual) return { error: 'Leitura não encontrada.' };
+
+    const ehKm = atual.unidade === 'km';
+    const valorAntigo = Number(atual.valor_novo);
+    const kmAntigo = atual.km_novo != null ? Number(atual.km_novo) : null;
+    const kmNovo = ehKm ? dados.valor_novo : dados.km_novo;
+    const dataAntiga: string = atual.data_referencia
+      ? String(atual.data_referencia).slice(0, 10)
+      : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(atual.atualizado_em));
+
+    const br = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }));
+    const dBr = (d: string) => d.split('-').reverse().join('/');
+    const mudancas: string[] = [];
+    if (valorAntigo !== dados.valor_novo) mudancas.push(`${ehKm ? 'KM' : 'horímetro'} ${br(valorAntigo)} → ${br(dados.valor_novo)}`);
+    if (!ehKm && kmAntigo !== kmNovo) mudancas.push(`KM ${br(kmAntigo)} → ${br(kmNovo)}`);
+    if (dataAntiga !== dados.data_referencia) mudancas.push(`data ${dBr(dataAntiga)} → ${dBr(dados.data_referencia)}`);
+    if (!mudancas.length) return { error: 'Nada foi alterado.' };
+
+    const quando = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+    const nota = `[Corrigido por ${nome} em ${quando}: ${mudancas.join('; ')}${dados.motivo?.trim() ? ` — ${dados.motivo.trim()}` : ''}]`;
+    const observacoes = [atual.observacoes, nota].filter(Boolean).join(' ');
+
+    const { data: upd, error: errUpd } = await supabase
+      .from('historico_horimetros')
+      .update({ valor_novo: dados.valor_novo, km_novo: kmNovo, data_referencia: dados.data_referencia, observacoes })
+      .eq('id', id)
+      .select('id');
+    if (errUpd) throw new Error(errUpd.message);
+    if (!upd?.length) {
+      return { error: 'O banco não permitiu a correção. Falta aplicar a migration 20261123000000_historico_horimetros_update.sql no Supabase (ou seu perfil não tem acesso ao módulo).' };
+    }
+
+    // Leitura seguinte da mesma placa: o "anterior" dela era o valor digitado errado.
+    if (atual.equipamento_id) {
+      const { data: prox } = await supabase
+        .from('historico_horimetros')
+        .select('id, valor_anterior, km_anterior')
+        .eq('equipamento_id', atual.equipamento_id)
+        .gt('atualizado_em', atual.atualizado_em)
+        .order('atualizado_em', { ascending: true })
+        .limit(1);
+      const p = prox?.[0];
+      if (p) {
+        const ajuste: Record<string, number | null> = {};
+        if (p.valor_anterior != null && Number(p.valor_anterior) === valorAntigo) ajuste.valor_anterior = dados.valor_novo;
+        if (!ehKm && p.km_anterior != null && kmAntigo != null && Number(p.km_anterior) === kmAntigo) ajuste.km_anterior = kmNovo;
+        if (Object.keys(ajuste).length) await supabase.from('historico_horimetros').update(ajuste).eq('id', p.id);
+      }
+
+      // Era a leitura mais recente? Então o "atual" da preventiva pode estar com o valor errado.
+      if (!p) {
+        const { data: prevs } = await supabase
+          .from('preventivas')
+          .select('id, horimetro_atual, km_atual')
+          .eq('equipamento_id', atual.equipamento_id);
+        for (const pv of prevs || []) {
+          const ajuste: Record<string, number | null> = {};
+          if (Number(pv.horimetro_atual) === valorAntigo) ajuste.horimetro_atual = dados.valor_novo;
+          if (!ehKm && kmAntigo != null && pv.km_atual != null && Number(pv.km_atual) === kmAntigo) ajuste.km_atual = kmNovo;
+          if (Object.keys(ajuste).length) await supabase.from('preventivas').update(ajuste).eq('id', pv.id);
+        }
+      }
+    }
+
+    revalidatePath('/preventivas');
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}

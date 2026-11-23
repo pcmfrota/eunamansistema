@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, AlertOctagon } from 'lucide-react'
+import { X, AlertOctagon, PencilLine } from 'lucide-react'
 import { fmtNum, fmtData, type LinhaPlaca, type Unidade } from '@/lib/horimetro-km-calc'
 import { EvolucaoChart } from './Graficos'
 import { StatusBadge } from './TabelaAnalitica'
 import { Segmentado } from './FiltrosBar'
 
 /** Painel lateral com o histórico de leituras da placa (até o fim do período) e mini gráfico. */
-export default function DrawerPlaca({ linha, onClose }: { linha: LinhaPlaca; onClose: () => void }) {
+export default function DrawerPlaca({ linha, onClose, onCorrigir }: { linha: LinhaPlaca; onClose: () => void; onCorrigir?: (idLeitura: string) => void }) {
   const temKm = linha.pontosKm.length > 0
   const [serie, setSerie] = useState<Unidade>(linha.unidade)
   const [montado, setMontado] = useState(false)
@@ -58,6 +58,7 @@ export default function DrawerPlaca({ linha, onClose }: { linha: LinhaPlaca; onC
                 <th className="py-2 text-right font-bold">Leitura</th>
                 <th className="py-2 text-right font-bold">Diferença</th>
                 <th className="py-2 text-left font-bold pl-3">Por</th>
+                {onCorrigir && <th className="py-2 w-8" aria-label="Corrigir" />}
               </tr>
             </thead>
             <tbody>
@@ -70,13 +71,23 @@ export default function DrawerPlaca({ linha, onClose }: { linha: LinhaPlaca; onC
                     {p.diferenca == null ? '—' : `${p.diferenca > 0 ? '+' : ''}${fmtNum(p.diferenca, 1)}`}
                   </td>
                   <td className="py-1.5 pl-3 text-zinc-500 truncate max-w-[110px]">{p.por || '—'}</td>
+                  {onCorrigir && (
+                    <td className="py-1.5 text-right">
+                      {p.id && (
+                        <button type="button" onClick={() => onCorrigir(p.id as string)} title="Corrigir esta leitura" aria-label="Corrigir esta leitura"
+                          className={`p-1 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/30 ${p.inconsistente ? 'text-amber-600' : 'text-zinc-400 hover:text-amber-600'}`}>
+                          <PencilLine size={13} />
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
           {!pontos.length && <p className="text-center text-sm text-zinc-400 py-6">Nenhuma leitura registrada.</p>}
           {pontos.some(p => p.inconsistente) && (
-            <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras menores que a anterior: ficam fora dos cálculos até serem corrigidas.</p>
+            <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras menores que a anterior: ficam fora dos cálculos até serem corrigidas{onCorrigir ? ' (use o lápis para corrigir)' : ''}.</p>
           )}
         </div>
       </aside>

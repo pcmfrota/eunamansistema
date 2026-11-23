@@ -462,7 +462,7 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
         ))}
       </div>
 
-      {tab === 'dashboard-km' && <DashboardKmHorimetro />}
+      {tab === 'dashboard-km' && <DashboardKmHorimetro podeEditar={!isVisitante} />}
 
       {/* Dashboard Pesados — SVG clustered bar chart with filters */}
       {tab === 'dashboard-pesados' && (
@@ -517,7 +517,7 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
       )}
 
       {tab === 'calendario' && (
-        <CalendarioLeiturasTab preventivas={preventivas} />
+        <CalendarioLeiturasTab preventivas={preventivas} podeEditar={!isVisitante} />
       )}
 
       {tab === 'historico' && (

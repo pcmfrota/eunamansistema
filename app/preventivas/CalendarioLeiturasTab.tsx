@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw, Search } from 'lucide-react'
 import { getLeiturasHorimetroKm } from './actions'
 import { inferUnidadeHorimetro } from '@/lib/horimetro-log'
+import EditarLeituraModal, { type LeituraEditavel } from './EditarLeituraModal'
 
 type PrevLinha = {
   id: string
@@ -41,7 +42,8 @@ const fmt = (v: number) => Number(v).toLocaleString('pt-BR', { maximumFractionDi
  * de uma). Fonte: historico_horimetros (gravado pelo modal "Atualizar Horímetro e KM" e
  * pelas edições anteriores, que só tinham horímetro).
  */
-export default function CalendarioLeiturasTab({ preventivas }: { preventivas: PrevLinha[] }) {
+export default function CalendarioLeiturasTab({ preventivas, podeEditar = false }: { preventivas: PrevLinha[]; podeEditar?: boolean }) {
+  const [editando, setEditando] = useState<LeituraEditavel[] | null>(null)
   const [mes, setMes] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [categoria, setCategoria] = useState<'todos' | 'h' | 'km'>('todos')
   const [busca, setBusca] = useState('')
@@ -125,6 +127,21 @@ export default function CalendarioLeiturasTab({ preventivas }: { preventivas: Pr
   }, [celulas, linhas])
 
   const hoje = iso(new Date())
+
+  /** Abre a correção com todas as leituras da placa naquele dia (a última já selecionada). */
+  const abrirCorrecao = (placa: string, dia: string) => {
+    const doDia = leituras
+      .filter(l => String(l.placa).toUpperCase().trim() === placa && diaDaLeitura(l) === dia)
+      .sort((a, b) => a.atualizado_em.localeCompare(b.atualizado_em))
+      .map(l => ({
+        id: l.id, placa, unidade: l.unidade, valor_novo: Number(l.valor_novo),
+        km_novo: l.km_novo != null ? Number(l.km_novo) : null,
+        valor_anterior: l.valor_anterior != null ? Number(l.valor_anterior) : null,
+        km_anterior: l.km_anterior != null ? Number(l.km_anterior) : null,
+        data: dia, atualizado_por_nome: l.atualizado_por_nome, observacoes: l.observacoes,
+      }))
+    if (doDia.length) setEditando(doDia)
+  }
   const mudarMes = (delta: number) => setMes(m => new Date(m.getFullYear(), m.getMonth() + delta, 1))
 
   return (
@@ -199,11 +216,13 @@ export default function CalendarioLeiturasTab({ preventivas }: { preventivas: Pr
                           `Por: ${c.leitura.atualizado_por_nome || 'Sistema'}`,
                           c.qtd > 1 ? `(${c.qtd} atualizações no dia — mostrando a última)` : null,
                           c.leitura.observacoes ? `Obs.: ${c.leitura.observacoes}` : null,
+                          podeEditar ? 'Clique para corrigir' : null,
                         ].filter(Boolean).join('\n')
                       : undefined
                     return (
                       <td key={k} title={titulo}
-                        className={`px-1 py-1 text-center align-middle border-b border-slate-100 dark:border-slate-800/70 ${k === hoje ? 'bg-blue-50/60 dark:bg-blue-950/20' : ''} ${c ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}>
+                        onClick={c && podeEditar ? () => abrirCorrecao(l.placa, k) : undefined}
+                        className={`${c && podeEditar ? 'cursor-pointer hover:ring-2 hover:ring-inset hover:ring-amber-400 ' : ''}px-1 py-1 text-center align-middle border-b border-slate-100 dark:border-slate-800/70 ${k === hoje ? 'bg-blue-50/60 dark:bg-blue-950/20' : ''} ${c ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}>
                         {c && (
                           <div className="flex flex-col leading-tight">
                             {c.horimetro != null && <span className="font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{fmt(c.horimetro)}h</span>}
@@ -226,8 +245,10 @@ export default function CalendarioLeiturasTab({ preventivas }: { preventivas: Pr
       <div className="flex flex-wrap gap-4 text-[11px] text-zinc-500">
         <span className="flex items-center gap-1.5"><span className="font-bold text-emerald-700 dark:text-emerald-400">0000h</span> horímetro</span>
         <span className="flex items-center gap-1.5"><span className="text-blue-700 dark:text-blue-400">0000km</span> KM</span>
-        <span>Passe o mouse na célula para ver quem atualizou.</span>
+        <span>Passe o mouse na célula para ver quem atualizou.{podeEditar ? ' Clique na célula para corrigir uma leitura digitada errado.' : ''}</span>
       </div>
+
+      {editando && <EditarLeituraModal leituras={editando} onClose={() => setEditando(null)} />}
     </div>
   )
 }

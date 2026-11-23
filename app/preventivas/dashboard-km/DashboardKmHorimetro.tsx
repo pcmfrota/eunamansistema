@@ -14,6 +14,7 @@ import { CardGrafico, UsoMensalChart, RankingChart, UsoPorTipoChart, EvolucaoCha
 import TabelaAnalitica from './TabelaAnalitica'
 import DrawerPlaca from './DrawerPlaca'
 import { exportarDashboard } from './exportar'
+import EditarLeituraModal, { type LeituraEditavel } from '../EditarLeituraModal'
 
 // Busca leituras desde ~3 meses antes do período de comparação, pra achar a "última
 // leitura antes do início" (base do cálculo) sem baixar o histórico inteiro.
@@ -23,7 +24,7 @@ const FOLGA_BASE_DIAS = 92
  * Aba "Dashboard KM & Horímetro": painel geral só com frotas ATIVAS (filtradas no banco).
  * Pesados = horímetro (h); Leves = KM. Cálculos em lib/horimetro-km-calc.ts.
  */
-export default function DashboardKmHorimetro() {
+export default function DashboardKmHorimetro({ podeEditar = false }: { podeEditar?: boolean }) {
   const { filtros, atualizar, limpar, pronto } = useFiltrosUrl()
   const periodo = useMemo(() => ({ inicio: filtros.inicio, fim: filtros.fim }), [filtros.inicio, filtros.fim])
   const anterior = useMemo(() => periodoAnterior(periodo), [periodo])
@@ -32,7 +33,9 @@ export default function DashboardKmHorimetro() {
   const hoje = hojeLocal()
 
   const [unidade, setUnidade] = useState<Unidade>('h')
-  const [selecionada, setSelecionada] = useState<LinhaPlaca | null>(null)
+  const [selId, setSelId] = useState<string | null>(null)
+  const [corrigindo, setCorrigindo] = useState<LeituraEditavel | null>(null)
+  const setSelecionada = (l: LinhaPlaca) => setSelId(l.equipamento.id)
   useEffect(() => {
     if (filtros.frota === 'leves') setUnidade('km')
     else if (filtros.frota === 'pesados') setUnidade('h')
@@ -59,6 +62,23 @@ export default function DashboardKmHorimetro() {
   const kpis = useMemo(() => calcularKpis(linhas, filtros.visao), [linhas, filtros.visao])
   const kpisAnt = useMemo(() => calcularKpis(linhasAnt, filtros.visao), [linhasAnt, filtros.visao])
   const temAnterior = linhasAnt.some(l => l.principal.temLeituraNoPeriodo || !!l.km?.temLeituraNoPeriodo)
+  const selecionada = selId ? linhas.find(l => l.equipamento.id === selId) ?? null : null
+
+  /** Monta a leitura pra correção a partir da linha bruta (anterior = leitura anterior da mesma placa). */
+  const abrirCorrecao = (idLeitura: string) => {
+    const todas = dados?.leituras || []
+    const alvo = todas.find(x => x.id === idLeitura)
+    if (!alvo || !selecionada) return
+    const daPlaca = todas.filter(x => x.equipamento_id === alvo.equipamento_id).sort((a, b) => a.ordem.localeCompare(b.ordem))
+    const ant = daPlaca[daPlaca.findIndex(x => x.id === alvo.id) - 1]
+    setCorrigindo({
+      id: alvo.id, placa: selecionada.equipamento.placa, unidade: alvo.unidade === 'km' ? 'km' : 'h',
+      valor_novo: alvo.valor_novo, km_novo: alvo.km_novo,
+      valor_anterior: ant ? ant.valor_novo : null, km_anterior: ant ? ant.km_novo : null,
+      data: alvo.data, atualizado_por_nome: alvo.por, observacoes: alvo.obs,
+    })
+  }
+
   const placaUnica = filtros.placas.length === 1 ? linhas.find(l => l.equipamento.placa === filtros.placas[0]) : undefined
 
   const carregandoTela = !pronto || (carregando && !erro) || (!dados && !erro)
@@ -127,7 +147,8 @@ export default function DashboardKmHorimetro() {
         </>
       )}
 
-      {selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} onClose={() => setSelecionada(null)} />}
+      {selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
+      {corrigindo && <EditarLeituraModal leituras={[corrigindo]} onClose={() => setCorrigindo(null)} />}
     </div>
   )
 }
