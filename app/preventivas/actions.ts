@@ -340,3 +340,74 @@ export async function getHistoricoHorimetros(limit: number = 1000) {
     return { error: error.message };
   }
 }
+
+/**
+ * Dados do "Dashboard KM & Horímetro": SOMENTE frotas ativas (status 'Ativo' e não
+ * excluídas, filtrado no banco) + as leituras delas entre `desde` e `fim`.
+ * `desde` já vem com folga antes do período (base da última leitura anterior e período
+ * de comparação). A data de cada leitura é resolvida aqui: data_referencia (modal) ou o
+ * dia em Brasília do atualizado_em (leituras antigas).
+ */
+export async function getDashboardKmHorimetro(desde: string, fim: string): Promise<
+  | { equipamentos: import('@/lib/horimetro-km-calc').EquipamentoAtivo[]; leituras: import('@/lib/horimetro-km-calc').LeituraBruta[]; rfAtual: { ano: number; mes: number; inicio: string; fim: string } | null }
+  | { error: string }
+> {
+  try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const { diaLocalSP } = await import('@/lib/horimetro-km-calc');
+    const supabase = createClient();
+
+    const { data: eqs, error: eqErr } = await supabase
+      .from('equipamentos')
+      .select('id, placa, tipo, categoria, modulo')
+      .ilike('status', 'ativo')
+      .is('deleted_at', null)
+      .order('placa');
+    if (eqErr) throw new Error(eqErr.message);
+    const equipamentos = (eqs || []) as { id: string; placa: string; tipo: string | null; categoria: string | null; modulo: string | null }[];
+
+    const hoje = diaLocalSP(new Date().toISOString());
+    const { data: rf } = await supabase
+      .from('calendario_suzano')
+      .select('ano, mes, data_inicio, data_fim')
+      .lte('data_inicio', hoje)
+      .gte('data_fim', hoje)
+      .limit(1);
+    const rfRow = rf?.[0] as { ano: number; mes: number; data_inicio: string; data_fim: string } | undefined;
+    const rfAtual = rfRow ? { ano: rfRow.ano, mes: rfRow.mes, inicio: String(rfRow.data_inicio).slice(0, 10), fim: String(rfRow.data_fim).slice(0, 10) } : null;
+
+    if (!equipamentos.length) return { equipamentos, leituras: [], rfAtual };
+
+    // Margem de 1 dia no atualizado_em por causa do fuso; o corte exato é feito pela data resolvida.
+    const ini = new Date(desde + 'T00:00:00Z'); ini.setUTCDate(ini.getUTCDate() - 1);
+    const fimMais = new Date(fim + 'T00:00:00Z'); fimMais.setUTCDate(fimMais.getUTCDate() + 2);
+    const { data, error } = await supabase
+      .from('historico_horimetros')
+      .select('id, equipamento_id, unidade, valor_novo, km_novo, data_referencia, atualizado_em, atualizado_por_nome, observacoes')
+      .in('equipamento_id', equipamentos.map(e => e.id))
+      .or(`and(data_referencia.gte.${desde},data_referencia.lte.${fim}),and(data_referencia.is.null,atualizado_em.gte.${ini.toISOString()},atualizado_em.lt.${fimMais.toISOString()})`)
+      .order('atualizado_em', { ascending: true })
+      .limit(20000);
+    if (error) throw new Error(error.message);
+
+    type Row = { id: string; equipamento_id: string; unidade: string; valor_novo: number | string; km_novo: number | string | null; data_referencia: string | null; atualizado_em: string; atualizado_por_nome: string | null; observacoes: string | null };
+    const leituras = ((data || []) as Row[])
+      .filter(r => r.valor_novo != null)
+      .map(r => ({
+        id: r.id,
+        equipamento_id: r.equipamento_id,
+        unidade: r.unidade,
+        valor_novo: Number(r.valor_novo),
+        km_novo: r.km_novo != null ? Number(r.km_novo) : null,
+        data: r.data_referencia ? String(r.data_referencia).slice(0, 10) : diaLocalSP(r.atualizado_em),
+        ordem: r.atualizado_em,
+        por: r.atualizado_por_nome,
+        obs: r.observacoes,
+      }))
+      .filter(l => l.data >= desde && l.data <= fim);
+
+    return { equipamentos, leituras, rfAtual };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}

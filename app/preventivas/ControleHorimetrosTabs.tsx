@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { Search, Edit2, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw, History, CalendarDays } from 'lucide-react'
+import { Search, Edit2, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw, History, CalendarDays, LayoutDashboard } from 'lucide-react'
 import Script from 'next/script'
 import { excluirPreventiva, atualizarHorimetroKm } from './actions'
 import DashboardHorimetros from './DashboardHorimetros'
 import HistoricoHorimetrosTab from './HistoricoHorimetrosTab'
 import CalendarioLeiturasTab from './CalendarioLeiturasTab'
+import DashboardKmHorimetro from './dashboard-km/DashboardKmHorimetro'
 import AtualizarHorimetroKmModal, { DadosAtualizacao } from './AtualizarHorimetroKmModal'
 import { useEffect } from 'react'
 import { useOffline } from '@/components/offline-provider'
@@ -358,7 +359,7 @@ interface Props {
   isVisitante: boolean
 }
 
-type TabKey = 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves' | 'calendario' | 'historico'
+type TabKey = 'dashboard-km' | 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves' | 'calendario' | 'historico'
 
 export default function ControleHorimetrosTabs({ data: initialData, isVisitante }: Props) {
   const { isOnline } = useOffline()
@@ -391,7 +392,7 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
     };
   }, []);
 
-  const [tab, setTab] = useState<TabKey>('dashboard-pesados')
+  const [tab, setTab] = useState<TabKey>('dashboard-km')
 
   const pesados = preventivas.filter(p => {
     const cat = p.equipamentos?.categoria?.toUpperCase() || ''
@@ -414,6 +415,7 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
   const tipos = Array.from(new Set(pesados.map(p => p.equipamentos?.tipo).filter(Boolean))) as string[]
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+    { key: 'dashboard-km', label: 'Dashboard KM & Horímetro', icon: <LayoutDashboard size={14} /> },
     { key: 'dashboard-pesados', label: 'Dashboard Pesados', icon: <BarChart2 size={14} /> },
     { key: 'pesados', label: `Pesados (${pesados.length})`, icon: <Truck size={14} /> },
     { key: 'dashboard-leves', label: 'Dashboard Leves', icon: <BarChart2 size={14} /> },
@@ -459,6 +461,8 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
           </button>
         ))}
       </div>
+
+      {tab === 'dashboard-km' && <DashboardKmHorimetro />}
 
       {/* Dashboard Pesados — SVG clustered bar chart with filters */}
       {tab === 'dashboard-pesados' && (

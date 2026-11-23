@@ -1,0 +1,86 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { X, AlertOctagon } from 'lucide-react'
+import { fmtNum, fmtData, type LinhaPlaca, type Unidade } from '@/lib/horimetro-km-calc'
+import { EvolucaoChart } from './Graficos'
+import { StatusBadge } from './TabelaAnalitica'
+import { Segmentado } from './FiltrosBar'
+
+/** Painel lateral com o histórico de leituras da placa (até o fim do período) e mini gráfico. */
+export default function DrawerPlaca({ linha, onClose }: { linha: LinhaPlaca; onClose: () => void }) {
+  const temKm = linha.pontosKm.length > 0
+  const [serie, setSerie] = useState<Unidade>(linha.unidade)
+  const [montado, setMontado] = useState(false)
+  useEffect(() => { setMontado(true) }, [])
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [onClose])
+  if (!montado) return null
+
+  const pontos = serie === linha.unidade ? linha.pontos : linha.pontosKm
+  const r = serie === linha.unidade ? linha.principal : linha.km
+  const eq = linha.equipamento
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex justify-end bg-black/40" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <aside className="w-full sm:max-w-md h-full bg-white dark:bg-zinc-950 shadow-2xl flex flex-col" role="dialog" aria-label={`Histórico de ${eq.placa}`}>
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+          <div>
+            <h2 className="text-lg font-extrabold text-amber-700 dark:text-amber-400">{eq.placa}</h2>
+            <p className="text-xs text-zinc-500">{eq.tipo} · {linha.frota === 'leve' ? 'Leve (KM)' : 'Pesado (horímetro)'}{eq.modulo ? ` · ${eq.modulo}` : ''}</p>
+            <div className="mt-2"><StatusBadge status={linha.status} /></div>
+          </div>
+          <button type="button" onClick={onClose} className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Fechar"><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+          {temKm && linha.unidade === 'h' && (
+            <Segmentado<Unidade> valor={serie} onChange={setSerie} opcoes={[{ v: 'h', l: 'Horímetro' }, { v: 'km', l: 'KM' }]} />
+          )}
+          <div className="grid grid-cols-3 gap-2 text-xs tabular-nums">
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Uso no período</div><div className="font-bold">{r?.temLeituraNoPeriodo ? `${fmtNum(r.uso, 1)} ${serie}` : '—'}</div></div>
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média mensal</div><div className="font-bold">{r?.mediaMensal != null ? `${fmtNum(r.mediaMensal, 1)} ${serie}` : '—'}</div></div>
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média diária</div><div className="font-bold">{r?.mediaDiaria != null ? `${fmtNum(r.mediaDiaria, 1)} ${serie}` : '—'}</div></div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
+            <EvolucaoChart pontos={pontos} unidade={serie} altura={180} />
+          </div>
+
+          <table className="w-full text-xs tabular-nums">
+            <thead>
+              <tr className="text-[11px] uppercase text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+                <th className="py-2 text-left font-bold">Data</th>
+                <th className="py-2 text-right font-bold">Leitura</th>
+                <th className="py-2 text-right font-bold">Diferença</th>
+                <th className="py-2 text-left font-bold pl-3">Por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...pontos].reverse().map((p, i) => (
+                <tr key={p.id || i} className={`border-b border-zinc-100 dark:border-zinc-800/60 ${p.inconsistente ? 'bg-red-50/60 dark:bg-red-900/10' : ''}`} title={p.obs || undefined}>
+                  <td className="py-1.5">{fmtData(p.data)}</td>
+                  <td className="py-1.5 text-right font-semibold">{fmtNum(p.valor, 1)} {serie}</td>
+                  <td className={`py-1.5 text-right ${p.inconsistente ? 'text-red-600 font-bold' : 'text-zinc-500'}`}>
+                    {p.inconsistente && <AlertOctagon size={11} className="inline mr-1 -mt-0.5" />}
+                    {p.diferenca == null ? '—' : `${p.diferenca > 0 ? '+' : ''}${fmtNum(p.diferenca, 1)}`}
+                  </td>
+                  <td className="py-1.5 pl-3 text-zinc-500 truncate max-w-[110px]">{p.por || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!pontos.length && <p className="text-center text-sm text-zinc-400 py-6">Nenhuma leitura registrada.</p>}
+          {pontos.some(p => p.inconsistente) && (
+            <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras menores que a anterior: ficam fora dos cálculos até serem corrigidas.</p>
+          )}
+        </div>
+      </aside>
+    </div>,
+    document.body
+  )
+}
