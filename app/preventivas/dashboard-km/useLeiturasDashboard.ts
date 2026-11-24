@@ -1,21 +1,32 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { getDashboardKmHorimetro } from '../actions'
-import type { EquipamentoAtivo, LeituraBruta } from '@/lib/horimetro-km-calc'
+import { buscarDadosDashboard, type DadosDashboard } from './buscarDados'
 
-export type DadosDashboard = {
-  equipamentos: EquipamentoAtivo[]
-  leituras: LeituraBruta[]
-  rfAtual: { ano: number; mes: number; inicio: string; fim: string } | null
-}
+export type { DadosDashboard } from './buscarDados'
 
 // Cache em memória por intervalo (o projeto não usa React Query/SWR). Vale enquanto a
 // página está aberta; é descartado quando uma leitura nova é registrada ou o sync termina.
 const TTL_MS = 5 * 60_000
 const cache = new Map<string, { em: number; dados: DadosDashboard }>()
+// Busca em andamento por intervalo: duas telas pedindo o mesmo intervalo dividem a mesma consulta.
+const emAndamento = new Map<string, Promise<DadosDashboard>>()
 
-/** Frotas ativas + leituras entre `desde` e `fim` (busca no banco, com cache). */
+function buscar(desde: string, fim: string): Promise<DadosDashboard> {
+  const chave = `${desde}|${fim}`
+  const ja = emAndamento.get(chave)
+  if (ja) return ja
+  const p = buscarDadosDashboard(desde, fim)
+    .then(d => { cache.set(chave, { em: Date.now(), dados: d }); return d })
+    .finally(() => emAndamento.delete(chave))
+  emAndamento.set(chave, p)
+  return p
+}
+
+/**
+ * Frotas ativas + leituras entre `desde` e `fim` (com cache). Enquanto um intervalo novo carrega,
+ * mantém os dados anteriores na tela (`carregando` = true) em vez de voltar pro esqueleto.
+ */
 export function useLeiturasDashboard(desde: string, fim: string, ativo: boolean) {
   const chave = `${desde}|${fim}`
   const [dados, setDados] = useState<DadosDashboard | null>(() => cache.get(chave)?.dados ?? null)
@@ -39,16 +50,14 @@ export function useLeiturasDashboard(desde: string, fim: string, ativo: boolean)
     if (!ativo) return
     let vivo = true
     const emCache = cache.get(chave)
-    if (emCache && Date.now() - emCache.em < TTL_MS) { setDados(emCache.dados); setErro(null); return }
+    if (emCache && Date.now() - emCache.em < TTL_MS) {
+      setDados(emCache.dados); setErro(null); setCarregando(false)
+      return
+    }
     setCarregando(true)
     setErro(null)
-    getDashboardKmHorimetro(desde, fim)
-      .then(res => {
-        if (!vivo) return
-        if ('error' in res) { setErro(res.error); return }
-        cache.set(chave, { em: Date.now(), dados: res })
-        setDados(res)
-      })
+    buscar(desde, fim)
+      .then(res => { if (vivo) setDados(res) })
       .catch(e => { if (vivo) setErro(e instanceof Error ? e.message : 'Falha ao carregar as leituras.') })
       .finally(() => { if (vivo) setCarregando(false) })
     return () => { vivo = false }

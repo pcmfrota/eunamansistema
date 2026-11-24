@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, RefreshCcw, Info, CalendarRange, BarChart3 } from 'lucide-react'
+import { AlertCircle, RefreshCcw, Info, CalendarRange, BarChart3, Loader2 } from 'lucide-react'
 import {
   montarLinhas, calcularKpis, periodoComparacao, somarDias, tipoFrota,
   type EquipamentoAtivo, type LinhaPlaca, type Unidade,
@@ -21,6 +21,10 @@ import EditarLeituraModal, { type LeituraEditavel } from '../EditarLeituraModal'
 // Busca leituras desde ~3 meses antes do período mais antigo (filtrado ou comparação), pra achar
 // a "última leitura antes do início" (base do cálculo) sem baixar o histórico inteiro.
 const FOLGA_BASE_DIAS = 92
+
+export function Atualizando() {
+  return <div className="flex items-center gap-2 text-xs text-blue-600"><Loader2 size={13} className="animate-spin" /> Atualizando dados…</div>
+}
 
 const arred1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10)
 
@@ -107,7 +111,8 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
 
   const placaUnica = filtros.placas.length === 1 ? linhas.find(l => l.equipamento.placa === filtros.placas[0]) : undefined
 
-  const carregandoTela = !pronto || (carregando && !erro) || (!dados && !erro)
+  // Esqueleto só na primeira carga; trocando filtros, os dados atuais ficam na tela até os novos chegarem.
+  const carregandoTela = !pronto || (!dados && !erro)
   const seletorUnidade = filtros.frota === 'todos'
     ? <Segmentado<Unidade> valor={unidade} onChange={setUnidade} opcoes={[{ v: 'h', l: 'Horímetro (h)' }, { v: 'km', l: 'KM' }]} />
     : null
@@ -162,6 +167,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
             </>
           ) : dados && (
             <>
+              {carregando && <Atualizando />}
               <KpiCards atual={kpis} anterior={kpisAnt} visao={filtros.visao} temAnterior={temAnterior} rotuloComparacao={rotuloComparacao(filtros.cmp)} />
 
               {placaUnica && (

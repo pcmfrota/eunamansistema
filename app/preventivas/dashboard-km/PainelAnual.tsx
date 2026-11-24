@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircle, RefreshCcw, ChevronLeft, ChevronRight, Clock, Route } from 'lucide-react'
+import { AlertCircle, RefreshCcw, ChevronLeft, ChevronRight, Clock, Route, Loader2 } from 'lucide-react'
 import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
@@ -137,13 +137,14 @@ export default function PainelAnual({ ano, onAno, filtroEquip, atraso, onDados }
         </div>
       )}
 
-      {(carregando || !dados) && !erro ? (
+      {!dados && !erro ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{[0, 1].map(i => <div key={i} className="h-[120px] rounded-xl bg-zinc-200/70 dark:bg-zinc-800 animate-pulse" />)}</div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">{[0, 1].map(i => <div key={i} className="h-[340px] rounded-xl bg-zinc-200/70 dark:bg-zinc-800 animate-pulse" />)}</div>
         </>
       ) : dados && (
         <>
+          {carregando && <div className="flex items-center gap-2 text-xs text-blue-600"><Loader2 size={13} className="animate-spin" /> Atualizando dados…</div>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Resumo titulo={`Horas rodadas em ${ano}`} icone={<Clock size={16} />} cor="text-emerald-600" unidade="h" ano={ano}
               total={soma('h')} totalAnt={soma('hAnt')} media={mediaDe('h')} mesesComparados={passados.length} />
