@@ -38,13 +38,16 @@ function baixar(blob: Blob, nome: string) {
 }
 
 export async function exportarDashboard(linhas: LinhaPlaca[], periodo: Periodo, formato: 'xlsx' | 'csv') {
-  const rows = linhasExportacao(linhas)
-  const nome = `km_horimetro_${periodo.inicio}_a_${periodo.fim}`
+  await exportarTabela(linhasExportacao(linhas), `km_horimetro_${periodo.inicio}_a_${periodo.fim}`, 'KM e Horímetro', formato)
+}
+
+/** Exporta qualquer tabela (uma linha por objeto) em Excel ou CSV pt-BR. */
+export async function exportarTabela(rows: Record<string, unknown>[], nome: string, aba: string, formato: 'xlsx' | 'csv') {
   if (formato === 'xlsx') {
     const XLSX = await import('xlsx')
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'KM e Horímetro')
+    XLSX.utils.book_append_sheet(wb, ws, aba.slice(0, 31))
     XLSX.writeFile(wb, `${nome}.xlsx`)
     return
   }
@@ -55,6 +58,6 @@ export async function exportarDashboard(linhas: LinhaPlaca[], periodo: Periodo, 
     const s = typeof v === 'number' ? String(v).replace('.', ',') : String(v)
     return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
-  const csv = [cab.join(';'), ...rows.map(r => cab.map(c => cel(r[c as keyof typeof r])).join(';'))].join('\r\n')
+  const csv = [cab.join(';'), ...rows.map(r => cab.map(c => cel(r[c])).join(';'))].join('\r\n')
   baixar(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }), `${nome}.csv`)
 }

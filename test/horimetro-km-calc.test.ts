@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  calcularUso, classificarLeituras, periodoAnterior, periodoDoAtalho, statusLeitura,
+  calcularUso, classificarLeituras, periodoAnterior, periodoComparacao, periodoDoAtalho, statusLeitura,
   variacaoPercentual, montarLinhas, serieTemporal, calcularKpis, diasEntre, diaLocalSP,
   listarMeses, fmtNum, fmtData, type LeituraBruta, type EquipamentoAtivo,
 } from '@/lib/horimetro-km-calc'
@@ -134,6 +134,24 @@ describe('períodos', () => {
     expect(diasEntre('2026-02-27', '2026-03-01')).toBe(2)
     expect(listarMeses('2026-11-15', '2027-01-03')).toEqual(['2026-11', '2026-12', '2027-01'])
     expect(diaLocalSP('2026-11-18T02:30:00Z')).toBe('2026-11-17') // 23h30 em Brasília
+  })
+})
+
+describe('período de comparação escolhido', () => {
+  const nov = { inicio: '2026-11-01', fim: '2026-11-30' }
+  it('anterior = mês anterior', () => {
+    expect(periodoComparacao(nov, 'anterior')).toEqual({ inicio: '2026-10-01', fim: '2026-10-31' })
+  })
+  it('mesmo período do ano anterior (inclusive fevereiro bissexto)', () => {
+    expect(periodoComparacao(nov, 'ano-anterior')).toEqual({ inicio: '2025-11-01', fim: '2025-11-30' })
+    expect(periodoComparacao({ inicio: '2028-02-01', fim: '2028-02-29' }, 'ano-anterior')).toEqual({ inicio: '2027-02-01', fim: '2027-02-28' })
+    expect(periodoComparacao({ inicio: '2027-02-01', fim: '2027-02-28' }, 'ano-anterior')).toEqual({ inicio: '2026-02-01', fim: '2026-02-28' })
+    expect(periodoComparacao({ inicio: '2026-03-10', fim: '2026-04-15' }, 'ano-anterior')).toEqual({ inicio: '2025-03-10', fim: '2025-04-15' })
+  })
+  it('datas livres; inválidas caem no período anterior', () => {
+    expect(periodoComparacao(nov, 'custom', { inicio: '2026-01-01', fim: '2026-06-30' })).toEqual({ inicio: '2026-01-01', fim: '2026-06-30' })
+    expect(periodoComparacao(nov, 'custom', { inicio: '2026-06-30', fim: '2026-01-01' })).toEqual({ inicio: '2026-10-01', fim: '2026-10-31' })
+    expect(periodoComparacao(nov, 'custom', {})).toEqual({ inicio: '2026-10-01', fim: '2026-10-31' })
   })
 })
 

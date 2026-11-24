@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, RefreshCcw, Info } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertCircle, RefreshCcw, Info, CalendarRange, BarChart3 } from 'lucide-react'
 import {
-  montarLinhas, calcularKpis, periodoAnterior, somarDias, tipoFrota, fmtData,
-  type LinhaPlaca, type Unidade,
+  montarLinhas, calcularKpis, periodoComparacao, somarDias, tipoFrota,
+  type EquipamentoAtivo, type LinhaPlaca, type Unidade,
 } from '@/lib/horimetro-km-calc'
 import { useFiltrosUrl, hojeLocal } from './useFiltrosUrl'
 import { useLeiturasDashboard } from './useLeiturasDashboard'
@@ -13,48 +13,63 @@ import KpiCards, { KpiSkeleton } from './KpiCards'
 import { CardGrafico, UsoMensalChart, RankingChart, UsoPorTipoChart, EvolucaoChart } from './Graficos'
 import TabelaAnalitica from './TabelaAnalitica'
 import DrawerPlaca from './DrawerPlaca'
-import { exportarDashboard } from './exportar'
+import BarraComparacao, { rotuloComparacao } from './BarraComparacao'
+import PainelAnual, { type MesAnual } from './PainelAnual'
+import { exportarDashboard, exportarTabela } from './exportar'
 import EditarLeituraModal, { type LeituraEditavel } from '../EditarLeituraModal'
 
-// Busca leituras desde ~3 meses antes do período de comparação, pra achar a "última
-// leitura antes do início" (base do cálculo) sem baixar o histórico inteiro.
+// Busca leituras desde ~3 meses antes do período mais antigo (filtrado ou comparação), pra achar
+// a "última leitura antes do início" (base do cálculo) sem baixar o histórico inteiro.
 const FOLGA_BASE_DIAS = 92
+
+const arred1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10)
 
 /**
  * Aba "Dashboard KM & Horímetro": painel geral só com frotas ATIVAS (filtradas no banco).
  * Pesados = horímetro (h); Leves = KM. Cálculos em lib/horimetro-km-calc.ts.
+ * Duas visões: período filtrado (com comparação escolhida) e anual (todos os meses de um ano).
  */
 export default function DashboardKmHorimetro({ podeEditar = false }: { podeEditar?: boolean }) {
   const { filtros, atualizar, limpar, pronto } = useFiltrosUrl()
+  const anual = filtros.aba === 'anual'
   const periodo = useMemo(() => ({ inicio: filtros.inicio, fim: filtros.fim }), [filtros.inicio, filtros.fim])
-  const anterior = useMemo(() => periodoAnterior(periodo), [periodo])
-  const desde = somarDias(anterior.inicio, -FOLGA_BASE_DIAS)
-  const { dados, carregando, erro, recarregar } = useLeiturasDashboard(desde, periodo.fim, pronto)
+  const anterior = useMemo(
+    () => periodoComparacao(periodo, filtros.cmp, { inicio: filtros.cmpIni, fim: filtros.cmpFim }),
+    [periodo, filtros.cmp, filtros.cmpIni, filtros.cmpFim])
+  const desde = somarDias(anterior.inicio < periodo.inicio ? anterior.inicio : periodo.inicio, -FOLGA_BASE_DIAS)
+  const fimBusca = anterior.fim > periodo.fim ? anterior.fim : periodo.fim
+  const { dados, carregando, erro, recarregar } = useLeiturasDashboard(desde, fimBusca, pronto)
   const hoje = hojeLocal()
 
   const [unidade, setUnidade] = useState<Unidade>('h')
   const [selId, setSelId] = useState<string | null>(null)
   const [corrigindo, setCorrigindo] = useState<LeituraEditavel | null>(null)
+  const [mesesAnual, setMesesAnual] = useState<MesAnual[]>([])
   const setSelecionada = (l: LinhaPlaca) => setSelId(l.equipamento.id)
   useEffect(() => {
     if (filtros.frota === 'leves') setUnidade('km')
     else if (filtros.frota === 'pesados') setUnidade('h')
   }, [filtros.frota])
 
-  // Frotas ativas → filtro de frota / tipo / placa (opções de tipo e placa respeitam a frota escolhida).
-  const ativosDaFrota = useMemo(() => (dados?.equipamentos || []).filter(e => {
+  // Filtro de frota / tipo / placa (o mesmo nas duas visões).
+  const daFrota = useCallback((e: EquipamentoAtivo) => {
     if (filtros.frota === 'todos') return true
     const f = tipoFrota(e.categoria, e.tipo)
     return filtros.frota === 'leves' ? f === 'leve' : f === 'pesado'
-  }), [dados, filtros.frota])
+  }, [filtros.frota])
+  const filtroEquip = useCallback((e: EquipamentoAtivo) =>
+    daFrota(e) &&
+    (!filtros.tipos.length || filtros.tipos.includes(e.tipo || 'SEM TIPO')) &&
+    (!filtros.placas.length || filtros.placas.includes(e.placa)),
+  [daFrota, filtros.tipos, filtros.placas])
+
+  // Opções de tipo e placa respeitam a frota escolhida.
+  const ativosDaFrota = useMemo(() => (dados?.equipamentos || []).filter(daFrota), [dados, daFrota])
   const tiposDisponiveis = useMemo(() => Array.from(new Set(ativosDaFrota.map(e => e.tipo || 'SEM TIPO'))).sort(), [ativosDaFrota])
   const placasDisponiveis = useMemo(() => ativosDaFrota
     .filter(e => !filtros.tipos.length || filtros.tipos.includes(e.tipo || 'SEM TIPO'))
     .map(e => e.placa).sort(), [ativosDaFrota, filtros.tipos])
-  const equipamentos = useMemo(() => ativosDaFrota.filter(e =>
-    (!filtros.tipos.length || filtros.tipos.includes(e.tipo || 'SEM TIPO')) &&
-    (!filtros.placas.length || filtros.placas.includes(e.placa))
-  ), [ativosDaFrota, filtros.tipos, filtros.placas])
+  const equipamentos = useMemo(() => (dados?.equipamentos || []).filter(filtroEquip), [dados, filtroEquip])
 
   const leituras = dados?.leituras
   const linhas = useMemo(() => montarLinhas(equipamentos, leituras || [], periodo, hoje, filtros.atraso), [equipamentos, leituras, periodo, hoje, filtros.atraso])
@@ -79,6 +94,17 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
     })
   }
 
+  const exportar = (f: 'xlsx' | 'csv') => {
+    if (!anual) { void exportarDashboard(linhas, periodo, f); return }
+    const ano = filtros.ano
+    const rows = mesesAnual.map(m => ({
+      'Mês': m.rotulo,
+      [`Horas ${ano}`]: arred1(m.h), [`Horas ${ano - 1}`]: arred1(m.hAnt),
+      [`KM ${ano}`]: arred1(m.km), [`KM ${ano - 1}`]: arred1(m.kmAnt),
+    }))
+    void exportarTabela(rows, `km_horimetro_anual_${ano}`, `Anual ${ano}`, f)
+  }
+
   const placaUnica = filtros.placas.length === 1 ? linhas.find(l => l.equipamento.placa === filtros.placas[0]) : undefined
 
   const carregandoTela = !pronto || (carregando && !erro) || (!dados && !erro)
@@ -89,65 +115,81 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950 p-3 sm:p-4 border border-zinc-200 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-1 gap-1">
+          {([
+            { v: 'periodo', l: 'Visão do período', i: <CalendarRange size={14} /> },
+            { v: 'anual', l: 'Visão anual (todos os meses)', i: <BarChart3 size={14} /> },
+          ] as const).map(o => (
+            <button key={o.v} type="button" onClick={() => atualizar({ aba: o.v })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${filtros.aba === o.v ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
+              {o.i} {o.l}
+            </button>
+          ))}
+        </div>
+        <span className="flex items-center gap-1 text-xs text-zinc-500"><Info size={12} /> Somente frotas ativas · Pesados em horas (h) · Leves em KM</span>
+      </div>
+
       <FiltrosBar
         filtros={filtros} atualizar={atualizar} limpar={limpar}
         placasDisponiveis={placasDisponiveis} tiposDisponiveis={tiposDisponiveis}
         rfAtual={dados?.rfAtual ?? null}
-        podeExportar={!!dados && linhas.length > 0}
-        onExportar={f => { void exportarDashboard(linhas, periodo, f) }}
+        podeExportar={anual ? mesesAnual.length > 0 : !!dados && linhas.length > 0}
+        onExportar={exportar}
+        modoAnual={anual}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-        <span className="tabular-nums">
-          Período <b className="text-zinc-700 dark:text-zinc-200">{fmtData(periodo.inicio)} a {fmtData(periodo.fim)}</b>
-          {' · '}comparado com {fmtData(anterior.inicio)} a {fmtData(anterior.fim)}
-        </span>
-        <span className="flex items-center gap-1"><Info size={12} /> Somente frotas ativas · Pesados em horas (h) · Leves em KM</span>
-      </div>
-
-      {erro && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">
-          <span className="flex items-center gap-2"><AlertCircle size={16} /> Não foi possível carregar as leituras: {erro}</span>
-          <button type="button" onClick={recarregar} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900/50 text-xs font-semibold"><RefreshCcw size={13} /> Tentar de novo</button>
-        </div>
-      )}
-
-      {carregandoTela ? (
+      {anual ? (
+        pronto && <PainelAnual ano={filtros.ano} onAno={ano => atualizar({ ano })} filtroEquip={filtroEquip} atraso={filtros.atraso} onDados={setMesesAnual} />
+      ) : (
         <>
-          <KpiSkeleton />
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-[300px] rounded-xl bg-zinc-200/70 dark:bg-zinc-800 animate-pulse" />)}
-          </div>
-          <div className="h-[360px] rounded-xl bg-zinc-200/70 dark:bg-zinc-800 animate-pulse" />
-        </>
-      ) : dados && (
-        <>
-          <KpiCards atual={kpis} anterior={kpisAnt} visao={filtros.visao} temAnterior={temAnterior} />
+          <BarraComparacao filtros={filtros} atualizar={atualizar} periodo={periodo} comparacao={anterior} />
 
-          {placaUnica && (
-            <CardGrafico titulo={`Evolução da leitura — ${placaUnica.equipamento.placa}`} sub={placaUnica.unidade === 'h' ? 'Horímetro acumulado' : 'KM acumulado'}>
-              <EvolucaoChart pontos={placaUnica.pontos.filter(p => p.data >= periodo.inicio)} unidade={placaUnica.unidade} />
-            </CardGrafico>
+          {erro && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">
+              <span className="flex items-center gap-2"><AlertCircle size={16} /> Não foi possível carregar as leituras: {erro}</span>
+              <button type="button" onClick={recarregar} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900/50 text-xs font-semibold"><RefreshCcw size={13} /> Tentar de novo</button>
+            </div>
           )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={`Soma em ${nomeUnidade}, com a média do período`} acao={seletorUnidade}>
-              <UsoMensalChart linhas={linhas} unidade={unidade} periodo={periodo} visao={filtros.visao} />
-            </CardGrafico>
-            <CardGrafico titulo="Uso por categoria / tipo" sub={`Soma em ${nomeUnidade}`}>
-              <UsoPorTipoChart linhas={linhas} unidade={unidade} />
-            </CardGrafico>
-          </div>
+          {carregandoTela ? (
+            <>
+              <KpiSkeleton />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-[300px] rounded-xl bg-zinc-200/70 dark:bg-zinc-800 animate-pulse" />)}
+              </div>
+              <div className="h-[360px] rounded-xl bg-zinc-200/70 dark:bg-zinc-800 animate-pulse" />
+            </>
+          ) : dados && (
+            <>
+              <KpiCards atual={kpis} anterior={kpisAnt} visao={filtros.visao} temAnterior={temAnterior} rotuloComparacao={rotuloComparacao(filtros.cmp)} />
 
-          <CardGrafico titulo="Ranking de placas por uso no período" sub={`Em ${nomeUnidade} · clique na barra para ver o histórico`}>
-            <RankingChart linhas={linhas} unidade={unidade} onSelecionar={setSelecionada} />
-          </CardGrafico>
+              {placaUnica && (
+                <CardGrafico titulo={`Evolução da leitura — ${placaUnica.equipamento.placa}`} sub={placaUnica.unidade === 'h' ? 'Horímetro acumulado' : 'KM acumulado'}>
+                  <EvolucaoChart pontos={placaUnica.pontos.filter(p => p.data >= periodo.inicio)} unidade={placaUnica.unidade} />
+                </CardGrafico>
+              )}
 
-          <TabelaAnalitica linhas={linhas} onSelecionar={setSelecionada} />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={`Soma em ${nomeUnidade}, com a média do período`} acao={seletorUnidade}>
+                  <UsoMensalChart linhas={linhas} unidade={unidade} periodo={periodo} visao={filtros.visao} />
+                </CardGrafico>
+                <CardGrafico titulo="Uso por categoria / tipo" sub={`Soma em ${nomeUnidade}`}>
+                  <UsoPorTipoChart linhas={linhas} unidade={unidade} />
+                </CardGrafico>
+              </div>
+
+              <CardGrafico titulo="Ranking de placas por uso no período" sub={`Em ${nomeUnidade} · clique na barra para ver o histórico`}>
+                <RankingChart linhas={linhas} unidade={unidade} onSelecionar={setSelecionada} />
+              </CardGrafico>
+
+              <TabelaAnalitica linhas={linhas} onSelecionar={setSelecionada} />
+            </>
+          )}
         </>
       )}
 
-      {selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} periodo={periodo} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
+      {!anual && selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} periodo={periodo} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
       {corrigindo && <EditarLeituraModal leituras={[corrigindo]} onClose={() => setCorrigindo(null)} />}
     </div>
   )

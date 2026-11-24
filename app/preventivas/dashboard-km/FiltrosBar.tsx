@@ -15,6 +15,8 @@ type Props = {
   rfAtual: { ano: number; mes: number; inicio: string; fim: string } | null
   onExportar: (formato: 'xlsx' | 'csv') => void
   podeExportar: boolean
+  /** Visão anual: esconde os controles de período (o ano é escolhido no próprio painel). */
+  modoAnual?: boolean
 }
 
 export function Segmentado<T extends string>({ valor, opcoes, onChange }: { valor: T; opcoes: { v: T; l: string }[]; onChange: (v: T) => void }) {
@@ -108,7 +110,7 @@ function MenuExportar({ onExportar, desabilitado }: { onExportar: (f: 'xlsx' | '
 
 const inputData = 'px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500'
 
-export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfAtual, onExportar, podeExportar }: Props) {
+export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfAtual, onExportar, podeExportar, modoAnual = false }: Props) {
   const mesSelecionado = filtros.modo === 'mes' ? filtros.inicio.slice(0, 7) : ''
   const btnAtalho = (ativo: boolean) => `px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${ativo ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
 
@@ -121,8 +123,10 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
         <CheckboxMultiSelect values={filtros.tipos} onChange={v => atualizar({ tipos: v })}
           options={tiposDisponiveis.map(t => ({ value: t, label: t }))} placeholder="Categoria / Tipo" />
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-[11px] font-semibold text-zinc-500 uppercase">Média</span>
-          <Segmentado valor={filtros.visao} onChange={v => atualizar({ visao: v })} opcoes={[{ v: 'mensal', l: 'Mensal' }, { v: 'anual', l: 'Anual' }]} />
+          {!modoAnual && <>
+            <span className="text-[11px] font-semibold text-zinc-500 uppercase">Média</span>
+            <Segmentado valor={filtros.visao} onChange={v => atualizar({ visao: v })} opcoes={[{ v: 'mensal', l: 'Mensal' }, { v: 'anual', l: 'Anual' }]} />
+          </>}
           <button type="button" onClick={limpar} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800">
             <FilterX size={13} /> Limpar filtros
           </button>
@@ -130,7 +134,7 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      {!modoAnual && <div className="flex flex-wrap items-center gap-1.5">
         {ATALHOS.map(a => (
           <button key={a.v} type="button" className={btnAtalho(filtros.modo === a.v)}
             onClick={() => atualizar({ modo: a.v, ...periodoDoAtalho(a.v, hojeLocal()) })}>{a.l}</button>
@@ -164,7 +168,7 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
             onChange={e => { const n = Math.round(Number(e.target.value)); if (n >= 1) atualizar({ atraso: n }) }} />
           dias
         </label>
-      </div>
+      </div>}
     </div>
   )
 }

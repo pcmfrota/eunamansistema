@@ -14,22 +14,23 @@ type CardProps = {
   /** true quando subir é ruim (alertas) — inverte a cor da variação. */
   subirEhRuim?: boolean
   alerta?: boolean
+  rotulo: string
 }
 
-function Variacao({ v, subirEhRuim }: { v: number | null; subirEhRuim?: boolean }) {
-  if (v == null) return <span className="text-[11px] text-zinc-400">sem base anterior</span>
+function Variacao({ v, subirEhRuim, rotulo }: { v: number | null; subirEhRuim?: boolean; rotulo: string }) {
+  if (v == null) return <span className="text-[11px] text-zinc-400">sem base de comparação</span>
   const zero = Math.abs(v) < 0.05
   const bom = zero ? null : (v > 0) !== !!subirEhRuim
   const cor = zero ? 'text-zinc-500' : bom ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
   const Icone = zero ? Minus : v > 0 ? TrendingUp : TrendingDown
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${cor}`}>
-      <Icone size={12} /> {v > 0 ? '+' : ''}{fmtNum(v, 1)}% <span className="font-normal text-zinc-400">vs. período anterior</span>
+      <Icone size={12} /> {v > 0 ? '+' : ''}{fmtNum(v, 1)}% <span className="font-normal text-zinc-400">vs. {rotulo}</span>
     </span>
   )
 }
 
-function Card({ titulo, valor, sub, icone, variacao, subirEhRuim, alerta }: CardProps) {
+function CardBase({ titulo, valor, sub, icone, variacao, subirEhRuim, alerta, rotulo }: CardProps) {
   return (
     <div className={`rounded-xl border p-4 flex flex-col gap-2 bg-white dark:bg-zinc-900 ${alerta ? 'border-red-200 dark:border-red-900/50' : 'border-zinc-200 dark:border-zinc-800'}`}>
       <div className="flex items-center justify-between gap-2">
@@ -38,7 +39,7 @@ function Card({ titulo, valor, sub, icone, variacao, subirEhRuim, alerta }: Card
       </div>
       <div className={`text-2xl font-extrabold tabular-nums leading-none ${alerta ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-white'}`}>{valor}</div>
       {sub && <div className="text-[11px] text-zinc-500 tabular-nums">{sub}</div>}
-      <Variacao v={variacao} subirEhRuim={subirEhRuim} />
+      <Variacao v={variacao} subirEhRuim={subirEhRuim} rotulo={rotulo} />
     </div>
   )
 }
@@ -51,7 +52,8 @@ export function KpiSkeleton() {
   )
 }
 
-export default function KpiCards({ atual, anterior, visao, temAnterior }: { atual: Kpis; anterior: Kpis; visao: VisaoMedia; temAnterior: boolean }) {
+export default function KpiCards({ atual, anterior, visao, temAnterior, rotuloComparacao = 'período anterior' }: { atual: Kpis; anterior: Kpis; visao: VisaoMedia; temAnterior: boolean; rotuloComparacao?: string }) {
+  const Card = (p: Omit<CardProps, 'rotulo'>) => CardBase({ ...p, rotulo: rotuloComparacao })
   const v = (a: number | null, b: number | null) => (temAnterior && a != null ? variacaoPercentual(a, b) : null)
   const rotuloMedia = visao === 'mensal' ? 'Média mensal / equip.' : 'Média anual / equip.'
   return (

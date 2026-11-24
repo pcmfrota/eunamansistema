@@ -124,6 +124,27 @@ export function periodoAnterior({ inicio, fim }: Periodo): Periodo {
   return { inicio: somarDias(inicio, -dias), fim: somarDias(inicio, -1) }
 }
 
+/** Com o que comparar: período imediatamente anterior, mesmo período do ano anterior, ou datas escolhidas. */
+export type ModoComparacao = 'anterior' | 'ano-anterior' | 'custom'
+
+/** Mesma data um ano antes (29/02 vira 28/02). */
+export function menosUmAno(d: string): string {
+  const a = +d.slice(0, 4) - 1, m = d.slice(5, 7)
+  const dia = Math.min(+d.slice(8, 10), +fimDoMes(`${a}-${m}`).slice(8, 10))
+  return `${a}-${m}-${String(dia).padStart(2, '0')}`
+}
+
+/** Período de comparação conforme o modo escolhido (datas livres inválidas caem no período anterior). */
+export function periodoComparacao(periodo: Periodo, modo: ModoComparacao, livre?: { inicio?: string | null; fim?: string | null }): Periodo {
+  if (modo === 'ano-anterior') {
+    const fim = menosUmAno(periodo.fim)
+    const fimDeMes = periodo.fim === fimDoMes(periodo.fim.slice(0, 7))
+    return { inicio: menosUmAno(periodo.inicio), fim: fimDeMes ? fimDoMes(fim.slice(0, 7)) : fim }
+  }
+  if (modo === 'custom' && livre?.inicio && livre?.fim && livre.inicio <= livre.fim) return { inicio: livre.inicio, fim: livre.fim }
+  return periodoAnterior(periodo)
+}
+
 // ─── SÉRIE DE LEITURAS ──────────────────────────────────────────────────────────
 export function ordenarLeituras<T extends PontoLeitura>(leituras: T[]): T[] {
   return [...leituras].sort((a, b) => a.data.localeCompare(b.data) || (a.ordem || '').localeCompare(b.ordem || ''))

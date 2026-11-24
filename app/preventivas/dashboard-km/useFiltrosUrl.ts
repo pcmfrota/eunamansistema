@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { periodoDoAtalho, type AtalhoPeriodo, type VisaoMedia } from '@/lib/horimetro-km-calc'
+import { periodoDoAtalho, type AtalhoPeriodo, type VisaoMedia, type ModoComparacao } from '@/lib/horimetro-km-calc'
 
 export type FiltroFrota = 'todos' | 'pesados' | 'leves'
 /** Atalho escolhido, 'rf' (período Suzano atual), 'mes' (seletor de mês/ano) ou 'custom' (datas livres). */
@@ -17,6 +17,13 @@ export type FiltrosDashboard = {
   visao: VisaoMedia
   /** Dias sem leitura a partir dos quais a placa fica "Atrasada". */
   atraso: number
+  /** Com o que comparar os KPIs (e as datas, quando escolhidas à mão). */
+  cmp: ModoComparacao
+  cmpIni: string
+  cmpFim: string
+  /** Visão do período filtrado ou visão anual (todos os meses de um ano). */
+  aba: 'periodo' | 'anual'
+  ano: number
 }
 
 export const hojeLocal = () => {
@@ -26,11 +33,11 @@ export const hojeLocal = () => {
 
 export function filtrosPadrao(): FiltrosDashboard {
   const p = periodoDoAtalho('mes-atual', hojeLocal())
-  return { frota: 'todos', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, visao: 'mensal', atraso: 7 }
+  return { frota: 'todos', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
 }
 
 // Prefixo "dk_" pra não colidir com outros parâmetros da página.
-const P = { frota: 'dk_frota', placas: 'dk_placas', tipos: 'dk_tipos', modo: 'dk_periodo', inicio: 'dk_ini', fim: 'dk_fim', visao: 'dk_visao', atraso: 'dk_atraso' } as const
+const P = { frota: 'dk_frota', placas: 'dk_placas', tipos: 'dk_tipos', modo: 'dk_periodo', inicio: 'dk_ini', fim: 'dk_fim', visao: 'dk_visao', atraso: 'dk_atraso', cmp: 'dk_cmp', cmpIni: 'dk_cmp_ini', cmpFim: 'dk_cmp_fim', aba: 'dk_aba', ano: 'dk_ano' } as const
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
 const MODOS: ModoPeriodo[] = ['mes-atual', 'mes-anterior', 'ultimos-3-meses', 'ano-atual', 'ano-anterior', 'rf', 'mes', 'custom']
 
@@ -51,6 +58,12 @@ function lerDaUrl(): FiltrosDashboard {
     visao: sp.get(P.visao) === 'anual' ? 'anual' : 'mensal',
     atraso: Number.isFinite(atraso) && atraso > 0 ? Math.round(atraso) : base.atraso,
   }
+  const cmp = sp.get(P.cmp), cIni = sp.get(P.cmpIni) || '', cFim = sp.get(P.cmpFim) || ''
+  if (cmp === 'ano-anterior') f.cmp = 'ano-anterior'
+  else if (cmp === 'custom' && DATA_RE.test(cIni) && DATA_RE.test(cFim) && cIni <= cFim) { f.cmp = 'custom'; f.cmpIni = cIni; f.cmpFim = cFim }
+  if (sp.get(P.aba) === 'anual') f.aba = 'anual'
+  const ano = Number(sp.get(P.ano))
+  if (Number.isInteger(ano) && ano >= 2000 && ano <= base.ano) f.ano = ano
   if (modo && MODOS.includes(modo)) {
     f.modo = modo
     if (modo !== 'rf' && modo !== 'mes' && modo !== 'custom') Object.assign(f, periodoDoAtalho(modo, hojeLocal()))
@@ -76,6 +89,11 @@ function gravarNaUrl(f: FiltrosDashboard) {
   set(P.fim, datasLivres ? f.fim : null)
   set(P.visao, f.visao !== 'mensal' ? f.visao : null)
   set(P.atraso, f.atraso !== def.atraso ? String(f.atraso) : null)
+  set(P.cmp, f.cmp !== 'anterior' ? f.cmp : null)
+  set(P.cmpIni, f.cmp === 'custom' ? f.cmpIni : null)
+  set(P.cmpFim, f.cmp === 'custom' ? f.cmpFim : null)
+  set(P.aba, f.aba !== 'periodo' ? f.aba : null)
+  set(P.ano, f.aba === 'anual' && f.ano !== def.ano ? String(f.ano) : null)
   const qs = sp.toString()
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`)
 }
@@ -89,6 +107,7 @@ export function useFiltrosUrl() {
   useEffect(() => { if (pronto) gravarNaUrl(filtros) }, [filtros, pronto])
 
   const atualizar = useCallback((parcial: Partial<FiltrosDashboard>) => setFiltros(f => ({ ...f, ...parcial })), [])
-  const limpar = useCallback(() => setFiltros(filtrosPadrao()), [])
+  // Limpar mantém a visão (período/anual) em que o usuário está.
+  const limpar = useCallback(() => setFiltros(f => ({ ...filtrosPadrao(), aba: f.aba, ano: f.ano })), [])
   return { filtros, atualizar, limpar, pronto }
 }
