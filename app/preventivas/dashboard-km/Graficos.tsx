@@ -51,12 +51,13 @@ export function UsoMensalChart({ linhas, unidade, periodo, visao }: { linhas: Li
   if (!dados.some(d => d.valor > 0)) return <Vazio />
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={dados} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+      <BarChart data={dados} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke={GRADE} strokeDasharray="3 3" />
         <XAxis dataKey="rotulo" tick={EIXO} axisLine={false} tickLine={false} />
         <YAxis tick={EIXO} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtNum(Number(v))} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
-        <Bar dataKey="valor" fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={48} />
+        <Bar dataKey="valor" fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={48}
+          label={{ position: 'top', fontSize: 11, fontWeight: 700, fill: '#3f3f46', formatter: (v: number) => (v > 0 ? `${fmtNum(v)} ${unidade}` : '') }} />
         {med != null && (
           <ReferenceLine y={med} stroke="#a1a1aa" strokeDasharray="4 4"
             label={{ value: `média ${fmtNum(med)} ${unidade}`, position: 'insideTopRight', fontSize: 11, fill: '#52525b' }} />
