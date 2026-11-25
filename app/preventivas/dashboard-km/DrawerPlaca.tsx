@@ -115,7 +115,7 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
             <p className="text-[11px] text-zinc-500">Uso no período = última leitura do período ({fmtData(r!.dataFinal)}) − primeira leitura do período ({fmtData(r!.dataInicial)}).</p>
           )}
           {pontos.some(p => p.inconsistente) && (
-            <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras menores que a anterior: ficam fora dos cálculos até serem corrigidas{onCorrigir ? ' (use o lápis para corrigir)' : ''}.</p>
+            <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras fora da sequência (muito altas ou menores que as anteriores, provável erro de digitação): ficam fora dos cálculos até serem corrigidas{onCorrigir ? ' (use o lápis para corrigir)' : ''}.</p>
           )}
         </div>
       </aside>

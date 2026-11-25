@@ -72,7 +72,7 @@ export default function KpiCards({ atual, anterior, visao, temAnterior, rotuloCo
       <Card titulo="Sem leitura no período" icone={<AlertTriangle size={16} />} alerta={atual.semLeitura > 0}
         valor={fmtNum(atual.semLeitura)} sub="placas ativas" variacao={v(atual.semLeitura, anterior.semLeitura)} subirEhRuim />
       <Card titulo="Inconsistências" icone={<AlertOctagon size={16} />} alerta={atual.inconsistencias > 0}
-        valor={fmtNum(atual.inconsistencias)} sub="leituras menores que a anterior" variacao={v(atual.inconsistencias, anterior.inconsistencias)} subirEhRuim />
+        valor={fmtNum(atual.inconsistencias)} sub="leituras fora da sequência" variacao={v(atual.inconsistencias, anterior.inconsistencias)} subirEhRuim />
     </div>
   )
 }

@@ -15,6 +15,7 @@ import TabelaAnalitica from './TabelaAnalitica'
 import DrawerPlaca from './DrawerPlaca'
 import BarraComparacao, { rotuloComparacao } from './BarraComparacao'
 import PainelAnual, { type MesAnual } from './PainelAnual'
+import MediasCharts from './MediasCharts'
 import { exportarDashboard, exportarTabela } from './exportar'
 import EditarLeituraModal, { type LeituraEditavel } from '../EditarLeituraModal'
 
@@ -185,6 +186,8 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
                   <UsoPorTipoChart linhas={linhas} unidade={unidade} />
                 </CardGrafico>
               </div>
+
+              <MediasCharts linhas={linhas} onSelecionar={setSelecionada} />
 
               <CardGrafico titulo="Ranking de placas por uso no período" sub={`Em ${nomeUnidade} · clique na barra para ver o histórico`}>
                 <RankingChart linhas={linhas} unidade={unidade} onSelecionar={setSelecionada} />

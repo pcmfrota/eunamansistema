@@ -152,11 +152,32 @@ export function ordenarLeituras<T extends PontoLeitura>(leituras: T[]): T[] {
   return [...leituras].sort((a, b) => a.data.localeCompare(b.data) || (a.ordem || '').localeCompare(b.ordem || ''))
 }
 
-/** Marca como inconsistente toda leitura menor que a última leitura válida anterior. */
+/**
+ * Marca as leituras fora da sequência. Horímetro/KM só sobem, então as leituras válidas são a
+ * MAIOR sequência crescente possível (em ordem de data); o que fica de fora é inconsistente.
+ * Assim, um valor digitado alto demais (ex.: 19.860 no lugar de 1.986) marca só ele mesmo,
+ * e não todas as leituras corretas que vêm depois. Empate: mantém as leituras mais antigas.
+ * diferenca = valor − última leitura válida antes dela.
+ */
 export function classificarLeituras(leituras: PontoLeitura[]): PontoClassificado[] {
+  const ord = ordenarLeituras(leituras)
+  const n = ord.length
+  const comp = new Array<number>(n).fill(1)
+  const ant = new Array<number>(n).fill(-1)
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < i; j++) { // em empate fica o antecessor mais antigo
+      if (ord[j].valor <= ord[i].valor && comp[j] + 1 > comp[i]) { comp[i] = comp[j] + 1; ant[i] = j }
+    }
+  }
+  const validas = new Set<number>()
+  if (n) {
+    let fim = 0
+    for (let i = 1; i < n; i++) if (comp[i] > comp[fim]) fim = i
+    for (let k = fim; k >= 0; k = ant[k]) validas.add(k)
+  }
   let ultimaValida: PontoLeitura | null = null
-  return ordenarLeituras(leituras).map(p => {
-    const inconsistente = ultimaValida != null && p.valor < ultimaValida.valor
+  return ord.map((p, i) => {
+    const inconsistente = !validas.has(i)
     const diferenca = ultimaValida != null ? p.valor - ultimaValida.valor : null
     if (!inconsistente) ultimaValida = p
     return { ...p, diferenca, inconsistente }

@@ -99,15 +99,35 @@ describe('calcularUso — placas de teste conferidas à mão', () => {
 })
 
 describe('classificarLeituras', () => {
-  it('compara com a última leitura VÁLIDA, não com a regressiva', () => {
+  it('valor baixo isolado: só ele fica inconsistente', () => {
     const c = classificarLeituras([
       { data: '2026-01-01', valor: 100 },
       { data: '2026-01-02', valor: 90 },
-      { data: '2026-01-03', valor: 95 },
+      { data: '2026-01-03', valor: 105 },
       { data: '2026-01-04', valor: 120 },
     ])
-    expect(c.map(p => p.inconsistente)).toEqual([false, true, true, false])
-    expect(c[3].diferenca).toBe(20)
+    expect(c.map(p => p.inconsistente)).toEqual([false, true, false, false])
+    expect(c[2].diferenca).toBe(5) // 105 − 100 (a última válida)
+  })
+
+  it('valor ALTO digitado errado não derruba as leituras corretas seguintes', () => {
+    const c = classificarLeituras([
+      { data: '2026-05-01', valor: 1900 },
+      { data: '2026-05-02', valor: 19860 }, // erro de digitação
+      { data: '2026-05-10', valor: 1950 },
+      { data: '2026-05-20', valor: 2000 },
+      { data: '2026-05-30', valor: 2040 },
+    ])
+    expect(c.map(p => p.inconsistente)).toEqual([false, true, false, false, false])
+    expect(c[2].diferenca).toBe(50)
+  })
+
+  it('empate: mantém a leitura mais antiga e marca a mais nova', () => {
+    const c = classificarLeituras([
+      { data: '2026-11-19', valor: 164679.4 },
+      { data: '2026-11-22', valor: 16435.6 },
+    ])
+    expect(c.map(p => p.inconsistente)).toEqual([false, true])
   })
 
   it('desempata leituras do mesmo dia pela ordem de registro', () => {
