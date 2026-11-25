@@ -16,14 +16,14 @@ import {
  *   uso = 1.400 − 1.100 = 300 h
  *   outubro = 1.250−1.100 = 150 h ; novembro = 1.400−1.250 = 150 h
  *   meses com leitura = 2 → média mensal = 300 ÷ 2 = 150 h ; projeção anual = 150 × 12 = 1.800 h
- *   dias corridos 05/10 → 20/11 = 46 → média diária = 300 ÷ 46 ≈ 6,52 h/dia
+ *   dias do período 01/10 → 30/11 = 61 → média diária = 300 ÷ 61 ≈ 4,92 h/dia
  *   média anual (um só ano) = 300 h
  *
  * PLACA DE TESTE 2 — LEVE (KM), período 01/11/2026 a 30/11/2026, sem leitura anterior
  *   02/11 50.000 km ; 12/11 50.300 km ; 22/11 51.000 km
  * Cálculo manual:
  *   uso = 51.000 − 50.000 = 1.000 km ; 1 mês → média mensal 1.000 km ; projeção 12.000 km
- *   dias 02/11 → 22/11 = 20 → média diária 50 km/dia
+ *   novembro = 30 dias → média diária 1.000 ÷ 30 ≈ 33,33 km/dia
  */
 const placa1 = [
   { data: '2026-09-20', valor: 1000 },
@@ -50,7 +50,7 @@ describe('calcularUso — placas de teste conferidas à mão', () => {
     expect(r.mesesComLeitura).toBe(2)
     expect(r.mediaMensal).toBe(150)
     expect(r.projecaoAnual).toBe(1800)
-    expect(r.mediaDiaria).toBeCloseTo(300 / 46, 6)
+    expect(r.mediaDiaria).toBeCloseTo(300 / 61, 6)
     expect(r.mediaAnual).toBe(300)
     expect(r.inconsistencias).toBe(1)
     expect(r.ultimaLeitura).toBe('2026-11-20')
@@ -62,7 +62,7 @@ describe('calcularUso — placas de teste conferidas à mão', () => {
     expect(r.leituraInicial).toBe(50000)
     expect(r.mediaMensal).toBe(1000)
     expect(r.projecaoAnual).toBe(12000)
-    expect(r.mediaDiaria).toBe(50)
+    expect(r.mediaDiaria).toBeCloseTo(1000 / 30, 6)
     expect(r.inconsistencias).toBe(0)
   })
 

@@ -196,7 +196,7 @@ const vazio = (ultimaLeitura: string | null, inconsistencias: number): Resultado
  * - uso = última leitura do período − primeira leitura do período (regressivas descartadas);
  * - com uma única leitura no período o uso fica "insuficiente" (precisa de pelo menos 2);
  * - média mensal = uso ÷ meses com leitura; média anual = média das somas por ano;
- * - média diária = uso ÷ dias corridos entre a primeira e a última leitura do período;
+ * - média diária = uso ÷ total de dias do período filtrado (ex.: novembro = 30 dias);
  * - projeção anual = média mensal × 12.
  * Leituras antes do início só servem pra detectar leitura regressiva.
  */
@@ -239,7 +239,7 @@ export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: strin
   const anos = Object.keys(usoPorAno).length
 
   const mediaMensal = meses.size ? uso / meses.size : null
-  const dias = diasEntre(ini.data, fin.data)
+  const dias = diasEntre(inicio, fim) + 1
   return {
     leituraInicial: ini.valor, dataInicial: ini.data,
     leituraFinal: fin.valor, dataFinal: fin.data,

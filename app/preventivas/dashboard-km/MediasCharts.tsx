@@ -90,7 +90,7 @@ export default function MediasCharts({ linhas, onSelecionar }: { linhas: LinhaPl
       opcoes={[{ v: 'dia', l: 'Por dia' }, { v: 'mes', l: 'Por mês' }, { v: 'ano', l: 'Por ano' }]} />
   )
   const explicacao = tipo === 'dia'
-    ? 'Uso no período ÷ dias entre a primeira e a última leitura'
+    ? 'Uso no período ÷ dias do período filtrado (ex.: novembro = 30 dias)'
     : tipo === 'mes' ? 'Uso no período ÷ meses com leitura' : 'Projeção anual: média mensal × 12'
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
