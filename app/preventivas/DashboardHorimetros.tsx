@@ -80,7 +80,7 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
                   {/* Badge above bar */}
                   <rect x={barCx - 16} y={barY - 18} width={32} height={15} rx={3} fill="var(--bg-primary)" stroke="var(--border-color)" strokeWidth={0.5} />
                   <text x={barCx} y={barY - 7} textAnchor="middle" fontSize={9} fontWeight="700" fill="var(--text-primary)" pointerEvents="none">
-                    {falta === 0 ? '0' : `+${falta}`}
+                    {Math.trunc(falta) === 0 ? '0' : `+${Math.trunc(falta)}`}
                   </text>
                   {/* Só placa embaixo — sem módulo para evitar sobreposição */}
                   <text x={barCx} y={BASELINE + NEG_H + 16} textAnchor="middle" fontSize={9} fontWeight="700" fill="currentColor" className="text-slate-600 dark:text-slate-400" pointerEvents="none">
@@ -98,7 +98,7 @@ function GroupChart({ title, items, onBarClick, fullWidth = false }: {
                     onMouseLeave={e => e.currentTarget.setAttribute('opacity', '0.92')} />
                   {/* Badge INSIDE bar at top */}
                   <rect x={barCx - 16} y={BASELINE + 3} width={32} height={14} rx={3} fill="var(--bg-primary)" stroke="var(--border-color)" strokeWidth={0.5} />
-                  <text x={barCx} y={BASELINE + 14} textAnchor="middle" fontSize={9} fontWeight="700" fill="var(--text-primary)" pointerEvents="none">{falta}</text>
+                  <text x={barCx} y={BASELINE + 14} textAnchor="middle" fontSize={9} fontWeight="700" fill="var(--text-primary)" pointerEvents="none">{Math.trunc(falta) === 0 ? '0' : Math.trunc(falta)}</text>
                   {/* Só placa */}
                   <text x={barCx} y={BASELINE + NEG_H + 16} textAnchor="middle" fontSize={9} fontWeight="700" fill="currentColor" className="text-slate-600 dark:text-slate-400" pointerEvents="none">
                     {p.equipamentos?.placa}
