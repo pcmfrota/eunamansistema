@@ -15,7 +15,7 @@ type HistoricoItem = {
   unidade: 'h' | 'km'
   valor_anterior: number | null
   valor_novo: number
-  origem: 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL' | 'ATUALIZACAO_MODAL'
+  origem: 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL' | 'ATUALIZACAO_MODAL' | 'IMPORTADO_OS'
   km_anterior?: number | null
   km_novo?: number | null
   data_referencia?: string | null
@@ -28,6 +28,7 @@ const ORIGENS: Record<string, { label: string; cls: string }> = {
   NOVO_APONTAMENTO: { label: 'Novo Apontamento', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
   EDICAO_MANUAL: { label: 'Edição na Tabela', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   ATUALIZACAO_MODAL: { label: 'Atualização H/KM', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+  IMPORTADO_OS: { label: 'Importado das OS', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
 }
 
 function OrigemTag({ origem }: { origem: string }) {
@@ -117,6 +118,7 @@ export default function HistoricoHorimetrosTab() {
             { value: 'NOVO_APONTAMENTO', label: 'Novo Apontamento' },
             { value: 'EDICAO_MANUAL', label: 'Edição na Tabela' },
             { value: 'ATUALIZACAO_MODAL', label: 'Atualização H/KM' },
+            { value: 'IMPORTADO_OS', label: 'Importado das OS' },
           ]}
           placeholder="Todas as Origens"
         />
