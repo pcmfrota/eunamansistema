@@ -142,6 +142,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
         podeExportar={anual ? mesesAnual.length > 0 : !!dados && linhas.length > 0}
         onExportar={exportar}
         modoAnual={anual}
+        extra={anual ? null : seletorUnidade}
       />
 
       {anual ? (
@@ -177,7 +178,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
               )}
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={`Soma em ${nomeUnidade}, com a média do período`} acao={seletorUnidade}>
+                <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={`Soma em ${nomeUnidade}, com a média do período`}>
                   <UsoMensalChart linhas={linhas} unidade={unidade} periodo={periodo} visao={filtros.visao} />
                 </CardGrafico>
                 <CardGrafico titulo="Uso por categoria / tipo" sub={`Soma em ${nomeUnidade}`}>

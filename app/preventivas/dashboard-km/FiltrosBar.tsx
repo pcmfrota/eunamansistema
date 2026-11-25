@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react'
 import { Search, X, FilterX, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
 import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
 import { fimDoMes, periodoDoAtalho, type AtalhoPeriodo } from '@/lib/horimetro-km-calc'
@@ -17,6 +17,8 @@ type Props = {
   podeExportar: boolean
   /** Visão anual: esconde os controles de período (o ano é escolhido no próprio painel). */
   modoAnual?: boolean
+  /** Controle extra mostrado ao lado de Categoria / Tipo (ex.: Horímetro / KM dos gráficos). */
+  extra?: ReactNode
 }
 
 export function Segmentado<T extends string>({ valor, opcoes, onChange }: { valor: T; opcoes: { v: T; l: string }[]; onChange: (v: T) => void }) {
@@ -110,7 +112,7 @@ function MenuExportar({ onExportar, desabilitado }: { onExportar: (f: 'xlsx' | '
 
 const inputData = 'px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500'
 
-export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfAtual, onExportar, podeExportar, modoAnual = false }: Props) {
+export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfAtual, onExportar, podeExportar, modoAnual = false, extra }: Props) {
   const mesSelecionado = filtros.modo === 'mes' ? filtros.inicio.slice(0, 7) : ''
   const btnAtalho = (ativo: boolean) => `px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${ativo ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
 
@@ -122,6 +124,7 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
         <PlacasSelect valores={filtros.placas} onChange={v => atualizar({ placas: v })} opcoes={placasDisponiveis} />
         <CheckboxMultiSelect values={filtros.tipos} onChange={v => atualizar({ tipos: v })}
           options={tiposDisponiveis.map(t => ({ value: t, label: t }))} placeholder="Categoria / Tipo" />
+        {extra}
         <div className="flex items-center gap-2 ml-auto">
           {!modoAnual && <>
             <span className="text-[11px] font-semibold text-zinc-500 uppercase">Média</span>
