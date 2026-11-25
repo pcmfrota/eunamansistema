@@ -196,7 +196,8 @@ const vazio = (ultimaLeitura: string | null, inconsistencias: number): Resultado
  * - uso = última leitura do período − primeira leitura do período (regressivas descartadas);
  * - com uma única leitura no período o uso fica "insuficiente" (precisa de pelo menos 2);
  * - média mensal = uso ÷ meses com leitura; média anual = média das somas por ano;
- * - média diária = uso ÷ total de dias do período filtrado (ex.: novembro = 30 dias);
+ * - média diária = uso ÷ dias do período até hoje (mês encerrado = todos os dias; mês atual =
+ *   do dia 1 até hoje, ex.: 25/11 → 25 dias);
  * - projeção anual = média mensal × 12.
  * Leituras antes do início só servem pra detectar leitura regressiva.
  */
@@ -205,7 +206,7 @@ export function usoValido(r: ResultadoUso | null | undefined): number | null {
   return r && r.temLeituraNoPeriodo && !r.insuficiente ? r.uso : null
 }
 
-export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: string): ResultadoUso {
+export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: string, hoje?: string): ResultadoUso {
   const cls = classificarLeituras(leituras.filter(l => l.data <= fim))
   const validas = cls.filter(p => !p.inconsistente)
   const noPeriodo = validas.filter(p => p.data >= inicio)
@@ -239,7 +240,8 @@ export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: strin
   const anos = Object.keys(usoPorAno).length
 
   const mediaMensal = meses.size ? uso / meses.size : null
-  const dias = diasEntre(inicio, fim) + 1
+  const ate = hoje && hoje < fim ? (hoje < inicio ? inicio : hoje) : fim
+  const dias = diasEntre(inicio, ate) + 1
   return {
     leituraInicial: ini.valor, dataInicial: ini.data,
     leituraFinal: fin.valor, dataFinal: fin.data,
@@ -344,8 +346,8 @@ export function montarLinhas(
     const unidade: Unidade = frota === 'leve' ? 'km' : 'h'
     const { h, km } = seriesDaPlaca(porEq.get(eq.id) || [])
     const serieP = frota === 'leve' ? km : h
-    const principal = calcularUso(serieP, periodo.inicio, periodo.fim)
-    const kmRes = frota === 'pesado' && km.length ? calcularUso(km, periodo.inicio, periodo.fim) : null
+    const principal = calcularUso(serieP, periodo.inicio, periodo.fim, hoje)
+    const kmRes = frota === 'pesado' && km.length ? calcularUso(km, periodo.inicio, periodo.fim, hoje) : null
     const ultimas = [principal.ultimaLeitura, kmRes?.ultimaLeitura].filter((d): d is string => !!d).sort()
     const ultimaLeitura = ultimas.length ? ultimas[ultimas.length - 1] : null
     const dias = diasSemLeitura(ultimaLeitura, referencia)

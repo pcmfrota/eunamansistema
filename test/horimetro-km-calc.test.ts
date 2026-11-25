@@ -66,6 +66,12 @@ describe('calcularUso — placas de teste conferidas à mão', () => {
     expect(r.inconsistencias).toBe(0)
   })
 
+  it('média diária do mês em andamento divide só pelos dias até hoje', () => {
+    const r = calcularUso(placa2, '2026-11-01', '2026-11-30', '2026-11-25')
+    expect(r.mediaDiaria).toBeCloseTo(1000 / 25, 6)
+    expect(calcularUso(placa2, '2026-11-01', '2026-11-30', '2026-12-10').mediaDiaria).toBeCloseTo(1000 / 30, 6)
+  })
+
   it('soma dos meses é igual ao uso', () => {
     const r = calcularUso(placa1, '2026-10-01', '2026-11-30')
     expect(Object.values(r.usoPorMes).reduce((s, v) => s + v, 0)).toBe(r.uso)
