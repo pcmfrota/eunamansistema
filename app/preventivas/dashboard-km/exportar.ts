@@ -1,4 +1,4 @@
-import { fmtData, type LinhaPlaca, type Periodo } from '@/lib/horimetro-km-calc'
+import { fmtData, usoValido, type LinhaPlaca, type Periodo } from '@/lib/horimetro-km-calc'
 
 const arred = (v: number | null, casas = 1) => (v == null ? null : Math.round(v * 10 ** casas) / 10 ** casas)
 
@@ -14,14 +14,14 @@ export function linhasExportacao(linhas: LinhaPlaca[]) {
       'Leitura inicial': arred(p.leituraInicial),
       'Data leitura inicial': fmtData(p.dataInicial),
       'Leitura final': arred(p.leituraFinal),
-      'Uso no período': p.temLeituraNoPeriodo ? arred(p.uso) : null,
+      'Uso no período': p.insuficiente ? 'Insuficiente (1 leitura)' : arred(usoValido(p)),
       'Média diária': arred(p.mediaDiaria, 2),
       'Média mensal': arred(p.mediaMensal),
       'Média anual': arred(p.mediaAnual),
       'Projeção anual': arred(p.projecaoAnual, 0),
       'KM inicial': arred(l.km?.leituraInicial ?? null),
       'KM final': arred(l.km?.leituraFinal ?? null),
-      'KM rodado no período': l.km?.temLeituraNoPeriodo ? arred(l.km.uso) : null,
+      'KM rodado no período': l.km?.insuficiente ? 'Insuficiente (1 leitura)' : arred(usoValido(l.km)),
       'Última leitura': fmtData(l.ultimaLeitura),
       'Dias sem leitura': l.diasSemLeitura,
       Inconsistências: l.inconsistencias,

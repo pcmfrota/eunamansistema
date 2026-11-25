@@ -36,9 +36,11 @@ export type ResultadoUso = {
   dataInicial: string | null
   leituraFinal: number | null
   dataFinal: string | null
-  /** Leitura final − leitura inicial (base = última leitura antes do início, se houver). */
+  /** Última leitura do período − primeira leitura do período (só leituras dentro do período). */
   uso: number
   temLeituraNoPeriodo: boolean
+  /** Só 1 leitura válida no período: não dá pra calcular o uso (precisa de pelo menos 2). */
+  insuficiente: boolean
   /** 'aaaa-mm' → uso atribuído ao mês da leitura que o registrou. Soma = uso. */
   usoPorMes: Record<string, number>
   /** 'aaaa' → soma do uso no ano. */
@@ -163,20 +165,25 @@ export function classificarLeituras(leituras: PontoLeitura[]): PontoClassificado
 
 const vazio = (ultimaLeitura: string | null, inconsistencias: number): ResultadoUso => ({
   leituraInicial: null, dataInicial: null, leituraFinal: null, dataFinal: null,
-  uso: 0, temLeituraNoPeriodo: false, usoPorMes: {}, usoPorAno: {}, mesesComLeitura: 0,
+  uso: 0, temLeituraNoPeriodo: false, insuficiente: false, usoPorMes: {}, usoPorAno: {}, mesesComLeitura: 0,
   mediaMensal: null, mediaAnual: null, mediaDiaria: null, projecaoAnual: null,
   inconsistencias, ultimaLeitura,
 })
 
 /**
- * Uso de uma série no período:
- * - uso = maior leitura − menor leitura do período, usando como base a última leitura
- *   antes do início quando existir (como regressivas são descartadas, maior = última e
- *   menor = primeira/base);
+ * Uso de uma série no período — usa SÓ as leituras lançadas dentro do período:
+ * - uso = última leitura do período − primeira leitura do período (regressivas descartadas);
+ * - com uma única leitura no período o uso fica "insuficiente" (precisa de pelo menos 2);
  * - média mensal = uso ÷ meses com leitura; média anual = média das somas por ano;
- * - média diária = uso ÷ dias corridos entre a primeira (ou base) e a última leitura;
+ * - média diária = uso ÷ dias corridos entre a primeira e a última leitura do período;
  * - projeção anual = média mensal × 12.
+ * Leituras antes do início só servem pra detectar leitura regressiva.
  */
+/** Uso válido pra exibir/somar: null quando não há leitura ou há só 1 no período. */
+export function usoValido(r: ResultadoUso | null | undefined): number | null {
+  return r && r.temLeituraNoPeriodo && !r.insuficiente ? r.uso : null
+}
+
 export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: string): ResultadoUso {
   const cls = classificarLeituras(leituras.filter(l => l.data <= fim))
   const validas = cls.filter(p => !p.inconsistente)
@@ -185,16 +192,21 @@ export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: strin
   const ultimaLeitura = validas.length ? validas[validas.length - 1].data : null
   if (!noPeriodo.length) return vazio(ultimaLeitura, inconsistencias)
 
-  let base: PontoClassificado | null = null
-  for (const p of validas) if (p.data < inicio) base = p
-
-  const ini = base ?? noPeriodo[0]
+  const ini = noPeriodo[0]
   const fin = noPeriodo[noPeriodo.length - 1]
+  if (noPeriodo.length < 2) {
+    return {
+      ...vazio(ultimaLeitura, inconsistencias),
+      leituraInicial: ini.valor, dataInicial: ini.data, leituraFinal: fin.valor, dataFinal: fin.data,
+      temLeituraNoPeriodo: true, insuficiente: true, mesesComLeitura: 1,
+    }
+  }
   const uso = fin.valor - ini.valor
 
+  // Cada diferença entre leituras seguidas do período vai pro mês da leitura mais nova.
   const usoPorMes: Record<string, number> = {}
   const meses = new Set<string>()
-  let anterior: PontoClassificado | null = base
+  let anterior: PontoClassificado | null = null
   for (const p of noPeriodo) {
     const mes = p.data.slice(0, 7)
     meses.add(mes)
@@ -210,7 +222,7 @@ export function calcularUso(leituras: PontoLeitura[], inicio: string, fim: strin
   return {
     leituraInicial: ini.valor, dataInicial: ini.data,
     leituraFinal: fin.valor, dataFinal: fin.data,
-    uso, temLeituraNoPeriodo: true, usoPorMes, usoPorAno,
+    uso, temLeituraNoPeriodo: true, insuficiente: false, usoPorMes, usoPorAno,
     mesesComLeitura: meses.size,
     mediaMensal,
     mediaAnual: anos ? uso / anos : null,

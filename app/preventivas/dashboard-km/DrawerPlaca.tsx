@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertOctagon, PencilLine, ChevronDown, ChevronUp } from 'lucide-react'
-import { fmtNum, fmtData, type LinhaPlaca, type Unidade, type Periodo, type PontoClassificado } from '@/lib/horimetro-km-calc'
+import { fmtNum, fmtData, usoValido, type LinhaPlaca, type Unidade, type Periodo, type PontoClassificado } from '@/lib/horimetro-km-calc'
 import { EvolucaoChart } from './Graficos'
 import { StatusBadge } from './TabelaAnalitica'
 import { Segmentado } from './FiltrosBar'
@@ -30,9 +30,8 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
   const eq = linha.equipamento
   const doPeriodo = pontos.filter(p => p.data >= periodo.inicio && p.data <= periodo.fim)
   const antes = pontos.filter(p => p.data < periodo.inicio)
-  const base = [...antes].reverse().find(p => !p.inconsistente)
-  const antigas = antes.filter(p => p !== base)
-  const pontosGrafico = base ? [base, ...doPeriodo] : doPeriodo
+  const antigas = antes
+  const pontosGrafico = doPeriodo
   const linhaTabela = (p: PontoClassificado, i: number, extra?: string) => (
     <tr key={p.id || `${p.data}-${i}`} className={`border-b border-zinc-100 dark:border-zinc-800/60 ${p.inconsistente ? 'bg-red-50/60 dark:bg-red-900/10' : extra || ''}`} title={p.obs || undefined}>
       <td className="py-1.5">{fmtData(p.data)}</td>
@@ -76,7 +75,7 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
             <Segmentado<Unidade> valor={serie} onChange={setSerie} opcoes={[{ v: 'h', l: 'Horímetro' }, { v: 'km', l: 'KM' }]} />
           )}
           <div className="grid grid-cols-3 gap-2 text-xs tabular-nums">
-            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Uso no período</div><div className="font-bold">{r?.temLeituraNoPeriodo ? `${fmtNum(r.uso, 1)} ${serie}` : '—'}</div></div>
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Uso no período</div><div className="font-bold">{r?.insuficiente ? <span className="text-amber-600">Insuficiente</span> : usoValido(r) != null ? `${fmtNum(r!.uso, 1)} ${serie}` : '—'}</div></div>
             <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média mensal</div><div className="font-bold">{r?.mediaMensal != null ? `${fmtNum(r.mediaMensal, 1)} ${serie}` : '—'}</div></div>
             <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média diária</div><div className="font-bold">{r?.mediaDiaria != null ? `${fmtNum(r.mediaDiaria, 1)} ${serie}` : '—'}</div></div>
           </div>
@@ -101,8 +100,6 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
               {!doPeriodo.length && (
                 <tr><td colSpan={colunas} className="py-3 text-center text-zinc-400">Nenhuma leitura lançada neste período.</td></tr>
               )}
-              {base && separador('Base do cálculo (última leitura antes do período)')}
-              {base && linhaTabela(base, 0, 'bg-zinc-50 dark:bg-zinc-900/60 text-zinc-500')}
               {verAntigas && antigas.length > 0 && separador('Histórico anterior')}
               {verAntigas && [...antigas].reverse().map((p, i) => linhaTabela(p, i, 'text-zinc-400'))}
             </tbody>
@@ -112,8 +109,10 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
               {verAntigas ? <><ChevronUp size={13} /> Ocultar histórico anterior</> : <><ChevronDown size={13} /> Ver histórico anterior ({antigas.length})</>}
             </button>
           )}
-          {doPeriodo.length > 0 && base && doPeriodo[0].data > periodo.inicio && (
-            <p className="text-[11px] text-zinc-500">O uso no período é a última leitura do período menos a base ({fmtData(base.data)}).</p>
+          {r?.insuficiente ? (
+            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">Só 1 leitura lançada no período: são necessárias pelo menos 2 leituras dentro do período para calcular o uso.</p>
+          ) : usoValido(r) != null && (
+            <p className="text-[11px] text-zinc-500">Uso no período = última leitura do período ({fmtData(r!.dataFinal)}) − primeira leitura do período ({fmtData(r!.dataInicial)}).</p>
           )}
           {pontos.some(p => p.inconsistente) && (
             <p className="text-[11px] text-red-600 dark:text-red-400">Linhas em vermelho são leituras menores que a anterior: ficam fora dos cálculos até serem corrigidas{onCorrigir ? ' (use o lápis para corrigir)' : ''}.</p>

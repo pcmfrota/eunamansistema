@@ -2,22 +2,22 @@ import { describe, it, expect } from 'vitest'
 import {
   calcularUso, classificarLeituras, periodoAnterior, periodoComparacao, periodoDoAtalho, statusLeitura,
   variacaoPercentual, montarLinhas, serieTemporal, calcularKpis, diasEntre, diaLocalSP,
-  listarMeses, fmtNum, fmtData, type LeituraBruta, type EquipamentoAtivo,
+  listarMeses, fmtNum, fmtData, usoValido, type LeituraBruta, type EquipamentoAtivo,
 } from '@/lib/horimetro-km-calc'
 
 /*
  * PLACA DE TESTE 1 — PESADO (horímetro), período 01/10/2026 a 30/11/2026
- *   20/09  1.000 h  (antes do período → base)
- *   05/10  1.100 h
+ *   20/09  1.000 h  (antes do período → NÃO entra no uso)
+ *   05/10  1.100 h  (primeira leitura do período)
  *   25/10  1.250 h
  *   10/11  1.240 h  (regressiva → inconsistência, ignorada)
- *   20/11  1.400 h
- * Cálculo manual:
- *   uso = 1.400 − 1.000 = 400 h
- *   outubro = (1.100−1.000) + (1.250−1.100) = 250 h ; novembro = 1.400−1.250 = 150 h
- *   meses com leitura = 2 → média mensal = 400 ÷ 2 = 200 h ; projeção anual = 200 × 12 = 2.400 h
- *   dias corridos 20/09 → 20/11 = 61 → média diária = 400 ÷ 61 ≈ 6,557 h/dia
- *   média anual (um só ano) = 400 h
+ *   20/11  1.400 h  (última leitura do período)
+ * Cálculo manual (só leituras dentro do período):
+ *   uso = 1.400 − 1.100 = 300 h
+ *   outubro = 1.250−1.100 = 150 h ; novembro = 1.400−1.250 = 150 h
+ *   meses com leitura = 2 → média mensal = 300 ÷ 2 = 150 h ; projeção anual = 150 × 12 = 1.800 h
+ *   dias corridos 05/10 → 20/11 = 46 → média diária = 300 ÷ 46 ≈ 6,52 h/dia
+ *   média anual (um só ano) = 300 h
  *
  * PLACA DE TESTE 2 — LEVE (KM), período 01/11/2026 a 30/11/2026, sem leitura anterior
  *   02/11 50.000 km ; 12/11 50.300 km ; 22/11 51.000 km
@@ -39,18 +39,19 @@ const placa2 = [
 ]
 
 describe('calcularUso — placas de teste conferidas à mão', () => {
-  it('placa 1 (pesado, com base anterior e uma regressiva)', () => {
+  it('placa 1 (pesado, leitura antes do período fora do cálculo, uma regressiva)', () => {
     const r = calcularUso(placa1, '2026-10-01', '2026-11-30')
-    expect(r.leituraInicial).toBe(1000)
-    expect(r.dataInicial).toBe('2026-09-20')
+    expect(r.leituraInicial).toBe(1100)
+    expect(r.dataInicial).toBe('2026-10-05')
     expect(r.leituraFinal).toBe(1400)
-    expect(r.uso).toBe(400)
-    expect(r.usoPorMes).toEqual({ '2026-10': 250, '2026-11': 150 })
+    expect(r.uso).toBe(300)
+    expect(r.insuficiente).toBe(false)
+    expect(r.usoPorMes).toEqual({ '2026-10': 150, '2026-11': 150 })
     expect(r.mesesComLeitura).toBe(2)
-    expect(r.mediaMensal).toBe(200)
-    expect(r.projecaoAnual).toBe(2400)
-    expect(r.mediaDiaria).toBeCloseTo(400 / 61, 6)
-    expect(r.mediaAnual).toBe(400)
+    expect(r.mediaMensal).toBe(150)
+    expect(r.projecaoAnual).toBe(1800)
+    expect(r.mediaDiaria).toBeCloseTo(300 / 46, 6)
+    expect(r.mediaAnual).toBe(300)
     expect(r.inconsistencias).toBe(1)
     expect(r.ultimaLeitura).toBe('2026-11-20')
   })
@@ -80,15 +81,20 @@ describe('calcularUso — placas de teste conferidas à mão', () => {
 
   it('ignora leituras depois do fim do período', () => {
     const r = calcularUso(placa1, '2026-10-01', '2026-10-31')
-    expect(r.uso).toBe(250)
+    expect(r.uso).toBe(150)
     expect(r.leituraFinal).toBe(1250)
   })
 
-  it('uma única leitura no período sem base: uso 0 e média diária nula', () => {
-    const r = calcularUso([{ data: '2026-11-05', valor: 10 }], '2026-11-01', '2026-11-30')
+  it('uma única leitura no período (mesmo com leitura antes): insuficiente, sem uso nem médias', () => {
+    const r = calcularUso([{ data: '2026-10-06', valor: 900 }, { data: '2026-11-19', valor: 1000 }], '2026-11-01', '2026-11-30')
+    expect(r.temLeituraNoPeriodo).toBe(true)
+    expect(r.insuficiente).toBe(true)
     expect(r.uso).toBe(0)
+    expect(usoValido(r)).toBeNull()
+    expect(r.leituraInicial).toBe(1000)
     expect(r.mediaDiaria).toBeNull()
-    expect(r.mediaMensal).toBe(0)
+    expect(r.mediaMensal).toBeNull()
+    expect(r.projecaoAnual).toBeNull()
   })
 })
 
@@ -193,8 +199,10 @@ describe('montarLinhas + agregações', () => {
   it('classifica frota, separa horímetro e KM e calcula status', () => {
     const [p, l, semLeitura] = linhas
     expect(p.frota).toBe('pesado')
-    expect(p.principal.uso).toBe(150) // 1.250 (base 25/10) → 1.400
-    expect(p.km?.uso).toBe(500)       // 200.000 (base) → 200.500
+    // Em novembro o pesado só tem 1 leitura válida (1.240 é regressiva): insuficiente.
+    expect(p.principal.insuficiente).toBe(true)
+    expect(p.principal.uso).toBe(0)
+    expect(p.km?.insuficiente).toBe(true) // só 200.500 em novembro
     expect(p.status).toBe('Inconsistente')
     expect(l.frota).toBe('leve')
     expect(l.principal.uso).toBe(1000)
@@ -207,11 +215,15 @@ describe('montarLinhas + agregações', () => {
   it('KPIs e série mensal', () => {
     const k = calcularKpis(linhas, 'mensal')
     expect(k.frotas).toBe(3)
-    expect(k.horasTotais).toBe(150)
+    expect(k.horasTotais).toBe(0)
     expect(k.kmTotais).toBe(1000)
     expect(k.semLeitura).toBe(1)
     expect(k.inconsistencias).toBe(1)
     expect(serieTemporal(linhas, 'h', { inicio: '2026-10-01', fim: '2026-11-30' }, 'mensal'))
-      .toEqual([{ chave: '2026-10', valor: 0 }, { chave: '2026-11', valor: 150 }])
+      .toEqual([{ chave: '2026-10', valor: 0 }, { chave: '2026-11', valor: 0 }])
+    // Out–nov inteiro: 1.100 → 1.250 em outubro, 1.250 → 1.400 em novembro.
+    const linhas2 = montarLinhas(eqs, leituras, { inicio: '2026-10-01', fim: '2026-11-30' }, '2026-11-23', 7)
+    expect(serieTemporal(linhas2, 'h', { inicio: '2026-10-01', fim: '2026-11-30' }, 'mensal'))
+      .toEqual([{ chave: '2026-10', valor: 150 }, { chave: '2026-11', valor: 150 }])
   })
 })

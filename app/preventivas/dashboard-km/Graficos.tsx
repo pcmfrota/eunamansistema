@@ -5,7 +5,7 @@ import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LineChart, Line } from 'recharts'
 import {
-  fmtNum, fmtData, rotuloMes, serieTemporal, usoPorTipo, usoDaLinha, media,
+  fmtNum, fmtData, rotuloMes, serieTemporal, usoPorTipo, usoDaLinha, usoValido, media,
   type LinhaPlaca, type Periodo, type Unidade, type VisaoMedia, type PontoClassificado,
 } from '@/lib/horimetro-km-calc'
 
@@ -70,7 +70,7 @@ export function RankingChart({ linhas, unidade, onSelecionar }: { linhas: LinhaP
   const [todas, setTodas] = useState(false)
   const ordenado = useMemo(() => linhas
     .map(l => ({ linha: l, r: usoDaLinha(l, unidade) }))
-    .filter((x): x is { linha: LinhaPlaca; r: NonNullable<typeof x.r> } => !!x.r && x.r.temLeituraNoPeriodo)
+    .filter((x): x is { linha: LinhaPlaca; r: NonNullable<typeof x.r> } => usoValido(x.r) != null)
     .sort((a, b) => b.r.uso - a.r.uso)
     .map(x => ({ rotulo: x.linha.equipamento.placa, valor: x.r.uso, linha: x.linha })), [linhas, unidade])
   const dados = todas ? ordenado : ordenado.slice(0, 10)
