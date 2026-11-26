@@ -27,7 +27,7 @@ export type FiltrosDashboard = {
   cmpIni: string
   cmpFim: string
   /** Visão do período filtrado ou visão anual (todos os meses de um ano). */
-  aba: 'periodo' | 'anual'
+  aba: 'periodo' | 'anual' | 'excedente'
   ano: number
 }
 
@@ -65,7 +65,8 @@ function lerDaUrl(): FiltrosDashboard {
   const cmp = sp.get(P.cmp), cIni = sp.get(P.cmpIni) || '', cFim = sp.get(P.cmpFim) || ''
   if (cmp === 'ano-anterior') f.cmp = 'ano-anterior'
   else if (cmp === 'custom' && DATA_RE.test(cIni) && DATA_RE.test(cFim) && cIni <= cFim) { f.cmp = 'custom'; f.cmpIni = cIni; f.cmpFim = cFim }
-  if (sp.get(P.aba) === 'anual') f.aba = 'anual'
+  const aba = sp.get(P.aba)
+  if (aba === 'anual' || aba === 'excedente') f.aba = aba
   const ano = Number(sp.get(P.ano))
   if (Number.isInteger(ano) && ano >= 2000 && ano <= base.ano) f.ano = ano
   if (modo && MODOS.includes(modo)) {

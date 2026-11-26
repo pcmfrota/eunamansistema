@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, RefreshCcw, Info, CalendarRange, BarChart3, Loader2 } from 'lucide-react'
+import { AlertCircle, RefreshCcw, Info, CalendarRange, BarChart3, Route, Loader2 } from 'lucide-react'
 import {
   montarLinhas, montarLinhasMeses, mesesComparacao, periodoDosMeses, calcularKpis, periodoComparacao, somarDias, tipoFrota,
   type EquipamentoAtivo, type LinhaPlaca, type Unidade,
@@ -16,6 +16,7 @@ import DrawerPlaca from './DrawerPlaca'
 import BarraComparacao, { rotuloComparacao } from './BarraComparacao'
 import PainelAnual, { type MesAnual } from './PainelAnual'
 import MediasCharts from './MediasCharts'
+import PlanilhaKmExcedente from './PlanilhaKmExcedente'
 import { exportarDashboard, exportarTabela } from './exportar'
 import EditarLeituraModal, { type LeituraEditavel } from '../EditarLeituraModal'
 
@@ -133,6 +134,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
           {([
             { v: 'periodo', l: 'Visão do período', i: <CalendarRange size={14} /> },
             { v: 'anual', l: 'Visão anual (todos os meses)', i: <BarChart3 size={14} /> },
+            { v: 'excedente', l: 'KM excedente (pesados)', i: <Route size={14} /> },
           ] as const).map(o => (
             <button key={o.v} type="button" onClick={() => atualizar({ aba: o.v })}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${filtros.aba === o.v ? 'bg-blue-600 text-white' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
@@ -143,6 +145,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
         <span className="flex items-center gap-1 text-xs text-zinc-500"><Info size={12} /> Somente frotas ativas · Pesados em horas (h) · Leves em KM</span>
       </div>
 
+      {filtros.aba === 'excedente' ? (pronto && <PlanilhaKmExcedente />) : <>
       <FiltrosBar
         filtros={filtros} atualizar={atualizar} limpar={limpar}
         placasDisponiveis={placasDisponiveis} tiposDisponiveis={tiposDisponiveis}
@@ -206,7 +209,9 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
         </>
       )}
 
-      {!anual && selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} periodo={periodo} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
+      </>}
+
+      {!anual && filtros.aba !== 'excedente' && selecionada && <DrawerPlaca key={selecionada.equipamento.id} linha={selecionada} periodo={periodo} onClose={() => setSelId(null)} onCorrigir={podeEditar ? abrirCorrecao : undefined} />}
       {corrigindo && <EditarLeituraModal leituras={[corrigindo]} onClose={() => setCorrigindo(null)} />}
     </div>
   )
