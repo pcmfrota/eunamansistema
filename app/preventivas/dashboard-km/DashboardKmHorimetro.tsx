@@ -139,7 +139,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
       <FiltrosBar
         filtros={filtros} atualizar={atualizar} limpar={limpar}
         placasDisponiveis={placasDisponiveis} tiposDisponiveis={tiposDisponiveis}
-        rfAtual={dados?.rfAtual ?? null}
+        rfs={dados?.rfs ?? []}
         podeExportar={anual ? mesesAnual.length > 0 : !!dados && linhas.length > 0}
         onExportar={exportar}
         modoAnual={anual}

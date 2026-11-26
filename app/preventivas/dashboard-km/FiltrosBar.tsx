@@ -3,8 +3,9 @@
 import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react'
 import { Search, X, FilterX, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
 import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
-import { fimDoMes, periodoDoAtalho, type AtalhoPeriodo } from '@/lib/horimetro-km-calc'
+import { fimDoMes, periodoDoAtalho, somarMeses, fmtData, type AtalhoPeriodo } from '@/lib/horimetro-km-calc'
 import { hojeLocal, type FiltrosDashboard, type FiltroFrota } from './useFiltrosUrl'
+import type { PeriodoSuzano } from './buscarDados'
 
 type Props = {
   filtros: FiltrosDashboard
@@ -12,7 +13,7 @@ type Props = {
   limpar: () => void
   placasDisponiveis: string[]
   tiposDisponiveis: string[]
-  rfAtual: { ano: number; mes: number; inicio: string; fim: string } | null
+  rfs: PeriodoSuzano[]
   onExportar: (formato: 'xlsx' | 'csv') => void
   podeExportar: boolean
   /** Visão anual: esconde os controles de período (o ano é escolhido no próprio painel). */
@@ -111,10 +112,27 @@ function MenuExportar({ onExportar, desabilitado }: { onExportar: (f: 'xlsx' | '
 }
 
 const inputData = 'px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500'
+const MESES_NOME = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+const nomeMes = (am: string) => `${MESES_NOME[+am.slice(5, 7) - 1]}/${am.slice(0, 4)}`
+/** Select compacto; fica azul quando é ele que define o período. */
+const selectCls = (ativo: boolean) => `px-2 py-1.5 text-xs font-semibold rounded-lg border outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${ativo ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200'}`
 
-export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfAtual, onExportar, podeExportar, modoAnual = false, extra }: Props) {
-  const mesSelecionado = filtros.modo === 'mes' ? filtros.inicio.slice(0, 7) : ''
-  const btnAtalho = (ativo: boolean) => `px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${ativo ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`
+export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfs, onExportar, podeExportar, modoAnual = false, extra }: Props) {
+  const hoje = hojeLocal()
+  // Últimos 24 meses (do atual pra trás) pro filtro de meses.
+  const meses = useMemo(() => Array.from({ length: 24 }, (_, i) => somarMeses(hoje.slice(0, 7), -i)), [hoje])
+  const ehAtalho = ATALHOS.some(a => a.v === filtros.modo)
+  const valorMeses = ehAtalho ? `a:${filtros.modo}` : filtros.modo === 'mes' ? `m:${filtros.inicio.slice(0, 7)}` : ''
+  const rfSel = filtros.modo === 'rf' ? rfs.find(r => r.inicio === filtros.inicio && r.fim === filtros.fim) : undefined
+  const valorRf = rfSel ? `${rfSel.ano}-${rfSel.mes}` : ''
+  const escolherMeses = (v: string) => {
+    if (v.startsWith('a:')) { const a = v.slice(2) as AtalhoPeriodo; atualizar({ modo: a, ...periodoDoAtalho(a, hoje) }) }
+    else if (v.startsWith('m:')) { const m = v.slice(2); atualizar({ modo: 'mes', inicio: `${m}-01`, fim: fimDoMes(m) }) }
+  }
+  const escolherRf = (v: string) => {
+    const r = rfs.find(x => `${x.ano}-${x.mes}` === v)
+    if (r) atualizar({ modo: 'rf', inicio: r.inicio, fim: r.fim })
+  }
 
   return (
     <div className="sticky top-0 z-20 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur shadow-sm p-3 flex flex-col gap-3">
@@ -137,26 +155,33 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
         </div>
       </div>
 
-      {!modoAnual && <div className="flex flex-wrap items-center gap-1.5">
-        {ATALHOS.map(a => (
-          <button key={a.v} type="button" className={btnAtalho(filtros.modo === a.v)}
-            onClick={() => atualizar({ modo: a.v, ...periodoDoAtalho(a.v, hojeLocal()) })}>{a.l}</button>
-        ))}
-        {rfAtual && (
-          <button type="button" className={btnAtalho(filtros.modo === 'rf')} title={`Período Suzano RF'${String(rfAtual.mes).padStart(2, '0')}`}
-            onClick={() => atualizar({ modo: 'rf', inicio: rfAtual.inicio, fim: rfAtual.fim })}>
-            RF&apos;{String(rfAtual.mes).padStart(2, '0')} (Suzano)
-          </button>
-        )}
-        <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+      {!modoAnual && <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
-          Mês/Ano
-          <input type="month" className={inputData} value={mesSelecionado}
-            onChange={e => { const m = e.target.value; if (m) atualizar({ modo: 'mes', inicio: `${m}-01`, fim: fimDoMes(m) }) }} />
+          Meses
+          <select className={selectCls(valorMeses !== '')} value={valorMeses} onChange={e => escolherMeses(e.target.value)}>
+            {!valorMeses && <option value="">Escolher…</option>}
+            <optgroup label="Atalhos">
+              {ATALHOS.map(a => <option key={a.v} value={`a:${a.v}`}>{a.l}</option>)}
+            </optgroup>
+            <optgroup label="Mês">
+              {meses.map(m => <option key={m} value={`m:${m}`}>{nomeMes(m)}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
+          Meses Suzano
+          <select className={selectCls(valorRf !== '')} value={valorRf} onChange={e => escolherRf(e.target.value)} disabled={!rfs.length}>
+            {!valorRf && <option value="">Escolher…</option>}
+            {rfs.map(r => (
+              <option key={`${r.ano}-${r.mes}`} value={`${r.ano}-${r.mes}`}>
+                RF&apos;{String(r.mes).padStart(2, '0')}/{r.ano} · {fmtData(r.inicio).slice(0, 5)} a {fmtData(r.fim).slice(0, 5)}
+              </option>
+            ))}
+          </select>
         </label>
         <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
-        <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
-          De
+        <label className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase ${filtros.modo === 'custom' ? 'text-blue-600' : 'text-zinc-500'}`}>
+          Período De
           <input type="date" className={inputData} value={filtros.inicio} max={filtros.fim}
             onChange={e => { if (e.target.value) atualizar({ modo: 'custom', inicio: e.target.value }) }} />
         </label>

@@ -4,8 +4,12 @@ import { diaLocalSP, type EquipamentoAtivo, type LeituraBruta } from '@/lib/hori
 export type DadosDashboard = {
   equipamentos: EquipamentoAtivo[]
   leituras: LeituraBruta[]
-  rfAtual: { ano: number; mes: number; inicio: string; fim: string } | null
+  rfAtual: PeriodoSuzano | null
+  /** Períodos Suzano (RF) já iniciados, do mais recente pro mais antigo. */
+  rfs: PeriodoSuzano[]
 }
+
+export type PeriodoSuzano = { ano: number; mes: number; inicio: string; fim: string }
 
 type RowLeitura = {
   id: string; equipamento_id: string; unidade: string; valor_novo: number | string; km_novo: number | string | null
@@ -48,14 +52,15 @@ export async function buscarDadosDashboard(desde: string, fim: string): Promise<
 
   const [eqRes, rfRes, rows] = await Promise.all([
     supabase.from('equipamentos').select('id, placa, tipo, categoria, modulo').ilike('status', 'ativo').is('deleted_at', null).order('placa'),
-    supabase.from('calendario_suzano').select('ano, mes, data_inicio, data_fim').lte('data_inicio', hoje).gte('data_fim', hoje).limit(1),
+    supabase.from('calendario_suzano').select('ano, mes, data_inicio, data_fim').lte('data_inicio', hoje).order('data_inicio', { ascending: false }).limit(36),
     buscarLeituras(),
   ])
   if (eqRes.error) throw new Error(eqRes.error.message)
 
   const equipamentos = (eqRes.data || []) as EquipamentoAtivo[]
-  const rfRow = (rfRes.data as { ano: number; mes: number; data_inicio: string; data_fim: string }[] | null)?.[0]
-  const rfAtual = rfRow ? { ano: rfRow.ano, mes: rfRow.mes, inicio: String(rfRow.data_inicio).slice(0, 10), fim: String(rfRow.data_fim).slice(0, 10) } : null
+  const rfs: PeriodoSuzano[] = ((rfRes.data || []) as { ano: number; mes: number; data_inicio: string; data_fim: string }[])
+    .map(r => ({ ano: r.ano, mes: r.mes, inicio: String(r.data_inicio).slice(0, 10), fim: String(r.data_fim).slice(0, 10) }))
+  const rfAtual = rfs.find(r => r.inicio <= hoje && r.fim >= hoje) ?? null
 
   const ativos = new Set(equipamentos.map(e => e.id))
   const leituras: LeituraBruta[] = rows
@@ -73,5 +78,5 @@ export async function buscarDadosDashboard(desde: string, fim: string): Promise<
     }))
     .filter(l => l.data >= desde && l.data <= fim)
 
-  return { equipamentos, leituras, rfAtual }
+  return { equipamentos, leituras, rfAtual, rfs }
 }
