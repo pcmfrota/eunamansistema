@@ -15,7 +15,7 @@ type HistoricoItem = {
   unidade: 'h' | 'km'
   valor_anterior: number | null
   valor_novo: number
-  origem: 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL' | 'ATUALIZACAO_MODAL' | 'IMPORTADO_OS'
+  origem: 'NOVO_APONTAMENTO' | 'EDICAO_MANUAL' | 'ATUALIZACAO_MODAL' | 'IMPORTADO_OS' | 'LANCAMENTO_CALENDARIO'
   km_anterior?: number | null
   km_novo?: number | null
   data_referencia?: string | null
@@ -29,6 +29,7 @@ const ORIGENS: Record<string, { label: string; cls: string }> = {
   EDICAO_MANUAL: { label: 'Edição na Tabela', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   ATUALIZACAO_MODAL: { label: 'Atualização H/KM', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
   IMPORTADO_OS: { label: 'Importado das OS', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  LANCAMENTO_CALENDARIO: { label: 'Lançado no calendário', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
 }
 
 function OrigemTag({ origem }: { origem: string }) {
@@ -119,6 +120,7 @@ export default function HistoricoHorimetrosTab() {
             { value: 'EDICAO_MANUAL', label: 'Edição na Tabela' },
             { value: 'ATUALIZACAO_MODAL', label: 'Atualização H/KM' },
             { value: 'IMPORTADO_OS', label: 'Importado das OS' },
+            { value: 'LANCAMENTO_CALENDARIO', label: 'Lançado no calendário' },
           ]}
           placeholder="Todas as Origens"
         />

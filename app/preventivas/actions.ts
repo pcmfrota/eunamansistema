@@ -516,3 +516,104 @@ export async function corrigirLeituraHorimetro(id: string, dados: CorrecaoLeitur
     return { error: error instanceof Error ? error.message : String(error) };
   }
 }
+
+export type NovaLeituraCalendario = {
+  /** Preventiva da placa (dela vem o equipamento). */
+  preventiva_id: string
+  data_referencia: string
+  /** Horímetro (pesados) ou KM (leves). */
+  valor_novo: number
+  /** KM dos pesados; ignorado nos leves. */
+  km_novo: number | null
+  observacoes?: string | null
+}
+
+/**
+ * Lança uma leitura em qualquer data pelo Calendário de Leituras (inclusive dias passados).
+ * - grava em historico_horimetros com origem LANCAMENTO_CALENDARIO, com o "anterior" igual
+ *   à última leitura antes dessa data;
+ * - só mexe no atual da preventiva se for a leitura mais recente da placa e não diminuir o valor.
+ */
+export async function lancarLeituraCalendario(dados: NovaLeituraCalendario): Promise<{ success: true } | { error: string }> {
+  try {
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = createClient();
+
+    if (!dados.data_referencia || !/^\d{4}-\d{2}-\d{2}$/.test(dados.data_referencia)) return { error: 'Data da leitura inválida.' };
+    if (!Number.isFinite(dados.valor_novo)) return { error: 'Valor da leitura inválido.' };
+    if (dados.km_novo != null && !Number.isFinite(dados.km_novo)) return { error: 'KM inválido.' };
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Sessão expirada. Entre de novo no sistema.' };
+    const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).maybeSingle();
+    if (profile?.role === 'visitante') return { error: 'Perfil visitante não pode lançar leituras.' };
+    const nome = profile?.full_name || user.email || 'Usuário';
+
+    const { data: prev, error: errPrev } = await supabase
+      .from('preventivas')
+      .select('id, equipamento_id, horimetro_atual, km_atual, data_atualizacao, equipamentos(placa, tipo, categoria)')
+      .eq('id', dados.preventiva_id)
+      .maybeSingle();
+    if (errPrev) throw new Error(errPrev.message);
+    if (!prev) return { error: 'Placa não encontrada nas preventivas.' };
+    const eq: any = (prev as any).equipamentos;
+    const unidade = inferUnidadeHorimetro(eq?.categoria, eq?.tipo);
+    const ehKm = unidade === 'km';
+    const kmNovo = ehKm ? dados.valor_novo : dados.km_novo;
+
+    // Leituras da placa, pra achar a anterior e saber se esta é a mais recente.
+    const diaBr = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(iso));
+    const { data: hist } = prev.equipamento_id
+      ? await supabase.from('historico_horimetros')
+          .select('valor_novo, km_novo, data_referencia, atualizado_em')
+          .eq('equipamento_id', prev.equipamento_id)
+          .order('atualizado_em', { ascending: true })
+          .limit(5000)
+      : { data: [] as any[] };
+    const comDia = (hist || []).map((h: any) => ({ ...h, dia: h.data_referencia ? String(h.data_referencia).slice(0, 10) : diaBr(h.atualizado_em) }));
+    const antes = comDia.filter(h => h.dia < dados.data_referencia).sort((a, b) => a.dia.localeCompare(b.dia) || a.atualizado_em.localeCompare(b.atualizado_em)).pop();
+    const temDepois = comDia.some(h => h.dia > dados.data_referencia);
+
+    const hojeBr = diaBr(new Date().toISOString());
+    const quando = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+    const nota = `[Lançado pelo calendário por ${nome} em ${quando}]`;
+    const linha: Record<string, any> = {
+      equipamento_id: prev.equipamento_id || null,
+      placa: eq?.placa || '—',
+      tipo: eq?.tipo || null,
+      categoria: eq?.categoria || null,
+      unidade,
+      valor_anterior: antes ? Number(antes.valor_novo) : null,
+      valor_novo: dados.valor_novo,
+      km_anterior: antes ? (ehKm ? Number(antes.valor_novo) : (antes.km_novo != null ? Number(antes.km_novo) : null)) : null,
+      km_novo: kmNovo ?? null,
+      data_referencia: dados.data_referencia,
+      origem: 'LANCAMENTO_CALENDARIO',
+      observacoes: [dados.observacoes?.trim(), nota].filter(Boolean).join(' '),
+      atualizado_por: user.id,
+      atualizado_por_nome: nome,
+    };
+    // Dia passado: registra no meio-dia daquela data pra ficar na ordem certa do histórico.
+    if (dados.data_referencia < hojeBr) linha.atualizado_em = `${dados.data_referencia}T12:00:00-03:00`;
+
+    const { error: errIns } = await supabase.from('historico_horimetros').insert(linha);
+    if (errIns) throw new Error(errIns.message);
+
+    // Leitura mais recente da placa e sem reduzir o valor → atualiza o atual da preventiva.
+    if (!temDepois && (prev.horimetro_atual == null || dados.valor_novo >= Number(prev.horimetro_atual))) {
+      const ajuste: Record<string, any> = { horimetro_atual: dados.valor_novo, data_atualizacao: dados.data_referencia };
+      if (!ehKm && kmNovo != null && (prev.km_atual == null || kmNovo >= Number(prev.km_atual))) ajuste.km_atual = kmNovo;
+      let { error } = await supabase.from('preventivas').update(ajuste).eq('id', prev.id);
+      if (error && colunaInexistente(error)) {
+        delete ajuste.km_atual;
+        ({ error } = await supabase.from('preventivas').update(ajuste).eq('id', prev.id));
+      }
+      if (error) console.error('[Calendário] Falha ao atualizar a preventiva:', error);
+    }
+
+    revalidatePath('/preventivas');
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
