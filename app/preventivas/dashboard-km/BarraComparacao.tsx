@@ -1,7 +1,7 @@
 'use client'
 
 import { GitCompareArrows } from 'lucide-react'
-import { fmtData, type ModoComparacao, type Periodo } from '@/lib/horimetro-km-calc'
+import { fmtData, rotuloMes, type ModoComparacao, type Periodo } from '@/lib/horimetro-km-calc'
 import { Segmentado } from './FiltrosBar'
 import type { FiltrosDashboard } from './useFiltrosUrl'
 
@@ -16,12 +16,16 @@ export function rotuloComparacao(modo: ModoComparacao): string {
  * Escolha do período de comparação dos KPIs: período imediatamente anterior, mesmo período
  * do ano anterior, ou datas escolhidas à mão.
  */
-export default function BarraComparacao({ filtros, atualizar, periodo, comparacao }: {
+export default function BarraComparacao({ filtros, atualizar, periodo, comparacao, meses, mesesComparados }: {
   filtros: FiltrosDashboard
   atualizar: (p: Partial<FiltrosDashboard>) => void
   periodo: Periodo
   comparacao: Periodo
+  /** Vários meses escolhidos (e os meses equivalentes da comparação). */
+  meses?: string[] | null
+  mesesComparados?: string[] | null
 }) {
+  const lista = (ms: string[]) => ms.map(rotuloMes).join(', ')
   const escolher = (modo: ModoComparacao) => {
     // Ao passar pra "Escolher datas", começa com as datas que já estavam sendo comparadas.
     if (modo === 'custom') atualizar({ cmp: 'custom', cmpIni: comparacao.inicio, cmpFim: comparacao.fim })
@@ -52,9 +56,9 @@ export default function BarraComparacao({ filtros, atualizar, periodo, comparaca
         </div>
       )}
       <span className="text-xs text-zinc-500 tabular-nums sm:ml-auto">
-        <b className="text-zinc-700 dark:text-zinc-200">{fmtData(periodo.inicio)} a {fmtData(periodo.fim)}</b>
+        <b className="text-zinc-700 dark:text-zinc-200">{meses?.length ? lista(meses) : `${fmtData(periodo.inicio)} a ${fmtData(periodo.fim)}`}</b>
         {' comparado com '}
-        <b className="text-zinc-700 dark:text-zinc-200">{fmtData(comparacao.inicio)} a {fmtData(comparacao.fim)}</b>
+        <b className="text-zinc-700 dark:text-zinc-200">{mesesComparados?.length ? lista(mesesComparados) : `${fmtData(comparacao.inicio)} a ${fmtData(comparacao.fim)}`}</b>
       </span>
     </div>
   )

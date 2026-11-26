@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react'
 import { Search, X, FilterX, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
 import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
-import { fimDoMes, periodoDoAtalho, somarMeses, fmtData, type AtalhoPeriodo } from '@/lib/horimetro-km-calc'
+import { fimDoMes, periodoDoAtalho, periodoDosMeses, somarMeses, fmtData } from '@/lib/horimetro-km-calc'
 import { hojeLocal, type FiltrosDashboard, type FiltroFrota } from './useFiltrosUrl'
 import type { PeriodoSuzano } from './buscarDados'
 
@@ -79,14 +79,6 @@ function PlacasSelect({ valores, onChange, opcoes }: { valores: string[]; onChan
   )
 }
 
-const ATALHOS: { v: AtalhoPeriodo; l: string }[] = [
-  { v: 'mes-atual', l: 'Mês atual' },
-  { v: 'mes-anterior', l: 'Mês anterior' },
-  { v: 'ultimos-3-meses', l: 'Últimos 3 meses' },
-  { v: 'ano-atual', l: 'Ano atual' },
-  { v: 'ano-anterior', l: 'Ano anterior' },
-]
-
 function MenuExportar({ onExportar, desabilitado }: { onExportar: (f: 'xlsx' | 'csv') => void; desabilitado: boolean }) {
   const [aberto, setAberto] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -113,7 +105,7 @@ function MenuExportar({ onExportar, desabilitado }: { onExportar: (f: 'xlsx' | '
 
 const inputData = 'px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500'
 const MESES_NOME = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-const nomeMes = (am: string) => `${MESES_NOME[+am.slice(5, 7) - 1]}/${am.slice(0, 4)}`
+const nomeMes = (am: string) => `${MESES_NOME[+am.slice(5, 7) - 1]} ${am.slice(0, 4)}`
 /** Select compacto; fica azul quando é ele que define o período. */
 const selectCls = (ativo: boolean) => `px-2 py-1.5 text-xs font-semibold rounded-lg border outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${ativo ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200'}`
 
@@ -121,17 +113,32 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
   const hoje = hojeLocal()
   // Últimos 24 meses (do atual pra trás) pro filtro de meses.
   const meses = useMemo(() => Array.from({ length: 24 }, (_, i) => somarMeses(hoje.slice(0, 7), -i)), [hoje])
-  const ehAtalho = ATALHOS.some(a => a.v === filtros.modo)
-  const valorMeses = ehAtalho ? `a:${filtros.modo}` : filtros.modo === 'mes' ? `m:${filtros.inicio.slice(0, 7)}` : ''
+  const anos = useMemo(() => Array.from(new Set(meses.map(m => +m.slice(0, 4)))), [meses])
+  // Meses marcados no seletor (um mês, vários meses, ou o mês atual/anterior pelos atalhos).
+  const mesesMarcados = filtros.modo === 'meses' ? filtros.meses
+    : filtros.modo === 'mes' || filtros.modo === 'mes-atual' || filtros.modo === 'mes-anterior' ? [filtros.inicio.slice(0, 7)] : []
+  const anoInteiro = filtros.inicio.endsWith('-01-01') && filtros.fim === `${filtros.inicio.slice(0, 4)}-12-31` && filtros.modo !== 'meses'
+  const [anoLista, setAnoLista] = useState<number | null>(null)
+  const anoSel = anoInteiro ? +filtros.inicio.slice(0, 4) : anoLista
+  const opcoesMeses = meses.filter(m => anoSel == null || +m.slice(0, 4) === anoSel)
+  const escolherVariosMeses = (vals: string[]) => {
+    const ms = Array.from(new Set(vals)).sort()
+    if (!ms.length) { const p = periodoDoAtalho('mes-atual', hoje); atualizar({ modo: 'mes-atual', meses: [], ...p }); return }
+    if (ms.length === 1) { atualizar({ modo: 'mes', meses: [], inicio: `${ms[0]}-01`, fim: fimDoMes(ms[0]) }); return }
+    atualizar({ modo: 'meses', meses: ms, ...periodoDosMeses(ms) })
+  }
+  const escolherAno = (v: string) => {
+    if (!v) { setAnoLista(null); return }
+    const a = +v
+    setAnoLista(a)
+    // Só o ano, sem mês marcado = ano inteiro (01/01 a 31/12).
+    atualizar({ modo: a === +hoje.slice(0, 4) ? 'ano-atual' : a === +hoje.slice(0, 4) - 1 ? 'ano-anterior' : 'custom', meses: [], inicio: `${a}-01-01`, fim: `${a}-12-31` })
+  }
   const rfSel = filtros.modo === 'rf' ? rfs.find(r => r.inicio === filtros.inicio && r.fim === filtros.fim) : undefined
   const valorRf = rfSel ? `${rfSel.ano}-${rfSel.mes}` : ''
-  const escolherMeses = (v: string) => {
-    if (v.startsWith('a:')) { const a = v.slice(2) as AtalhoPeriodo; atualizar({ modo: a, ...periodoDoAtalho(a, hoje) }) }
-    else if (v.startsWith('m:')) { const m = v.slice(2); atualizar({ modo: 'mes', inicio: `${m}-01`, fim: fimDoMes(m) }) }
-  }
   const escolherRf = (v: string) => {
     const r = rfs.find(x => `${x.ano}-${x.mes}` === v)
-    if (r) atualizar({ modo: 'rf', inicio: r.inicio, fim: r.fim })
+    if (r) atualizar({ modo: 'rf', meses: [], inicio: r.inicio, fim: r.fim })
   }
 
   return (
@@ -156,18 +163,12 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
       </div>
 
       {!modoAnual && <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
-          Meses
-          <select className={selectCls(valorMeses !== '')} value={valorMeses} onChange={e => escolherMeses(e.target.value)}>
-            {!valorMeses && <option value="">Escolher…</option>}
-            <optgroup label="Atalhos">
-              {ATALHOS.map(a => <option key={a.v} value={`a:${a.v}`}>{a.l}</option>)}
-            </optgroup>
-            <optgroup label="Mês">
-              {meses.map(m => <option key={m} value={`m:${m}`}>{nomeMes(m)}</option>)}
-            </optgroup>
-          </select>
-        </label>
+        <CheckboxMultiSelect values={mesesMarcados} onChange={escolherVariosMeses}
+          options={opcoesMeses.map(m => ({ value: m, label: nomeMes(m) }))} placeholder="Todos os Meses" />
+        <select className={selectCls(anoInteiro)} value={anoSel ?? ''} onChange={e => escolherAno(e.target.value)} title="Ano: filtra a lista de meses; sem mês marcado, mostra o ano inteiro">
+          <option value="">Todos os Anos</option>
+          {anos.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
           Meses Suzano
           <select className={selectCls(valorRf !== '')} value={valorRf} onChange={e => escolherRf(e.target.value)} disabled={!rfs.length}>
@@ -183,12 +184,12 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
         <label className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase ${filtros.modo === 'custom' ? 'text-blue-600' : 'text-zinc-500'}`}>
           Período De
           <input type="date" className={inputData} value={filtros.inicio} max={filtros.fim}
-            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', inicio: e.target.value }) }} />
+            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', meses: [], inicio: e.target.value }) }} />
         </label>
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
           Até
           <input type="date" className={inputData} value={filtros.fim} min={filtros.inicio}
-            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', fim: e.target.value }) }} />
+            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', meses: [], fim: e.target.value }) }} />
         </label>
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase ml-auto" title="Placa sem leitura há mais dias que isso fica com status Atrasada">
           Atrasada após

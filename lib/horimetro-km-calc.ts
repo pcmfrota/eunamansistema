@@ -364,6 +364,92 @@ export function montarLinhas(
   })
 }
 
+// ─── VÁRIOS MESES ESCOLHIDOS ────────────────────────────────────────────────────
+/** Dias do período já decorridos até hoje (mês futuro = 0). */
+export function diasDecorridos(p: Periodo, hoje: string): number {
+  if (hoje < p.inicio) return 0
+  return diasEntre(p.inicio, hoje < p.fim ? hoje : p.fim) + 1
+}
+
+/**
+ * Junta os resultados de vários períodos (ex.: meses escolhidos separadamente). Cada período segue
+ * a regra dele (última − primeira leitura dentro do período); o uso total é a soma.
+ * Médias: mensal = uso ÷ meses com uso; diária = uso ÷ dias decorridos somados; anual = mensal × 12.
+ */
+export function combinarResultados(rs: ResultadoUso[], diasPorPeriodo: number[]): ResultadoUso {
+  const ultimas = rs.map(r => r.ultimaLeitura).filter((d): d is string => !!d).sort()
+  const ultimaLeitura = ultimas.length ? ultimas[ultimas.length - 1] : null
+  const inconsistencias = rs.reduce((s, r) => s + r.inconsistencias, 0)
+  const comLeitura = rs.filter(r => r.temLeituraNoPeriodo)
+  if (!comLeitura.length) return vazio(ultimaLeitura, inconsistencias)
+  const validos = comLeitura.filter(r => !r.insuficiente)
+  const prim = (validos.length ? validos : comLeitura)[0]
+  const ult = (validos.length ? validos : comLeitura)[(validos.length ? validos : comLeitura).length - 1]
+  const base = {
+    leituraInicial: prim.leituraInicial, dataInicial: prim.dataInicial,
+    leituraFinal: ult.leituraFinal, dataFinal: ult.dataFinal,
+  }
+  if (!validos.length) {
+    return { ...vazio(ultimaLeitura, inconsistencias), ...base, temLeituraNoPeriodo: true, insuficiente: true, mesesComLeitura: comLeitura.length }
+  }
+  const uso = validos.reduce((s, r) => s + r.uso, 0)
+  const usoPorMes: Record<string, number> = {}
+  const usoPorAno: Record<string, number> = {}
+  for (const r of validos) {
+    for (const [k, v] of Object.entries(r.usoPorMes)) usoPorMes[k] = (usoPorMes[k] || 0) + v
+    for (const [k, v] of Object.entries(r.usoPorAno)) usoPorAno[k] = (usoPorAno[k] || 0) + v
+  }
+  const meses = validos.reduce((s, r) => s + r.mesesComLeitura, 0)
+  const dias = diasPorPeriodo.reduce((s, d) => s + d, 0)
+  const mediaMensal = meses ? uso / meses : null
+  const anos = Object.keys(usoPorAno).length
+  return {
+    ...base, uso, temLeituraNoPeriodo: true, insuficiente: false, usoPorMes, usoPorAno,
+    mesesComLeitura: meses, mediaMensal,
+    mediaAnual: anos ? uso / anos : null,
+    mediaDiaria: dias > 0 ? uso / dias : null,
+    projecaoAnual: mediaMensal != null ? mediaMensal * 12 : null,
+    inconsistencias, ultimaLeitura,
+  }
+}
+
+/**
+ * Linhas do painel para vários meses escolhidos (podem ser intercalados, ex.: mar + jun + nov).
+ * Cada mês é calculado sozinho e depois somado; histórico/status vêm do mês mais recente.
+ */
+export function montarLinhasMeses(
+  equipamentos: EquipamentoAtivo[], leituras: LeituraBruta[], meses: string[], hoje: string, limiteDias: number,
+): LinhaPlaca[] {
+  const ord = Array.from(new Set(meses)).sort()
+  if (!ord.length) return []
+  const periodos = ord.map(m => ({ inicio: `${m}-01`, fim: fimDoMes(m) }))
+  if (periodos.length === 1) return montarLinhas(equipamentos, leituras, periodos[0], hoje, limiteDias)
+  const porMes = periodos.map(p => montarLinhas(equipamentos, leituras, p, hoje, limiteDias))
+  const dias = periodos.map(p => diasDecorridos(p, hoje))
+  const ultimo = porMes[porMes.length - 1]
+  return ultimo.map((l, i) => {
+    const principal = combinarResultados(porMes.map(x => x[i].principal), dias)
+    const kms = porMes.map(x => x[i].km).filter((r): r is ResultadoUso => !!r)
+    const km = kms.length ? combinarResultados(kms, dias) : null
+    const inconsistencias = principal.inconsistencias + (km?.inconsistencias || 0)
+    return { ...l, principal, km, inconsistencias, status: statusLeitura(inconsistencias, l.diasSemLeitura, limiteDias) }
+  })
+}
+
+/** Meses de comparação: 'anterior' volta o bloco inteiro (do 1º ao último mês); 'ano-anterior' volta 12 meses. */
+export function mesesComparacao(meses: string[], modo: 'anterior' | 'ano-anterior'): string[] {
+  const ord = Array.from(new Set(meses)).sort()
+  if (!ord.length) return []
+  const n = modo === 'ano-anterior' ? 12 : listarMeses(`${ord[0]}-01`, `${ord[ord.length - 1]}-01`).length
+  return ord.map(m => somarMeses(m, -n))
+}
+
+/** Do 1º dia do primeiro mês ao último dia do último mês. */
+export function periodoDosMeses(meses: string[]): Periodo {
+  const ord = Array.from(new Set(meses)).sort()
+  return { inicio: `${ord[0]}-01`, fim: fimDoMes(ord[ord.length - 1]) }
+}
+
 // ─── AGREGAÇÕES DO DASHBOARD ────────────────────────────────────────────────────
 /** Uso de uma unidade numa linha: horímetro dos pesados; KM dos leves e, se pedido, dos pesados. */
 export function usoDaLinha(l: LinhaPlaca, unidade: Unidade): ResultadoUso | null {

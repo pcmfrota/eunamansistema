@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, RefreshCcw, Info, CalendarRange, BarChart3, Loader2 } from 'lucide-react'
 import {
-  montarLinhas, calcularKpis, periodoComparacao, somarDias, tipoFrota,
+  montarLinhas, montarLinhasMeses, mesesComparacao, periodoDosMeses, calcularKpis, periodoComparacao, somarDias, tipoFrota,
   type EquipamentoAtivo, type LinhaPlaca, type Unidade,
 } from '@/lib/horimetro-km-calc'
 import { useFiltrosUrl, hojeLocal } from './useFiltrosUrl'
@@ -38,9 +38,12 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
   const { filtros, atualizar, limpar, pronto } = useFiltrosUrl()
   const anual = filtros.aba === 'anual'
   const periodo = useMemo(() => ({ inicio: filtros.inicio, fim: filtros.fim }), [filtros.inicio, filtros.fim])
+  // Vários meses escolhidos: cada mês é calculado sozinho e somado.
+  const mesesSel = filtros.modo === 'meses' && filtros.meses.length > 1 ? filtros.meses : null
+  const mesesAnt = useMemo(() => (mesesSel && filtros.cmp !== 'custom' ? mesesComparacao(mesesSel, filtros.cmp) : null), [mesesSel, filtros.cmp])
   const anterior = useMemo(
-    () => periodoComparacao(periodo, filtros.cmp, { inicio: filtros.cmpIni, fim: filtros.cmpFim }),
-    [periodo, filtros.cmp, filtros.cmpIni, filtros.cmpFim])
+    () => mesesAnt ? periodoDosMeses(mesesAnt) : periodoComparacao(periodo, filtros.cmp, { inicio: filtros.cmpIni, fim: filtros.cmpFim }),
+    [mesesAnt, periodo, filtros.cmp, filtros.cmpIni, filtros.cmpFim])
   const desde = somarDias(anterior.inicio < periodo.inicio ? anterior.inicio : periodo.inicio, -FOLGA_BASE_DIAS)
   const fimBusca = anterior.fim > periodo.fim ? anterior.fim : periodo.fim
   const { dados, carregando, erro, recarregar } = useLeiturasDashboard(desde, fimBusca, pronto)
@@ -77,8 +80,12 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
   const equipamentos = useMemo(() => (dados?.equipamentos || []).filter(filtroEquip), [dados, filtroEquip])
 
   const leituras = dados?.leituras
-  const linhas = useMemo(() => montarLinhas(equipamentos, leituras || [], periodo, hoje, filtros.atraso), [equipamentos, leituras, periodo, hoje, filtros.atraso])
-  const linhasAnt = useMemo(() => montarLinhas(equipamentos, leituras || [], anterior, hoje, filtros.atraso), [equipamentos, leituras, anterior, hoje, filtros.atraso])
+  const linhas = useMemo(() => mesesSel
+    ? montarLinhasMeses(equipamentos, leituras || [], mesesSel, hoje, filtros.atraso)
+    : montarLinhas(equipamentos, leituras || [], periodo, hoje, filtros.atraso), [mesesSel, equipamentos, leituras, periodo, hoje, filtros.atraso])
+  const linhasAnt = useMemo(() => mesesAnt
+    ? montarLinhasMeses(equipamentos, leituras || [], mesesAnt, hoje, filtros.atraso)
+    : montarLinhas(equipamentos, leituras || [], anterior, hoje, filtros.atraso), [mesesAnt, equipamentos, leituras, anterior, hoje, filtros.atraso])
   const kpis = useMemo(() => calcularKpis(linhas, filtros.visao), [linhas, filtros.visao])
   const kpisAnt = useMemo(() => calcularKpis(linhasAnt, filtros.visao), [linhasAnt, filtros.visao])
   const temAnterior = linhasAnt.some(l => l.principal.temLeituraNoPeriodo || !!l.km?.temLeituraNoPeriodo)
@@ -150,7 +157,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
         pronto && <PainelAnual ano={filtros.ano} onAno={ano => atualizar({ ano })} filtroEquip={filtroEquip} atraso={filtros.atraso} onDados={setMesesAnual} />
       ) : (
         <>
-          <BarraComparacao filtros={filtros} atualizar={atualizar} periodo={periodo} comparacao={anterior} />
+          <BarraComparacao filtros={filtros} atualizar={atualizar} periodo={periodo} comparacao={anterior} meses={mesesSel} mesesComparados={mesesAnt} />
 
           {erro && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400">
@@ -180,7 +187,7 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={`Soma em ${nomeUnidade}, com a média do período`}>
-                  <UsoMensalChart linhas={linhas} unidade={unidade} periodo={periodo} visao={filtros.visao} />
+                  <UsoMensalChart linhas={linhas} unidade={unidade} periodo={periodo} visao={filtros.visao} meses={mesesSel ?? undefined} />
                 </CardGrafico>
                 <CardGrafico titulo="Uso por categoria / tipo" sub={`Soma em ${nomeUnidade}`}>
                   <UsoPorTipoChart linhas={linhas} unidade={unidade} />

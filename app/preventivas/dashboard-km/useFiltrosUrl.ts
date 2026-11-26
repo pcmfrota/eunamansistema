@@ -1,11 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { periodoDoAtalho, type AtalhoPeriodo, type VisaoMedia, type ModoComparacao } from '@/lib/horimetro-km-calc'
+import { periodoDoAtalho, periodoDosMeses, type AtalhoPeriodo, type VisaoMedia, type ModoComparacao } from '@/lib/horimetro-km-calc'
 
 export type FiltroFrota = 'todos' | 'pesados' | 'leves'
-/** Atalho escolhido, 'rf' (período Suzano atual), 'mes' (seletor de mês/ano) ou 'custom' (datas livres). */
-export type ModoPeriodo = AtalhoPeriodo | 'rf' | 'mes' | 'custom'
+/** Atalho, 'rf' (período Suzano), 'mes' (um mês), 'meses' (vários meses escolhidos) ou 'custom' (datas livres). */
+export type ModoPeriodo = AtalhoPeriodo | 'rf' | 'mes' | 'meses' | 'custom'
 
 export type FiltrosDashboard = {
   frota: FiltroFrota
@@ -14,6 +14,8 @@ export type FiltrosDashboard = {
   modo: ModoPeriodo
   inicio: string
   fim: string
+  /** Meses escolhidos (aaaa-mm) quando modo = 'meses'. */
+  meses: string[]
   visao: VisaoMedia
   /** Dias sem leitura a partir dos quais a placa fica "Atrasada". */
   atraso: number
@@ -34,13 +36,13 @@ export const hojeLocal = () => {
 export function filtrosPadrao(): FiltrosDashboard {
   const p = periodoDoAtalho('mes-atual', hojeLocal())
   // Painel sempre abre travado nos PESADOS (dá pra trocar depois, mas ao reabrir volta pra pesados).
-  return { frota: 'pesados', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
+  return { frota: 'pesados', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, meses: [], visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
 }
 
 // Prefixo "dk_" pra não colidir com outros parâmetros da página.
-const P = { frota: 'dk_frota', placas: 'dk_placas', tipos: 'dk_tipos', modo: 'dk_periodo', inicio: 'dk_ini', fim: 'dk_fim', visao: 'dk_visao', atraso: 'dk_atraso', cmp: 'dk_cmp', cmpIni: 'dk_cmp_ini', cmpFim: 'dk_cmp_fim', aba: 'dk_aba', ano: 'dk_ano' } as const
+const P = { frota: 'dk_frota', placas: 'dk_placas', tipos: 'dk_tipos', modo: 'dk_periodo', inicio: 'dk_ini', fim: 'dk_fim', meses: 'dk_meses', visao: 'dk_visao', atraso: 'dk_atraso', cmp: 'dk_cmp', cmpIni: 'dk_cmp_ini', cmpFim: 'dk_cmp_fim', aba: 'dk_aba', ano: 'dk_ano' } as const
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
-const MODOS: ModoPeriodo[] = ['mes-atual', 'mes-anterior', 'ultimos-3-meses', 'ano-atual', 'ano-anterior', 'rf', 'mes', 'custom']
+const MODOS: ModoPeriodo[] = ['mes-atual', 'mes-anterior', 'ultimos-3-meses', 'ano-atual', 'ano-anterior', 'rf', 'mes', 'meses', 'custom']
 
 function lerDaUrl(): FiltrosDashboard {
   const base = filtrosPadrao()
@@ -65,7 +67,14 @@ function lerDaUrl(): FiltrosDashboard {
   if (Number.isInteger(ano) && ano >= 2000 && ano <= base.ano) f.ano = ano
   if (modo && MODOS.includes(modo)) {
     f.modo = modo
-    if (modo !== 'rf' && modo !== 'mes' && modo !== 'custom') Object.assign(f, periodoDoAtalho(modo, hojeLocal()))
+    if (modo !== 'rf' && modo !== 'mes' && modo !== 'meses' && modo !== 'custom') Object.assign(f, periodoDoAtalho(modo, hojeLocal()))
+  }
+  const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+  if (f.modo === 'meses') {
+    const ms = lista(P.meses).filter(m => MES_RE.test(m))
+    if (ms.length) Object.assign(f, { meses: Array.from(new Set(ms)).sort(), ...periodoDosMeses(ms) })
+    else f.modo = 'mes-atual'
+    return f
   }
   if ((f.modo === 'rf' || f.modo === 'mes' || f.modo === 'custom') && ini && fim && DATA_RE.test(ini) && DATA_RE.test(fim) && ini <= fim) {
     f.inicio = ini; f.fim = fim
@@ -86,6 +95,7 @@ function gravarNaUrl(f: FiltrosDashboard) {
   const datasLivres = f.modo === 'rf' || f.modo === 'mes' || f.modo === 'custom'
   set(P.inicio, datasLivres ? f.inicio : null)
   set(P.fim, datasLivres ? f.fim : null)
+  set(P.meses, f.modo === 'meses' ? f.meses.join(',') : null)
   set(P.visao, f.visao !== 'mensal' ? f.visao : null)
   set(P.atraso, f.atraso !== def.atraso ? String(f.atraso) : null)
   set(P.cmp, f.cmp !== 'anterior' ? f.cmp : null)

@@ -45,8 +45,10 @@ const tooltip = (unidade: Unidade) => function Tip(p: TooltipProps<ValueType, Na
   return p.active && d ? <TooltipBox titulo={d.rotulo} valor={d.valor} unidade={unidade} /> : null
 }
 
-export function UsoMensalChart({ linhas, unidade, periodo, visao }: { linhas: LinhaPlaca[]; unidade: Unidade; periodo: Periodo; visao: VisaoMedia }) {
-  const dados = useMemo(() => serieTemporal(linhas, unidade, periodo, visao).map(d => ({ ...d, rotulo: rotuloMes(d.chave) })), [linhas, unidade, periodo, visao])
+export function UsoMensalChart({ linhas, unidade, periodo, visao, meses }: { linhas: LinhaPlaca[]; unidade: Unidade; periodo: Periodo; visao: VisaoMedia; meses?: string[] }) {
+  const dados = useMemo(() => serieTemporal(linhas, unidade, periodo, visao)
+    .filter(d => !meses?.length || visao !== 'mensal' || meses.includes(d.chave))
+    .map(d => ({ ...d, rotulo: rotuloMes(d.chave) })), [linhas, unidade, periodo, visao, meses])
   const med = media(dados.map(d => d.valor))
   if (!dados.some(d => d.valor > 0)) return <Vazio />
   return (

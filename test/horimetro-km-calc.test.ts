@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   calcularUso, classificarLeituras, periodoAnterior, periodoComparacao, periodoDoAtalho, statusLeitura,
   variacaoPercentual, montarLinhas, serieTemporal, calcularKpis, diasEntre, diaLocalSP,
-  listarMeses, fmtNum, fmtData, usoValido, type LeituraBruta, type EquipamentoAtivo,
+  listarMeses, fmtNum, fmtData, usoValido, montarLinhasMeses, mesesComparacao, periodoDosMeses,
+  type LeituraBruta, type EquipamentoAtivo,
 } from '@/lib/horimetro-km-calc'
 
 /*
@@ -251,5 +252,37 @@ describe('montarLinhas + agregações', () => {
     const linhas2 = montarLinhas(eqs, leituras, { inicio: '2026-10-01', fim: '2026-11-30' }, '2026-11-23', 7)
     expect(serieTemporal(linhas2, 'h', { inicio: '2026-10-01', fim: '2026-11-30' }, 'mensal'))
       .toEqual([{ chave: '2026-10', valor: 150 }, { chave: '2026-11', valor: 150 }])
+  })
+})
+
+describe('vários meses escolhidos', () => {
+  const eqs: EquipamentoAtivo[] = [{ id: 'e1', placa: 'PES0001', tipo: 'COMBOIO', categoria: 'PESADA', modulo: null }]
+  const L = (id: string, valor: number, data: string): LeituraBruta =>
+    ({ id, equipamento_id: 'e1', unidade: 'h', valor_novo: valor, km_novo: null, data, ordem: data, por: null, obs: null })
+  // set: 100 → 150 (50 h) ; out: 1 leitura só ; nov: 300 → 380 (80 h)
+  const leituras = [L('a', 100, '2026-09-02'), L('b', 150, '2026-09-28'), L('c', 200, '2026-10-15'), L('d', 300, '2026-11-03'), L('e', 380, '2026-11-20')]
+
+  it('meses intercalados: soma o uso de cada mês com a regra dele', () => {
+    const [l] = montarLinhasMeses(eqs, leituras, ['2026-11', '2026-09'], '2026-12-15', 7)
+    expect(l.principal.uso).toBe(130) // 50 + 80
+    expect(l.principal.usoPorMes).toEqual({ '2026-09': 50, '2026-11': 80 })
+    expect(l.principal.mesesComLeitura).toBe(2)
+    expect(l.principal.mediaMensal).toBe(65)
+    expect(l.principal.mediaDiaria).toBeCloseTo(130 / 60, 6) // 30 + 30 dias
+    expect(l.principal.leituraInicial).toBe(100)
+    expect(l.principal.leituraFinal).toBe(380)
+  })
+
+  it('mês só com 1 leitura não soma nada; todos assim = insuficiente', () => {
+    const [l] = montarLinhasMeses(eqs, leituras, ['2026-10', '2026-11'], '2026-12-15', 7)
+    expect(l.principal.uso).toBe(80)
+    const [l2] = montarLinhasMeses(eqs, leituras, ['2026-10'], '2026-12-15', 7)
+    expect(l2.principal.insuficiente).toBe(true)
+  })
+
+  it('meses de comparação e período dos meses', () => {
+    expect(mesesComparacao(['2026-11', '2026-09'], 'anterior')).toEqual(['2026-06', '2026-08'])
+    expect(mesesComparacao(['2026-11', '2026-10'], 'ano-anterior')).toEqual(['2025-10', '2025-11'])
+    expect(periodoDosMeses(['2026-11', '2026-09'])).toEqual({ inicio: '2026-09-01', fim: '2026-11-30' })
   })
 })
