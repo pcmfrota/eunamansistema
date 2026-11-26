@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { Search, Edit2, Trash2, Upload, BarChart2, Truck, Wrench, Gauge, FileSpreadsheet, FileText, RefreshCw, History, CalendarDays, LayoutDashboard } from 'lucide-react'
+import { Search, Edit2, Trash2, Upload, BarChart2, Truck, Gauge, FileSpreadsheet, FileText, RefreshCw, History, CalendarDays, LayoutDashboard } from 'lucide-react'
 import Script from 'next/script'
 import { excluirPreventiva, atualizarHorimetroKm } from './actions'
 import DashboardHorimetros from './DashboardHorimetros'
@@ -359,7 +359,7 @@ interface Props {
   isVisitante: boolean
 }
 
-type TabKey = 'dashboard-km' | 'dashboard-pesados' | 'pesados' | 'leves' | 'zocar' | 'dashboard-leves' | 'calendario' | 'historico'
+type TabKey = 'dashboard-km' | 'dashboard-pesados' | 'pesados' | 'leves' | 'dashboard-leves' | 'calendario' | 'historico'
 
 export default function ControleHorimetrosTabs({ data: initialData, isVisitante }: Props) {
   const { isOnline } = useOffline()
@@ -406,12 +406,6 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
     return cat === 'LEVE' || ['CARRO', 'PICKUP', 'VAN', 'CAMINHONETE', 'LEVE'].includes(tipo)
   })
 
-  const zocar = preventivas.filter(p => {
-    const tipo = p.equipamentos?.tipo?.toUpperCase() || ''
-    const mod = p.equipamentos?.modulo?.toUpperCase() || ''
-    return tipo.includes('ZOCAR') || mod.includes('ZOCAR') || (p.intervalo_horas <= 100 && p.intervalo_horas > 0)
-  })
-
   const tipos = Array.from(new Set(pesados.map(p => p.equipamentos?.tipo).filter(Boolean))) as string[]
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
@@ -420,7 +414,6 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
     { key: 'pesados', label: `Pesados (${pesados.length})`, icon: <Truck size={14} /> },
     { key: 'dashboard-leves', label: 'Dashboard Leves', icon: <BarChart2 size={14} /> },
     { key: 'leves', label: `Leves (${leves.length})`, icon: <Gauge size={14} /> },
-    { key: 'zocar', label: `Implemento Zocar (${zocar.length})`, icon: <Wrench size={14} /> },
     { key: 'calendario', label: 'Calendário de Leituras', icon: <CalendarDays size={14} /> },
     { key: 'historico', label: 'Histórico', icon: <History size={14} /> },
   ]
@@ -491,28 +484,6 @@ export default function ControleHorimetrosTabs({ data: initialData, isVisitante 
             <h3 className="font-semibold text-zinc-700 dark:text-zinc-300">Veículos Leves — Manutenção a cada 10.000 km</h3>
           </div>
           <PrevTable data={leves} isVisitante={isVisitante} unidade="km" limites={[10000]} label="horimetros_leves" />
-        </div>
-      )}
-
-      {tab === 'zocar' && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Wrench size={16} className="text-orange-500" />
-            <h3 className="font-semibold text-zinc-700 dark:text-zinc-300">Implemento Zocar — Intervalos: 100h / 500h / 1.000h</h3>
-          </div>
-          <div className="grid grid-cols-3 gap-3 mb-2">
-            {[100, 500, 1000].map(interv => {
-              const group = zocar.filter(p => p.intervalo_horas === interv)
-              return (
-                <div key={interv} className="glass-card rounded-xl p-3 shadow-sm">
-                  <p className="text-xs text-text-muted font-medium">Intervalo {interv}h</p>
-                  <p className="text-2xl font-black text-text-primary">{group.length}</p>
-                  <p className="text-xs text-text-muted">equipamentos</p>
-                </div>
-              )
-            })}
-          </div>
-          <PrevTable data={zocar} isVisitante={isVisitante} unidade="h" limites={[100, 500, 1000]} label="horimetros_zocar" />
         </div>
       )}
 

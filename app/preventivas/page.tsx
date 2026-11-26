@@ -112,7 +112,7 @@ export default function ControleHorimetrosPage() {
               CONTROLE DE HORÍMETRO E KM
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
-              Pesados (500h) • Leves (10.000 km) • Implemento Zocar (100/500/1.000h)
+              Pesados (500h) • Leves (10.000 km)
             </p>
           </div>
         </div>
