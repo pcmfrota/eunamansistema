@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts'
-import { fmtNum, usoDaLinha, media, type LinhaPlaca, type ResultadoUso, type Unidade } from '@/lib/horimetro-km-calc'
+import { sigla, fmtNum, usoDaLinha, media, type LinhaPlaca, type ResultadoUso, type Unidade } from '@/lib/horimetro-km-calc'
 import { CardGrafico, COR } from './Graficos'
 import { Segmentado } from './FiltrosBar'
 
@@ -26,7 +26,7 @@ function Tip({ unidade, tipo }: { unidade: Unidade; tipo: TipoMedia }) {
     return (
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-lg text-xs tabular-nums">
         <div className="font-bold text-zinc-800 dark:text-zinc-100">{d.rotulo} <span className="font-normal text-zinc-500">{d.tipoEq}</span></div>
-        <div className="text-zinc-600 dark:text-zinc-300">{fmtNum(d.valor, 1)} {unidade} {ROTULO[tipo]}</div>
+        <div className="text-zinc-600 dark:text-zinc-300">{fmtNum(d.valor, 1)} {sigla(unidade)} {ROTULO[tipo]}</div>
       </div>
     )
   }
@@ -49,7 +49,7 @@ function GraficoMedia({ linhas, unidade, tipo, onSelecionar }: { linhas: LinhaPl
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2 tabular-nums">
         <span className="text-2xl font-extrabold" style={{ color: COR[unidade] }}>{frota == null ? '—' : fmtNum(frota, 1)}</span>
-        <span className="text-xs text-zinc-500">{unidade} {ROTULO[tipo]} · média da frota ({ordenado.length} placa{ordenado.length === 1 ? '' : 's'})</span>
+        <span className="text-xs text-zinc-500">{sigla(unidade)} {ROTULO[tipo]} · média da frota ({ordenado.length} placa{ordenado.length === 1 ? '' : 's'})</span>
       </div>
       {!dados.length ? (
         <div className="h-[200px] flex items-center justify-center text-sm text-zinc-400 text-center px-4">Sem placas com pelo menos 2 leituras no período</div>
@@ -66,7 +66,7 @@ function GraficoMedia({ linhas, unidade, tipo, onSelecionar }: { linhas: LinhaPl
             )}
             <Bar dataKey="valor" fill={COR[unidade]} radius={[0, 4, 4, 0]} barSize={16} cursor="pointer"
               onClick={(d: unknown) => { const l = (d as { linha?: LinhaPlaca } | null)?.linha; if (l) onSelecionar(l) }}
-              label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => fmtNum(v, tipo === 'dia' ? 1 : 0) }} />
+              label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => `${fmtNum(v, tipo === 'dia' ? 1 : 0)} ${sigla(unidade)}` }} />
           </BarChart>
         </ResponsiveContainer>
       )}

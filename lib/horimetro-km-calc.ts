@@ -513,6 +513,9 @@ export function calcularKpis(linhas: LinhaPlaca[], visao: VisaoMedia): Kpis {
   }
 }
 
+/** Sigla da unidade pra exibir: H (horímetro) ou KM. */
+export const sigla = (u: Unidade) => (u === 'h' ? 'H' : 'KM')
+
 // ─── FORMATAÇÃO pt-BR ───────────────────────────────────────────────────────────
 export function fmtNum(v: number | null | undefined, casas = 0): string {
   if (v == null || !isFinite(v)) return '—'

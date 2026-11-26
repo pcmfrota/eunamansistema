@@ -6,7 +6,7 @@ import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import {
-  montarLinhas, serieTemporal, somarDias, fmtNum, rotuloMes, variacaoPercentual,
+  montarLinhas, serieTemporal, sigla, somarDias, fmtNum, rotuloMes, variacaoPercentual,
   type EquipamentoAtivo, type Unidade,
 } from '@/lib/horimetro-km-calc'
 import { useLeiturasDashboard } from './useLeiturasDashboard'
@@ -30,8 +30,8 @@ function TipAnual({ unidade, ano }: { unidade: Unidade; ano: number }) {
     return (
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-lg text-xs tabular-nums">
         <div className="font-bold text-zinc-800 dark:text-zinc-100 mb-1">{d.rotulo}</div>
-        <div className="text-zinc-700 dark:text-zinc-200">{ano}: <b>{atual == null ? '—' : `${fmtNum(atual, 1)} ${unidade}`}</b></div>
-        <div className="text-zinc-500">{ano - 1}: {fmtNum(ant, 1)} {unidade}</div>
+        <div className="text-zinc-700 dark:text-zinc-200">{ano}: <b>{atual == null ? '—' : `${fmtNum(atual, 1)} ${sigla(unidade)}`}</b></div>
+        <div className="text-zinc-500">{ano - 1}: {fmtNum(ant, 1)} {sigla(unidade)}</div>
         {v != null && <div className="text-zinc-500 mt-0.5">{v > 0 ? '+' : ''}{fmtNum(v, 1)}% vs. {ano - 1}</div>}
       </div>
     )
@@ -63,10 +63,10 @@ function Resumo({ titulo, icone, cor, total, totalAnt, media, unidade, ano, mese
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">{titulo}<span className={cor}>{icone}</span></div>
-      <div className="text-2xl font-extrabold tabular-nums text-zinc-900 dark:text-white">{fmtNum(total)}<span className={`text-sm font-bold ml-1 ${cor}`}>{unidade}</span></div>
-      <div className="text-[11px] text-zinc-500 tabular-nums">Média mensal: <b>{media == null ? '—' : `${fmtNum(media)} ${unidade}`}</b></div>
+      <div className="text-2xl font-extrabold tabular-nums text-zinc-900 dark:text-white">{fmtNum(total)}<span className={`text-sm font-bold ml-1 ${cor}`}>{sigla(unidade)}</span></div>
+      <div className="text-[11px] text-zinc-500 tabular-nums">Média mensal: <b>{media == null ? '—' : `${fmtNum(media)} ${sigla(unidade)}`}</b></div>
       <div className="text-[11px] text-zinc-500 tabular-nums">
-        {ano - 1} nos mesmos {mesesComparados} meses: {fmtNum(totalAnt)} {unidade}
+        {ano - 1} nos mesmos {mesesComparados} meses: {fmtNum(totalAnt)} {sigla(unidade)}
         {v != null && <b className={`ml-1 ${v >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>({v > 0 ? '+' : ''}{fmtNum(v, 1)}%)</b>}
       </div>
     </div>

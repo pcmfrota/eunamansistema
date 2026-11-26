@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, ChevronLeft, ChevronRight, CheckCircle2, Clock3, AlertOctagon } from 'lucide-react'
-import { fmtNum, fmtData, usoValido, type LinhaPlaca, type StatusLeitura, type ResultadoUso } from '@/lib/horimetro-km-calc'
+import { sigla, fmtNum, fmtData, usoValido, type LinhaPlaca, type StatusLeitura, type ResultadoUso } from '@/lib/horimetro-km-calc'
 
 type Chave = 'placa' | 'tipo' | 'frota' | 'inicial' | 'final' | 'uso' | 'diaria' | 'mensal' | 'projecao' | 'ultima' | 'dias' | 'status'
 const POR_PAGINA = 15
@@ -45,8 +45,8 @@ function Valor({ l, pegar, casas = 0, insuficiente = false }: { l: LinhaPlaca; p
     <div className="flex flex-col items-end leading-tight">
       {v == null && insuficiente && l.principal.insuficiente
         ? <Insuf />
-        : <span className={v == null ? 'text-zinc-300' : ''}>{v == null ? '—' : `${fmtNum(v, casas)} ${l.unidade}`}</span>}
-      {km != null && <span className="text-[10px] text-blue-600 dark:text-blue-400">{fmtNum(km, casas)} km</span>}
+        : <span className={v == null ? 'text-zinc-300' : ''}>{v == null ? '—' : `${fmtNum(v, casas)} ${sigla(l.unidade)}`}</span>}
+      {km != null && <span className="text-[10px] text-blue-600 dark:text-blue-400">{fmtNum(km, casas)} KM</span>}
       {km == null && insuficiente && l.km?.insuficiente && <Insuf />}
     </div>
   )
@@ -148,8 +148,8 @@ export default function TabelaAnalitica({ linhas, onSelecionar, acaoExtra }: { l
               <StatusBadge status={l.status} />
             </div>
             <div className="grid grid-cols-3 gap-2 text-[11px] tabular-nums">
-              <div><div className="text-zinc-400">Uso</div><div className="font-bold">{l.principal.insuficiente ? <Insuf /> : usoValido(l.principal) != null ? `${fmtNum(l.principal.uso, 1)} ${l.unidade}` : '—'}</div></div>
-              <div><div className="text-zinc-400">Média mensal</div><div className="font-bold">{l.principal.mediaMensal != null ? `${fmtNum(l.principal.mediaMensal, 1)} ${l.unidade}` : '—'}</div></div>
+              <div><div className="text-zinc-400">Uso</div><div className="font-bold">{l.principal.insuficiente ? <Insuf /> : usoValido(l.principal) != null ? `${fmtNum(l.principal.uso, 1)} ${sigla(l.unidade)}` : '—'}</div></div>
+              <div><div className="text-zinc-400">Média mensal</div><div className="font-bold">{l.principal.mediaMensal != null ? `${fmtNum(l.principal.mediaMensal, 1)} ${sigla(l.unidade)}` : '—'}</div></div>
               <div><div className="text-zinc-400">Última</div><div className="font-bold">{fmtData(l.ultimaLeitura)}</div></div>
             </div>
           </button>

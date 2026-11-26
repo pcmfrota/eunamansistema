@@ -5,7 +5,7 @@ import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LineChart, Line } from 'recharts'
 import {
-  fmtNum, fmtData, rotuloMes, serieTemporal, usoPorTipo, usoDaLinha, usoValido, media,
+  sigla, fmtNum, fmtData, rotuloMes, serieTemporal, usoPorTipo, usoDaLinha, usoValido, media,
   type LinhaPlaca, type Periodo, type Unidade, type VisaoMedia, type PontoClassificado,
 } from '@/lib/horimetro-km-calc'
 
@@ -34,7 +34,7 @@ function TooltipBox({ titulo, valor, unidade }: { titulo: string; valor: number;
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-lg text-xs">
       <div className="font-bold text-zinc-800 dark:text-zinc-100">{titulo}</div>
-      <div className="tabular-nums text-zinc-600 dark:text-zinc-300">{fmtNum(valor, 1)} {unidade}</div>
+      <div className="tabular-nums text-zinc-600 dark:text-zinc-300">{fmtNum(valor, 1)} {sigla(unidade)}</div>
     </div>
   )
 }
@@ -59,10 +59,10 @@ export function UsoMensalChart({ linhas, unidade, periodo, visao, meses }: { lin
         <YAxis tick={EIXO} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtNum(Number(v))} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
         <Bar dataKey="valor" fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={48}
-          label={{ position: 'top', fontSize: 11, fontWeight: 700, fill: '#3f3f46', formatter: (v: number) => (v > 0 ? `${fmtNum(v)} ${unidade}` : '') }} />
+          label={{ position: 'top', fontSize: 11, fontWeight: 700, fill: '#3f3f46', formatter: (v: number) => (v > 0 ? `${fmtNum(v)} ${sigla(unidade)}` : '') }} />
         {med != null && (
           <ReferenceLine y={med} stroke="#a1a1aa" strokeDasharray="4 4"
-            label={{ value: `média ${fmtNum(med)} ${unidade}`, position: 'insideTopRight', fontSize: 11, fill: '#52525b' }} />
+            label={{ value: `média ${fmtNum(med)} ${sigla(unidade)}`, position: 'insideTopRight', fontSize: 11, fill: '#52525b' }} />
         )}
       </BarChart>
     </ResponsiveContainer>
@@ -88,7 +88,7 @@ export function RankingChart({ linhas, unidade, onSelecionar }: { linhas: LinhaP
           <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
           <Bar dataKey="valor" fill={COR[unidade]} radius={[0, 4, 4, 0]} barSize={16} cursor="pointer"
             onClick={(d: unknown) => { const l = (d as { linha?: LinhaPlaca } | null)?.linha; if (l) onSelecionar(l) }}
-            label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => fmtNum(v) }} />
+            label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => `${fmtNum(v)} ${sigla(unidade)}` }} />
         </BarChart>
       </ResponsiveContainer>
       {ordenado.length > 10 && (
@@ -111,7 +111,7 @@ export function UsoPorTipoChart({ linhas, unidade }: { linhas: LinhaPlaca[]; uni
         <YAxis type="category" dataKey="rotulo" tick={{ ...EIXO, fontWeight: 600 }} axisLine={false} tickLine={false} width={104} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
         <Bar dataKey="valor" fill={COR[unidade]} radius={[0, 4, 4, 0]} barSize={16}
-          label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => fmtNum(v) }} />
+          label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => `${fmtNum(v)} ${sigla(unidade)}` }} />
       </BarChart>
     </ResponsiveContainer>
   )

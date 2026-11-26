@@ -60,13 +60,13 @@ export default function KpiCards({ atual, anterior, visao, temAnterior, rotuloCo
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
       <Card titulo="Frotas ativas" icone={<Truck size={16} />} valor={fmtNum(atual.frotas)} sub="no filtro aplicado" variacao={null} />
       <Card titulo="Horas rodadas" icone={<Clock size={16} className="text-emerald-600" />}
-        valor={<>{fmtNum(atual.horasTotais)}<span className="text-sm font-bold text-emerald-600 ml-1">h</span></>} sub="Pesados (horímetro)"
+        valor={<>{fmtNum(atual.horasTotais)}<span className="text-sm font-bold text-emerald-600 ml-1">H</span></>} sub="Pesados (horímetro)"
         variacao={v(atual.horasTotais, anterior.horasTotais)} />
       <Card titulo="KM rodados" icone={<Route size={16} className="text-blue-600" />}
-        valor={<>{fmtNum(atual.kmTotais)}<span className="text-sm font-bold text-blue-600 ml-1">km</span></>} sub="Leves (KM)"
+        valor={<>{fmtNum(atual.kmTotais)}<span className="text-sm font-bold text-blue-600 ml-1">KM</span></>} sub="Leves (KM)"
         variacao={v(atual.kmTotais, anterior.kmTotais)} />
       <Card titulo={rotuloMedia} icone={<Activity size={16} />}
-        valor={<span className="text-lg"><span className="text-emerald-700 dark:text-emerald-400">{fmtNum(atual.mediaH)} h</span> <span className="text-zinc-300">·</span> <span className="text-blue-700 dark:text-blue-400">{fmtNum(atual.mediaKm)} km</span></span>}
+        valor={<span className="text-lg"><span className="text-emerald-700 dark:text-emerald-400">{fmtNum(atual.mediaH)} H</span> <span className="text-zinc-300">·</span> <span className="text-blue-700 dark:text-blue-400">{fmtNum(atual.mediaKm)} KM</span></span>}
         sub="pesados · leves"
         variacao={v(atual.mediaH ?? null, anterior.mediaH)} />
       <Card titulo="Sem leitura no período" icone={<AlertTriangle size={16} />} alerta={atual.semLeitura > 0}

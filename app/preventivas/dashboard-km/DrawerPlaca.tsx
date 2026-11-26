@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertOctagon, PencilLine, ChevronDown, ChevronUp } from 'lucide-react'
-import { fmtNum, fmtData, usoValido, type LinhaPlaca, type Unidade, type Periodo, type PontoClassificado } from '@/lib/horimetro-km-calc'
+import { sigla, fmtNum, fmtData, usoValido, type LinhaPlaca, type Unidade, type Periodo, type PontoClassificado } from '@/lib/horimetro-km-calc'
 import { EvolucaoChart } from './Graficos'
 import { StatusBadge } from './TabelaAnalitica'
 import { Segmentado } from './FiltrosBar'
@@ -35,7 +35,7 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
   const linhaTabela = (p: PontoClassificado, i: number, extra?: string) => (
     <tr key={p.id || `${p.data}-${i}`} className={`border-b border-zinc-100 dark:border-zinc-800/60 ${p.inconsistente ? 'bg-red-50/60 dark:bg-red-900/10' : extra || ''}`} title={p.obs || undefined}>
       <td className="py-1.5">{fmtData(p.data)}</td>
-      <td className="py-1.5 text-right font-semibold">{fmtNum(p.valor, 1)} {serie}</td>
+      <td className="py-1.5 text-right font-semibold">{fmtNum(p.valor, 1)} {sigla(serie)}</td>
       <td className={`py-1.5 text-right ${p.inconsistente ? 'text-red-600 font-bold' : 'text-zinc-500'}`}>
         {p.inconsistente && <AlertOctagon size={11} className="inline mr-1 -mt-0.5" />}
         {p.diferenca == null ? '—' : `${p.diferenca > 0 ? '+' : ''}${fmtNum(p.diferenca, 1)}`}
@@ -75,9 +75,9 @@ export default function DrawerPlaca({ linha, periodo, onClose, onCorrigir }: { l
             <Segmentado<Unidade> valor={serie} onChange={setSerie} opcoes={[{ v: 'h', l: 'Horímetro' }, { v: 'km', l: 'KM' }]} />
           )}
           <div className="grid grid-cols-3 gap-2 text-xs tabular-nums">
-            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Uso no período</div><div className="font-bold">{r?.insuficiente ? <span className="text-amber-600">Insuficiente</span> : usoValido(r) != null ? `${fmtNum(r!.uso, 1)} ${serie}` : '—'}</div></div>
-            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média mensal</div><div className="font-bold">{r?.mediaMensal != null ? `${fmtNum(r.mediaMensal, 1)} ${serie}` : '—'}</div></div>
-            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média diária</div><div className="font-bold">{r?.mediaDiaria != null ? `${fmtNum(r.mediaDiaria, 1)} ${serie}` : '—'}</div></div>
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Uso no período</div><div className="font-bold">{r?.insuficiente ? <span className="text-amber-600">Insuficiente</span> : usoValido(r) != null ? `${fmtNum(r!.uso, 1)} ${sigla(serie)}` : '—'}</div></div>
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média mensal</div><div className="font-bold">{r?.mediaMensal != null ? `${fmtNum(r.mediaMensal, 1)} ${sigla(serie)}` : '—'}</div></div>
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2"><div className="text-zinc-400">Média diária</div><div className="font-bold">{r?.mediaDiaria != null ? `${fmtNum(r.mediaDiaria, 1)} ${sigla(serie)}` : '—'}</div></div>
           </div>
 
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
