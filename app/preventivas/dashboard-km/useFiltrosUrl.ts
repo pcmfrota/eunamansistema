@@ -33,7 +33,8 @@ export const hojeLocal = () => {
 
 export function filtrosPadrao(): FiltrosDashboard {
   const p = periodoDoAtalho('mes-atual', hojeLocal())
-  return { frota: 'todos', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
+  // Painel sempre abre travado nos PESADOS (dá pra trocar depois, mas ao reabrir volta pra pesados).
+  return { frota: 'pesados', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
 }
 
 // Prefixo "dk_" pra não colidir com outros parâmetros da página.
@@ -46,13 +47,11 @@ function lerDaUrl(): FiltrosDashboard {
   if (typeof window === 'undefined') return base
   const sp = new URLSearchParams(window.location.search)
   const lista = (k: string) => (sp.get(k) || '').split(',').map(s => s.trim()).filter(Boolean)
-  const frota = sp.get(P.frota)
   const modo = sp.get(P.modo) as ModoPeriodo | null
   const ini = sp.get(P.inicio), fim = sp.get(P.fim)
   const atraso = Number(sp.get(P.atraso))
   const f: FiltrosDashboard = {
     ...base,
-    frota: frota === 'pesados' || frota === 'leves' ? frota : 'todos',
     placas: lista(P.placas),
     tipos: lista(P.tipos),
     visao: sp.get(P.visao) === 'anual' ? 'anual' : 'mensal',
@@ -80,7 +79,7 @@ function gravarNaUrl(f: FiltrosDashboard) {
   const sp = new URLSearchParams(window.location.search)
   const def = filtrosPadrao()
   const set = (k: string, v: string | null) => { if (v) sp.set(k, v); else sp.delete(k) }
-  set(P.frota, f.frota !== 'todos' ? f.frota : null)
+  sp.delete(P.frota) // a frota não vai pra URL: ao abrir a página é sempre Pesados
   set(P.placas, f.placas.join(',') || null)
   set(P.tipos, f.tipos.join(',') || null)
   set(P.modo, f.modo !== 'mes-atual' ? f.modo : null)
