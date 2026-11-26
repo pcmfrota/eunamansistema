@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useEffect, type ReactNode } from 'react'
 import { Search, X, FilterX, Download, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
 import { CheckboxMultiSelect } from '@/components/checkbox-multi-select'
-import { fimDoMes, periodoDoAtalho, periodoDosMeses, somarMeses, fmtData } from '@/lib/horimetro-km-calc'
+import { fimDoMes, periodoDoAtalho, periodoDosMeses, fmtData } from '@/lib/horimetro-km-calc'
 import { hojeLocal, type FiltrosDashboard, type FiltroFrota } from './useFiltrosUrl'
 import type { PeriodoSuzano } from './buscarDados'
 
@@ -105,34 +105,35 @@ function MenuExportar({ onExportar, desabilitado }: { onExportar: (f: 'xlsx' | '
 
 const inputData = 'px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500'
 const MESES_NOME = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-const nomeMes = (am: string) => `${MESES_NOME[+am.slice(5, 7) - 1]} ${am.slice(0, 4)}`
 /** Select compacto; fica azul quando é ele que define o período. */
 const selectCls = (ativo: boolean) => `px-2 py-1.5 text-xs font-semibold rounded-lg border outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${ativo ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200'}`
 
 export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponiveis, tiposDisponiveis, rfs, onExportar, podeExportar, modoAnual = false, extra }: Props) {
   const hoje = hojeLocal()
-  // Últimos 24 meses (do atual pra trás) pro filtro de meses.
-  const meses = useMemo(() => Array.from({ length: 24 }, (_, i) => somarMeses(hoje.slice(0, 7), -i)), [hoje])
-  const anos = useMemo(() => Array.from(new Set(meses.map(m => +m.slice(0, 4)))), [meses])
-  // Meses marcados no seletor (um mês, vários meses, ou o mês atual/anterior pelos atalhos).
-  const mesesMarcados = filtros.modo === 'meses' ? filtros.meses
-    : filtros.modo === 'mes' || filtros.modo === 'mes-atual' || filtros.modo === 'mes-anterior' ? [filtros.inicio.slice(0, 7)] : []
-  const anoInteiro = filtros.inicio.endsWith('-01-01') && filtros.fim === `${filtros.inicio.slice(0, 4)}-12-31` && filtros.modo !== 'meses'
-  const [anoLista, setAnoLista] = useState<number | null>(null)
-  const anoSel = anoInteiro ? +filtros.inicio.slice(0, 4) : anoLista
-  const opcoesMeses = meses.filter(m => anoSel == null || +m.slice(0, 4) === anoSel)
-  const escolherVariosMeses = (vals: string[]) => {
-    const ms = Array.from(new Set(vals)).sort()
-    if (!ms.length) { const p = periodoDoAtalho('mes-atual', hoje); atualizar({ modo: 'mes-atual', meses: [], ...p }); return }
-    if (ms.length === 1) { atualizar({ modo: 'mes', meses: [], inicio: `${ms[0]}-01`, fim: fimDoMes(ms[0]) }); return }
-    atualizar({ modo: 'meses', meses: ms, ...periodoDosMeses(ms) })
-  }
-  const escolherAno = (v: string) => {
-    if (!v) { setAnoLista(null); return }
-    const a = +v
-    setAnoLista(a)
-    // Só o ano, sem mês marcado = ano inteiro (01/01 a 31/12).
-    atualizar({ modo: a === +hoje.slice(0, 4) ? 'ano-atual' : a === +hoje.slice(0, 4) - 1 ? 'ano-anterior' : 'custom', meses: [], inicio: `${a}-01-01`, fim: `${a}-12-31` })
+  const anoAtual = +hoje.slice(0, 4)
+  // Anos disponíveis: o atual e os 2 anteriores.
+  const anos = [anoAtual, anoAtual - 1, anoAtual - 2].map(String)
+  // Meses do período escolhido (aaaa-mm). Mês e ano são escolhidos separados: o período é a
+  // combinação deles (ex.: Setembro + Novembro de 2026 → set/26 e nov/26).
+  const mesesDoFiltro = useMemo(() => {
+    if (filtros.modo === 'meses') return filtros.meses
+    if (filtros.modo === 'mes' || filtros.modo === 'mes-atual' || filtros.modo === 'mes-anterior') return [filtros.inicio.slice(0, 7)]
+    const anoInteiro = filtros.inicio.endsWith('-01-01') && filtros.fim === `${filtros.inicio.slice(0, 4)}-12-31`
+    if (anoInteiro) return Array.from({ length: 12 }, (_, i) => `${filtros.inicio.slice(0, 4)}-${String(i + 1).padStart(2, '0')}`).filter(m => m <= hoje.slice(0, 7))
+    return []
+  }, [filtros.modo, filtros.meses, filtros.inicio, filtros.fim, hoje])
+  const mesesMarcados = Array.from(new Set(mesesDoFiltro.map(m => m.slice(5, 7)))).sort()
+  const anosMarcados = Array.from(new Set(mesesDoFiltro.map(m => m.slice(0, 4)))).sort()
+  /** Combina meses × anos (sem meses futuros) e aplica o período. Nada marcado = mês atual. */
+  const aplicarMesAno = (ms: string[], as: string[]) => {
+    if (!ms.length && !as.length) { atualizar({ modo: 'mes-atual', meses: [], ...periodoDoAtalho('mes-atual', hoje) }); return }
+    const anosUsar = as.length ? as : [String(anoAtual)]
+    const mesesUsar = ms.length ? ms : Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
+    const todas = anosUsar.flatMap(a => mesesUsar.map(m => `${a}-${m}`)).sort()
+    const passadas = todas.filter(m => m <= hoje.slice(0, 7))
+    const lista = passadas.length ? passadas : todas
+    if (lista.length === 1) { atualizar({ modo: 'mes', meses: [], inicio: `${lista[0]}-01`, fim: fimDoMes(lista[0]) }); return }
+    atualizar({ modo: 'meses', meses: lista, ...periodoDosMeses(lista) })
   }
   const rfSel = filtros.modo === 'rf' ? rfs.find(r => r.inicio === filtros.inicio && r.fim === filtros.fim) : undefined
   const valorRf = rfSel ? `${rfSel.ano}-${rfSel.mes}` : ''
@@ -163,12 +164,10 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
       </div>
 
       {!modoAnual && <div className="flex flex-wrap items-center gap-2">
-        <CheckboxMultiSelect values={mesesMarcados} onChange={escolherVariosMeses}
-          options={opcoesMeses.map(m => ({ value: m, label: nomeMes(m) }))} placeholder="Todos os Meses" />
-        <select className={selectCls(anoInteiro)} value={anoSel ?? ''} onChange={e => escolherAno(e.target.value)} title="Ano: filtra a lista de meses; sem mês marcado, mostra o ano inteiro">
-          <option value="">Todos os Anos</option>
-          {anos.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
+        <CheckboxMultiSelect values={mesesMarcados} onChange={v => aplicarMesAno(v, anosMarcados)} selecionarTodos
+          options={MESES_NOME.map((n, i) => ({ value: String(i + 1).padStart(2, '0'), label: n }))} placeholder="Mês" />
+        <CheckboxMultiSelect values={anosMarcados} onChange={v => aplicarMesAno(mesesMarcados, v)} selecionarTodos
+          options={anos.map(a => ({ value: a, label: a }))} placeholder="Ano" />
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
           Meses Suzano
           <select className={selectCls(valorRf !== '')} value={valorRf} onChange={e => escolherRf(e.target.value)} disabled={!rfs.length}>

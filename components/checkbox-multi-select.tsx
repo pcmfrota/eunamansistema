@@ -18,13 +18,15 @@ interface CheckboxMultiSelectProps {
   className?: string;
   /** Pill fica destacada em âmbar em vez de verde — usado pro filtro de Status da OS, pra não ser confundido com o Status do veículo. */
   accent?: "green" | "amber";
+  /** Mostra a opção "Selecionar todos" no topo da lista (e o rótulo "Todos" quando tudo está marcado). */
+  selecionarTodos?: boolean;
 }
 
 // Dropdown de múltipla seleção com checkbox — substitui os antigos <select> de valor único
 // nos filtros de listagem/dashboard do sistema inteiro. Mesma casca visual (pill com seta)
 // do <select> original, pra não mudar o layout das telas que já o usam; o que muda é que
 // abre um painel com uma checkbox por opção em vez de trocar de valor direto.
-export function CheckboxMultiSelect({ values, onChange, options, placeholder, className, accent = "green" }: CheckboxMultiSelectProps) {
+export function CheckboxMultiSelect({ values, onChange, options, placeholder, className, accent = "green", selecionarTodos = false }: CheckboxMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const accentColor = accent === "amber" ? "#d97706" : "#16a34a";
@@ -46,9 +48,12 @@ export function CheckboxMultiSelect({ values, onChange, options, placeholder, cl
     onChange(values.includes(val) ? values.filter((v) => v !== val) : [...values, val]);
   };
 
+  const todosMarcados = options.length > 0 && options.every((o) => values.includes(o.value));
   const label =
     values.length === 0
       ? placeholder
+      : selecionarTodos && todosMarcados && options.length > 1
+      ? "Todos"
       : values.length === 1
       ? options.find((o) => o.value === values[0])?.label || values[0]
       : `${values.length} selecionados`;
@@ -78,6 +83,16 @@ export function CheckboxMultiSelect({ values, onChange, options, placeholder, cl
           className="absolute z-50 mt-1.5 min-w-[210px] max-h-72 overflow-y-auto rounded-xl shadow-2xl py-1.5"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
         >
+          {selecionarTodos && !todosMarcados && (
+            <button
+              type="button"
+              onClick={() => onChange(options.map((o) => o.value))}
+              className="w-full text-left px-3.5 py-2 text-[11px] font-bold uppercase tracking-wide hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+              style={{ color: accentColor }}
+            >
+              Selecionar todos
+            </button>
+          )}
           {values.length > 0 && (
             <button
               type="button"
