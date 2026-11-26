@@ -122,24 +122,27 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
     if (anoInteiro) return Array.from({ length: 12 }, (_, i) => `${filtros.inicio.slice(0, 4)}-${String(i + 1).padStart(2, '0')}`).filter(m => m <= hoje.slice(0, 7))
     return []
   }, [filtros.modo, filtros.meses, filtros.inicio, filtros.fim, hoje])
-  const mesesMarcados = Array.from(new Set(mesesDoFiltro.map(m => m.slice(5, 7)))).sort()
-  const anosMarcados = Array.from(new Set(mesesDoFiltro.map(m => m.slice(0, 4)))).sort()
+  // Mostra exatamente o que foi marcado; sem nada marcado à mão (ex.: ao abrir), mostra o mês do período.
+  const marcouAMao = filtros.selMeses.length > 0 || filtros.selAnos.length > 0
+  const mesesMarcados = marcouAMao ? filtros.selMeses : Array.from(new Set(mesesDoFiltro.map(m => m.slice(5, 7)))).sort()
+  const anosMarcados = marcouAMao ? filtros.selAnos : Array.from(new Set(mesesDoFiltro.map(m => m.slice(0, 4)))).sort()
   /** Combina meses × anos (sem meses futuros) e aplica o período. Nada marcado = mês atual. */
   const aplicarMesAno = (ms: string[], as: string[]) => {
-    if (!ms.length && !as.length) { atualizar({ modo: 'mes-atual', meses: [], ...periodoDoAtalho('mes-atual', hoje) }); return }
+    const sel = { selMeses: [...ms].sort(), selAnos: [...as].sort() }
+    if (!ms.length && !as.length) { atualizar({ modo: 'mes-atual', meses: [], ...sel, ...periodoDoAtalho('mes-atual', hoje) }); return }
     const anosUsar = as.length ? as : [String(anoAtual)]
     const mesesUsar = ms.length ? ms : Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
     const todas = anosUsar.flatMap(a => mesesUsar.map(m => `${a}-${m}`)).sort()
     const passadas = todas.filter(m => m <= hoje.slice(0, 7))
     const lista = passadas.length ? passadas : todas
-    if (lista.length === 1) { atualizar({ modo: 'mes', meses: [], inicio: `${lista[0]}-01`, fim: fimDoMes(lista[0]) }); return }
-    atualizar({ modo: 'meses', meses: lista, ...periodoDosMeses(lista) })
+    if (lista.length === 1) { atualizar({ modo: 'mes', meses: [], ...sel, inicio: `${lista[0]}-01`, fim: fimDoMes(lista[0]) }); return }
+    atualizar({ modo: 'meses', meses: lista, ...sel, ...periodoDosMeses(lista) })
   }
   const rfSel = filtros.modo === 'rf' ? rfs.find(r => r.inicio === filtros.inicio && r.fim === filtros.fim) : undefined
   const valorRf = rfSel ? `${rfSel.ano}-${rfSel.mes}` : ''
   const escolherRf = (v: string) => {
     const r = rfs.find(x => `${x.ano}-${x.mes}` === v)
-    if (r) atualizar({ modo: 'rf', meses: [], inicio: r.inicio, fim: r.fim })
+    if (r) atualizar({ modo: 'rf', meses: [], selMeses: [], selAnos: [], inicio: r.inicio, fim: r.fim })
   }
 
   return (
@@ -183,12 +186,12 @@ export default function FiltrosBar({ filtros, atualizar, limpar, placasDisponive
         <label className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase ${filtros.modo === 'custom' ? 'text-blue-600' : 'text-zinc-500'}`}>
           Período De
           <input type="date" className={inputData} value={filtros.inicio} max={filtros.fim}
-            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', meses: [], inicio: e.target.value }) }} />
+            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', meses: [], selMeses: [], selAnos: [], inicio: e.target.value }) }} />
         </label>
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase">
           Até
           <input type="date" className={inputData} value={filtros.fim} min={filtros.inicio}
-            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', meses: [], fim: e.target.value }) }} />
+            onChange={e => { if (e.target.value) atualizar({ modo: 'custom', meses: [], selMeses: [], selAnos: [], fim: e.target.value }) }} />
         </label>
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase ml-auto" title="Placa sem leitura há mais dias que isso fica com status Atrasada">
           Atrasada após

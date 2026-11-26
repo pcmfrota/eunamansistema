@@ -16,6 +16,9 @@ export type FiltrosDashboard = {
   fim: string
   /** Meses escolhidos (aaaa-mm) quando modo = 'meses'. */
   meses: string[]
+  /** O que está marcado nos filtros Mês (01..12) e Ano — vazio = nada marcado (mostra o rótulo). */
+  selMeses: string[]
+  selAnos: string[]
   visao: VisaoMedia
   /** Dias sem leitura a partir dos quais a placa fica "Atrasada". */
   atraso: number
@@ -36,7 +39,7 @@ export const hojeLocal = () => {
 export function filtrosPadrao(): FiltrosDashboard {
   const p = periodoDoAtalho('mes-atual', hojeLocal())
   // Painel sempre abre travado nos PESADOS (dá pra trocar depois, mas ao reabrir volta pra pesados).
-  return { frota: 'pesados', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, meses: [], visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
+  return { frota: 'pesados', placas: [], tipos: [], modo: 'mes-atual', inicio: p.inicio, fim: p.fim, meses: [], selMeses: [], selAnos: [], visao: 'mensal', atraso: 7, cmp: 'anterior', cmpIni: '', cmpFim: '', aba: 'periodo', ano: +hojeLocal().slice(0, 4) }
 }
 
 // Prefixo "dk_" pra não colidir com outros parâmetros da página.
