@@ -81,10 +81,12 @@ export function RankingChart({ linhas, unidade, onSelecionar }: { linhas: LinhaP
   return (
     <div className="flex flex-col gap-2">
       <ResponsiveContainer width="100%" height={Math.max(160, dados.length * 28 + 20)}>
-        <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+        <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 64, left: 0, bottom: 0 }} style={{ cursor: 'pointer' }}
+            onClick={(st: unknown) => { const l = (st as { activePayload?: { payload?: { linha?: LinhaPlaca } }[] } | null)?.activePayload?.[0]?.payload?.linha; if (l) onSelecionar(l) }}>
           <CartesianGrid horizontal={false} stroke={GRADE} strokeDasharray="3 3" />
           <XAxis type="number" tick={EIXO} axisLine={false} tickLine={false} tickFormatter={v => fmtNum(Number(v))} />
-          <YAxis type="category" dataKey="rotulo" tick={{ ...EIXO, fontWeight: 600 }} axisLine={false} tickLine={false} width={72} />
+          <YAxis type="category" dataKey="rotulo" tick={{ ...EIXO, fontWeight: 600, cursor: 'pointer' }} axisLine={false} tickLine={false} width={72}
+              onClick={(t: unknown) => { const v = (t as { value?: string } | null)?.value; const l = dados.find(d => d.rotulo === v)?.linha; if (l) onSelecionar(l) }} />
           <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
           <Bar dataKey="valor" fill={COR[unidade]} radius={[0, 4, 4, 0]} barSize={16} cursor="pointer"
             onClick={(d: unknown) => { const l = (d as { linha?: LinhaPlaca } | null)?.linha; if (l) onSelecionar(l) }}
