@@ -570,6 +570,18 @@ export default function ControleFiltrosClient({
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="bg-zinc-100 dark:bg-zinc-900 font-bold text-zinc-800 dark:text-zinc-100">
+                      <td className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-900 px-3 py-2 border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap">Total: {trocasPorPlaca.length} placa{trocasPorPlaca.length === 1 ? "" : "s"}</td>
+                      <td className="px-3 py-2 border-r border-zinc-200 dark:border-zinc-800 text-[10px] uppercase text-zinc-500 whitespace-nowrap">{trocasPorPlaca.filter(t => !t.datas.length).length} pendente{trocasPorPlaca.filter(t => !t.datas.length).length === 1 ? "" : "s"}</td>
+                      <td className="px-3 py-2 text-center border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap">{trocasPorPlaca.reduce((s, t) => s + t.datas.length, 0)} trocas</td>
+                      {Array.from({ length: Math.max(1, maxTrocas) }, (_, i) => (
+                        <td key={i} className="px-3 py-2 text-center border-r border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-500 whitespace-nowrap">
+                          {trocasPorPlaca.filter(t => t.datas.length > i).length} placa{trocasPorPlaca.filter(t => t.datas.length > i).length === 1 ? "" : "s"}
+                        </td>
+                      ))}
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
