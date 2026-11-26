@@ -195,6 +195,17 @@ export default function ControleFiltrosClient({
       });
   }, [historicoGeral]);
 
+  // Planilha "datas de troca por placa": uma linha por placa, datas da mais antiga pra mais nova.
+  const trocasPorPlaca = useMemo(() => {
+    const porPlaca: Record<string, string[]> = {};
+    lancamentos.forEach(l => { (porPlaca[l.placa] ||= []).push(l.data_troca); });
+    return linhasTodas.map(l => ({
+      placa: l.placa, tipo: l.tipo, modulo: l.modulo,
+      datas: (porPlaca[l.placa] || []).filter(Boolean).sort(),
+    }));
+  }, [lancamentos, linhasTodas]);
+  const maxTrocas = Math.max(0, ...trocasPorPlaca.map(t => t.datas.length));
+
   // Lançamentos com evidência fotográfica — respeita o filtro de tipo.
   const lancamentosComFoto = useMemo(
     () => historicoGeral.filter(l => l.evidencias && l.evidencias.length > 0),
@@ -448,13 +459,21 @@ export default function ControleFiltrosClient({
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={statusPieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}>
+                  <Pie data={statusPieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}
+                    labelLine={false} isAnimationActive={false}
+                    label={({ value, percent, x, y, textAnchor }: { value: number; percent: number; x: number; y: number; textAnchor: string }) => value > 0 ? (
+                      <text x={x} y={y} textAnchor={textAnchor as "start" | "middle" | "end"} dominantBaseline="central" fontSize={12} fontWeight={800} fill="#3f3f46">
+                        {value} ({Math.round(percent * 100)}%)
+                      </text>
+                    ) : null}>
                     {statusPieData.map(entry => (
                       <Cell key={entry.name} fill={entry.name === "Instalado" ? COR_INSTALADO : COR_PENDENTE} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(v: number, n: string) => [`${v} equip.`, n]} />
                   <Legend verticalAlign="bottom" height={28} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700 }} />
+                  <text x="50%" y="44%" textAnchor="middle" dominantBaseline="central" fontSize={22} fontWeight={800} fill="#18181b">{pctInstalado}%</text>
+                  <text x="50%" y="44%" dy={18} textAnchor="middle" dominantBaseline="central" fontSize={10} fontWeight={700} fill="#71717a">instalado</text>
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -465,14 +484,18 @@ export default function ControleFiltrosClient({
             <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Comboio x Skid</h3>
             <p className="text-[11px] text-zinc-400 mb-3">Sempre os dois tipos, mesmo com o filtro de tipo ativo</p>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={porTipoData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={6}>
+              <BarChart data={porTipoData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }} barGap={6}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} opacity={0.5} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fontWeight: 700, fill: "#71717a" }} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#71717a" }} axisLine={false} tickLine={false} />
                 <Tooltip />
                 <Legend verticalAlign="top" align="right" height={24} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, fontWeight: 700 }} />
-                <Bar dataKey="instalado" name="Instalado" fill={COR_INSTALADO} radius={[4, 4, 0, 0]} barSize={28} />
-                <Bar dataKey="pendente" name="Pendente" fill={COR_PENDENTE} radius={[4, 4, 0, 0]} barSize={28} />
+                <Bar dataKey="instalado" name="Instalado" fill={COR_INSTALADO} radius={[4, 4, 0, 0]} barSize={28}>
+                  <LabelList dataKey="instalado" position="top" fontSize={11} fontWeight={700} fill="#52525b" />
+                </Bar>
+                <Bar dataKey="pendente" name="Pendente" fill={COR_PENDENTE} radius={[4, 4, 0, 0]} barSize={28}>
+                  <LabelList dataKey="pendente" position="top" fontSize={11} fontWeight={700} fill="#52525b" />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -497,6 +520,58 @@ export default function ControleFiltrosClient({
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Datas de troca por placa (planilha) */}
+          <div className="lg:col-span-2 bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Datas de Troca por Placa</h3>
+            <p className="text-[11px] text-zinc-400 mb-3">
+              Cada troca da mais antiga para a mais recente · abaixo da data, os dias desde a troca anterior{filtroTipo !== "TODOS" ? ` — ${TIPO_LABEL[filtroTipo]}` : ""}
+            </p>
+            {trocasPorPlaca.length === 0 ? (
+              <div className="h-[120px] flex items-center justify-center text-xs text-zinc-400 font-semibold uppercase tracking-wide">Sem placas</div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-zinc-50 dark:bg-zinc-900 text-[10px] uppercase tracking-wide text-zinc-500">
+                      <th className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-left font-bold border-b border-r border-zinc-200 dark:border-zinc-800">Placa</th>
+                      <th className="px-3 py-2 text-left font-bold border-b border-r border-zinc-200 dark:border-zinc-800">Tipo</th>
+                      <th className="px-3 py-2 text-center font-bold border-b border-r border-zinc-200 dark:border-zinc-800">Trocas</th>
+                      {Array.from({ length: Math.max(1, maxTrocas) }, (_, i) => (
+                        <th key={i} className="px-3 py-2 text-center font-bold border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap">{i + 1}ª troca</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trocasPorPlaca.map(t => (
+                      <tr key={t.placa} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/60">
+                        <td className="sticky left-0 z-10 bg-white dark:bg-zinc-950 px-3 py-2 font-bold text-zinc-800 dark:text-zinc-200 border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap">{t.placa}</td>
+                        <td className="px-3 py-2 text-zinc-500 border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap">{TIPO_LABEL[t.tipo as keyof typeof TIPO_LABEL] || t.tipo}</td>
+                        <td className="px-3 py-2 text-center font-bold border-b border-r border-zinc-200 dark:border-zinc-800">{t.datas.length}</td>
+                        {Array.from({ length: Math.max(1, maxTrocas) }, (_, i) => {
+                          const d = t.datas[i];
+                          const ant = i > 0 ? t.datas[i - 1] : null;
+                          const intervalo = d && ant ? Math.round((Date.parse(d) - Date.parse(ant)) / 86400000) : null;
+                          return (
+                            <td key={i} className="px-3 py-1.5 text-center border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap tabular-nums">
+                              {d ? (
+                                <>
+                                  <div className="font-semibold text-zinc-700 dark:text-zinc-200">{fmtDataBr(d)}</div>
+                                  {intervalo != null && <div className="text-[10px] text-zinc-400">+{intervalo} dias</div>}
+                                </>
+                              ) : i === 0 ? (
+                                <span className="text-[10px] font-bold uppercase text-amber-600">Pendente</span>
+                              ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
