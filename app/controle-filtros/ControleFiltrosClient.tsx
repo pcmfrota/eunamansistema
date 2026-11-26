@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus, X, Camera, Trash2, Filter, CheckCircle2, AlertTriangle, History, Loader2, List,
   LayoutDashboard, Image as ImageIcon, Percent, Boxes,
@@ -647,12 +648,7 @@ export default function ControleFiltrosClient({
       )}
 
       {/* Lightbox */}
-      {fotoExpandida && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center bg-zinc-950/95 backdrop-blur-sm p-4" onClick={() => setFotoExpandida(null)}>
-          <button onClick={() => setFotoExpandida(null)} className="absolute top-4 right-4 text-white/80 hover:text-white p-2"><X size={24} /></button>
-          <img src={fotoExpandida} alt="Evidência ampliada" className="max-w-full max-h-full rounded-lg object-contain" onClick={e => e.stopPropagation()} />
-        </div>
-      )}
+      {fotoExpandida && <FotoAmpliada src={fotoExpandida} onClose={() => setFotoExpandida(null)} />}
 
       {/* Confirmação de exclusão */}
       {deletingId && (
@@ -667,5 +663,27 @@ export default function ControleFiltrosClient({
         </div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Foto ampliada em tela cheia. Vai pro document.body (portal) pra cobrir a página inteira, acima de
+ * qualquer container/modal. Fecha no X, no ESC ou clicando fora da imagem.
+ */
+function FotoAmpliada({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    window.addEventListener("keydown", esc, true);
+    return () => window.removeEventListener("keydown", esc, true);
+  }, [onClose]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-zinc-950/95 backdrop-blur-sm p-4" onClick={onClose} role="dialog" aria-label="Foto ampliada">
+      <button type="button" onClick={e => { e.stopPropagation(); onClose(); }} aria-label="Fechar" title="Fechar (Esc)"
+        className="absolute top-4 right-4 z-10 rounded-full bg-white/10 hover:bg-white/20 text-white p-2"><X size={24} /></button>
+      <img src={src} alt="Evidência ampliada" className="max-w-full max-h-full rounded-lg object-contain" onClick={e => e.stopPropagation()} />
+    </div>,
+    document.body
   );
 }
