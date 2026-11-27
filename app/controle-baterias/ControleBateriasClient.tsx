@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { excluirBateria } from "./actions";
 import {
   garantiaDias, situacaoGarantia, diasRestantes, validarBateria, chaveSerie, hojeIso,
-  SITUACAO_LABEL, EXTENSOES_CERTIFICADO, type Bateria, type SituacaoGarantia,
+  SITUACAO_LABEL, EXTENSOES_CERTIFICADO, PRAZOS_GARANTIA_MESES, somarMeses, type Bateria, type SituacaoGarantia,
 } from "@/lib/baterias";
 import {
   enviarBateria, validarArquivoCertificado, lerComoDataUrl, urlCertificado, type ArquivoLocal, type EnvioBateria,
@@ -148,6 +148,8 @@ function FormBateria({ inicial, existentes, fornecedoresCadastro, onClose, onSal
     observacoes: inicial?.observacoes || "",
   }));
   const [arquivo, setArquivo] = useState<ArquivoLocal | null>(null);
+  // Prazo escolhido nos botões: mudando a data da venda, o vencimento acompanha.
+  const [prazoMeses, setPrazoMeses] = useState<number | null>(null);
   const [removerCert, setRemoverCert] = useState(false);
   const [verAtual, setVerAtual] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -240,8 +242,34 @@ function FormBateria({ inicial, existentes, fornecedoresCadastro, onClose, onSal
             {dias == null ? "—" : `${dias} dia${dias !== 1 ? "s" : ""}`}
           </div>
         </Campo>
-        <Campo label="Data da venda" obrig><input type="date" className={inputCls} value={form.data_venda} onChange={set("data_venda")} /></Campo>
-        <Campo label="Vencimento da garantia" obrig><input type="date" className={inputCls} value={form.data_vencimento_garantia} min={form.data_venda || undefined} onChange={set("data_vencimento_garantia")} /></Campo>
+        <Campo label="Data da venda" obrig><input type="date" className={inputCls} value={form.data_venda} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, data_venda: v, data_vencimento_garantia: prazoMeses ? somarMeses(v, prazoMeses) || f.data_vencimento_garantia : f.data_vencimento_garantia })); }} /></Campo>
+        <Campo label="Vencimento da garantia" obrig><input type="date" className={inputCls} value={form.data_vencimento_garantia} min={form.data_venda || undefined} onChange={e => { setPrazoMeses(null); set("data_vencimento_garantia")(e); }} /></Campo>
+      </div>
+
+      <div className="flex flex-col gap-1.5 -mt-1">
+        <span className={labelCls}>Prazo de garantia (calcula o vencimento a partir da data da venda)</span>
+        <div className="flex flex-wrap gap-2">
+          {PRAZOS_GARANTIA_MESES.map(m => {
+            const alvo = somarMeses(form.data_venda, m);
+            const ativo = !!alvo && alvo === form.data_vencimento_garantia;
+            return (
+              <button key={m} type="button"
+                onClick={() => {
+                  if (!alvo) { setErro("Informe primeiro a data da venda."); return; }
+                  setErro(null);
+                  setPrazoMeses(m);
+                  setForm(f => ({ ...f, data_vencimento_garantia: alvo }));
+                }}
+                title={alvo ? `Vencimento em ${fmtData(alvo)}` : "Informe a data da venda"}
+                className={cn("px-4 py-2 rounded-xl text-sm font-bold border transition-colors",
+                  ativo ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-400 hover:text-blue-600",
+                  !form.data_venda && "opacity-60")}>
+                {m} meses
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Campo label="Certificado da bateria (PDF, JPG, PNG — até 10 MB)">

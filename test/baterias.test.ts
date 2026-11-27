@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { garantiaDias, situacaoGarantia, diasRestantes, validarBateria, chaveSerie, nomeArquivoSeguro } from '@/lib/baterias'
+import { garantiaDias, situacaoGarantia, diasRestantes, validarBateria, chaveSerie, nomeArquivoSeguro, somarMeses } from '@/lib/baterias'
 
 describe('garantiaDias', () => {
   it('conta os dias entre a venda e o vencimento', () => {
@@ -53,4 +53,19 @@ describe('validarBateria', () => {
 describe('utilitários', () => {
   it('chave do número de série ignora espaço e caixa', () => expect(chaveSerie('  abc-1 ')).toBe('ABC-1'))
   it('nome de arquivo seguro', () => expect(nomeArquivoSeguro('Certificado Bateria nº 1.pdf')).toBe('Certificado_Bateria_n_1.pdf'))
+})
+
+describe('somarMeses (botões de garantia)', () => {
+  it('soma meses mantendo o dia', () => {
+    expect(somarMeses('2026-11-06', 3)).toBe('2027-02-06')
+    expect(somarMeses('2026-11-06', 6)).toBe('2027-05-06')
+    expect(somarMeses('2026-11-06', 12)).toBe('2027-11-06')
+    expect(somarMeses('2026-11-06', 24)).toBe('2028-11-06')
+  })
+  it('fim de mês cai no último dia do mês de destino', () => {
+    expect(somarMeses('2026-08-31', 6)).toBe('2027-02-28')
+    expect(somarMeses('2027-08-31', 6)).toBe('2028-02-29')
+    expect(somarMeses('2026-01-31', 3)).toBe('2026-04-30')
+  })
+  it('sem data da venda → null', () => expect(somarMeses('', 12)).toBeNull())
 })

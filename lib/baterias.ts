@@ -109,3 +109,19 @@ export function nomeArquivoSeguro(nome: string): string {
   const base = nome.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').replace(/_+/g, '_')
   return base.slice(-80) || 'certificado'
 }
+
+/** Opções rápidas de garantia (meses) no cadastro. */
+export const PRAZOS_GARANTIA_MESES = [3, 6, 12, 24] as const
+
+/**
+ * Data da venda + N meses (mesmo dia; se o mês não tiver o dia, usa o último dia do mês).
+ * Ex.: 06/11/2026 + 12 = 06/11/2027; 31/08/2026 + 6 = 28/02/2027.
+ */
+export function somarMeses(dataIso: string, meses: number): string | null {
+  if (!ISO.test(dataIso || '')) return null
+  const [a, m, d] = dataIso.split('-').map(Number)
+  const alvo = new Date(Date.UTC(a, m - 1 + meses, 1))
+  const ultimoDia = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate()
+  alvo.setUTCDate(Math.min(d, ultimoDia))
+  return alvo.toISOString().slice(0, 10)
+}
