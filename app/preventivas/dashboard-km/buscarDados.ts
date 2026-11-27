@@ -51,7 +51,7 @@ export async function buscarDadosDashboard(desde: string, fim: string): Promise<
   }
 
   const [eqRes, rfRes, rows] = await Promise.all([
-    supabase.from('equipamentos').select('id, placa, tipo, categoria, modulo').ilike('status', 'ativo').is('deleted_at', null).order('placa'),
+    supabase.from('equipamentos').select('id, placa, tipo, categoria, modulo, area').ilike('status', 'ativo').is('deleted_at', null).order('placa'),
     supabase.from('calendario_suzano').select('ano, mes, data_inicio, data_fim').lte('data_inicio', hoje).order('data_inicio', { ascending: false }).limit(36),
     buscarLeituras(),
   ])

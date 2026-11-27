@@ -278,7 +278,7 @@ export function media(valores: (number | null)[]): number | null {
 }
 
 // ─── MONTAGEM POR PLACA ─────────────────────────────────────────────────────────
-export type EquipamentoAtivo = { id: string; placa: string; tipo: string | null; categoria: string | null; modulo: string | null }
+export type EquipamentoAtivo = { id: string; placa: string; tipo: string | null; categoria: string | null; modulo: string | null; /** COLHEITA, CARREGAMENTO, BASE... (franquia de KM) */ area?: string | null }
 
 /** Linha de historico_horimetros já com a data da leitura resolvida. */
 export type LeituraBruta = {

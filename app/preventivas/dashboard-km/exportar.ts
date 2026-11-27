@@ -41,6 +41,14 @@ export async function exportarDashboard(linhas: LinhaPlaca[], periodo: Periodo, 
   await exportarTabela(linhasExportacao(linhas), `km_horimetro_${periodo.inicio}_a_${periodo.fim}`, 'KM e Horímetro', formato)
 }
 
+/** Excel com várias abas (ex.: resumo da franquia + planilha por placa). */
+export async function exportarAbas(abas: { aba: string; rows: Record<string, unknown>[] }[], nome: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  for (const a of abas) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(a.rows), a.aba.slice(0, 31))
+  XLSX.writeFile(wb, `${nome}.xlsx`)
+}
+
 /** Exporta qualquer tabela (uma linha por objeto) em Excel ou CSV pt-BR. */
 export async function exportarTabela(rows: Record<string, unknown>[], nome: string, aba: string, formato: 'xlsx' | 'csv') {
   if (formato === 'xlsx') {
