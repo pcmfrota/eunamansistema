@@ -209,9 +209,20 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
 
               <MediasCharts linhas={linhas} onSelecionar={setSelecionada} />
 
-              <CardGrafico titulo="Ranking de placas por uso no período" sub={`Em ${nomeUnidade} · clique na barra para ver o histórico`}>
-                <RankingChart linhas={linhas} unidade={unidade} onSelecionar={setSelecionada} />
-              </CardGrafico>
+              {unidade === 'h' ? (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <CardGrafico titulo="Ranking de placas por horas" sub="Horímetro (pesados) · clique na barra para ver o histórico">
+                    <RankingChart linhas={linhas} unidade="h" onSelecionar={setSelecionada} />
+                  </CardGrafico>
+                  <CardGrafico titulo="Ranking de placas por KM rodado" sub="KM dos pesados · clique na barra para ver o histórico">
+                    <RankingChart linhas={linhas.filter(l => l.unidade === 'h')} unidade="km" onSelecionar={setSelecionada} />
+                  </CardGrafico>
+                </div>
+              ) : (
+                <CardGrafico titulo="Ranking de placas por uso no período" sub={`Em ${nomeUnidade} · clique na barra para ver o histórico`}>
+                  <RankingChart linhas={linhas} unidade={unidade} onSelecionar={setSelecionada} />
+                </CardGrafico>
+              )}
 
               <TabelaAnalitica linhas={linhas} onSelecionar={setSelecionada} />
             </>
