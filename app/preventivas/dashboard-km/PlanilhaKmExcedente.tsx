@@ -248,8 +248,8 @@ export default function PlanilhaKmExcedente() {
   const td = 'px-3 py-2 border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap'
   const linhaClicavel = 'cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20 group'
   const faixa = (texto: string) => (
-    <tr className="bg-green-200 dark:bg-green-900/60">
-      <td colSpan={8} className="px-3 py-1.5 text-center text-[10px] font-black uppercase tracking-wider text-green-900 dark:text-green-100 border-b border-green-300 dark:border-green-800">
+    <tr>
+      <td colSpan={8} className="bg-green-200 dark:bg-green-900/60 px-3 py-1.5 text-center text-[10px] font-black uppercase tracking-wider text-green-900 dark:text-green-100 border-b border-green-300 dark:border-green-800">
         {texto}
       </td>
     </tr>
