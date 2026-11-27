@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LineChart, Line } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LineChart, Line, LabelList } from 'recharts'
 import {
   sigla, fmtNum, fmtData, rotuloMes, serieTemporal, usoPorTipo, usoDaLinha, usoValido, media,
   type LinhaPlaca, type Periodo, type Unidade, type VisaoMedia, type PontoClassificado,
@@ -128,12 +128,17 @@ export function EvolucaoChart({ pontos, unidade, altura = 240 }: { pontos: Ponto
   const folga = Math.max(1, (max - min) * 0.1)
   return (
     <ResponsiveContainer width="100%" height={altura}>
-      <LineChart data={dados} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+      <LineChart data={dados} margin={{ top: 22, right: 28, left: 0, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke={GRADE} strokeDasharray="3 3" />
         <XAxis dataKey="rotulo" tick={EIXO} axisLine={false} tickLine={false} minTickGap={24} />
         <YAxis tick={EIXO} axisLine={false} tickLine={false} width={64} domain={[Math.floor(min - folga), Math.ceil(max + folga)]} tickFormatter={v => fmtNum(Number(v))} />
         <Tooltip content={tooltip(unidade)} />
-        <Line type="monotone" dataKey="valor" stroke={COR[unidade]} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: COR[unidade] }} activeDot={{ r: 6 }} />
+        <Line type="monotone" dataKey="valor" stroke={COR[unidade]} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: COR[unidade] }} activeDot={{ r: 6 }}>
+          {/* Com muitos pontos os números se sobrepõem: rotula só até 15 leituras (o tooltip mostra o resto). */}
+          {dados.length <= 15 && (
+            <LabelList dataKey="valor" position="top" fontSize={10} fontWeight={700} fill="#3f3f46" formatter={(v: number) => `${fmtNum(v)} ${sigla(unidade)}`} />
+          )}
+        </Line>
       </LineChart>
     </ResponsiveContainer>
   )

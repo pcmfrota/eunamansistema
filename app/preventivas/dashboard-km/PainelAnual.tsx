@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AlertCircle, RefreshCcw, ChevronLeft, ChevronRight, Clock, Route, Loader2 } from 'lucide-react'
 import type { TooltipProps } from 'recharts'
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList } from 'recharts'
 import {
   montarLinhas, serieTemporal, sigla, somarDias, fmtNum, rotuloMes, variacaoPercentual,
   type EquipamentoAtivo, type Unidade,
@@ -43,14 +43,20 @@ function GraficoAnual({ dados, unidade, ano, comparar }: { dados: MesAnual[]; un
   const chaveAnt = unidade === 'h' ? 'hAnt' : 'kmAnt'
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={dados} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
+      <BarChart data={dados} margin={{ top: 22, right: 8, left: 0, bottom: 0 }} barGap={2}>
         <CartesianGrid vertical={false} stroke="#e4e4e7" strokeDasharray="3 3" />
         <XAxis dataKey="rotulo" tick={EIXO} axisLine={false} tickLine={false} />
         <YAxis tick={EIXO} axisLine={false} tickLine={false} width={60} tickFormatter={v => fmtNum(Number(v))} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={TipAnual({ unidade, ano })} />
         <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-        {comparar && <Bar dataKey={chaveAnt} name={String(ano - 1)} fill={COR_ANTERIOR} radius={[4, 4, 0, 0]} maxBarSize={22} />}
-        <Bar dataKey={chave} name={String(ano)} fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={22} />
+        {comparar && (
+          <Bar dataKey={chaveAnt} name={String(ano - 1)} fill={COR_ANTERIOR} radius={[4, 4, 0, 0]} maxBarSize={22}>
+            <LabelList dataKey={chaveAnt} position="top" fontSize={9} fill="#a1a1aa" formatter={(v: number) => (v > 0 ? `${fmtNum(v)} ${sigla(unidade)}` : '')} />
+          </Bar>
+        )}
+        <Bar dataKey={chave} name={String(ano)} fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={22}>
+          <LabelList dataKey={chave} position="top" fontSize={10} fontWeight={700} fill="#3f3f46" formatter={(v: number) => (v > 0 ? `${fmtNum(v)} ${sigla(unidade)}` : '')} />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   )
