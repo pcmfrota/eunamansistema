@@ -63,8 +63,9 @@ export default function KpiCards({ atual, anterior, visao, temAnterior, rotuloCo
         valor={<>{fmtNum(atual.horasTotais)}<span className="text-sm font-bold text-emerald-600 ml-1">H</span></>} sub="Pesados (horímetro)"
         variacao={v(atual.horasTotais, anterior.horasTotais)} />
       <Card titulo="KM rodados" icone={<Route size={16} className="text-blue-600" />}
-        valor={<>{fmtNum(atual.kmTotais)}<span className="text-sm font-bold text-blue-600 ml-1">KM</span></>} sub="Leves (KM)"
-        variacao={v(atual.kmTotais, anterior.kmTotais)} />
+        valor={<>{fmtNum(atual.kmTotais + atual.kmPesados)}<span className="text-sm font-bold text-blue-600 ml-1">KM</span></>}
+        sub={<>Pesados {fmtNum(atual.kmPesados)} KM ({atual.pesadosComKm} placas) · Leves {fmtNum(atual.kmTotais)} KM</>}
+        variacao={v(atual.kmTotais + atual.kmPesados, anterior.kmTotais + anterior.kmPesados)} />
       <Card titulo={rotuloMedia} icone={<Activity size={16} />}
         valor={<span className="text-lg"><span className="text-emerald-700 dark:text-emerald-400">{fmtNum(atual.mediaH)} H</span> <span className="text-zinc-300">·</span> <span className="text-blue-700 dark:text-blue-400">{fmtNum(atual.mediaKm)} KM</span></span>}
         sub="pesados · leves"

@@ -252,6 +252,12 @@ describe('montarLinhas + agregações', () => {
     const linhas2 = montarLinhas(eqs, leituras, { inicio: '2026-10-01', fim: '2026-11-30' }, '2026-11-23', 7)
     expect(serieTemporal(linhas2, 'h', { inicio: '2026-10-01', fim: '2026-11-30' }, 'mensal'))
       .toEqual([{ chave: '2026-10', valor: 150 }, { chave: '2026-11', valor: 150 }])
+    // KM dos pesados entra no KPI separado dos leves (novembro: só 1 leitura de KM → 0).
+    expect(k.kmPesados).toBe(0)
+    expect(k.pesadosComKm).toBe(0)
+    const k2 = calcularKpis(linhas2, 'mensal')
+    expect(k2.kmPesados).toBe(linhas2[0].km?.uso ?? 0)
+    expect(k2.pesadosComKm).toBe(linhas2[0].km && !linhas2[0].km.insuficiente && linhas2[0].km.temLeituraNoPeriodo ? 1 : 0)
   })
 })
 

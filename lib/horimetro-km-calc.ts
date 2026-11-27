@@ -488,7 +488,12 @@ export function usoPorTipo(linhas: LinhaPlaca[], unidade: Unidade): { tipo: stri
 export type Kpis = {
   frotas: number
   horasTotais: number
+  /** KM dos leves (frota de KM). */
   kmTotais: number
+  /** KM rodado pelos pesados (leitura de KM do modal), no mesmo período. */
+  kmPesados: number
+  /** Pesados com KM calculável no período (2+ leituras de KM). */
+  pesadosComKm: number
   mediaH: number | null
   mediaKm: number | null
   semLeitura: number
@@ -506,6 +511,8 @@ export function calcularKpis(linhas: LinhaPlaca[], visao: VisaoMedia): Kpis {
     frotas: linhas.length,
     horasTotais: pes.reduce((s, l) => s + l.principal.uso, 0),
     kmTotais: lev.reduce((s, l) => s + l.principal.uso, 0),
+    kmPesados: pes.reduce((s, l) => s + (l.km?.uso || 0), 0),
+    pesadosComKm: pes.filter(l => usoValido(l.km) != null).length,
     mediaH: media(pes.map(l => m(l.principal))),
     mediaKm: media(lev.map(l => m(l.principal))),
     semLeitura: linhas.filter(l => !l.principal.temLeituraNoPeriodo && !l.km?.temLeituraNoPeriodo).length,
