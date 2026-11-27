@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-context";
 import { useOffline } from "@/components/offline-provider";
 import { localDb } from "@/lib/offline-db";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { excluirBateria } from "./actions";
 import {
   garantiaDias, situacaoGarantia, diasRestantes, validarBateria, chaveSerie, hojeIso,
@@ -136,8 +137,8 @@ function CertificadoViewer({ bateria, onClose }: { bateria: Bateria; onClose: ()
 
 type FormState = { modelo: string; numero_serie: string; fornecedor: string; data_venda: string; data_vencimento_garantia: string; observacoes: string };
 
-function FormBateria({ inicial, existentes, fornecedores, onClose, onSalvo }: {
-  inicial: Bateria | null; existentes: Bateria[]; fornecedores: string[]; onClose: () => void; onSalvo: (b: Bateria, pendente: boolean) => void;
+function FormBateria({ inicial, existentes, fornecedoresCadastro, onClose, onSalvo }: {
+  inicial: Bateria | null; existentes: Bateria[]; fornecedoresCadastro: string[]; onClose: () => void; onSalvo: (b: Bateria, pendente: boolean) => void;
 }) {
   const { profile } = useAuth();
   const { isOnline } = useOffline();
@@ -155,6 +156,12 @@ function FormBateria({ inicial, existentes, fornecedores, onClose, onSalvo }: {
   const set = (k: keyof FormState) => (e: { target: { value: string } }) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const dias = garantiaDias(form.data_venda, form.data_vencimento_garantia);
+  // Lista do Controle de Custos; na edição, mantém o fornecedor gravado mesmo se saiu do cadastro.
+  const opcoesFornecedor = useMemo(() => {
+    const nomes = new Set(fornecedoresCadastro);
+    if (inicial?.fornecedor) nomes.add(inicial.fornecedor.trim());
+    return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR")).map(n => ({ value: n, label: n }));
+  }, [fornecedoresCadastro, inicial?.fornecedor]);
   const temCertAtual = !!(inicial?.certificado_path || inicial?._certificadoLocal) && !removerCert;
 
   const escolherArquivo = async (f: File | undefined) => {
@@ -223,8 +230,10 @@ function FormBateria({ inicial, existentes, fornecedores, onClose, onSalvo }: {
         <Campo label="Modelo da bateria" obrig><input className={inputCls} value={form.modelo} onChange={set("modelo")} placeholder="Ex.: Moura 150Ah" autoFocus /></Campo>
         <Campo label="Número de série" obrig><input className={cn(inputCls, "uppercase font-mono")} value={form.numero_serie} onChange={set("numero_serie")} placeholder="Ex.: MR150-0001" /></Campo>
         <Campo label="Fornecedor" obrig>
-          <input className={inputCls} value={form.fornecedor} onChange={set("fornecedor")} list="baterias-fornecedores" placeholder="Nome do fornecedor" />
-          <datalist id="baterias-fornecedores">{fornecedores.map(f => <option key={f} value={f} />)}</datalist>
+          <SearchableSelect options={opcoesFornecedor} value={form.fornecedor} onChange={v => setForm(f => ({ ...f, fornecedor: v }))} placeholder="Selecione o fornecedor..." />
+          {fornecedoresCadastro.length === 0 && (
+            <p className="text-[11px] text-amber-600 font-semibold">Nenhum fornecedor carregado. Os fornecedores vêm do cadastro do Controle de Custos (precisa de internet na primeira vez).</p>
+          )}
         </Campo>
         <Campo label="Garantia (dias)">
           <div className={cn(inputCls, "bg-zinc-100 dark:bg-zinc-800/60 cursor-not-allowed tabular-nums", dias != null && dias <= 0 && "text-red-600")} aria-readonly title="Calculado automaticamente">
@@ -319,7 +328,7 @@ function DetalheBateria({ b, hoje, podeEditar, onClose, onEditar, onCertificado 
 
 // ─── Tela ───
 
-export default function ControleBateriasClient({ baterias: iniciais }: { baterias: Bateria[] }) {
+export default function ControleBateriasClient({ baterias: iniciais, fornecedoresCadastro }: { baterias: Bateria[]; fornecedoresCadastro: string[] }) {
   const { isVisitante } = useAuth();
   const { isOnline } = useOffline();
   const podeEditar = !isVisitante;
@@ -580,7 +589,7 @@ export default function ControleBateriasClient({ baterias: iniciais }: { bateria
         )}
       </div>
 
-      {form && <FormBateria inicial={form.bateria} existentes={baterias} fornecedores={fornecedores} onClose={() => setForm(null)} onSalvo={aoSalvar} />}
+      {form && <FormBateria inicial={form.bateria} existentes={baterias} fornecedoresCadastro={fornecedoresCadastro} onClose={() => setForm(null)} onSalvo={aoSalvar} />}
       {vendo && !form && (
         <DetalheBateria b={vendo} hoje={hoje} podeEditar={podeEditar} onClose={() => setVendo(null)}
           onEditar={() => setForm({ bateria: vendo })} onCertificado={() => setCertificado(vendo)} />
