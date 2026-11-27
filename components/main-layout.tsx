@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from "./theme-provider";
 import { useAuth } from "./auth-context";
 import { useOffline } from "./offline-provider";
@@ -37,6 +37,7 @@ import {
   History,
   ShieldAlert,
   Timer,
+  Search,
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { MODULOS_SISTEMA } from "@/lib/modulos";
@@ -103,6 +104,10 @@ const adminNavigation = [
   { name: 'Gestão de Usuários', path: '/admin/usuarios', icon: Users },
 ];
 
+/** Busca do menu: ignora acento e maiúscula ("lubrificacao" acha "Lubrificação"). */
+const normalizarBusca = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const casaBusca = (nome: string, busca: string) => !busca || normalizarBusca(nome).includes(normalizarBusca(busca));
+
 function getFilteredNavigation(permissions: string[], role?: string, isOnline: boolean = true) {
   // Acesso é só o que está efetivamente concedido por indivíduo (user_module_permissions,
   // já resolvido em `permissions` pelo auth-context) — nenhuma lista fixa de cargo aqui.
@@ -126,6 +131,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const { profile, signOut, loading: authLoading, user, permissions } = useAuth();
   const { isOnline } = useOffline();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [buscaMenu, setBuscaMenu] = useState('');
+  const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -491,14 +498,55 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
+          {(() => {
+            const itensMenu = [
+              ...getFilteredNavigation(permissions, profile?.role, isOnline),
+              ...(profile?.role === 'admin' ? adminNavigation : []),
+            ].filter(item => casaBusca(item.name, buscaMenu));
+            return (
+              <div className="relative mb-3">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#9ca3af' }} />
+                <input
+                  type="text"
+                  value={buscaMenu}
+                  onChange={e => setBuscaMenu(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') setBuscaMenu('');
+                    if (e.key === 'Enter' && buscaMenu && itensMenu[0]) {
+                      router.push(itensMenu[0].path);
+                      setBuscaMenu('');
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  placeholder="Buscar módulo..."
+                  aria-label="Buscar módulo no menu"
+                  className="w-full pl-8 pr-7 py-2 rounded-xl text-[13px] outline-none transition-colors focus:ring-2 focus:ring-green-600/40"
+                  style={{
+                    background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.035)',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}`,
+                    color: isDark ? '#ffffff' : '#111827',
+                  }}
+                />
+                {buscaMenu && (
+                  <button onClick={() => setBuscaMenu('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded" aria-label="Limpar busca" title="Limpar (Esc)">
+                    <X className="w-3.5 h-3.5" style={{ color: isDark ? 'rgba(255,255,255,0.55)' : '#6b7280' }} />
+                  </button>
+                )}
+                {buscaMenu && itensMenu.length === 0 && (
+                  <p className="mt-3 px-2 text-[12px]" style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#9ca3af' }}>Nenhum módulo encontrado.</p>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="space-y-0.5">
-            {getFilteredNavigation(permissions, profile?.role, isOnline).map((item, index) => {
+            {getFilteredNavigation(permissions, profile?.role, isOnline).filter(item => casaBusca(item.name, buscaMenu)).map((item, index) => {
               const isActive = pathname === item.path;
               return (
                 <Link
                   key={item.path}
                   href={item.path}
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={() => { setSidebarOpen(false); setBuscaMenu(''); }}
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group"
                   style={{
                     background: isActive
@@ -545,7 +593,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             })}
           </div>
 
-          {profile?.role === 'admin' && (
+          {profile?.role === 'admin' && adminNavigation.some(item => casaBusca(item.name, buscaMenu)) && (
             <>
               <div className="mt-5 mb-2 px-2">
                 <p
@@ -558,6 +606,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <div className="space-y-0.5">
                 {adminNavigation
                   .filter(item => profile?.role === 'admin' || permissions.includes(item.path))
+                  .filter(item => casaBusca(item.name, buscaMenu))
                   .map((item, index) => {
                   const isActive = pathname === item.path;
                   return (
