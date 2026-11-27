@@ -5,7 +5,7 @@
 
 export interface SyncItem {
   id?: number;
-  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos' | 'insumos_maquina_adhoc' | 'afiacao' | 'aux_afiacao' | 'equipamentos' | 'controladoria_frota' | 'checklist_frota' | 'controle_filtros_implemento';
+  entity: 'os' | 'preventiva' | 'horimetro' | 'pneu' | 'backlog' | 'colaborador' | 'captacao' | 'lavagem' | 'calendario' | 'prev_prog_semanal' | 'docs_tacografo' | 'docs_civ_cipp' | 'docs_laudo_eletromecanico' | 'docs_laudo_implemento' | 'docs_crlve_pesados' | 'docs_crlve_leve' | 'checklists_mecanicos' | 'ficha_mao_obra' | 'apontamento_mao_obra' | 'ficha_lubrificacao' | 'lubrificacao' | 'custos_manutencao' | 'custos_fornecedores' | 'custos_parcelas' | 'insumos_fichas_abastecimento' | 'insumos_abastecimento_linhas' | 'insumos_fichas_recarga' | 'insumos_recarga_itens' | 'insumos_materiais' | 'insumos_modulos' | 'insumos_maquina_adhoc' | 'afiacao' | 'aux_afiacao' | 'equipamentos' | 'controladoria_frota' | 'checklist_frota' | 'controle_filtros_implemento' | 'controle_baterias';
   // 'update_lancamento'/'approve' faltavam aqui mesmo já sendo tratados em
   // lib/offline-actions.ts — gap de tipo pré-existente (nunca dava erro porque o build do
   // Next.js tolera erro de tipo; CaptacaoClient.tsx tinha o bug de usar 'update' em vez de
@@ -18,7 +18,7 @@ export interface SyncItem {
 
 export class OfflineDB {
   private dbName = 'eunaman_local_db';
-  private dbVersion = 34;
+  private dbVersion = 35;
   private db: IDBDatabase | null = null;
 
   private setupObjectStores(db: IDBDatabase) {
@@ -124,6 +124,8 @@ export class OfflineDB {
     if (!db.objectStoreNames.contains('checklist_frota')) db.createObjectStore('checklist_frota', { keyPath: 'id' });
 
     if (!db.objectStoreNames.contains('controle_filtros_implemento')) db.createObjectStore('controle_filtros_implemento', { keyPath: 'id' });
+
+    if (!db.objectStoreNames.contains('controle_baterias')) db.createObjectStore('controle_baterias', { keyPath: 'id' });
   }
 
   async open(requiredStore?: string): Promise<IDBDatabase> {

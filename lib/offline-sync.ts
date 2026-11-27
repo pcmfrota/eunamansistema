@@ -282,6 +282,10 @@ const syncTasks: Record<
   // banda escala direto com quantidade de linhas × fotos por linha).
   controle_filtros_implemento: (supabase) =>
     supabase.from("controle_filtros_implemento").select("*").order("data_troca", { ascending: false }).limit(150),
+
+  // Sem base64 na tabela (o certificado fica no Storage) — dá pra trazer tudo.
+  controle_baterias: (supabase) =>
+    supabase.from("controle_baterias").select("*").order("data_vencimento_garantia", { ascending: true }).limit(5000),
 };
 
 /**

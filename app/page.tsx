@@ -30,7 +30,8 @@ import {
   Fuel,
   ShieldCheck,
   ClipboardCheck,
-  Filter
+  Filter,
+  BatteryCharging
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PremiumLoader } from "@/components/premium-loader";
@@ -177,6 +178,13 @@ const portalItems = [
     desc: "Controle de instalação e troca de filtro absoluto de Comboio e Skid.",
     icon: Filter,
     color: "from-sky-500 to-blue-600 bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25 dark:border-sky-400/20"
+  },
+  {
+    name: "Controle de Baterias",
+    path: "/controle-baterias",
+    desc: "Cadastro das baterias da frota, garantia e certificado anexado.",
+    icon: BatteryCharging,
+    color: "from-lime-500 to-green-600 bg-lime-500/10 text-lime-600 dark:text-lime-400 border-lime-500/25 dark:border-lime-400/20"
   },
   {
     name: "Controle de Custos",

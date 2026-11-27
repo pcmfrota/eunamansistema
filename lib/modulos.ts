@@ -32,6 +32,7 @@ export const MODULOS_SISTEMA: Modulo[] = [
   { path: '/controladoria-frota',     label: 'Controladoria de Gestão',   concedivel: true },
   { path: '/checklist-frota',         label: 'Checklist de Frota',        concedivel: true },
   { path: '/controle-filtros',        label: 'Controle de Filtros',       concedivel: true },
+  { path: '/controle-baterias',       label: 'Controle de Baterias',      concedivel: true },
   { path: '/custos',                  label: 'Controle de Custos',        concedivel: true },
   { path: '/insumos',                 label: 'Controle de Insumos',       concedivel: true },
   { path: '/historico-exclusoes',     label: 'Histórico de Exclusões',    concedivel: true },

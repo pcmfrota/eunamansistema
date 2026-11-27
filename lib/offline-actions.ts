@@ -90,6 +90,9 @@ import {
   excluirLancamentoFiltroImplemento
 } from "@/app/controle-filtros/actions";
 
+import { excluirBateria } from "@/app/controle-baterias/actions";
+import { enviarBateria } from "@/lib/baterias-storage";
+
 import {
   salvarFichaMaoObra,
   excluirFichaMaoObra,
@@ -457,6 +460,16 @@ export async function replaySyncItem(item: SyncItem): Promise<{ success: boolean
         if (res && "error" in res) throw new Error(res.error);
       } else if (action === "delete") {
         const res = await excluirChecklistFrota(payload.id);
+        if (res && "error" in res) throw new Error(res.error);
+      }
+    }
+    else if (entity === "controle_baterias") {
+      // Mesmo id do aparelho: reenvio vira edição do mesmo registro, nunca duplica.
+      if (action === "create" || action === "update") {
+        const res = await enviarBateria(payload);
+        if (res && "error" in res) throw new Error(res.error);
+      } else if (action === "delete") {
+        const res = await excluirBateria(payload.id);
         if (res && "error" in res) throw new Error(res.error);
       }
     }
