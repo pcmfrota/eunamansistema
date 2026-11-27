@@ -127,18 +127,28 @@ export function RankingChart({ linhas, unidade, onSelecionar }: { linhas: LinhaP
   )
 }
 
+/** Valor à direita da barra horizontal, numa linha só (o padrão quebrava "22 H" em duas linhas). */
+function rotuloDireita(unidade: Unidade) {
+  return function RotuloDireita(p: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: unknown }) {
+    const v = Number(p.value)
+    if (!isFinite(v)) return null
+    return <text x={Number(p.x) + Number(p.width) + 6} y={Number(p.y) + Number(p.height) / 2} dominantBaseline="central" fontSize={11} fontWeight={600} fill="#3f3f46">{`${fmtNum(v)} ${sigla(unidade)}`}</text>
+  }
+}
+
 export function UsoPorTipoChart({ linhas, unidade }: { linhas: LinhaPlaca[]; unidade: Unidade }) {
   const dados = useMemo(() => usoPorTipo(linhas, unidade).map(d => ({ rotulo: d.tipo, valor: d.valor, placas: d.placas })), [linhas, unidade])
   if (!dados.some(d => d.valor > 0)) return <Vazio />
   return (
     <ResponsiveContainer width="100%" height={Math.max(160, dados.length * 30 + 20)}>
-      <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+      <BarChart data={dados} layout="vertical" margin={{ top: 0, right: 72, left: 0, bottom: 0 }}>
         <CartesianGrid horizontal={false} stroke={GRADE} strokeDasharray="3 3" />
         <XAxis type="number" tick={EIXO} axisLine={false} tickLine={false} tickFormatter={v => fmtNum(Number(v))} />
         <YAxis type="category" dataKey="rotulo" tick={{ ...EIXO, fontWeight: 600 }} axisLine={false} tickLine={false} width={104} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
-        <Bar dataKey="valor" fill={COR[unidade]} radius={[0, 4, 4, 0]} barSize={16}
-          label={{ position: 'right', fontSize: 11, fill: '#52525b', formatter: (v: number) => `${fmtNum(v)} ${sigla(unidade)}` }} />
+        <Bar dataKey="valor" fill={COR[unidade]} radius={[0, 4, 4, 0]} barSize={16}>
+          <LabelList dataKey="valor" content={rotuloDireita(unidade)} />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   )
