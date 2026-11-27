@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CheckboxOption {
@@ -28,7 +29,13 @@ interface CheckboxMultiSelectProps {
 // abre um painel com uma checkbox por opção em vez de trocar de valor direto.
 export function CheckboxMultiSelect({ values, onChange, options, placeholder, className, accent = "green", selecionarTodos = false }: CheckboxMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [busca, setBusca] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const painelRef = useRef<HTMLDivElement>(null);
+  // O painel abre num portal (fixed, no body) pra nunca ficar atrás de cards/gráficos
+  // vizinhos nem ser cortado por containers com overflow — antes era absolute dentro da
+  // barra de filtros e os cards de baixo cobriam a lista.
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
   const accentColor = accent === "amber" ? "#d97706" : "#16a34a";
   const accentBg = accent === "amber" ? "rgba(217,119,6,0.1)" : "rgba(34,197,94,0.1)";
   const accentBorder = accent === "amber" ? "rgba(217,119,6,0.3)" : "rgba(34,197,94,0.3)";
@@ -36,13 +43,45 @@ export function CheckboxMultiSelect({ values, onChange, options, placeholder, cl
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+      const alvo = event.target as Node;
+      if (wrapperRef.current && !wrapperRef.current.contains(alvo) && !painelRef.current?.contains(alvo)) {
         setIsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) { setBusca(""); return; }
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [isOpen]);
+
+  // Posição do painel: abaixo do botão; se não couber, abre pra cima. Acompanha rolagem/redimensionamento.
+  useLayoutEffect(() => {
+    if (!isOpen) { setPos(null); return; }
+    const calcular = () => {
+      const r = wrapperRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const margem = 8;
+      const abaixo = window.innerHeight - r.bottom - margem;
+      const acima = r.top - margem;
+      const left = Math.max(margem, Math.min(r.left, window.innerWidth - 230));
+      if (abaixo >= 220 || abaixo >= acima) setPos({ left, top: r.bottom + 6, maxHeight: Math.min(320, abaixo - 6) });
+      else setPos({ left, bottom: window.innerHeight - r.top + 6, maxHeight: Math.min(320, acima - 6) });
+    };
+    calcular();
+    window.addEventListener("resize", calcular);
+    window.addEventListener("scroll", calcular, true);
+    return () => { window.removeEventListener("resize", calcular); window.removeEventListener("scroll", calcular, true); };
+  }, [isOpen]);
+
+  const termo = busca.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const opcoesVisiveis = termo
+    ? options.filter((o) => o.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(termo))
+    : options;
 
   const toggleValue = (val: string) => {
     onChange(values.includes(val) ? values.filter((v) => v !== val) : [...values, val]);
@@ -78,11 +117,26 @@ export function CheckboxMultiSelect({ values, onChange, options, placeholder, cl
         size={14}
         style={{ color: values.length > 0 ? accentColor : "var(--text-muted)" }}
       />
-      {isOpen && (
+      {isOpen && pos && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute z-50 mt-1.5 min-w-[210px] max-h-72 overflow-y-auto rounded-xl shadow-2xl py-1.5"
-          style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
+          ref={painelRef}
+          className="fixed z-[1000] min-w-[210px] max-w-[320px] flex flex-col rounded-xl shadow-2xl overflow-hidden backdrop-blur-md"
+          style={{ left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight, minWidth: Math.max(210, wrapperRef.current?.offsetWidth || 0), background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
         >
+          {options.length > 8 && (
+            <div className="relative p-2 border-b shrink-0" style={{ borderColor: "var(--border-color)" }}>
+              <Search size={13} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+              <input
+                autoFocus
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar..."
+                className="w-full pl-7 pr-2 py-1.5 text-[13px] rounded-lg outline-none"
+                style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)", color: "var(--text-primary)" }}
+              />
+            </div>
+          )}
+          <div className="overflow-y-auto py-1.5">
           {selecionarTodos && !todosMarcados && (
             <button
               type="button"
@@ -102,7 +156,10 @@ export function CheckboxMultiSelect({ values, onChange, options, placeholder, cl
               Limpar seleção
             </button>
           )}
-          {options.map((opt) => {
+          {opcoesVisiveis.length === 0 && (
+            <p className="px-3.5 py-2 text-[12px]" style={{ color: "var(--text-muted)" }}>Nada encontrado.</p>
+          )}
+          {opcoesVisiveis.map((opt) => {
             const checked = values.includes(opt.value);
             return (
               <label
@@ -123,7 +180,9 @@ export function CheckboxMultiSelect({ values, onChange, options, placeholder, cl
               </label>
             );
           })}
-        </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
