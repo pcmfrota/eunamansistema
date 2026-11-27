@@ -189,8 +189,13 @@ export default function DashboardKmHorimetro({ podeEditar = false }: { podeEdita
               )}
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={`Soma em ${nomeUnidade}, com a média do período`}>
+                <CardGrafico titulo={filtros.visao === 'mensal' ? 'Uso mês a mês' : 'Uso por ano'} sub={unidade === 'h' ? 'Soma em horas e em KM rodado (pesados), com a média do período' : `Soma em ${nomeUnidade}, com a média do período`}>
+                  {unidade === 'h' && <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Horímetro (H)</p>}
                   <UsoMensalChart linhas={linhas} unidade={unidade} periodo={periodo} visao={filtros.visao} meses={mesesSel ?? undefined} />
+                  {unidade === 'h' && <>
+                    <p className="mt-3 mb-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">KM rodado</p>
+                    <UsoMensalChart linhas={linhas.filter(l => l.unidade === 'h')} unidade="km" periodo={periodo} visao={filtros.visao} meses={mesesSel ?? undefined} />
+                  </>}
                 </CardGrafico>
                 <CardGrafico titulo="Uso por categoria / tipo" sub={unidade === 'h' ? 'Soma em horas e em KM rodado (pesados)' : `Soma em ${nomeUnidade}`}>
                   {unidade === 'h' && <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Horímetro (H)</p>}
