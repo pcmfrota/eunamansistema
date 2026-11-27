@@ -247,11 +247,10 @@ export default function PlanilhaKmExcedente() {
   const th = 'px-3 py-2 font-bold border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap'
   const td = 'px-3 py-2 border-b border-r border-zinc-200 dark:border-zinc-800 whitespace-nowrap'
   const linhaClicavel = 'cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20 group'
-  const faixa = (texto: string, cor = 'text-zinc-600 dark:text-zinc-300') => (
-    <tr className="bg-zinc-100/70 dark:bg-zinc-800/40">
-      {/* sticky: o título da área não some quando a tabela rola pro lado */}
-      <td colSpan={8} className="p-0 border-b border-zinc-200 dark:border-zinc-800">
-        <span className={`sticky left-0 inline-block px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${cor}`}>{texto}</span>
+  const faixa = (texto: string) => (
+    <tr className="bg-green-50 dark:bg-green-950/30">
+      <td colSpan={8} className="px-3 py-1.5 text-center text-[10px] font-black uppercase tracking-wider text-green-800 dark:text-green-300 border-b border-green-200 dark:border-green-900/50">
+        {texto}
       </td>
     </tr>
   )
@@ -395,7 +394,7 @@ export default function PlanilhaKmExcedente() {
                   })}
                   {semFranquia.length > 0 && (
                     <>
-                      {faixa('Sem franquia no contrato (só KM rodado)', 'text-zinc-500')}
+                      {faixa('Sem franquia no contrato (só KM rodado)')}
                       {semFranquia.map(g => (
                         <tr key={g.chave} className={`text-zinc-500 ${linhaClicavel}`} onClick={() => abrirGrupo(g)} title="Ver placas">
                           <td className={td}><span className="inline-flex items-center gap-1">{capital(g.tipo || 'Sem tipo')} · {capital(g.area || 'sem área')} <ChevronRight size={13} className="opacity-40 group-hover:opacity-100" /></span></td>
