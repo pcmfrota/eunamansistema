@@ -10,7 +10,7 @@ import {
   type EquipamentoAtivo, type Unidade,
 } from '@/lib/horimetro-km-calc'
 import { useLeiturasDashboard } from './useLeiturasDashboard'
-import { CardGrafico, COR } from './Graficos'
+import { CardGrafico, COR, rotuloTopo, dominioComFolga } from './Graficos'
 import { hojeLocal } from './useFiltrosUrl'
 
 const FOLGA_BASE_DIAS = 92
@@ -46,16 +46,16 @@ function GraficoAnual({ dados, unidade, ano, comparar }: { dados: MesAnual[]; un
       <BarChart data={dados} margin={{ top: 22, right: 8, left: 0, bottom: 0 }} barGap={2}>
         <CartesianGrid vertical={false} stroke="#e4e4e7" strokeDasharray="3 3" />
         <XAxis dataKey="rotulo" tick={EIXO} axisLine={false} tickLine={false} />
-        <YAxis tick={EIXO} axisLine={false} tickLine={false} width={60} tickFormatter={v => fmtNum(Number(v))} />
+        <YAxis tick={EIXO} axisLine={false} tickLine={false} width={60} domain={dominioComFolga(comparar ? 1.3 : 1.12)} tickFormatter={v => fmtNum(Number(v))} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={TipAnual({ unidade, ano })} />
         <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
         {comparar && (
           <Bar dataKey={chaveAnt} name={String(ano - 1)} fill={COR_ANTERIOR} radius={[4, 4, 0, 0]} maxBarSize={22}>
-            <LabelList dataKey={chaveAnt} position="top" fontSize={9} fill="#a1a1aa" formatter={(v: number) => (v > 0 ? `${fmtNum(v)} ${sigla(unidade)}` : '')} />
+            <LabelList dataKey={chaveAnt} content={rotuloTopo(unidade, { fontSize: 9, cor: '#a1a1aa', negrito: false, vertical: true })} />
           </Bar>
         )}
         <Bar dataKey={chave} name={String(ano)} fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={22}>
-          <LabelList dataKey={chave} position="top" fontSize={10} fontWeight={700} fill="#3f3f46" formatter={(v: number) => (v > 0 ? `${fmtNum(v)} ${sigla(unidade)}` : '')} />
+          <LabelList dataKey={chave} content={rotuloTopo(unidade, { fontSize: 10 })} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

@@ -28,6 +28,30 @@ export function CardGrafico({ titulo, sub, acao, children }: { titulo: string; s
   )
 }
 
+type PropsRotulo = { x?: number | string; y?: number | string; width?: number | string; value?: unknown }
+
+/**
+ * Valor em cima da barra numa linha só ("10.460 H"). O rótulo padrão do recharts quebra o texto
+ * na largura da barra — em barra estreita o "H" ia pra linha de baixo e o número estourava o topo.
+ * `vertical`: texto em pé (usado na barra do ano anterior, pra não encavalar com a do ano atual).
+ */
+export function rotuloTopo(unidade: Unidade, opts: { fontSize?: number; cor?: string; negrito?: boolean; vertical?: boolean; casas?: number } = {}) {
+  return function RotuloTopo(p: PropsRotulo) {
+    const v = Number(p.value)
+    if (!(v > 0)) return null
+    const cx = Number(p.x) + Number(p.width) / 2
+    const y = Number(p.y)
+    const texto = `${fmtNum(v, opts.casas ?? 0)} ${sigla(unidade)}`
+    const comum = { fontSize: opts.fontSize ?? 10, fontWeight: opts.negrito === false ? 500 : 700, fill: opts.cor ?? '#3f3f46' }
+    return opts.vertical
+      ? <text transform={`translate(${cx + 3},${y - 4}) rotate(-90)`} textAnchor="start" {...comum}>{texto}</text>
+      : <text x={cx} y={y - 6} textAnchor="middle" {...comum}>{texto}</text>
+  }
+}
+
+/** Folga acima da barra mais alta, pro rótulo não ser cortado. */
+export const dominioComFolga = (folga = 1.12) => [0, (max: number) => (max > 0 ? Math.ceil(max * folga) : 1)] as [number, (max: number) => number]
+
 const Vazio = () => <div className="h-[220px] flex items-center justify-center text-sm text-zinc-400">Nenhuma leitura no período</div>
 
 function TooltipBox({ titulo, valor, unidade }: { titulo: string; valor: number; unidade: Unidade }) {
@@ -56,10 +80,11 @@ export function UsoMensalChart({ linhas, unidade, periodo, visao, meses }: { lin
       <BarChart data={dados} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke={GRADE} strokeDasharray="3 3" />
         <XAxis dataKey="rotulo" tick={EIXO} axisLine={false} tickLine={false} />
-        <YAxis tick={EIXO} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtNum(Number(v))} />
+        <YAxis tick={EIXO} axisLine={false} tickLine={false} width={56} domain={dominioComFolga()} tickFormatter={v => fmtNum(Number(v))} />
         <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={tooltip(unidade)} />
-        <Bar dataKey="valor" fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={48}
-          label={{ position: 'top', fontSize: 11, fontWeight: 700, fill: '#3f3f46', formatter: (v: number) => (v > 0 ? `${fmtNum(v)} ${sigla(unidade)}` : '') }} />
+        <Bar dataKey="valor" fill={COR[unidade]} radius={[4, 4, 0, 0]} maxBarSize={48}>
+          <LabelList dataKey="valor" content={rotuloTopo(unidade, { fontSize: 11 })} />
+        </Bar>
         {med != null && (
           <ReferenceLine y={med} stroke="#a1a1aa" strokeDasharray="4 4"
             label={{ value: `média ${fmtNum(med)} ${sigla(unidade)}`, position: 'insideTopRight', fontSize: 11, fill: '#52525b' }} />
